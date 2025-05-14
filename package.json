@@ -1,0 +1,29 @@
+{
+  "name": "@relay-protocol/hub-monorepo",
+  "private": true,
+  "version": "0.0.1",
+  "workspaces": [
+    "packages/*",
+    "oracle",
+    "smart-contracts"
+  ],
+  "scripts": {
+    "build": "yarn packages:clean && yarn packages:build",
+    "packages:clean": "yarn packages --parallel run clean",
+    "packages:build": "yarn packages --topological-dev run build",
+    "lint": "yarn packages --parallel run lint",
+    "packages": "yarn workspaces foreach --recursive --from '{@relay-protocol/eslint-config,@relay-protocol/tslint-config}'",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\""
+  },
+  "devDependencies": {
+    "@types/node": "22.15.3",
+    "eslint": "9.25.1",
+    "prettier": "3.5.3",
+    "ts-node": "10.9.2",
+    "typescript": "5.7.2"
+  },
+  "packageManager": "yarn@4.9.1",
+  "dependencies": {
+    "typescript-eslint": "8.31.0"
+  }
+}

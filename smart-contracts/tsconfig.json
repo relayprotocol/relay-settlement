@@ -1,0 +1,4 @@
+{
+  "extends": "@relay-protocol/tsconfig",
+  "exclude": ["dist"]
+}
