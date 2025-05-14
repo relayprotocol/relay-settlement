@@ -114,6 +114,22 @@ contract Hub is AccessControl {
         return true;
     }
 
+    function mint(
+        address receiver,
+        uint256 id,
+        uint256 amount
+    ) public virtual onlyRole(HUB_ORACLE_ROLE) returns (bool) {
+        _mint(receiver, id, amount);
+    }
+
+    function burn(
+        address sender,
+        uint256 id,
+        uint256 amount
+    ) public virtual onlyRole(HUB_ORACLE_ROLE) returns (bool) {
+        _burn(sender, id, amount);
+    }
+
     /*//////////////////////////////////////////////////////////////
                               ERC165 LOGIC
     //////////////////////////////////////////////////////////////*/
