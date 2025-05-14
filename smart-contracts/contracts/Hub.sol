@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+
+
 /// @notice Minimalist and gas efficient standard ERC6909 implementation.
 /// @author Solmate (https://github.com/transmissions11/solmate/blob/main/src/tokens/ERC6909.sol)
-contract Hub {
+contract Hub is AccessControl {
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
@@ -25,6 +28,35 @@ contract Hub {
     mapping(address => mapping(address => mapping(uint256 => uint256))) public allowance;
 
     /*//////////////////////////////////////////////////////////////
+                             ROLES
+    //////////////////////////////////////////////////////////////*/
+
+    bytes32 public constant HUB_ORACLE_ROLE = keccak256("HUB_ORACLE_ROLE");
+
+    bytes32 public constant HUB_ORACLE_ADMIN_ROLE = keccak256("HUB_ORACLE_ADMIN_ROLE");
+    
+    /*//////////////////////////////////////////////////////////////
+                             CONSTRUCTOR
+    //////////////////////////////////////////////////////////////*/
+
+    constructor(address adminAddress) {
+        _setRoleAdmin(HUB_ORACLE_ROLE, HUB_ORACLE_ADMIN_ROLE);
+        _grantRole(HUB_ORACLE_ADMIN_ROLE, adminAddress);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                        ROLES LOGIC
+    //////////////////////////////////////////////////////////////*/
+    function addOracle(address account) public onlyRole(HUB_ORACLE_ADMIN_ROLE) {
+        _grantRole(HUB_ORACLE_ROLE, account);
+    }
+
+    function removeOracle(address account) public onlyRole(HUB_ORACLE_ADMIN_ROLE) {
+        _revokeRole(HUB_ORACLE_ROLE, account);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+
                               ERC6909 LOGIC
     //////////////////////////////////////////////////////////////*/
 
@@ -86,7 +118,8 @@ contract Hub {
                               ERC165 LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
+
+    function supportsInterface(bytes4 interfaceId) public view virtual override(AccessControl) returns (bool) {
         return
             interfaceId == 0x01ffc9a7 || // ERC165 Interface ID for ERC165
             interfaceId == 0x0f632fb3; // ERC165 Interface ID for ERC6909
