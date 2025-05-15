@@ -1,4 +1,5 @@
 import type { HardhatUserConfig } from 'hardhat/config'
+import 'solidity-coverage'
 import '@nomicfoundation/hardhat-toolbox-viem'
 import '@nomicfoundation/hardhat-ignition'
 
@@ -26,6 +27,9 @@ const networks = {
     name: 'Arbitrum Sepolia',
     url: 'https://sepolia-rollup.arbitrum.io/rpc',
   },
+  hardhat: {
+    allowUnlimitedContractSize: true,
+  },
 }
 
 const etherscan = {
@@ -37,7 +41,15 @@ const etherscan = {
 const config: HardhatUserConfig = {
   etherscan,
   networks,
-  solidity: '0.8.28',
+  solidity: {
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+    },
+    version: '0.8.28',
+  },
   sourcify: {
     enabled: true,
   },

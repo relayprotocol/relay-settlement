@@ -2,6 +2,7 @@
   "name": "@relay-protocol/smart-contracts",
   "scripts": {
     "test": "hardhat test",
+    "coverage": "SOLIDITY_COVERAGE=true hardhat coverage",
     "lint:contracts": "solhint 'contracts/**/*.sol'",
     "lintFix": "yarn lint:contracts --fix --noPrompt && yarn lint:code --fix",
     "lint:code": "eslint .",
@@ -30,7 +31,7 @@
     "prettier": "3.4.2",
     "prettier-plugin-solidity": "1.4.2",
     "solhint": "5.0.5",
-    "solidity-coverage": "0.8.1",
+    "solidity-coverage": "0.8.16",
     "ts-node": "8.0.0",
     "typescript": "5.0.4",
     "viem": "2.7.6"
