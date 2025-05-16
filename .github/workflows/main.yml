@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        folders: ['smart-contracts', '@relay-protocol/hub-client']
+        folders: ['smart-contracts', 'packages/hub-utils']
     steps:
       - uses: actions/checkout@v4
         with:
@@ -26,10 +26,20 @@ jobs:
       - run: 'yarn build'
         shell: bash
 
+      - name: Set workspace name
+        id: workspace-name
+        run: |
+          if [[ "${{ matrix.folders }}" == packages/* ]]; then
+            echo "WORKSPACE_NAME=$(echo ${{ matrix.folders }} | sed 's|packages/||')" >> $GITHUB_OUTPUT
+          else
+            echo "WORKSPACE_NAME=${{ matrix.folders }}" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
       - name: 'run lint'
-        run: yarn workspace @relay-protocol/${{matrix.folders}} lint
+        run: yarn workspace @relay-protocol/${{steps.workspace-name.outputs.WORKSPACE_NAME}} lint
         shell: bash
 
       - name: 'run tests'
-        run: yarn workspace @relay-protocol/${{matrix.folders}} run test
+        run: yarn workspace @relay-protocol/${{steps.workspace-name.outputs.WORKSPACE_NAME}} run test
         shell: bash
