@@ -21,7 +21,7 @@ contract Hub is AccessControl {
                              ERC6909 STORAGE
     //////////////////////////////////////////////////////////////*/
 
-    mapping(address => mapping(address => bool)) public isOperator;
+    mapping(address => mapping(address => bool)) internal _isOperator;
 
     mapping(address => mapping(uint256 => uint256)) public balanceOf;
 
@@ -60,11 +60,31 @@ contract Hub is AccessControl {
                               ERC6909 LOGIC
     //////////////////////////////////////////////////////////////*/
 
+    function isOperator(address account, address operator) public view returns (bool) {
+        return hasRole(HUB_ORACLE_ROLE, account) || _isOperator[account][operator];
+    }
+
+
+    // @notice Internal function to set an operator for an account    
+    function _setOperatorFor(address account, address operator, bool approved) internal returns (bool result) {
+        _isOperator[account][operator] = approved;
+        emit OperatorSet(account, operator, approved);
+        return true;
+    }
+
+    function setOperatorFor(address account, address operator, bool approved) public onlyRole(HUB_ORACLE_ROLE) returns (bool result) {
+        return _setOperatorFor(account, operator, approved);
+    }
+
+    function setOperator(address operator, bool approved) public returns (bool result) {
+        return _setOperatorFor(msg.sender, operator, approved);
+    }
+
     function transfer(
         address receiver,
         uint256 id,
         uint256 amount
-    ) public virtual returns (bool) {
+    ) public returns (bool result) {
         balanceOf[msg.sender][id] -= amount;
 
         balanceOf[receiver][id] += amount;
@@ -79,8 +99,8 @@ contract Hub is AccessControl {
         address receiver,
         uint256 id,
         uint256 amount
-    ) public virtual returns (bool) {
-        if (msg.sender != sender && !isOperator[sender][msg.sender]) {
+    ) public returns (bool result) {
+        if (msg.sender != sender && !isOperator(sender, msg.sender)) {
             uint256 allowed = allowance[sender][msg.sender][id];
             if (allowed != type(uint256).max) allowance[sender][msg.sender][id] = allowed - amount;
         }
@@ -98,7 +118,7 @@ contract Hub is AccessControl {
         address spender,
         uint256 id,
         uint256 amount
-    ) public virtual returns (bool) {
+    ) public returns (bool result) {
         allowance[msg.sender][spender][id] = amount;
 
         emit Approval(msg.sender, spender, id, amount);
@@ -106,28 +126,24 @@ contract Hub is AccessControl {
         return true;
     }
 
-    function setOperator(address operator, bool approved) public virtual returns (bool) {
-        isOperator[msg.sender][operator] = approved;
-
-        emit OperatorSet(msg.sender, operator, approved);
-
-        return true;
-    }
+    
 
     function mint(
         address receiver,
         uint256 id,
         uint256 amount
-    ) public virtual onlyRole(HUB_ORACLE_ROLE) returns (bool) {
+    ) public onlyRole(HUB_ORACLE_ROLE) returns (bool result) {
         _mint(receiver, id, amount);
+        return true;
     }
 
     function burn(
         address sender,
         uint256 id,
         uint256 amount
-    ) public virtual onlyRole(HUB_ORACLE_ROLE) returns (bool) {
+    ) public onlyRole(HUB_ORACLE_ROLE) returns (bool result) {
         _burn(sender, id, amount);
+        return true;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -135,7 +151,7 @@ contract Hub is AccessControl {
     //////////////////////////////////////////////////////////////*/
 
 
-    function supportsInterface(bytes4 interfaceId) public view virtual override(AccessControl) returns (bool) {
+    function supportsInterface(bytes4 interfaceId) public pure override(AccessControl) returns (bool result) {
         return
             interfaceId == 0x01ffc9a7 || // ERC165 Interface ID for ERC165
             interfaceId == 0x0f632fb3; // ERC165 Interface ID for ERC6909
@@ -149,7 +165,7 @@ contract Hub is AccessControl {
         address receiver,
         uint256 id,
         uint256 amount
-    ) internal virtual {
+    ) internal {
         balanceOf[receiver][id] += amount;
 
         emit Transfer(msg.sender, address(0), receiver, id, amount);
@@ -159,7 +175,7 @@ contract Hub is AccessControl {
         address sender,
         uint256 id,
         uint256 amount
-    ) internal virtual {
+    ) internal {
         balanceOf[sender][id] -= amount;
 
         emit Transfer(msg.sender, sender, address(0), id, amount);
