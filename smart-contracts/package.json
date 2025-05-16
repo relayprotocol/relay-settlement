@@ -1,6 +1,8 @@
 {
   "name": "@relay-protocol/smart-contracts",
   "scripts": {
+    "build": "yarn hardhat compile",
+    "build:abis": "yarn hardhat export:abis",
     "test": "hardhat test",
     "coverage": "SOLIDITY_COVERAGE=true hardhat coverage",
     "lint:contracts": "solhint 'contracts/**/*.sol'",
@@ -17,6 +19,7 @@
     "@nomicfoundation/hardhat-viem": "2.0.6",
     "@types/chai": "4.2.0",
     "@types/chai-as-promised": "7.1.6",
+    "@types/fs-extra": "^11",
     "@types/mocha": "9.1.0",
     "@types/node": "18.0.0",
     "chai": "4.2.0",
@@ -38,6 +41,7 @@
   },
   "dependencies": {
     "@openzeppelin/contracts": "5.3.0",
-    "eslint-plugin-sort-keys-fix": "^1.1.2"
+    "eslint-plugin-sort-keys-fix": "^1.1.2",
+    "fs-extra": "11.3.0"
   }
 }

@@ -3,6 +3,8 @@ import 'solidity-coverage'
 import '@nomicfoundation/hardhat-toolbox-viem'
 import '@nomicfoundation/hardhat-ignition'
 
+import './tasks/exportAbis'
+
 // get pk from shell
 const { DEPLOYER_PRIVATE_KEY } = process.env
 if (!DEPLOYER_PRIVATE_KEY) {
