@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        folders: ['smart-contracts', 'packages/hub-utils']
+        folders: ['smart-contracts', 'packages/hub-client']
     steps:
       - uses: actions/checkout@v4
         with:
