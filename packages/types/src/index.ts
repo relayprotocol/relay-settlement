@@ -10,4 +10,4 @@ export interface TokenIdComponents {
   address: string
 }
 
-export type TokenId = BigInt
+export type TokenId = bigint

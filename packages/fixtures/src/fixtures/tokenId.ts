@@ -3,7 +3,7 @@ export const tokenIdTestCases: Array<{
   name: string
   input: TokenIdComponents
   expectedLength: number
-  expectedValue: BigInt
+  expectedValue: bigint
 }> = [
   {
     expectedLength: 66,

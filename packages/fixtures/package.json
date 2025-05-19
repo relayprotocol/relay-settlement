@@ -1,9 +1,8 @@
 {
   "name": "@relay-protocol/fixtures",
   "version": "0.0.1",
-  "main": "dist/src/index.js",
-  "types": "dist/src/index.d.ts",
-  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
