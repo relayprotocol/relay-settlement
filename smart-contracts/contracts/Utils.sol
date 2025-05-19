@@ -26,4 +26,23 @@ library Utils {
     }
     return uint256(keccak256(abi.encodePacked(family, chainId, token)));
   }
+
+
+  /**
+   * @notice Generates a virtual address for a given family, chain ID, and account
+   * @param family The blockchain family ('evm', 'solana', 'bitcoin')
+   * @param chainId The ID of the blockchain network
+   * @param account The account address or identifier
+   * @return A virtual address derived from the token ID
+   */
+  function generateAddress(string memory family, uint256 chainId, string memory account) external pure returns (address) {
+     bytes32 addressHash = Strings.equal(family, "evm") ?
+      keccak256(
+        abi.encodePacked(family, chainId, Strings.parseAddress(account))
+      )
+      :
+      keccak256(abi.encodePacked(family, chainId, account));
+
+     return address(uint160(uint256(addressHash)));
+  }
 }
