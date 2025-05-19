@@ -1,0 +1,17 @@
+{
+  "name": "@relay-protocol/types",
+  "version": "0.0.1",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "lint": "eslint"
+  },
+  "devDependencies": {
+    "@relay-protocol/tsconfig": "workspace:*",
+    "eslint": "9.25.1",
+    "typescript": "5.8.3"
+  }
+}

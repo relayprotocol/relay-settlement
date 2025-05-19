@@ -1447,9 +1447,19 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@relay-protocol/tsconfig@workspace:packages/tsconfig":
+"@relay-protocol/tsconfig@workspace:*, @relay-protocol/tsconfig@workspace:packages/tsconfig":
   version: 0.0.0-use.local
   resolution: "@relay-protocol/tsconfig@workspace:packages/tsconfig"
+  languageName: unknown
+  linkType: soft
+
+"@relay-protocol/types@workspace:packages/types":
+  version: 0.0.0-use.local
+  resolution: "@relay-protocol/types@workspace:packages/types"
+  dependencies:
+    "@relay-protocol/tsconfig": "workspace:*"
+    eslint: "npm:9.25.1"
+    typescript: "npm:5.8.3"
   languageName: unknown
   linkType: soft
 
