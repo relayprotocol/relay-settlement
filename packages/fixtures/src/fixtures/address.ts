@@ -5,11 +5,11 @@ export const addressesTestCases: Array<{
   expectedAddress: `0x${string}`
 }> = [
   {
+    expectedAddress: '0x5CC7C5F24C34AFAf30Fcb95af8c2528506c2ed4e',
     input: {
       address: '0x0000000000000000000000000000000000000000',
       chainId: 1,
     },
-    expectedAddress: '0x5CC7C5F24C34AFAf30Fcb95af8c2528506c2ed4e',
     name: 'ETH on Ethereum', // '0x' + 64 hex characters
   },
   {
