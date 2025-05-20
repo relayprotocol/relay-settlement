@@ -19,6 +19,16 @@ contract Allocator is Ownable, AccessControl {
   // delay
   uint256 public delay;
 
+  // payload builders mapping
+  mapping(uint256 => mapping(address => address)) public payloadBuilders;
+
+  // events
+  event PayloadBuilderUpdated(
+    uint256 indexed chainId,
+    address indexed escrow,
+    address indexed builder
+  );
+
   // errors
   error NotMultisigOwner(address account);
 
@@ -48,5 +58,19 @@ contract Allocator is Ownable, AccessControl {
 
   function enable() public onlyOwner {
     enabled = true;
+  }
+
+  /**
+   * @notice sets or updates the payload builder for a specific chain
+   * @param chainId chain ID
+   * @param builder address of the payload builder contract
+   */
+  function setPayloadBuilder(
+    uint256 chainId,
+    address escrow,
+    address builder
+  ) external onlyOwner {
+    payloadBuilders[chainId][escrow] = builder;
+    emit PayloadBuilderUpdated(chainId, escrow, builder);
   }
 }
