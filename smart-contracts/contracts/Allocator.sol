@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
-import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+
+interface ISafe {
+  function isOwner(address) external view returns (bool);
+}
+
 contract Allocator is Ownable, AccessControl {
     bool public enabled;
     
@@ -13,15 +18,16 @@ contract Allocator is Ownable, AccessControl {
     // delay
     uint256 public delay;
 
-    /*//////////////////////////////////////////////////////////////
-                             CONSTRUCTOR
-    //////////////////////////////////////////////////////////////*/
+
+    // errors
+    error NotMultisigOwner(address account);
 
     constructor(address _owner, uint256 _delay) Ownable(_owner) {
       // roles
       _setRoleAdmin(SOLVER_ORACLE_ROLE, SOLVER_ORACLE_ADMIN_ROLE);
       _grantRole(SOLVER_ORACLE_ADMIN_ROLE, _owner);
-      
+
+
       // enabled by default
       enabled = true;
 
@@ -29,7 +35,19 @@ contract Allocator is Ownable, AccessControl {
       delay = _delay;
 
       // TODO:  check if is _owner is a valid multisig
+    }
 
+    modifier onlyMultisigOwner() {
+      if (!ISafe(owner()).isOwner(msg.sender)) revert NotMultisigOwner(msg.sender);
+      _;
+    }
+
+    function disable() public onlyMultisigOwner() {
+      enabled = false;
+    }
+
+    function enable() public onlyOwner() {
+      enabled = true;
     }
 
 }
