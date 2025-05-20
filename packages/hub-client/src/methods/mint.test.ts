@@ -9,10 +9,10 @@ const hubClient = createHubClient({
 
 describe('mint', () => {
   it('should prepare the mint transaction', async () => {
-    const tx = await hubClient.prepareMintTx({
+    const tx = await hubClient.mint({
       account: '0x1D682340264cF209257f24C3EDcb2a9fc0592535',
       amount: ethers.parseUnits('1', 18),
-      chaindId: 10,
+      chainId: 10,
       family: 'evm',
       tokenAddress: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
     })
