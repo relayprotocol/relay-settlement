@@ -9,45 +9,44 @@ interface ISafe {
 }
 
 contract Allocator is Ownable, AccessControl {
-    bool public enabled;
-    
-    // solver roles
-    bytes32 public constant SOLVER_ORACLE_ROLE = keccak256("SOLVER_ORACLE_ROLE");
-    bytes32 public constant SOLVER_ORACLE_ADMIN_ROLE = keccak256("SOLVER_ORACLE_ADMIN_ROLE");
-    
+  bool public enabled;
+
+  // solver roles
+  bytes32 public constant SOLVER_ORACLE_ROLE = keccak256("SOLVER_ORACLE_ROLE");
+  bytes32 public constant SOLVER_ORACLE_ADMIN_ROLE =
+    keccak256("SOLVER_ORACLE_ADMIN_ROLE");
+
+  // delay
+  uint256 public delay;
+
+  // errors
+  error NotMultisigOwner(address account);
+
+  constructor(address _owner, uint256 _delay) Ownable(_owner) {
+    // roles
+    _setRoleAdmin(SOLVER_ORACLE_ROLE, SOLVER_ORACLE_ADMIN_ROLE);
+    _grantRole(SOLVER_ORACLE_ADMIN_ROLE, _owner);
+
+    // enabled by default
+    enabled = true;
+
     // delay
-    uint256 public delay;
+    delay = _delay;
 
+    // TODO:  check if is _owner is a valid multisig
+  }
 
-    // errors
-    error NotMultisigOwner(address account);
+  modifier onlyMultisigOwner() {
+    if (!ISafe(owner()).isOwner(msg.sender))
+      revert NotMultisigOwner(msg.sender);
+    _;
+  }
 
-    constructor(address _owner, uint256 _delay) Ownable(_owner) {
-      // roles
-      _setRoleAdmin(SOLVER_ORACLE_ROLE, SOLVER_ORACLE_ADMIN_ROLE);
-      _grantRole(SOLVER_ORACLE_ADMIN_ROLE, _owner);
+  function disable() public onlyMultisigOwner {
+    enabled = false;
+  }
 
-
-      // enabled by default
-      enabled = true;
-
-      // delay
-      delay = _delay;
-
-      // TODO:  check if is _owner is a valid multisig
-    }
-
-    modifier onlyMultisigOwner() {
-      if (!ISafe(owner()).isOwner(msg.sender)) revert NotMultisigOwner(msg.sender);
-      _;
-    }
-
-    function disable() public onlyMultisigOwner() {
-      enabled = false;
-    }
-
-    function enable() public onlyOwner() {
-      enabled = true;
-    }
-
+  function enable() public onlyOwner {
+    enabled = true;
+  }
 }

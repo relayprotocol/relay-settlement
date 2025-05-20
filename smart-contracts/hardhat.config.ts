@@ -2,6 +2,7 @@ import type { HardhatUserConfig } from 'hardhat/config'
 import 'solidity-coverage'
 import '@nomicfoundation/hardhat-toolbox-viem'
 import '@nomicfoundation/hardhat-ignition'
+import '@nomiclabs/hardhat-solhint'
 
 import './tasks/exportAbis'
 import './tasks/deployments/hub'
