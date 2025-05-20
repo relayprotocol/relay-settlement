@@ -1,5 +1,5 @@
 {
-  "name": "@relay-protocol/hub-abis",
+  "name": "@relay-protocol/abis",
   "version": "1.0.0",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

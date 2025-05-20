@@ -2,7 +2,7 @@ import { ethers } from 'ethers'
 import { HubClient, MintParams, SubmitTxParams } from '../client'
 import { submitTx } from '../submitTx'
 import { generateAddress, generateTokenId } from '@relay-protocol/hub-utils'
-import { Hub } from '@relay-protocol/hub-abis'
+import { Hub } from '@relay-protocol/abis'
 
 export const mint = async (
   params: MintParams,

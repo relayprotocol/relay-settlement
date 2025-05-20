@@ -1361,6 +1361,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@relay-protocol/abis@workspace:*, @relay-protocol/abis@workspace:packages/abis":
+  version: 0.0.0-use.local
+  resolution: "@relay-protocol/abis@workspace:packages/abis"
+  dependencies:
+    tsup: "npm:8.4.0"
+    typescript: "npm:5.8.3"
+  languageName: unknown
+  linkType: soft
+
 "@relay-protocol/eslint-config@workspace:*, @relay-protocol/eslint-config@workspace:packages/eslint-config":
   version: 0.0.0-use.local
   resolution: "@relay-protocol/eslint-config@workspace:packages/eslint-config"
@@ -1386,20 +1395,11 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@relay-protocol/hub-abis@workspace:*, @relay-protocol/hub-abis@workspace:packages/abis":
-  version: 0.0.0-use.local
-  resolution: "@relay-protocol/hub-abis@workspace:packages/abis"
-  dependencies:
-    tsup: "npm:8.4.0"
-    typescript: "npm:5.8.3"
-  languageName: unknown
-  linkType: soft
-
 "@relay-protocol/hub-client@workspace:packages/hub-client":
   version: 0.0.0-use.local
   resolution: "@relay-protocol/hub-client@workspace:packages/hub-client"
   dependencies:
-    "@relay-protocol/hub-abis": "workspace:*"
+    "@relay-protocol/abis": "workspace:*"
     "@relay-protocol/hub-utils": "workspace:*"
     eslint: "npm:9.25.1"
     ethers: "npm:6.13.5"

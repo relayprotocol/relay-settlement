@@ -12,7 +12,7 @@
     "packages:clean": "yarn packages --parallel run clean",
     "packages:build": "yarn packages --topological-dev run build",
     "lint": "yarn packages --parallel run lint",
-    "packages": "yarn workspaces foreach --recursive --from '{@relay-protocol/eslint-config,@relay-protocol/tslint-config,@relay-protocol/types,@relay-protocol/fixtures,@relay-protocol/hub-abis,@relay-protocol/hub-utils}'",
+    "packages": "yarn workspaces foreach --recursive --from '{@relay-protocol/eslint-config,@relay-protocol/tslint-config,@relay-protocol/types,@relay-protocol/fixtures,@relay-protocol/abis,@relay-protocol/hub-utils}'",
     "format": "prettier --write \"src/**/*.{ts,tsx}\""
   },
   "devDependencies": {
