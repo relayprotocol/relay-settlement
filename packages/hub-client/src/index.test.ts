@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HubClient } from '.'
+import { HubClient } from './client'
 
 const hubClient = new HubClient({
   address: '0x1234567890AbcdEF1234567890aBcdef12345678',

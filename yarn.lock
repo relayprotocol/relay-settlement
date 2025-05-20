@@ -1386,7 +1386,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@relay-protocol/hub-abis@workspace:packages/abis":
+"@relay-protocol/hub-abis@workspace:*, @relay-protocol/hub-abis@workspace:packages/abis":
   version: 0.0.0-use.local
   resolution: "@relay-protocol/hub-abis@workspace:packages/abis"
   dependencies:
@@ -1399,6 +1399,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@relay-protocol/hub-client@workspace:packages/hub-client"
   dependencies:
+    "@relay-protocol/hub-abis": "workspace:*"
+    "@relay-protocol/hub-utils": "workspace:*"
     eslint: "npm:9.25.1"
     ethers: "npm:6.13.5"
     tsup: "npm:8.4.0"

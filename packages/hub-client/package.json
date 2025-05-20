@@ -12,6 +12,8 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@relay-protocol/hub-abis": "workspace:*",
+    "@relay-protocol/hub-utils": "workspace:*",
     "ethers": "6.13.5",
     "vitest": "3.1.3"
   },
