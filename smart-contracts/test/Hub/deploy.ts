@@ -1,7 +1,7 @@
 import { expect } from 'chai'
 import hre from 'hardhat'
 import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import HubModule from '../ignition/modules/Hub'
+import HubModule from '../../ignition/modules/Hub'
 
 describe('Hub Deployment', function () {
   async function deployHub() {
