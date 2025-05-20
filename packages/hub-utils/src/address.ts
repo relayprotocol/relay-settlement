@@ -1,6 +1,5 @@
 import { ethers } from 'ethers'
-import { TokenIdComponents } from '@relay-protocol/types'
-import { getPackedData } from './utils'
+import { VirtualAddressComponents, VirtualAddress } from '@relay-protocol/types'
 
 /**
  * Generates a virtual Ethereum address from token components
@@ -11,8 +10,13 @@ import { getPackedData } from './utils'
  * This is equivalent to the Solidity: address(uint160(uint256(addressHash)))
  */
 
-export function generateAddress(components: TokenIdComponents): string {
-  const addressHash = ethers.keccak256(getPackedData(components))
+export function generateAddress(
+  components: VirtualAddressComponents
+): VirtualAddress {
+  const { chainId, address } = components
+  const addressHash = ethers.keccak256(
+    ethers.solidityPacked(['uint', 'string'], [chainId, address])
+  )
   const addressBytes = addressHash.slice(2).slice(-40)
-  return ethers.getAddress('0x' + addressBytes)
+  return ethers.getAddress('0x' + addressBytes) as `0x${string}`
 }

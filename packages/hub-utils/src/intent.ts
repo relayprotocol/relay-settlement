@@ -1,8 +1,11 @@
 import { ethers } from 'ethers'
+import { VirtualAddress } from '@relay-protocol/types'
 
-export const getIntentAddress = (intentId: string) => {
+export const generateIntentAddress = (intentId: string): VirtualAddress => {
   const addressHash = ethers.keccak256(
     ethers.solidityPacked(['string'], [intentId])
   )
-  return ethers.getAddress('0x' + addressHash.slice(2).slice(-40))
+  return ethers.getAddress(
+    '0x' + addressHash.slice(2).slice(-40)
+  ) as `0x${string}`
 }

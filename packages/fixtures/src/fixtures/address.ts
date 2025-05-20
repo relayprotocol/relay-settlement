@@ -1,42 +1,38 @@
-import { TokenIdComponents } from '@relay-protocol/types'
+import { VirtualAddressComponents } from '@relay-protocol/types'
 export const addressesTestCases: Array<{
   name: string
-  input: TokenIdComponents
+  input: VirtualAddressComponents
   expectedAddress: `0x${string}`
 }> = [
   {
     input: {
       address: '0x0000000000000000000000000000000000000000',
       chainId: 1,
-      family: 'evm',
     },
-    expectedAddress: '0x900C5beBABD7DDF3C35CCE2d206F386C63a67763',
+    expectedAddress: '0x5CC7C5F24C34AFAf30Fcb95af8c2528506c2ed4e',
     name: 'ETH on Ethereum', // '0x' + 64 hex characters
   },
   {
-    expectedAddress: '0x17BaE7e0E3B54d775F77DfFBc8Ce4fDb9D967FA4',
+    expectedAddress: '0x469148eBe03892603f72981C95AeFb9d71B73dB3',
     input: {
       address: 'bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq',
       chainId: 1,
-      family: 'bitcoin',
     },
     name: 'Bitcoin',
   },
   {
-    expectedAddress: '0x81655EF7d57D0dD5665D89e48C331DFd34CfBB60',
+    expectedAddress: '0x4e8a6eB3820C5815b2496181073b8992776d60f6',
     input: {
       address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
       chainId: 1,
-      family: 'solana',
     },
     name: 'USDC on Solana',
   },
   {
-    expectedAddress: '0xBbf511716716CcD27BaD0Db819802E6cDb1961ff',
+    expectedAddress: '0x7c6EA41A770C8c6c7F5D70e55146B606e8075c3B',
     input: {
       address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
       chainId: 8453,
-      family: 'evm',
     },
     name: 'USDC on Base',
   },
