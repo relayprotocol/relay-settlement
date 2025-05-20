@@ -15,9 +15,8 @@ contract Allocator is Ownable, AccessControl {
   event DelayChanged(uint256 delay);
 
   // solver roles
-  bytes32 public constant SOLVER_ORACLE_ROLE = keccak256("SOLVER_ORACLE_ROLE");
-  bytes32 public constant SOLVER_ORACLE_ADMIN_ROLE =
-    keccak256("SOLVER_ORACLE_ADMIN_ROLE");
+  bytes32 public constant SOLVER_ROLE = keccak256("SOLVER_ROLE");
+  bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
   // delay
   uint256 public delay;
@@ -37,8 +36,8 @@ contract Allocator is Ownable, AccessControl {
 
   constructor(address _owner, uint256 _delay) Ownable(_owner) {
     // roles
-    _setRoleAdmin(SOLVER_ORACLE_ROLE, SOLVER_ORACLE_ADMIN_ROLE);
-    _grantRole(SOLVER_ORACLE_ADMIN_ROLE, _owner);
+    _setRoleAdmin(SOLVER_ROLE, ADMIN_ROLE);
+    _grantRole(ADMIN_ROLE, _owner);
 
     // enabled by default
     enabled = true;
