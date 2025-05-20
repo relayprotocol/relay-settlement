@@ -11,6 +11,9 @@ interface ISafe {
 contract Allocator is Ownable, AccessControl {
   bool public enabled;
 
+  event Enabled(bool enabled);
+  event DelayChanged(uint256 delay);
+
   // solver roles
   bytes32 public constant SOLVER_ORACLE_ROLE = keccak256("SOLVER_ORACLE_ROLE");
   bytes32 public constant SOLVER_ORACLE_ADMIN_ROLE =
@@ -54,10 +57,17 @@ contract Allocator is Ownable, AccessControl {
 
   function disable() public onlyMultisigOwner {
     enabled = false;
+    emit Enabled(enabled);
   }
 
   function enable() public onlyOwner {
     enabled = true;
+    emit Enabled(enabled);
+  }
+
+  function setDelay(uint256 _delay) public onlyOwner {
+    delay = _delay;
+    emit DelayChanged(delay);
   }
 
   /**
