@@ -1,19 +1,2 @@
-/**
- * Type definitions for the Relay Protocol Hub utilities
- */
-
-export type ChainType = 'evm' | 'bitcoin' | 'solana'
-
-export interface TokenIdComponents {
-  family: ChainType
-  chainId: number
-  address: string
-}
-
-export interface VirtualAddressComponents {
-  chainId: number
-  address: string
-}
-
-export type TokenId = bigint
-export type VirtualAddress = `0x${string}`
+export * from './types/networks'
+export * from './types/utils'

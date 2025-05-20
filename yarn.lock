@@ -1397,7 +1397,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@relay-protocol/eslint-config@workspace:*, @relay-protocol/eslint-config@workspace:packages/eslint-config":
+"@relay-protocol/eslint-config@workspace:*, @relay-protocol/eslint-config@workspace:^, @relay-protocol/eslint-config@workspace:packages/eslint-config":
   version: 0.0.0-use.local
   resolution: "@relay-protocol/eslint-config@workspace:packages/eslint-config"
   dependencies:
@@ -1465,6 +1465,20 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@relay-protocol/networks@workspace:packages/networks":
+  version: 0.0.0-use.local
+  resolution: "@relay-protocol/networks@workspace:packages/networks"
+  dependencies:
+    "@relay-protocol/eslint-config": "workspace:^"
+    "@relay-protocol/tsconfig": "workspace:./packages/tsconfig"
+    "@relay-protocol/types": "workspace:./packages/types"
+    eslint: "npm:9.25.1"
+    fs-extra: "npm:11.3.0"
+    tsup: "npm:8.4.0"
+    typescript: "npm:5.8.3"
+  languageName: unknown
+  linkType: soft
+
 "@relay-protocol/smart-contracts@workspace:smart-contracts":
   version: 0.0.0-use.local
   resolution: "@relay-protocol/smart-contracts@workspace:smart-contracts"
@@ -1504,13 +1518,13 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@relay-protocol/tsconfig@workspace:*, @relay-protocol/tsconfig@workspace:packages/tsconfig":
+"@relay-protocol/tsconfig@workspace:*, @relay-protocol/tsconfig@workspace:./packages/tsconfig, @relay-protocol/tsconfig@workspace:packages/tsconfig":
   version: 0.0.0-use.local
   resolution: "@relay-protocol/tsconfig@workspace:packages/tsconfig"
   languageName: unknown
   linkType: soft
 
-"@relay-protocol/types@workspace:*, @relay-protocol/types@workspace:packages/types":
+"@relay-protocol/types@workspace:*, @relay-protocol/types@workspace:./packages/types, @relay-protocol/types@workspace:packages/types":
   version: 0.0.0-use.local
   resolution: "@relay-protocol/types@workspace:packages/types"
   dependencies:
