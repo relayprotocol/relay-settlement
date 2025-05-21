@@ -8,6 +8,17 @@ interface ISafe {
   function isOwner(address) external view returns (bool);
 }
 
+interface PayloadBuilder {
+  function buildPayload(
+    uint256 chainId,
+    address escrow,
+    address currency,
+    uint256 amount,
+    address receiver,
+    bytes calldata data
+  ) external returns (bytes memory);
+}
+
 contract Allocator is Ownable, AccessControl {
   bool public enabled;
 
@@ -24,6 +35,12 @@ contract Allocator is Ownable, AccessControl {
   // payload builders mapping
   mapping(uint256 => mapping(address => address)) public payloadBuilders;
 
+  // unsigned payloads
+  mapping(bytes32 => bytes) public unsignedPayloads;
+
+  // payload timestamps
+  mapping(bytes32 => uint256) public payloadTimestamps;
+
   // events
   event PayloadBuilderUpdated(
     uint256 indexed chainId,
@@ -31,8 +48,16 @@ contract Allocator is Ownable, AccessControl {
     address indexed builder
   );
 
+  event PayloadBuilt(
+    bytes32 indexed payloadHash,
+    bytes payload,
+    uint256 timestamp
+  );
+
   // errors
   error NotMultisigOwner(address account);
+  error CallerIsNotSolver(address account);
+  error NoPayloadBuilder(uint256 chainId, address escrow);
 
   constructor(address _owner, uint256 _delay) Ownable(_owner) {
     // roles
@@ -81,5 +106,47 @@ contract Allocator is Ownable, AccessControl {
   ) external onlyOwner {
     payloadBuilders[chainId][escrow] = builder;
     emit PayloadBuilderUpdated(chainId, escrow, builder);
+  }
+
+  /**
+   * @notice submits a withdraw request to the payload builder, store the payload
+   * @param chainId chain ID
+   * @param escrow address of the escrow contract
+   * @param currency address of the currency contract (or zero address for native)
+   * @param amount amount to withdraw
+   * @param receiver address of the receiver
+   * @param data additional data to pass to the payload builder
+   */
+  function submitWithdrawRequest(
+    uint256 chainId,
+    address escrow,
+    address currency,
+    uint256 amount,
+    address receiver,
+    bytes calldata data
+  ) public returns (bytes32 payloadHash) {
+    // Check that the calling address has the solver role
+    if (!hasRole(SOLVER_ROLE, msg.sender)) {
+      revert CallerIsNotSolver(msg.sender);
+    }
+    // check if the payload builder is set
+    address builder = payloadBuilders[chainId][escrow];
+    if (builder == address(0)) {
+      revert NoPayloadBuilder(chainId, escrow);
+    }
+
+    bytes memory payload = PayloadBuilder(builder).buildPayload(
+      chainId,
+      escrow,
+      currency,
+      amount,
+      receiver,
+      data
+    );
+    payloadHash = keccak256(abi.encodePacked(payload, block.timestamp));
+    unsignedPayloads[payloadHash] = payload;
+    payloadTimestamps[payloadHash] = block.timestamp + delay;
+    emit PayloadBuilt(payloadHash, payload, block.timestamp);
+    return payloadHash;
   }
 }
