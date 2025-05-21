@@ -1,32 +1,9 @@
-import hre from 'hardhat'
-import { ethers } from 'ethers'
-import { expect } from 'chai'
 import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import AllocatorModule from '../../ignition/modules/Allocator'
-
-const DEFAULT_DELAY = 600n
+import { expect } from 'chai'
+import { ethers } from 'ethers'
+import { DEFAULT_DELAY, deployAllocator } from '../helpers/deployAllocator'
 
 describe('Allocator', function () {
-  async function deployAllocator() {
-    const [owner] = await hre.viem.getWalletClients()
-    const publicClient = await hre.viem.getPublicClient()
-
-    const { allocator } = await hre.ignition.deploy(AllocatorModule, {
-      parameters: {
-        Allocator: {
-          delay: DEFAULT_DELAY,
-          owner: owner.account.address,
-        },
-      },
-    })
-
-    return {
-      allocator,
-      owner,
-      publicClient,
-    }
-  }
-
   describe('Constructor', function () {
     it('should set the correct owner', async function () {
       const { owner, allocator } = await loadFixture(deployAllocator)

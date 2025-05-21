@@ -1,16 +1,22 @@
 import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
 import { expect } from 'chai'
 import hre from 'hardhat'
-import AllocatorModule from '../../ignition/modules/Allocator'
 import {
   decodeEventLog,
   keccak256,
   TransactionReceipt,
   zeroAddress,
 } from 'viem'
+import { DEFAULT_DELAY, deployAllocator } from '../helpers/deployAllocator'
 
-const DEFAULT_DELAY = 600n
 const chainId = 1n
+
+interface PayloadBuiltEvent {
+  args: {
+    payloadHash: `0x${string}`
+    payload: `0x${string}`
+  }
+}
 
 const extractEvent = async (
   receipt: TransactionReceipt,
@@ -31,34 +37,30 @@ const extractEvent = async (
       }
     })
     .filter((e) => e !== null)
-  return event
+  return event as unknown as PayloadBuiltEvent
 }
 
 describe('Allocator submitWithdrawRequest', function () {
-  async function deployAllocator() {
-    const [owner, solver, escrow, attacker] = await hre.viem.getWalletClients()
-    const publicClient = await hre.viem.getPublicClient()
-
-    const { allocator } = await hre.ignition.deploy(AllocatorModule, {
-      parameters: {
-        Allocator: {
-          delay: DEFAULT_DELAY,
-          owner: owner.account.address,
-        },
-      },
-    })
+  async function deployAllocatorWithSetup() {
+    const { allocator, owner, otherAccounts, publicClient } =
+      await deployAllocator()
+    const [solver, escrow, attacker] = otherAccounts
 
     const payloadBuilder = await hre.viem.deployContract('DummyPayloadBuilder')
 
-    await allocator.write.setPayloadBuilder({
-      account: owner.account,
-      args: [chainId, escrow.account.address, payloadBuilder.address],
-    })
+    await allocator.write.setPayloadBuilder(
+      [chainId, escrow.account.address, payloadBuilder.address],
+      {
+        account: owner.account,
+      }
+    )
 
-    await allocator.write.grantRole({
-      account: owner.account,
-      args: [keccak256('SOLVER_ROLE'), solver.account.address],
-    })
+    await allocator.write.grantRole(
+      [keccak256('SOLVER_ROLE' as `0x${string}`), solver.account.address],
+      {
+        account: owner.account,
+      }
+    )
 
     return {
       allocator,
@@ -72,58 +74,69 @@ describe('Allocator submitWithdrawRequest', function () {
 
   describe('submitWithdrawRequest()', function () {
     it('should fail if the request was not performed by a solver', async () => {
-      const { allocator, attacker, escrow } = await loadFixture(deployAllocator)
+      const { allocator, attacker, escrow } = await loadFixture(
+        deployAllocatorWithSetup
+      )
       await expect(
-        allocator.write.submitWithdrawRequest({
-          account: attacker.account,
-          args: [
+        allocator.write.submitWithdrawRequest(
+          [
             1n, //chainId
             escrow.account.address, // escrow
             zeroAddress, // currency
             1n, // amount
             attacker.account.address, // receiver
-            '', // data
+            '0x' as `0x${string}`, // data
           ],
-        })
+          {
+            account: attacker.account,
+          }
+        )
       ).to.be.rejectedWith(
         'CallerIsNotSolver("0x90F79bf6EB2c4f870365E785982E1f101E93b906")'
       )
     })
 
     it('should fail if no payload builder exists', async () => {
-      const { allocator, solver, escrow } = await loadFixture(deployAllocator)
+      const { allocator, solver, escrow } = await loadFixture(
+        deployAllocatorWithSetup
+      )
       await expect(
-        allocator.write.submitWithdrawRequest({
-          account: solver.account,
-          args: [
+        allocator.write.submitWithdrawRequest(
+          [
             2n, // chainId
             escrow.account.address,
             zeroAddress, // currency
             1n, // amount
             solver.account.address, // receiver
-            '', // data
+            '0x' as `0x${string}`, // data
           ],
-        })
+          {
+            account: solver.account,
+          }
+        )
       ).to.be.rejectedWith(
         'NoPayloadBuilder(2, "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC")'
       )
     })
 
     it('should emit an event with the payload hash', async () => {
-      const { allocator, solver, escrow, publicClient } =
-        await loadFixture(deployAllocator)
+      const { allocator, solver, escrow, publicClient } = await loadFixture(
+        deployAllocatorWithSetup
+      )
 
-      const txHash = await allocator.write.submitWithdrawRequest({
-        account: solver.account,
-        args: [
+      const txHash = await allocator.write.submitWithdrawRequest(
+        [
           chainId,
           escrow.account.address,
           zeroAddress, // currency
           1n, // amount
           solver.account.address, // receiver
-          '', // data
+          '0x' as `0x${string}`, // data
         ],
-      })
+        {
+          account: solver.account,
+        }
+      )
       const receipt = await publicClient.waitForTransactionReceipt({
         hash: txHash,
       })
@@ -136,20 +149,23 @@ describe('Allocator submitWithdrawRequest', function () {
     })
 
     it('should store the unsigned payload', async () => {
-      const { allocator, solver, escrow, publicClient } =
-        await loadFixture(deployAllocator)
+      const { allocator, solver, escrow, publicClient } = await loadFixture(
+        deployAllocatorWithSetup
+      )
 
-      const txHash = await allocator.write.submitWithdrawRequest({
-        account: solver.account,
-        args: [
+      const txHash = await allocator.write.submitWithdrawRequest(
+        [
           chainId,
           escrow.account.address,
           zeroAddress, // currency
           1n, // amount
           solver.account.address, // receiver
-          '', // data
+          '0x' as `0x${string}`, // data
         ],
-      })
+        {
+          account: solver.account,
+        }
+      )
       const receipt = await publicClient.waitForTransactionReceipt({
         hash: txHash,
       })
@@ -163,20 +179,23 @@ describe('Allocator submitWithdrawRequest', function () {
       expect(payload).to.equal(payloadBuiltEvent.args.payload)
     })
     it('should store the timestamp after which the payload can be signed', async () => {
-      const { allocator, solver, escrow, publicClient } =
-        await loadFixture(deployAllocator)
+      const { allocator, solver, escrow, publicClient } = await loadFixture(
+        deployAllocatorWithSetup
+      )
 
-      const txHash = await allocator.write.submitWithdrawRequest({
-        account: solver.account,
-        args: [
+      const txHash = await allocator.write.submitWithdrawRequest(
+        [
           chainId,
           escrow.account.address,
           zeroAddress, // currency
           1n, // amount
           solver.account.address, // receiver
-          '', // data
+          '0x' as `0x${string}`, // data
         ],
-      })
+        {
+          account: solver.account,
+        }
+      )
       const receipt = await publicClient.waitForTransactionReceipt({
         hash: txHash,
       })

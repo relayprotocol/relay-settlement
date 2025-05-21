@@ -1,40 +1,16 @@
 import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
 import { expect } from 'chai'
-import hre from 'hardhat'
-import AllocatorModule from '../../ignition/modules/Allocator'
-
-const DEFAULT_DELAY = 600n
+import { DEFAULT_DELAY, deployAllocator } from '../helpers/deployAllocator'
 
 describe('Allocator setDelay', function () {
-  async function deployAllocator() {
-    const [owner, attacker] = await hre.viem.getWalletClients()
-    const publicClient = await hre.viem.getPublicClient()
-
-    const { allocator } = await hre.ignition.deploy(AllocatorModule, {
-      parameters: {
-        Allocator: {
-          delay: DEFAULT_DELAY,
-          owner: owner.account.address,
-        },
-      },
-    })
-
-    return {
-      allocator,
-      attacker,
-      owner,
-      publicClient,
-    }
-  }
-
   describe('setDelay()', function () {
     it('should revert when an attacker tries to set the delay', async function () {
-      const { allocator, attacker } = await loadFixture(deployAllocator)
+      const { allocator, otherAccounts } = await loadFixture(deployAllocator)
+      const attacker = otherAccounts[0]
 
       await expect(
-        allocator.write.setDelay({
+        allocator.write.setDelay([1000n], {
           account: attacker.account,
-          args: [1000n],
         })
       ).to.be.rejectedWith('OwnableUnauthorizedAccount')
     })
@@ -44,9 +20,8 @@ describe('Allocator setDelay', function () {
 
       expect(await allocator.read.delay()).to.equal(DEFAULT_DELAY)
 
-      const setDelayHash = await allocator.write.setDelay({
+      const setDelayHash = await allocator.write.setDelay([1000n], {
         account: owner.account,
-        args: [1000n],
       })
       await publicClient.waitForTransactionReceipt({ hash: setDelayHash })
 

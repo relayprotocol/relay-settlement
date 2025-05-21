@@ -1,13 +1,13 @@
 import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { encodeFunctionData } from 'viem'
 import { expect } from 'chai'
 import hre from 'hardhat'
-import AllocatorModule from '../../ignition/modules/Allocator'
+import { encodeFunctionData } from 'viem'
+import { deployAllocator } from '../helpers/deployAllocator'
 
 const DEFAULT_DELAY = 600n
 
 describe('Allocator disable/enable', function () {
-  async function deployAllocator() {
+  async function deployAllocatorWithSafe() {
     const [owner, admin, attacker] = await hre.viem.getWalletClients()
     const publicClient = await hre.viem.getPublicClient()
 
@@ -16,13 +16,8 @@ describe('Allocator disable/enable', function () {
     await mockSafe.write.addOwner([owner.account.address])
     await mockSafe.write.addOwner([admin.account.address])
 
-    const { allocator } = await hre.ignition.deploy(AllocatorModule, {
-      parameters: {
-        Allocator: {
-          delay: DEFAULT_DELAY,
-          owner: mockSafe.address,
-        },
-      },
+    const { allocator } = await deployAllocator({
+      owner: mockSafe.address,
     })
 
     return {
@@ -37,8 +32,9 @@ describe('Allocator disable/enable', function () {
 
   describe('disable()', function () {
     it('should allow any multisig owner to disable the contract', async function () {
-      const { allocator, admin, publicClient } =
-        await loadFixture(deployAllocator)
+      const { allocator, admin, publicClient } = await loadFixture(
+        deployAllocatorWithSafe
+      )
 
       expect(await allocator.read.enabled()).to.equal(true)
 
@@ -51,7 +47,7 @@ describe('Allocator disable/enable', function () {
     })
 
     it('should revert when non-admin tries to disable the contract', async function () {
-      const { allocator, attacker } = await loadFixture(deployAllocator)
+      const { allocator, attacker } = await loadFixture(deployAllocatorWithSafe)
 
       await expect(
         allocator.write.disable({
@@ -64,7 +60,7 @@ describe('Allocator disable/enable', function () {
   describe('enable()', function () {
     it('should require multisig signature to enable the contract', async function () {
       const { allocator, owner, admin, publicClient, mockSafe } =
-        await loadFixture(deployAllocator)
+        await loadFixture(deployAllocatorWithSafe)
 
       const disableHash = await allocator.write.disable({
         account: admin.account,
@@ -91,8 +87,9 @@ describe('Allocator disable/enable', function () {
     })
 
     it('should revert when non-owner tries to enable the contract', async function () {
-      const { allocator, admin, attacker, publicClient } =
-        await loadFixture(deployAllocator)
+      const { allocator, admin, attacker, publicClient } = await loadFixture(
+        deployAllocatorWithSafe
+      )
 
       const disableHash = await allocator.write.disable({
         account: admin.account,
