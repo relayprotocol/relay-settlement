@@ -1,11 +1,12 @@
+import '@nomicfoundation/hardhat-ignition'
+import '@nomicfoundation/hardhat-toolbox-viem'
+import '@nomiclabs/hardhat-solhint'
+import { networks as nets } from '@relay-protocol/networks'
 import type { HardhatUserConfig } from 'hardhat/config'
 import 'solidity-coverage'
-import '@nomicfoundation/hardhat-toolbox-viem'
-import '@nomicfoundation/hardhat-ignition'
-import '@nomiclabs/hardhat-solhint'
 
-import './tasks/exportAbis'
 import './tasks/deployments/hub'
+import './tasks/exportAbis'
 
 // get pk from shell
 const { DEPLOYER_PRIVATE_KEY } = process.env
@@ -24,6 +25,8 @@ let accounts
 if (DEPLOYER_PRIVATE_KEY) {
   accounts = [DEPLOYER_PRIVATE_KEY]
 }
+
+// parse networks from file
 const networks = {
   'arbitrum-sepolia': {
     accounts,
@@ -35,6 +38,22 @@ const networks = {
     allowUnlimitedContractSize: true,
   },
 }
+
+Object.keys(nets).forEach((id) => {
+  const { slug, rpc } = nets[id]
+  let accounts
+  const network = {
+    chainId: Number(id),
+    url: rpc[0],
+  }
+  if (DEPLOYER_PRIVATE_KEY) {
+    accounts = [DEPLOYER_PRIVATE_KEY]
+  }
+  networks[slug] = {
+    ...network,
+    accounts,
+  }
+})
 
 const etherscan = {
   apiKey: {

@@ -1465,7 +1465,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@relay-protocol/networks@workspace:packages/networks":
+"@relay-protocol/networks@workspace:*, @relay-protocol/networks@workspace:packages/networks":
   version: 0.0.0-use.local
   resolution: "@relay-protocol/networks@workspace:packages/networks"
   dependencies:
@@ -1493,6 +1493,7 @@ __metadata:
     "@openzeppelin/contracts": "npm:5.3.0"
     "@relay-protocol/fixtures": "workspace:*"
     "@relay-protocol/hub-utils": "workspace:*"
+    "@relay-protocol/networks": "workspace:*"
     "@types/chai": "npm:4.2.0"
     "@types/chai-as-promised": "npm:7.1.6"
     "@types/fs-extra": "npm:^11"
