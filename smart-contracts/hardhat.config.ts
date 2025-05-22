@@ -5,6 +5,8 @@ import { networks as nets } from '@relay-protocol/networks'
 import type { HardhatUserConfig } from 'hardhat/config'
 import 'solidity-coverage'
 
+import { parseEther } from 'viem'
+
 import './tasks/deployments/hub'
 import './tasks/exportAbis'
 
@@ -54,6 +56,29 @@ Object.keys(nets).forEach((id) => {
     accounts,
   }
 })
+
+// parse fork URL for tests
+const forkUrl = process.env.RPC_URL
+if (forkUrl) {
+  let accounts
+  if (DEPLOYER_PRIVATE_KEY) {
+    accounts = [
+      {
+        balance: parseEther('10000').toString(),
+        privateKey: DEPLOYER_PRIVATE_KEY,
+      },
+    ]
+  }
+
+  // check if fork is zksync
+  networks.hardhat = {
+    ...networks.hardhat,
+    accounts,
+    forking: {
+      url: forkUrl,
+    },
+  }
+}
 
 const etherscan = {
   apiKey: {
