@@ -25,8 +25,8 @@ contract Allocator is Ownable, AccessControl {
   event Enabled(bool enabled);
   event DelayChanged(uint256 delay);
 
-  // solver roles
-  bytes32 public constant SOLVER_ROLE = keccak256("SOLVER_ROLE");
+  // roles
+  bytes32 public constant HUB_ROLE = keccak256("HUB_ROLE");
   bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
   // delay
@@ -56,12 +56,12 @@ contract Allocator is Ownable, AccessControl {
 
   // errors
   error NotMultisigOwner(address account);
-  error CallerIsNotSolver(address account);
+  error CallerIsNotHub(address account);
   error NoPayloadBuilder(uint256 chainId, address escrow);
 
   constructor(address _owner, uint256 _delay) Ownable(_owner) {
     // roles
-    _setRoleAdmin(SOLVER_ROLE, ADMIN_ROLE);
+    _setRoleAdmin(HUB_ROLE, ADMIN_ROLE);
     _grantRole(ADMIN_ROLE, _owner);
 
     // enabled by default
@@ -125,9 +125,9 @@ contract Allocator is Ownable, AccessControl {
     address receiver,
     bytes calldata data
   ) public returns (bytes32 payloadHash) {
-    // Check that the calling address has the solver role
-    if (!hasRole(SOLVER_ROLE, msg.sender)) {
-      revert CallerIsNotSolver(msg.sender);
+    // Check that the calling address has the hub role
+    if (!hasRole(HUB_ROLE, msg.sender)) {
+      revert CallerIsNotHub(msg.sender);
     }
     // check if the payload builder is set
     address builder = payloadBuilders[chainId][escrow];

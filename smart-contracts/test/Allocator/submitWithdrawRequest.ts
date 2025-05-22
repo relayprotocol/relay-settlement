@@ -44,7 +44,7 @@ describe('Allocator submitWithdrawRequest', function () {
   async function deployAllocatorWithSetup() {
     const { allocator, owner, otherAccounts, publicClient } =
       await deployAllocator()
-    const [solver, escrow, attacker] = otherAccounts
+    const [hub, escrow, attacker] = otherAccounts
 
     const payloadBuilder = await hre.viem.deployContract('DummyPayloadBuilder')
 
@@ -56,7 +56,7 @@ describe('Allocator submitWithdrawRequest', function () {
     )
 
     await allocator.write.grantRole(
-      [keccak256('SOLVER_ROLE' as `0x${string}`), solver.account.address],
+      [keccak256('HUB_ROLE' as `0x${string}`), hub.account.address],
       {
         account: owner.account,
       }
@@ -66,14 +66,14 @@ describe('Allocator submitWithdrawRequest', function () {
       allocator,
       attacker,
       escrow,
+      hub,
       owner,
       publicClient,
-      solver,
     }
   }
 
   describe('submitWithdrawRequest()', function () {
-    it('should fail if the request was not performed by a solver', async () => {
+    it('should fail if the request was not performed by a hub', async () => {
       const { allocator, attacker, escrow } = await loadFixture(
         deployAllocatorWithSetup
       )
@@ -92,12 +92,12 @@ describe('Allocator submitWithdrawRequest', function () {
           }
         )
       ).to.be.rejectedWith(
-        'CallerIsNotSolver("0x90F79bf6EB2c4f870365E785982E1f101E93b906")'
+        'CallerIsNotHub("0x90F79bf6EB2c4f870365E785982E1f101E93b906")'
       )
     })
 
     it('should fail if no payload builder exists', async () => {
-      const { allocator, solver, escrow } = await loadFixture(
+      const { allocator, hub, escrow } = await loadFixture(
         deployAllocatorWithSetup
       )
       await expect(
@@ -107,11 +107,11 @@ describe('Allocator submitWithdrawRequest', function () {
             escrow.account.address,
             zeroAddress, // currency
             1n, // amount
-            solver.account.address, // receiver
+            hub.account.address, // receiver
             '0x' as `0x${string}`, // data
           ],
           {
-            account: solver.account,
+            account: hub.account,
           }
         )
       ).to.be.rejectedWith(
@@ -120,7 +120,7 @@ describe('Allocator submitWithdrawRequest', function () {
     })
 
     it('should emit an event with the payload hash', async () => {
-      const { allocator, solver, escrow, publicClient } = await loadFixture(
+      const { allocator, hub, escrow, publicClient } = await loadFixture(
         deployAllocatorWithSetup
       )
 
@@ -130,11 +130,11 @@ describe('Allocator submitWithdrawRequest', function () {
           escrow.account.address,
           zeroAddress, // currency
           1n, // amount
-          solver.account.address, // receiver
+          hub.account.address, // receiver
           '0x' as `0x${string}`, // data
         ],
         {
-          account: solver.account,
+          account: hub.account,
         }
       )
       const receipt = await publicClient.waitForTransactionReceipt({
@@ -149,7 +149,7 @@ describe('Allocator submitWithdrawRequest', function () {
     })
 
     it('should store the unsigned payload', async () => {
-      const { allocator, solver, escrow, publicClient } = await loadFixture(
+      const { allocator, hub, escrow, publicClient } = await loadFixture(
         deployAllocatorWithSetup
       )
 
@@ -159,11 +159,11 @@ describe('Allocator submitWithdrawRequest', function () {
           escrow.account.address,
           zeroAddress, // currency
           1n, // amount
-          solver.account.address, // receiver
+          hub.account.address, // receiver
           '0x' as `0x${string}`, // data
         ],
         {
-          account: solver.account,
+          account: hub.account,
         }
       )
       const receipt = await publicClient.waitForTransactionReceipt({
@@ -179,7 +179,7 @@ describe('Allocator submitWithdrawRequest', function () {
       expect(payload).to.equal(payloadBuiltEvent.args.payload)
     })
     it('should store the timestamp after which the payload can be signed', async () => {
-      const { allocator, solver, escrow, publicClient } = await loadFixture(
+      const { allocator, hub, escrow, publicClient } = await loadFixture(
         deployAllocatorWithSetup
       )
 
@@ -189,11 +189,11 @@ describe('Allocator submitWithdrawRequest', function () {
           escrow.account.address,
           zeroAddress, // currency
           1n, // amount
-          solver.account.address, // receiver
+          hub.account.address, // receiver
           '0x' as `0x${string}`, // data
         ],
         {
-          account: solver.account,
+          account: hub.account,
         }
       )
       const receipt = await publicClient.waitForTransactionReceipt({
