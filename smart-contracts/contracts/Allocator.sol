@@ -55,7 +55,7 @@ contract Allocator is Ownable, AccessControl {
   );
 
   event PayloadBuilt(
-    bytes32 indexed payloadHash,
+    bytes32 indexed payloadId,
     bytes payload,
     uint256 timestamp
   );
@@ -130,7 +130,7 @@ contract Allocator is Ownable, AccessControl {
     uint256 amount,
     address receiver,
     bytes calldata data
-  ) public returns (bytes32 payloadHash) {
+  ) public returns (bytes32 payloadId) {
     // Check that the calling address has the hub role
     if (!hasRole(HUB_ROLE, msg.sender)) {
       revert CallerIsNotHub(msg.sender);
@@ -149,10 +149,10 @@ contract Allocator is Ownable, AccessControl {
       receiver,
       data
     );
-    payloadHash = keccak256(abi.encodePacked(payload, block.timestamp));
-    unsignedPayloads[payloadHash] = payload;
-    payloadTimestamps[payloadHash] = block.timestamp + delay;
-    emit PayloadBuilt(payloadHash, payload, block.timestamp);
-    return payloadHash;
+    payloadId = keccak256(abi.encodePacked(payload, block.timestamp));
+    unsignedPayloads[payloadId] = payload;
+    payloadTimestamps[payloadId] = block.timestamp + delay;
+    emit PayloadBuilt(payloadId, payload, block.timestamp);
+    return payloadId;
   }
 }

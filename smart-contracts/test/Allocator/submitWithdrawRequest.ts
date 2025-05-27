@@ -13,7 +13,7 @@ const chainId = 1n
 
 interface PayloadBuiltEvent {
   args: {
-    payloadHash: `0x${string}`
+    payloadId: `0x${string}`
     payload: `0x${string}`
   }
 }
@@ -174,8 +174,8 @@ describe('Allocator submitWithdrawRequest', function () {
         'PayloadBuilt',
         allocator.abi
       )
-      const payloadHash = payloadBuiltEvent.args.payloadHash
-      const payload = await allocator.read.unsignedPayloads([payloadHash])
+      const payloadId = payloadBuiltEvent.args.payloadId
+      const payload = await allocator.read.unsignedPayloads([payloadId])
       expect(payload).to.equal(payloadBuiltEvent.args.payload)
     })
     it('should store the timestamp after which the payload can be signed', async () => {
@@ -205,8 +205,8 @@ describe('Allocator submitWithdrawRequest', function () {
         allocator.abi
       )
 
-      const payloadHash = payloadBuiltEvent.args.payloadHash
-      const timestamp = await allocator.read.payloadTimestamps([payloadHash])
+      const payloadId = payloadBuiltEvent.args.payloadId
+      const timestamp = await allocator.read.payloadTimestamps([payloadId])
       const block = await publicClient.getBlock({
         blockNumber: receipt.blockNumber,
       })
