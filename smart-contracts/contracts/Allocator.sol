@@ -14,7 +14,7 @@ interface PayloadBuilder {
     address escrow,
     address currency,
     uint256 amount,
-    address receiver,
+    string calldata receiver,
     bytes calldata data
   ) external view returns (bytes memory);
 
@@ -128,7 +128,7 @@ contract Allocator is Ownable, AccessControl {
     address escrow,
     address currency,
     uint256 amount,
-    address receiver,
+    string calldata receiver,
     bytes calldata data
   ) public returns (bytes32 payloadId) {
     // Check that the calling address has the hub role

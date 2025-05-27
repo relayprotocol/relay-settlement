@@ -9,7 +9,7 @@ contract DummyPayloadBuilder is PayloadBuilder {
     address,
     address,
     uint256,
-    address,
+    string calldata,
     bytes calldata
   ) external view override returns (bytes memory) {
     return "dummy payload";

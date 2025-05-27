@@ -26,7 +26,7 @@ contract EVMPayloadBuilder is PayloadBuilder {
     address /* escrow */,
     address currency,
     uint256 amount,
-    address receiver,
+    string memory receiver,
     bytes calldata /* data */
   ) external view override returns (bytes memory) {
     CallRequest memory request = CallRequest({
@@ -39,7 +39,7 @@ contract EVMPayloadBuilder is PayloadBuilder {
       // If this is a native transfer, we need to set the value to the amount
       // and the data to an empty bytes array
       request.calls[0] = Call({
-        to: receiver,
+        to: toAddress(receiver),
         data: bytes(""),
         value: amount,
         allowFailure: false
@@ -50,7 +50,7 @@ contract EVMPayloadBuilder is PayloadBuilder {
         to: currency,
         data: abi.encodeWithSignature(
           "transfer(address,uint256)",
-          receiver,
+          toAddress(receiver),
           amount
         ),
         value: 0,
@@ -74,5 +74,28 @@ contract EVMPayloadBuilder is PayloadBuilder {
           payload
         )
       );
+  }
+
+  // Converts a string representation of an address to an address type
+  function toAddress(string memory s) internal pure returns (address) {
+    bytes memory b = bytes(s);
+    require(b.length == 42, "Invalid address length");
+
+    uint160 result = 0;
+    for (uint i = 2; i < 42; i++) {
+      result <<= 4;
+      uint8 c = uint8(b[i]);
+
+      if (c >= 48 && c <= 57) {
+        result |= uint160(c - 48); // 0-9
+      } else if (c >= 65 && c <= 70) {
+        result |= uint160(c - 55); // A-F
+      } else if (c >= 97 && c <= 102) {
+        result |= uint160(c - 87); // a-f
+      } else {
+        revert("Invalid character in address");
+      }
+    }
+    return address(result);
   }
 }
