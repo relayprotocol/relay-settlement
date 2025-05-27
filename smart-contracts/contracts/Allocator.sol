@@ -16,7 +16,13 @@ interface PayloadBuilder {
     uint256 amount,
     address receiver,
     bytes calldata data
-  ) external returns (bytes memory);
+  ) external view returns (bytes memory);
+
+  function hashPayload(
+    uint256 chainId,
+    address escrow,
+    bytes calldata payload
+  ) external pure returns (bytes32);
 }
 
 contract Allocator is Ownable, AccessControl {

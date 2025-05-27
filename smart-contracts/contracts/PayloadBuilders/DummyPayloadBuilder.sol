@@ -11,7 +11,15 @@ contract DummyPayloadBuilder is PayloadBuilder {
     uint256,
     address,
     bytes calldata
-  ) external pure override returns (bytes memory) {
+  ) external view override returns (bytes memory) {
     return "dummy payload";
+  }
+
+  function hashPayload(
+    uint256,
+    address,
+    bytes calldata payload
+  ) external pure override returns (bytes32) {
+    return keccak256(payload);
   }
 }
