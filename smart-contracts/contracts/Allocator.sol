@@ -12,7 +12,7 @@ interface PayloadBuilder {
   function buildPayload(
     uint256 chainId,
     address escrow,
-    address currency,
+    string calldata currency,
     uint256 amount,
     string calldata receiver,
     bytes calldata data
@@ -126,7 +126,7 @@ contract Allocator is Ownable, AccessControl {
   function submitWithdrawRequest(
     uint256 chainId,
     address escrow,
-    address currency,
+    string calldata currency,
     uint256 amount,
     string calldata receiver,
     bytes calldata data

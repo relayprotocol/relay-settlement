@@ -24,7 +24,7 @@ contract EVMPayloadBuilder is PayloadBuilder {
   function buildPayload(
     uint256 /* chainId */,
     address /* escrow */,
-    address currency,
+    string calldata currency,
     uint256 amount,
     string memory receiver,
     bytes calldata /* data */
@@ -34,8 +34,9 @@ contract EVMPayloadBuilder is PayloadBuilder {
       nonce: uint256(keccak256(abi.encodePacked(block.timestamp))),
       expiration: block.timestamp + 10 days // Can we get the delay from the Allocator?
     });
+    address currencyAddress = toAddress(currency);
 
-    if (currency == address(0)) {
+    if (currencyAddress == address(0)) {
       // If this is a native transfer, we need to set the value to the amount
       // and the data to an empty bytes array
       request.calls[0] = Call({
@@ -47,7 +48,7 @@ contract EVMPayloadBuilder is PayloadBuilder {
     } else {
       // Otherwise we assume this is an ERC20 transfer
       request.calls[0] = Call({
-        to: currency,
+        to: currencyAddress,
         data: abi.encodeWithSignature(
           "transfer(address,uint256)",
           toAddress(receiver),
