@@ -23,6 +23,8 @@ interface PayloadBuilder {
     address escrow,
     bytes calldata payload
   ) external pure returns (bytes32);
+
+  function curve() external pure returns (string memory);
 }
 
 contract Allocator is Ownable, AccessControl {

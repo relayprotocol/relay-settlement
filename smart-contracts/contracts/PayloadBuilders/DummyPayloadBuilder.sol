@@ -22,4 +22,8 @@ contract DummyPayloadBuilder is PayloadBuilder {
   ) external pure override returns (bytes32) {
     return keccak256(payload);
   }
+
+  function curve() external pure returns (string memory) {
+    return "dummy curve";
+  }
 }

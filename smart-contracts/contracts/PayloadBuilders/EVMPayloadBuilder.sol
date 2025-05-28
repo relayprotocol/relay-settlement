@@ -77,6 +77,10 @@ contract EVMPayloadBuilder is PayloadBuilder {
       );
   }
 
+  function curve() external pure returns (string memory) {
+    return "Ecdsa";
+  }
+
   // Converts a string representation of an address to an address type
   function toAddress(string memory s) internal pure returns (address) {
     bytes memory b = bytes(s);
