@@ -9,6 +9,7 @@ import { parseEther } from 'viem'
 
 import './tasks/deployments/hub'
 import './tasks/exportAbis'
+import './tasks/computeSignatures'
 
 // get pk from shell
 const { DEPLOYER_PRIVATE_KEY } = process.env
