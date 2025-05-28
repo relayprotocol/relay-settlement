@@ -83,6 +83,7 @@ if (forkUrl) {
 const etherscan = {
   apiKey: {
     arbitrumSepolia: 'W5XNFPZS8D6JZ5AXVWD4XCG8B5ZH5JCD4Y',
+    auroraTestnet: 'T',
   },
 }
 
