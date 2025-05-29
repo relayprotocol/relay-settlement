@@ -22,7 +22,7 @@ interface PayloadBuilder {
     uint256 chainId,
     address escrow,
     bytes calldata payload
-  ) external pure returns (bytes32);
+  ) external view returns (bytes32);
 
   function curve() external pure returns (string memory);
 }

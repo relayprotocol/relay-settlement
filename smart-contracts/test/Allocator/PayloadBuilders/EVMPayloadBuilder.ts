@@ -1,11 +1,11 @@
 import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { privateKeyToAccount } from 'viem/accounts'
 import { expect } from 'chai'
 import hre from 'hardhat'
 import {
   decodeAbiParameters,
   getAddress,
   hashMessage,
+  hashTypedData,
   hexToBytes,
   parseUnits,
   zeroAddress,
@@ -134,13 +134,14 @@ describe('Allocator EVMPayloadBuilder', function () {
   })
 
   describe('hashPayload()', function () {
-    it('should hash a payload correctly', async () => {
+    it('should hash a payload correctly using EIP712', async () => {
       const { payloadBuilder, escrow, receiver } =
         await loadFixture(deployAllocator)
 
       const amount = parseUnits('0.1', 18)
+      const chainId = 1n // Mainnet chain ID
       const payload = await payloadBuilder.read.buildPayload([
-        1n, // chainId
+        chainId, // chainId
         escrow.account.address, // escrow
         zeroAddress, // currency
         amount, // amount
@@ -150,13 +151,61 @@ describe('Allocator EVMPayloadBuilder', function () {
 
       // Let's now check that the hash corresponds to what the EVM would generate when asking the user to sign the payload.
       const hash = await payloadBuilder.read.hashPayload([
-        1n, // chainId
+        chainId, // chainId
         escrow.account.address, // escrow
         payload,
       ])
       expect(hash).to.be.a('string')
-      expect(hash.length).to.be.greaterThan(32)
-      expect(hash).to.equal(hashMessage({ raw: hexToBytes(payload) }))
+
+      const [message] = decodeAbiParameters(
+        [
+          {
+            components: [
+              {
+                components: [
+                  { name: 'to', type: 'address' },
+                  { name: 'data', type: 'bytes' },
+                  { name: 'value', type: 'uint256' },
+                  { name: 'allowFailure', type: 'bool' },
+                ],
+                name: 'calls',
+                type: 'tuple[]',
+              },
+              { name: 'nonce', type: 'uint256' },
+              { name: 'expiration', type: 'uint256' },
+            ],
+            name: 'callRequest',
+            type: 'tuple',
+          },
+        ],
+        payload
+      )
+
+      const reconstructedHash = hashTypedData({
+        domain: {
+          chainId: Number(chainId),
+          name: 'RelayEscrow',
+          verifyingContract: escrow.account.address,
+          version: '1',
+        },
+        message,
+        primaryType: 'CallRequest',
+        types: {
+          Call: [
+            { name: 'to', type: 'address' },
+            { name: 'data', type: 'bytes' },
+            { name: 'value', type: 'uint256' },
+            { name: 'allowFailure', type: 'bool' },
+          ],
+          CallRequest: [
+            { name: 'calls', type: 'Call[]' },
+            { name: 'nonce', type: 'uint256' },
+            { name: 'expiration', type: 'uint256' },
+          ],
+        },
+      })
+
+      expect(hash).to.equal(reconstructedHash)
     })
   })
 })
