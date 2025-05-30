@@ -208,4 +208,14 @@ describe('Allocator EVMPayloadBuilder', function () {
       expect(hash).to.equal(reconstructedHash)
     })
   })
+
+  describe('toAddress', function () {
+    it('should return the address of the payload builder', async () => {
+      const { payloadBuilder } = await loadFixture(deployAllocator)
+      const address = await payloadBuilder.read.toAddress([
+        '0x81Dd955D02D337DB81BA6c9C5F6213E647672052',
+      ])
+      expect(address).to.equal('0x81Dd955D02D337DB81BA6c9C5F6213E647672052')
+    })
+  })
 })

@@ -165,7 +165,7 @@ contract EVMPayloadBuilder is PayloadBuilder {
   }
 
   // Converts a string representation of an address to an address type
-  function toAddress(string memory s) internal pure returns (address) {
+  function toAddress(string memory s) public pure returns (address) {
     bytes memory b = bytes(s);
     require(b.length == 42, "Invalid address length");
 
