@@ -2,7 +2,6 @@
 pragma solidity ^0.8.28;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
 interface ISafe {
@@ -28,7 +27,7 @@ interface PayloadBuilder {
   function curve() external pure returns (string memory);
 }
 
-contract Allocator is Ownable, AccessControl {
+contract Allocator is AccessControl {
   bool public enabled;
 
   event Enabled(bool enabled);
@@ -40,6 +39,9 @@ contract Allocator is Ownable, AccessControl {
 
   // delay
   uint256 public delay;
+
+  // owner of the contract
+  address public owner;
 
   // payload builders mapping
   mapping(uint256 => mapping(address => address)) public payloadBuilders;
@@ -68,7 +70,7 @@ contract Allocator is Ownable, AccessControl {
   error CallerIsNotHub(address account);
   error NoPayloadBuilder(uint256 chainId, address escrow);
 
-  constructor(address _owner, uint256 _delay) Ownable(_owner) {
+  constructor(address _owner, uint256 _delay) {
     // roles
     _setRoleAdmin(HUB_ROLE, ADMIN_ROLE);
     _grantRole(ADMIN_ROLE, _owner);
@@ -80,11 +82,11 @@ contract Allocator is Ownable, AccessControl {
     delay = _delay;
 
     // TODO:  check if is _owner is a valid multisig
+    owner = _owner;
   }
 
   modifier onlyMultisigOwner() {
-    if (!ISafe(owner()).isOwner(msg.sender))
-      revert NotMultisigOwner(msg.sender);
+    if (!ISafe(owner).isOwner(msg.sender)) revert NotMultisigOwner(msg.sender);
     _;
   }
 
@@ -93,12 +95,12 @@ contract Allocator is Ownable, AccessControl {
     emit Enabled(enabled);
   }
 
-  function enable() public onlyOwner {
+  function enable() public onlyRole(ADMIN_ROLE) {
     enabled = true;
     emit Enabled(enabled);
   }
 
-  function setDelay(uint256 _delay) public onlyOwner {
+  function setDelay(uint256 _delay) public onlyRole(ADMIN_ROLE) {
     delay = _delay;
     emit DelayChanged(delay);
   }
@@ -112,7 +114,7 @@ contract Allocator is Ownable, AccessControl {
     uint256 chainId,
     address escrow,
     address builder
-  ) external onlyOwner {
+  ) external onlyRole(ADMIN_ROLE) {
     payloadBuilders[chainId][escrow] = builder;
     emit PayloadBuilderUpdated(chainId, escrow, builder);
   }

@@ -101,7 +101,7 @@ describe('Allocator disable/enable', function () {
         allocator.write.enable({
           account: attacker.account,
         })
-      ).to.be.rejectedWith('OwnableUnauthorizedAccount')
+      ).to.be.rejectedWith('AccessControlUnauthorizedAccount')
     })
   })
 })

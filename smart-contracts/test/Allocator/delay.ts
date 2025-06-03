@@ -12,7 +12,7 @@ describe('Allocator setDelay', function () {
         allocator.write.setDelay([1000n], {
           account: attacker.account,
         })
-      ).to.be.rejectedWith('OwnableUnauthorizedAccount')
+      ).to.be.rejectedWith('AccessControlUnauthorizedAccount')
     })
     it('should let the owner set the delay', async function () {
       const { allocator, owner, publicClient } =

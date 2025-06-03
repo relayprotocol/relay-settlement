@@ -132,6 +132,6 @@ describe('Allocator - setPayloadBuilder', function () {
           account: nonOwner.account,
         }
       )
-    ).to.be.rejectedWith('OwnableUnauthorizedAccount')
+    ).to.be.rejectedWith('AccessControlUnauthorizedAccount')
   })
 })
