@@ -2,8 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {PayloadBuilder} from "../Allocator.sol";
-import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import {EIP712, MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 // Taken from https://github.com/relayprotocol/escrow-contracts/blob/main/packages/ethereum-vm/src/utils/RelayEscrowStructs.sol
 struct Call {
@@ -37,8 +36,6 @@ contract EVMPayloadBuilder is PayloadBuilder {
     keccak256(
       "CallRequest(Call[] calls,uint256 nonce,uint256 expiration)Call(address to,bytes data,uint256 value,bool allowFailure)"
     );
-
-  constructor() {}
 
   // This must return a "CallRequest calldata request"
   // as defined in https://github.com/relayprotocol/escrow-contracts/blob/main/packages/ethereum-vm/src/utils/RelayEscrowStructs.sol
