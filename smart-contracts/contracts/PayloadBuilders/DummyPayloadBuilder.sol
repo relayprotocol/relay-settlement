@@ -15,12 +15,14 @@ contract DummyPayloadBuilder is PayloadBuilder {
     return "dummy payload";
   }
 
-  function hashPayload(
+  function hashesToSign(
     uint256 /** chainId */,
     address /* escrow */,
     bytes calldata payload
-  ) external pure override returns (bytes32) {
-    return keccak256(payload);
+  ) external pure override returns (bytes32[] memory hashes) {
+    hashes = new bytes32[](1);
+    hashes[0] = keccak256(payload);
+    return hashes;
   }
 
   function curve() external pure returns (string memory) {

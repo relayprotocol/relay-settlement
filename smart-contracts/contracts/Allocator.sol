@@ -20,11 +20,11 @@ interface PayloadBuilder {
     bytes calldata data
   ) external view returns (bytes memory);
 
-  function hashPayload(
+  function hashesToSign(
     uint256 chainId,
     address escrow,
     bytes calldata payload
-  ) external view returns (bytes32);
+  ) external view returns (bytes32[] memory);
 
   function curve() external pure returns (string memory);
 }
@@ -76,7 +76,7 @@ contract Allocator is AccessControl {
   mapping(bytes32 => bytes) public unsignedPayloads;
 
   // signed payloads
-  mapping(bytes32 => bytes) public signedPayloads;
+  mapping(bytes32 => mapping(bytes32 => bytes)) public signedPayloads;
 
   // payload timestamps
   mapping(bytes32 => uint256) public payloadTimestamps;
@@ -94,7 +94,11 @@ contract Allocator is AccessControl {
     uint256 timestamp
   );
 
-  event PayloadWithdrawSigned(bytes32 indexed payloadId, bytes signedPayload);
+  event PayloadWithdrawSigned(
+    bytes32 indexed payloadId,
+    bytes32 indexed hashToSign,
+    bytes signedPayload
+  );
 
   // errors
   error NotMultisigOwner(address account);
@@ -111,7 +115,6 @@ contract Allocator is AccessControl {
     string memory _signer,
     address _wNEAR
   ) {
-
     // roles
     _setRoleAdmin(HUB_ROLE, ADMIN_ROLE);
     _grantRole(ADMIN_ROLE, _owner);
@@ -272,39 +275,50 @@ contract Allocator is AccessControl {
       revert WithdrawalDisabled();
     }
 
-    if (signedPayloads[payloadId].length > 0) {
-      revert PayloadAlreadySigned(payloadId);
-    }
-
     string memory path = Strings.toHexString(uint160(address(this)), 20);
     PayloadBuilder payloadBuilder = PayloadBuilder(builder);
 
-    // Encode the JSON request for the signer
-    bytes memory data = encodeJSONRequest(
-      payloadBuilder.hashPayload(chainId, escrow, unsignedPayloads[payloadId]),
-      payloadBuilder.curve(),
-      path,
-      0
+    bytes32[] memory hashesToSign = payloadBuilder.hashesToSign(
+      chainId,
+      escrow,
+      unsignedPayloads[payloadId]
     );
+    for (uint256 i = 0; i < hashesToSign.length; i++) {
+      if (signedPayloads[payloadId][hashesToSign[i]].length > 0) {
+        revert PayloadAlreadySigned(payloadId);
+      }
 
-    // Now get NEAR to sign the payload!
-    PromiseCreateArgs memory callSign = near.call(
-      nearSigner,
-      "sign",
-      data,
-      // the docs here https://github.com/aurora-is-near/chain-signatures-signer/tree/main?tab=readme-ov-file#signing-the-payload
-      // states that 1 yoctoNEAR is usually enough to sign the call successfully
-      1, // attachedNear
-      gasSettings.signGas
-    );
-    PromiseCreateArgs memory callback = near.auroraCall(
-      address(this),
-      abi.encodeWithSelector(this.signWithdrawCallback.selector, payloadId),
-      0,
-      gasSettings.callbackGas
-    );
+      // Encode the JSON request for the signer
+      bytes memory data = encodeJSONRequest(
+        hashesToSign[i],
+        payloadBuilder.curve(),
+        path,
+        0
+      );
 
-    callSign.then(callback).transact();
+      // Now get NEAR to sign the payload!
+      PromiseCreateArgs memory callSign = near.call(
+        nearSigner,
+        "sign",
+        data,
+        // the docs here https://github.com/aurora-is-near/chain-signatures-signer/tree/main?tab=readme-ov-file#signing-the-payload
+        // states that 1 yoctoNEAR is usually enough to sign the call successfully
+        1, // attachedNear
+        gasSettings.signGas
+      );
+      PromiseCreateArgs memory callback = near.auroraCall(
+        address(this),
+        abi.encodeWithSelector(
+          this.signWithdrawCallback.selector,
+          payloadId,
+          hashesToSign[i]
+        ),
+        0,
+        gasSettings.callbackGas
+      );
+
+      callSign.then(callback).transact();
+    }
   }
 
   /**
@@ -315,7 +329,8 @@ contract Allocator is AccessControl {
    * signedPayloads mapping. It also emits an event to notify that the payload has been signed.
    */
   function signWithdrawCallback(
-    bytes32 payloadId
+    bytes32 payloadId,
+    bytes32 hashToSign
   ) public onlyRole(CALLBACK_ROLE) {
     // triggering this function requires Aurora precompiles and therefore has no unit tests
     PromiseResult memory result = AuroraSdk.promiseResult(0);
@@ -324,8 +339,8 @@ contract Allocator is AccessControl {
       revert SignCallbackFailed(payloadId);
     }
 
-    signedPayloads[payloadId] = result.output;
-    emit PayloadWithdrawSigned(payloadId, result.output);
+    signedPayloads[payloadId][hashToSign] = result.output;
+    emit PayloadWithdrawSigned(payloadId, hashToSign, result.output);
   }
 
   /*

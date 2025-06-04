@@ -175,18 +175,24 @@ task(
         'EVMPayloadBuilder',
         payloadBuilderAddress
       )
-      const payloadHash = await payloadBuilder.read.hashPayload([
+      const payloadHashes = await payloadBuilder.read.hashesToSign([
         chainId,
         escrowAddress,
         payload,
       ])
 
       // Wait 10 seconds to "wait" for the signature to arrive
-      let signedPayload = await allocator.read.signedPayloads([payloadId])
+      let signedPayload = await allocator.read.signedPayloads([
+        payloadId,
+        payloadHashes[0],
+      ])
       while (signedPayload === '0x') {
         console.log('Waiting for signed payload...')
         await wait(1)
-        signedPayload = await allocator.read.signedPayloads([payloadId])
+        signedPayload = await allocator.read.signedPayloads([
+          payloadId,
+          payloadHashes[0],
+        ])
       }
       const jsonSignature = JSON.parse(fromHex(signedPayload, 'string'))
 
@@ -219,7 +225,7 @@ task(
       }
 
       const recoveredFromHash = await recoverAddress({
-        hash: payloadHash,
+        hash: payloadHashes[0],
         signature,
       })
 

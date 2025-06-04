@@ -80,19 +80,20 @@ contract EVMPayloadBuilder is PayloadBuilder {
     return abi.encode(request);
   }
 
-  /// @notice Hashes a payload using EIP-712 standard
+  /// @notice Returns the single EIP-712 hash to sign for the given CallRequest
   /// @param payload The encoded CallRequest payload to hash
   /// @return The EIP-712 hash of the payload
-  function hashPayload(
+  function hashesToSign(
     uint256 chainId,
     address escrow,
     bytes calldata payload
-  ) external pure returns (bytes32) {
-    // decode the payload
+  ) external pure returns (bytes32[] memory) {
+    bytes32[] memory hashes = new bytes32[](1);
     CallRequest memory request = abi.decode(payload, (CallRequest));
     bytes32 domainSeparator = buildDomainSeparator(chainId, escrow);
     (, bytes32 eip712Hash) = hashCallRequest(request, domainSeparator);
-    return eip712Hash;
+    hashes[0] = eip712Hash;
+    return hashes;
   }
 
   /// @notice Returns an EIP-712 domain separator for the escrow

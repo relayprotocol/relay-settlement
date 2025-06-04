@@ -49,7 +49,15 @@ task('allocator:sign-payload', 'Sign payload on allocator')
 
       console.log(`Signing payload for hash: ${payloadId}`)
       const txHash = await allocator.write.signWithdrawPayload(
-        [chainId, escrow, payloadId],
+        [
+          chainId,
+          escrow,
+          payloadId,
+          {
+            callbackGas: 30_000_000_000_000n,
+            signGas: 10_000_000_000_000n,
+          },
+        ],
         {
           account: signer.account,
         }
