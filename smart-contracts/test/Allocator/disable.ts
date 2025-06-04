@@ -4,8 +4,6 @@ import hre from 'hardhat'
 import { encodeFunctionData } from 'viem'
 import { deployAllocator } from '../helpers/deployAllocator'
 
-const DEFAULT_DELAY = 600n
-
 describe('Allocator disable/enable', function () {
   async function deployAllocatorWithSafe() {
     const [owner, admin, attacker] = await hre.viem.getWalletClients()
@@ -19,6 +17,22 @@ describe('Allocator disable/enable', function () {
     const { allocator } = await deployAllocator({
       owner: mockSafe.address,
     })
+
+    // simulate multisig execution to enable the allocator
+    const data = encodeFunctionData({
+      abi: allocator.abi,
+      args: [],
+      functionName: 'enable',
+    })
+
+    const enableHash = await mockSafe.write.execute(
+      [allocator.address, 0n, data],
+      {
+        account: owner.account,
+      }
+    )
+
+    await publicClient.waitForTransactionReceipt({ hash: enableHash })
 
     return {
       admin,

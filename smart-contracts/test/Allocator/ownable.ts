@@ -12,10 +12,10 @@ describe('Allocator', function () {
       )
     })
 
-    it('should be enabled by default', async function () {
+    it('should be disabled by default', async function () {
       const { allocator } = await loadFixture(deployAllocator)
       const enabled = await allocator.read.enabled()
-      expect(enabled).to.equal(true)
+      expect(enabled).to.equal(false)
     })
 
     it('should have delay set', async function () {

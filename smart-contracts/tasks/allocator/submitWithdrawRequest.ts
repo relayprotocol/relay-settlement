@@ -26,31 +26,6 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
       const publicClient = await viem.getPublicClient()
 
       const allocator = await viem.getContractAt('Allocator', allocatorAddress)
-      const wNEARAddress = await allocator.read.wNEAR()
-      const wNEAR = await viem.getContractAt('MyToken', wNEARAddress)
-
-      // check wNEAR approval amount
-      const allowance = 1n
-      const currentAllowance = (await wNEAR.read.allowance([
-        signer.account.address,
-        allocator.address,
-      ])) as bigint
-      console.log(`Current wNEAR allowance: ${currentAllowance}`)
-      if (currentAllowance < allowance) {
-        console.log('Approving 1 wNEAR for allocator...')
-        const approveHash = await wNEAR.write.approve([
-          allocator.address,
-          allowance,
-        ])
-        await publicClient.waitForTransactionReceipt({ hash: approveHash })
-        console.log(
-          'New signer allowance:',
-          await wNEAR.read.allowance([
-            signer.account.address,
-            allocator.address,
-          ])
-        )
-      }
 
       const submitWithdrawRequestParams = [
         chainId,
@@ -60,34 +35,39 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
         receiver || signer.account.address,
         data,
       ]
-      console.log(
-        `Submitting withdraw request with params ${submitWithdrawRequestParams.join()}`
-      )
+      console.log('Submitting withdraw request with params', {
+        amount,
+        chainId,
+        currency,
+        data,
+        escrow,
+        receiver: receiver || signer.account.address,
+      })
       const txHash = await allocator.write.submitWithdrawRequest(
         submitWithdrawRequestParams,
         {
           account: signer.account,
         }
       )
+      console.log('Withdraw Request Transaction:', txHash)
 
       const receipt = await publicClient.waitForTransactionReceipt({
         hash: txHash,
       })
-      console.log('Transaction hash:', receipt.transactionHash)
-
-      const payloadBuiltEvent = receipt.logs.find((log) => {
-        try {
-          const decodedEvent = decodeEventLog({
-            abi: allocator.abi,
-            data: log.data,
-            eventName: 'PayloadBuilt',
-            topics: log.topics,
-          })
-          return decodedEvent
-        } catch {
-          return null // Ignore unrecognized events
-        }
-      })
+      const [payloadBuiltEvent] = receipt.logs
+        .map((log) => {
+          try {
+            return decodeEventLog({
+              abi: allocator.abi,
+              data: log.data,
+              eventName: 'PayloadBuilt',
+              topics: log.topics,
+            })
+          } catch {
+            return null // or filter out unrecognized events
+          }
+        })
+        .filter((e) => e !== null)
 
       if (!payloadBuiltEvent) {
         console.log('PayloadBuilt event not found in transaction logs.')
@@ -96,6 +76,6 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
 
       const { payloadId } = payloadBuiltEvent.args
       console.log(`payloadId: ${payloadId}`)
-      console.log('Withdraw request submitted successfully')
+      return payloadId
     }
   )

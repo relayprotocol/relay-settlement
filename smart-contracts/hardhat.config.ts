@@ -7,6 +7,13 @@ import 'solidity-coverage'
 
 import { parseEther } from 'viem'
 
+import './tasks/allocator/grantHubRole'
+import './tasks/allocator/init'
+import './tasks/allocator/setPayloadBuilder'
+import './tasks/allocator/signPayload'
+import './tasks/allocator/submitWithdrawRequest'
+import './tasks/deployments/allocator'
+
 import './tasks/deployments/hub'
 import './tasks/exportAbis'
 import './tasks/computeSignatures'
