@@ -13,7 +13,7 @@ interface ISafe {
 interface PayloadBuilder {
   function buildPayload(
     uint256 chainId,
-    address escrow,
+    string calldata escrow,
     string calldata currency,
     uint256 amount,
     string calldata receiver,
@@ -22,7 +22,7 @@ interface PayloadBuilder {
 
   function hashesToSign(
     uint256 chainId,
-    address escrow,
+    string calldata escrow,
     bytes calldata payload
   ) external view returns (bytes32[] memory);
 
@@ -70,7 +70,7 @@ contract Allocator is AccessControl {
   address public owner;
 
   // payload builders mapping
-  mapping(uint256 => mapping(address => address)) public payloadBuilders;
+  mapping(uint256 => mapping(string => address)) public payloadBuilders;
 
   // unsigned payloads
   mapping(bytes32 => bytes) public unsignedPayloads;
@@ -84,7 +84,7 @@ contract Allocator is AccessControl {
   // events
   event PayloadBuilderSet(
     uint256 indexed chainId,
-    address indexed escrow,
+    string indexed escrow,
     address indexed builder
   );
 
@@ -103,7 +103,7 @@ contract Allocator is AccessControl {
   // errors
   error NotMultisigOwner(address account);
   error CallerIsNotHub(address account);
-  error NoPayloadBuilder(uint256 chainId, address escrow);
+  error NoPayloadBuilder(uint256 chainId, string escrow);
   error PayloadNotReady(bytes32 payloadId);
   error PayloadAlreadySigned(bytes32 payloadId);
   error WithdrawalDisabled();
@@ -185,7 +185,7 @@ contract Allocator is AccessControl {
    */
   function setPayloadBuilder(
     uint256 chainId,
-    address escrow,
+    string calldata escrow,
     address builder
   ) external onlyRole(ADMIN_ROLE) {
     payloadBuilders[chainId][escrow] = builder;
@@ -203,7 +203,7 @@ contract Allocator is AccessControl {
    */
   function submitWithdrawRequest(
     uint256 chainId,
-    address escrow,
+    string calldata escrow,
     string calldata currency,
     uint256 amount,
     string calldata receiver,
@@ -257,7 +257,7 @@ contract Allocator is AccessControl {
    */
   function signWithdrawPayload(
     uint256 chainId,
-    address escrow,
+    string calldata escrow,
     bytes32 payloadId,
     GasSettings memory gasSettings
   ) public {

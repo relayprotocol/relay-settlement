@@ -41,7 +41,7 @@ contract EVMPayloadBuilder is PayloadBuilder {
   // as defined in https://github.com/relayprotocol/escrow-contracts/blob/main/packages/ethereum-vm/src/utils/RelayEscrowStructs.sol
   function buildPayload(
     uint256 /* chainId */,
-    address /* escrow */,
+    string calldata /* escrow */,
     string calldata currency,
     uint256 amount,
     string memory receiver,
@@ -85,7 +85,7 @@ contract EVMPayloadBuilder is PayloadBuilder {
   /// @return The EIP-712 hash of the payload
   function hashesToSign(
     uint256 chainId,
-    address escrow,
+    string calldata escrow,
     bytes calldata payload
   ) external pure returns (bytes32[] memory) {
     bytes32[] memory hashes = new bytes32[](1);
@@ -100,7 +100,7 @@ contract EVMPayloadBuilder is PayloadBuilder {
   /// @return The EIP-712 domain separator
   function buildDomainSeparator(
     uint256 chainId,
-    address escrow
+    string calldata escrow
   ) internal pure returns (bytes32) {
     return
       keccak256(
@@ -111,7 +111,7 @@ contract EVMPayloadBuilder is PayloadBuilder {
           keccak256(bytes(SIGNING_DOMAIN)),
           keccak256(bytes(SIGNATURE_VERSION)),
           chainId,
-          escrow
+          toAddress(escrow)
         )
       );
   }

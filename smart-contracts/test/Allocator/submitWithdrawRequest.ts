@@ -114,9 +114,7 @@ describe('Allocator submitWithdrawRequest', function () {
             account: hub.account,
           }
         )
-      ).to.be.rejectedWith(
-        'NoPayloadBuilder(2, "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC")'
-      )
+      ).to.be.rejectedWith(`NoPayloadBuilder(2, "${escrow.account.address}")`)
     })
 
     it('should emit an event with the payload hash', async () => {
