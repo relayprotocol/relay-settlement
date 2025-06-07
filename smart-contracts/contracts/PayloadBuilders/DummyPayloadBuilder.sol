@@ -11,7 +11,7 @@ contract DummyPayloadBuilder is PayloadBuilder {
     uint256 /* amount */,
     string calldata /* receiver */,
     bytes calldata /* data */
-  ) external view override returns (bytes memory) {
+  ) external pure override returns (bytes memory) {
     return "dummy payload";
   }
 
