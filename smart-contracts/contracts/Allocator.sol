@@ -293,7 +293,10 @@ contract Allocator is AccessControl {
         hashesToSign[i],
         payloadBuilder.curve(),
         path,
-        0
+        keccak256(abi.encodePacked(payloadBuilder.curve())) ==
+          keccak256(abi.encodePacked("Ecdsa"))
+          ? 0
+          : 1
       );
 
       // Now get NEAR to sign the payload!
@@ -352,7 +355,7 @@ contract Allocator is AccessControl {
     bytes32 payloadHashToSign,
     string memory curve,
     string memory path,
-    uint256 version
+    uint256 domain_id
   ) public pure returns (bytes memory) {
     return
       abi.encodePacked(
@@ -367,7 +370,7 @@ contract Allocator is AccessControl {
         path,
         // solhint-disable-next-line quotes
         '","domain_id":',
-        Strings.toString(version),
+        Strings.toString(domain_id),
         // solhint-disable-next-line quotes
         "}}"
       );
