@@ -2,7 +2,7 @@
 
 ## Allocator
 
-Deploy, set up and use the allocator
+Deploy, set up and use the allocator. Multiple tasks exist to set things up:
 
 ```sh
 # Deploy the main Allocator contract
@@ -26,4 +26,18 @@ yarn hardhat allocator:submit-withdraw --allocator <allocator-address> --chain-i
 
 # sign payload
 yarn hardhat allocator:sign-payload --id <payload-id> --allocator <allocator-address>
+```
+
+We also have "end to end" tasks which can be used to deploy everything and submit transactions. This uses a lot of defaults, and roles are granted to the caller's address (you need to set the `DEPLOYER_PRIVATE_KEY` environment variable).
+
+For EVM (Ethereum, L2... etc):
+
+```bash
+yarn run hardhat full:evm --network aurora-testnet --wnear 0x4861825E75ab14553E5aF711EbbE6873d369d146  --chain-id 84532 --escrow 0x9229808f111ff3EAf6826736c74462fece0f6583
+```
+
+For Bitcoin. You first need to deploy the EVM version... because it provides the private key that needs to be supplied to the Bitcoin payload builder at deployment time (replace the last argument). Also, this script requires that you fund the Bitcoin address first (as the payload is construted from UTXO).
+
+```bash
+yarn run hardhat full:bitcoin --network aurora-testnet --wnear 0x4861825E75ab14553E5aF711EbbE6873d369d146 --recipient tb1q6xsu27js50xzvnwfgxrkhwj7a9rrch76wf7xxq --public-key 0x04e70427664177dee706e65274d3e7e7e28faa5ec10dedddf205ec49720ee9f154d4a4f09296f8f1695277413b13f78a656b72032a703d9be51baa28b733ae6376
 ```

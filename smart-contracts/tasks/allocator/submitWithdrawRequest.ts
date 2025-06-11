@@ -6,7 +6,7 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
   .addParam('chainId', 'The chain id of the destination address')
   .addParam('escrow', 'The escrow contract on destination chain')
   .addOptionalParam('currency', 'default to zero', zeroAddress)
-  .addOptionalParam('amount', 'Amount to withdraw')
+  .addOptionalParam('amount', 'Amount to withdraw', '1')
   .addOptionalParam('receiver', 'account to receive tokens (default to signer)')
   .addOptionalParam('data', 'additional data', '0x')
   .setAction(
@@ -16,7 +16,7 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
         chainId,
         escrow,
         currency,
-        amount = '1', // Default to '1' if not provided
+        amount,
         receiver,
         data,
       },

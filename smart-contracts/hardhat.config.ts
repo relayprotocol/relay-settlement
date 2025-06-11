@@ -12,11 +12,14 @@ import './tasks/allocator/init'
 import './tasks/allocator/setPayloadBuilder'
 import './tasks/allocator/signPayload'
 import './tasks/allocator/submitWithdrawRequest'
-import './tasks/deployments/allocator'
+import './tasks/allocator/full/evm'
+import './tasks/allocator/full/bitcoin.ts'
 
+import './tasks/deployments/allocator'
 import './tasks/deployments/hub'
 import './tasks/exportAbis'
 import './tasks/computeSignatures'
+import './tasks/allocator/PayloadBuilders/sendBitcoinTx'
 
 // get pk from shell
 const { DEPLOYER_PRIVATE_KEY } = process.env

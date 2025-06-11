@@ -4,9 +4,7 @@ import hre from 'hardhat'
 import {
   decodeAbiParameters,
   getAddress,
-  hashMessage,
   hashTypedData,
-  hexToBytes,
   parseUnits,
   zeroAddress,
 } from 'viem'
