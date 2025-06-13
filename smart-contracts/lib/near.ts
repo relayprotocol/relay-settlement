@@ -17,9 +17,3 @@ export const extractNearSignature = (
   const v = recovery_id + 27 // Convert to 0 or 1 for EIP-1559 compatibility
   return { r, s, v }
 }
-
-export const wait = (time: number | bigint) => {
-  return new Promise((resolve) => {
-    setTimeout(resolve, Number(time) * 1000)
-  })
-}

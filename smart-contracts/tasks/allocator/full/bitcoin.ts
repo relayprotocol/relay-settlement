@@ -14,7 +14,8 @@ import {
   getBalance,
   txidToBytes32,
 } from '../../../lib/bitcoin'
-import { extractNearSignature, wait } from '../../../lib/utils'
+import { extractNearSignature } from '../../../lib/near'
+import { wait } from '../../../lib/wait'
 
 task(
   'full:bitcoin',

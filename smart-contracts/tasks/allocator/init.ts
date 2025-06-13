@@ -1,49 +1,40 @@
 import { task } from 'hardhat/config'
 import { parseUnits } from 'viem'
+import { checkAndApproveWNEAR, getWNEARAddress } from '../../lib/aurora'
 
 task('allocator:init', 'Initialize the Allocator contract')
   .addParam('allocator', 'The address of the allocator contract')
-  .addParam('wNEAR', 'The address of the wNEAR contract')
+  .addOptionalParam('wNEAR', 'The address of the wNEAR contract')
   .setAction(
-    async ({ allocator: allocatorAddress, wNEAR: wNearAddress }, { viem }) => {
+    async ({ allocator: allocatorAddress, wNEAR: wNEARAddress }, hre) => {
+      const { viem, network } = hre
       const [signer] = await viem.getWalletClients()
       const publicClient = await viem.getPublicClient()
+
+      if (!wNEARAddress) {
+        wNEARAddress = await getWNEARAddress(network.config.chainId!)
+      }
 
       const allocator = await viem.getContractAt('Allocator', allocatorAddress)
 
       const isEnabled = await allocator.read.enabled()
       if (!isEnabled) {
-        // Get the wNEAR address from the allocator contract
-        const wNEAR = await viem.getContractAt('MyToken', wNearAddress)
-
-        // check wNEAR approval amount
-        const currentAllowance = (await wNEAR.read.allowance([
-          signer.account.address,
-          allocator.address,
-        ])) as bigint
-        console.log(`Current wNEAR allowance: ${currentAllowance} wei`)
-
         // Approve 2 wNEAR for the allocator if necessary
         const allowance = parseUnits('2', 24)
-        if (currentAllowance < allowance) {
-          const approveHash = await wNEAR.write.approve([
-            allocator.address,
-            allowance,
-          ])
-          await publicClient.waitForTransactionReceipt({ hash: approveHash })
-          console.log('Approved 2 wNEAR for allocator')
-        }
+        await checkAndApproveWNEAR(
+          hre,
+          publicClient,
+          signer.account.address,
+          allocator.address,
+          allowance
+        )
 
-        // Check wNEAR balance of the signer
-        const nativeBalance = await publicClient.getBalance({
-          address: signer.account.address,
-        })
-        console.log(`Aurora native balance: ${nativeBalance} wei`)
-
+        // check wNEAR balance
+        const wNEAR = await viem.getContractAt('MyToken', wNEARAddress)
         const balance = await wNEAR.read.balanceOf([signer.account.address])
         console.log(`Current wNEAR balance: ${balance} wei`)
 
-        if (balance < allowance) {
+        if (balance < 500_000_000_000n) {
           throw Error(`Insufficient balance ${balance}`)
         }
 

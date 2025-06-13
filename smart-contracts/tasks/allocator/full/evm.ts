@@ -8,8 +8,8 @@ import {
   recoverTypedDataAddress,
   zeroAddress,
 } from 'viem'
-
-import { extractNearSignature, wait } from '../../../lib/utils'
+import { extractNearSignature } from '../../../lib/near'
+import { wait } from '../../../lib/wait'
 
 task(
   'full:evm',

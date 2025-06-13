@@ -1,12 +1,13 @@
 import { task } from 'hardhat/config'
 import { parseUnits } from 'viem'
+import { checkAndApproveWNEAR, getWNEARAddress } from '../../lib/aurora'
 
 task('allocator:sign-payload', 'Sign payload on allocator')
   .addParam('allocator', 'The address of the allocator contract')
   .addParam('payloadId', 'The payloadId to use')
   .addParam('chainId', 'The chainId on which the withdrawal will be made')
   .addParam('escrow', 'The escrow contract address from which to withdraw')
-  .addParam('wnear', 'The address of the wNEAR contract')
+  .addOptionalParam('wnear', 'The address of the wNEAR contract')
   .setAction(
     async (
       {
@@ -16,36 +17,27 @@ task('allocator:sign-payload', 'Sign payload on allocator')
         chainId,
         wnear: wNEARAddress,
       },
-      { viem }
+      hre
     ) => {
+      const { viem, network } = hre
       const [signer] = await viem.getWalletClients()
       const publicClient = await viem.getPublicClient()
 
       const allocator = await viem.getContractAt('Allocator', allocatorAddress)
-      const wNEAR = await viem.getContractAt('MyToken', wNEARAddress)
+
+      if (!wNEARAddress) {
+        wNEARAddress = await getWNEARAddress(network.config.chainId!)
+      }
 
       // check wNEAR approval amount
       const allowance = parseUnits('1', 24)
-      const currentAllowance = (await wNEAR.read.allowance([
+      await checkAndApproveWNEAR(
+        hre,
+        publicClient,
         signer.account.address,
         allocator.address,
-      ])) as bigint
-      if (currentAllowance < allowance) {
-        console.log(`Current wNEAR allowance: ${currentAllowance}`)
-        console.log('Approving 1 wNEAR for allocator...')
-        const approveHash = await wNEAR.write.approve([
-          allocator.address,
-          allowance,
-        ])
-        await publicClient.waitForTransactionReceipt({ hash: approveHash })
-        console.log(
-          'New signer allowance:',
-          await wNEAR.read.allowance([
-            signer.account.address,
-            allocator.address,
-          ])
-        )
-      }
+        allowance
+      )
 
       console.log(`Signing payload for hash: ${payloadId}`)
       const txHash = await allocator.write.signWithdrawPayload(
