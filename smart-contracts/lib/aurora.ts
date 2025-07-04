@@ -1,6 +1,7 @@
 import networks from '@relay-protocol/networks'
 import { HardhatRuntimeEnvironment } from 'hardhat/types'
-import { PublicClient } from 'viem'
+import { parseUnits, PublicClient } from 'viem'
+import { wait } from './wait'
 
 export function getWNEARAddress(chainId: number): string {
   const networkConfig = networks[chainId]
@@ -25,7 +26,7 @@ export async function checkAndApproveWNEAR(
 
   if (currentAllowance < allowance) {
     console.log(`Current wNEAR allowance: ${currentAllowance}`)
-    console.log(`Approving ${amount} wNEAR for allocator...`)
+    console.log(`Approving ${allowance} wNEAR for allocator...`)
     const approveHash = await wNEAR.write.approve([to, allowance])
     await publicClient.waitForTransactionReceipt({ hash: approveHash })
 

@@ -1,10 +1,20 @@
 import * as bitcoin from 'bitcoinjs-lib'
 import networks from '@relay-protocol/networks'
+import bs58 from 'bs58'
 import { task } from 'hardhat/config'
 import AllocatorModule from '../../ignition/modules/Allocator'
 import { bitcoinAddressfromHexPublicKey } from '../../lib/bitcoin'
 
 const DEFAULT_DELAY = '1'
+
+function base58ToBytes32(b58: string): string {
+  const decoded = bs58.decode(b58)
+  // Pad with zeros if needed to ensure 32 bytes
+  const padded = Buffer.alloc(32, 0)
+  // Copy the decoded bytes into the padded buffer
+  padded.set(decoded, padded.length - decoded.length)
+  return '0x' + padded.toString('hex')
+}
 
 task('deploy:allocator', 'Deploy the Allocator contract')
   .addOptionalParam('owner', 'The address of the owner')

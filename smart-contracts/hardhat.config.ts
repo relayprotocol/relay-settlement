@@ -7,19 +7,26 @@ import 'solidity-coverage'
 
 import { parseEther } from 'viem'
 
+// allocator actions
 import './tasks/allocator/grantHubRole'
 import './tasks/allocator/init'
 import './tasks/allocator/setPayloadBuilder'
 import './tasks/allocator/signPayload'
 import './tasks/allocator/submitWithdrawRequest'
-import './tasks/allocator/full/evm'
-import './tasks/allocator/full/bitcoin.ts'
 
-import './tasks/deployments/allocator'
-import './tasks/deployments/hub'
-import './tasks/exportAbis'
-import './tasks/computeSignatures'
+// allocator test suite
+import './tasks/allocator/full/evm'
+import './tasks/allocator/full/bitcoin'
+import './tasks/allocator/full/solana'
 import './tasks/allocator/PayloadBuilders/sendBitcoinTx'
+
+// deployments
+import './tasks/deployments/hub'
+import './tasks/deployments/allocator'
+
+// helpers
+import './tasks/computeSignatures'
+import './tasks/exportAbis'
 
 // get pk from shell
 const { DEPLOYER_PRIVATE_KEY } = process.env
