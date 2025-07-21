@@ -11,6 +11,7 @@ interface ISafe {
 }
 
 interface PayloadBuilder {
+  error InsufficientAmount(uint256 amount);
   function buildPayload(
     uint256 chainId,
     string calldata escrow,

@@ -70,14 +70,16 @@ task('deploy:allocator', 'Deploy the Allocator contract')
     }
   )
 
-task(
-  'deploy:evm-payload-builder',
-  'Deploys a PayloadBuilder contract'
-).setAction(async (_, { viem }) => {
-  const payload = await viem.deployContract('EVMPayloadBuilder')
-  console.log(`PayloadBuilder deployed to: ${payload.address}`)
-  return payload.address
-})
+task('deploy:payload-builder', 'Deploys a PayloadBuilder contract')
+  .addParam('payloadBuilder', 'The name of the payload builder contract')
+  .setAction(async ({ payloadBuilder }, { viem }) => {
+    // Let's now deploy the payload builder contract
+    const payloadBuilderContract = await viem.deployContract(payloadBuilder)
+    console.log(
+      `${payloadBuilder} deployed to: ${payloadBuilderContract.address}`
+    )
+    return payloadBuilderContract.address
+  })
 
 task('deploy:bitcoin-payload-builder', 'Deploys a PayloadBuilder contract')
   .addParam('allocatorPublicKey', 'The ethereum public key of the allocator')

@@ -3,6 +3,8 @@ pragma solidity ^0.8.28;
 
 import {PayloadBuilder} from "../Allocator.sol";
 import {Base64} from "solady/src/utils/Base64.sol";
+import "../Utils.sol";
+
 struct BitcoinTransactionParams {
   UTXO[] utxos; // Array of UTXOs to spend
   uint64 feeRate; // Fee rate in satoshis per byte
@@ -68,9 +70,9 @@ contract BitcoinPayloadBuilder is PayloadBuilder {
       bytes memory script = utxos[i].scriptPubKey;
       inputs[i] = BitcoinTransactionDataInput({
         txid: abi.encodePacked(utxos[i].txid), // txid already in little-endian from txidToBytes32
-        index: encodeUint32LE(utxos[i].index), // index of the output
+        index: Utils.encodeUint32LE(utxos[i].index), // index of the output
         script: script,
-        value: encodeUint64LE(utxos[i].value) // value of the output
+        value: Utils.encodeUint64LE(utxos[i].value) // value of the output
       });
     }
   }
@@ -92,14 +94,14 @@ contract BitcoinPayloadBuilder is PayloadBuilder {
     // Output 1: to receiver
     bytes memory receiverScriptBytes = Base64.decode(receiverScript);
     outputs[0] = BitcoinTransactionDataOutput({
-      value: encodeUint64LE(amount - uint64(fees)),
+      value: Utils.encodeUint64LE(amount - uint64(fees)),
       script: receiverScriptBytes
     });
 
     // Output 2: to self for change (if needed)
     if (change > 0) {
       outputs[1] = BitcoinTransactionDataOutput({
-        value: encodeUint64LE(change),
+        value: Utils.encodeUint64LE(change),
         script: changeScriptBytes
       });
     }
@@ -149,7 +151,7 @@ contract BitcoinPayloadBuilder is PayloadBuilder {
     uint256 whichInput
   ) internal pure returns (bytes memory) {
     // --- 1) version (little‐endian 0x00000001) ---
-    bytes memory versionLE = encodeUint32LE(1);
+    bytes memory versionLE = Utils.encodeUint32LE(1);
 
     // --- 2) varint(inputCount) ---
     uint256 nInputs = txData.inputs.length;
@@ -175,7 +177,7 @@ contract BitcoinPayloadBuilder is PayloadBuilder {
         scriptSigBytes = "";
       }
       // d) sequence = 0xFFFFFFFF (4 bytes LE)
-      bytes memory sequenceLE = encodeUint32LE(0xFFFFFFFF);
+      bytes memory sequenceLE = Utils.encodeUint32LE(0xFFFFFFFF);
 
       // e) concat this input's fields:
       //    [ prevTxid_LE || prevIndex_LE || scriptSigLen || scriptSigBytes || sequenceLE ]
@@ -208,8 +210,8 @@ contract BitcoinPayloadBuilder is PayloadBuilder {
     }
 
     // --- 6) locktime (4 bytes LE = 0) and hashType (4 bytes LE = 0x01_00_00_00 for SIGHASH_ALL) ---
-    bytes memory locktimeLE = encodeUint32LE(0);
-    bytes memory hashTypeLE = encodeUint32LE(0x01);
+    bytes memory locktimeLE = Utils.encodeUint32LE(0);
+    bytes memory hashTypeLE = Utils.encodeUint32LE(0x01);
 
     // --- 7) Full preimage: [ versionLE || inputCountLE || allInputs || outputCountLE || allOutputs || locktimeLE || hashTypeLE ] ---
     return
@@ -296,22 +298,5 @@ contract BitcoinPayloadBuilder is PayloadBuilder {
           bytes1(uint8((value >> 56) & 0xFF))
         );
     }
-  }
-
-  // Util functions to encode uint64 and uint32 values in little-endian format
-  function encodeUint64LE(uint64 value) internal pure returns (bytes memory) {
-    bytes memory b = new bytes(8);
-    for (uint8 i = 0; i < 8; i++) {
-      b[i] = bytes1(uint8(value >> (8 * i)));
-    }
-    return b;
-  }
-
-  function encodeUint32LE(uint32 value) internal pure returns (bytes memory) {
-    bytes memory b = new bytes(4);
-    for (uint8 i = 0; i < 4; i++) {
-      b[i] = bytes1(uint8(value >> (8 * i)));
-    }
-    return b;
   }
 }

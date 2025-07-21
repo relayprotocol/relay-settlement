@@ -3,9 +3,8 @@ pragma solidity ^0.8.28;
 
 import {PayloadBuilder} from "../Allocator.sol";
 import {Utils} from "../Utils.sol";
-import {JSONParserLib} from "solady/src/utils/JSONParserLib.sol";
 
-contract SolanaPayloadBuilder is PayloadBuilder {
+contract SuiPayloadBuilder is PayloadBuilder {
   function buildPayload(
     uint256 /* chainId */,
     string calldata /* escrow */,
@@ -14,13 +13,8 @@ contract SolanaPayloadBuilder is PayloadBuilder {
     string memory receiver,
     bytes calldata data
   ) external view override returns (bytes memory) {
-    // Parse token address (None means SOL)
-    bytes32 tokenPubkey;
-    bytes32 recipientPubkey = Utils.hexStringToBytes32(receiver);
-
-    if (bytes(currency).length > 0) {
-      tokenPubkey = Utils.hexStringToBytes32(currency);
-    }
+    // Parse receiver address
+    bytes32 recipientAddress = Utils.hexStringToBytes32(receiver);
 
     // Ensure amount doesn't exceed uint64 max value
     if (amount > type(uint64).max) {
@@ -44,9 +38,9 @@ contract SolanaPayloadBuilder is PayloadBuilder {
       (nonce, expiration) = abi.decode(data, (uint64, int64));
     }
 
-    // Encode request in Borsh compatible format
+    // Encode request in BCS-compatible format for Sui
     return
-      encodeBorsh(recipientPubkey, tokenPubkey, amountU64, nonce, expiration);
+      encodeBCS(recipientAddress, currency, amountU64, nonce, expiration);
   }
 
   function hashesToSign(
@@ -63,43 +57,39 @@ contract SolanaPayloadBuilder is PayloadBuilder {
     return "Eddsa";
   }
 
-  function encodeBorsh(
+  function encodeBCS(
     bytes32 recipient,
-    bytes32 token,
+    string memory coinType,
     uint64 amount,
     uint64 nonce,
     int64 expiration
   ) internal pure returns (bytes memory) {
     bytes memory result;
 
-    // 1. Recipient (32 bytes)
+    // 1. Recipient address (32 bytes)
     result = bytes.concat(result, recipient);
 
-    // 2. Token (Option<Pubkey>) - using 1 byte prefix
-    if (token == bytes32(0)) {
-      // None means SOL
-      result = bytes.concat(result, hex"00");
-    } else {
-      // Some means SPL token
-      result = bytes.concat(result, hex"01");
-      result = bytes.concat(result, token);
-    }
-
-    // 3. Amount (8 bytes, little-endian)
+    // 2. Amount (8 bytes) - using little-endian format as per BCS
     result = bytes.concat(result, Utils.encodeUint64LE(amount));
-
+    
+    // 3. Encode coin_type as TypeNameStruct
+    bytes memory coinTypeBytes = bytes(coinType);
+    
+    // Add length of the string as a single byte if under 128 characters
+    // For longer strings, BCS uses a different encoding scheme
+    require(coinTypeBytes.length < 128, "Coin type string too long");
+    result = bytes.concat(result, bytes1(uint8(coinTypeBytes.length)));
+    
+    // Add the string data
+    result = bytes.concat(result, coinTypeBytes);
+    
     // 4. Nonce (8 bytes, little-endian)
     result = bytes.concat(result, Utils.encodeUint64LE(nonce));
-
+    
     // 5. Expiration (8 bytes, little-endian)
     require(expiration >= 0, "Expiration cannot be negative");
     result = bytes.concat(result, Utils.encodeUint64LE(uint64(expiration)));
 
     return result;
-  }
-
-  // For test
-  function hexStringToBytes32(string memory hexString) public pure returns (bytes32) {
-    return Utils.hexStringToBytes32(hexString);
   }
 }

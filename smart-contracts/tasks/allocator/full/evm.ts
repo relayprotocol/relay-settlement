@@ -10,6 +10,9 @@ import {
 } from 'viem'
 import { extractNearSignature } from '../../../lib/near'
 import { wait } from '../../../lib/wait'
+import { publicKeyToAddress } from 'viem/utils'
+import { derivePublicKey } from '../../../lib/near'
+import { base58 } from '@scure/base'
 
 task(
   'full:evm',
@@ -61,7 +64,9 @@ task(
       if (payloadBuilderAddress === zeroAddress) {
         console.log('PayloadBuilder not set, deploying a new one...')
 
-        payloadBuilderAddress = await run('deploy:evm-payload-builder')
+        payloadBuilderAddress = await run('deploy:payload-builder', {
+          payloadBuilder: 'EVMPayloadBuilder',
+        })
 
         const tx = await allocator.write.setPayloadBuilder([
           chainId,
@@ -150,15 +155,25 @@ task(
         ],
       }
 
-      const recoveredFromHash = await recoverAddress({
-        hash: payloadHashes[0],
-        signature,
-      })
+      const derivationPath = allocatorAddress.toLowerCase()
+      // remove 0x for aurora address
+      const predecessor = `${allocatorAddress.substring(2).toLowerCase()}.aurora`
+      const domainId = 0 // 1 for Eddsa
 
-      const publicKey = await recoverPublicKey({
-        hash: payloadHashes[0],
-        signature,
-      })
+      // Get the public key from the NEAR contract
+      const { publicKey: allocatorPublicKeyRaw } = await derivePublicKey(
+        derivationPath,
+        predecessor,
+        Number(domainId)
+      )
+
+      // NajPublicKey to UncompressedPubKeySEC1
+      const allocatorPublicKey = `0x04${Buffer.from(base58.decode(allocatorPublicKeyRaw)).toString('hex')}`
+
+      // UncompressedPubKeySEC1 to Address
+      const signerAddress = publicKeyToAddress(
+        allocatorPublicKey as `0x${string}`
+      )
 
       // EIP-712 verification
       const recoveredFromTypedData = await recoverTypedDataAddress({
@@ -174,18 +189,18 @@ task(
         types,
       })
 
-      if (recoveredFromHash !== recoveredFromTypedData) {
+      if (signerAddress !== recoveredFromTypedData) {
         throw new Error(
-          `Recovered addresses do not match: ${recoveredFromHash} !== ${recoveredFromTypedData}`
+          `Recovered addresses do not match: ${signerAddress} !== ${recoveredFromTypedData}`
         )
       }
       console.log(
         '🔍 Recovered address (make sure it is the allocator on the escrow contract):',
-        recoveredFromHash
+        signerAddress
       )
       console.log(
         '🔍 Recovered public key which can be used to compute addresses on all chains with the same curve:',
-        publicKey
+        allocatorPublicKey
       )
       console.log('📡 Transaction data to submit to the Escrow contract:')
       console.log({

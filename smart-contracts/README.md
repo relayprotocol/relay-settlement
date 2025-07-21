@@ -41,3 +41,20 @@ For Bitcoin. You first need to deploy the EVM version... because it provides the
 ```bash
 yarn run hardhat full:bitcoin --network aurora-testnet --wnear 0x4861825E75ab14553E5aF711EbbE6873d369d146 --recipient tb1q6xsu27js50xzvnwfgxrkhwj7a9rrch76wf7xxq --public-key 0x04e70427664177dee706e65274d3e7e7e28faa5ec10dedddf205ec49720ee9f154d4a4f09296f8f1695277413b13f78a656b72032a703d9be51baa28b733ae6376
 ```
+
+### Testnet Faucet
+
+Replace `<account-name>` with a unique account name in the following commands
+
+### Get NEAR in testnet
+```
+near account create-account sponsor-by-faucet-service <account-name> autogenerate-new-keypair save-to-keychain network-config testnet create
+```
+
+### Export private key and import in Meteor wallet
+```
+near account export-account <account-name> using-private-key network-config testnet
+```
+
+### Bridge to Aurora Testnet
+Bridge to Aurora Testnet Via https://testnet.rainbowbridge.app/

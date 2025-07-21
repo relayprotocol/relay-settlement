@@ -131,16 +131,6 @@ describe('Allocator SolanaPayloadBuilder', function () {
     })
   })
 
-  describe('toBytes32()', function () {
-    it('should parse correctly string into corresponding bytes32', async () => {
-      const recipient = 'ETZgVwqLnzZFQfK2YB1rDLratt4cCGwNHcV8jJokrxmm'
-      const { payloadBuilder } = await loadFixture(deployAllocator)
-      // make sure bytes32 helper in sol contract is consistent
-      const encoded = base58ToBytes32(recipient)
-      expect(await payloadBuilder.read.toBytes32([encoded])).to.equal(encoded)
-    })
-  })
-
   describe('decodeEscrowRequest', function () {
     const amount = 1n
     const expiration = 1749096009n
@@ -248,6 +238,18 @@ describe('Allocator SolanaPayloadBuilder', function () {
       )
       expect(decodedRequest.expiration.toString()).to.equal(
         transferRequest.expiration.toString()
+      )
+    })
+  })
+
+  describe('hexStringToBytes32()', function () {
+    it('should parse correctly string into corresponding bytes32', async () => {
+      const recipient = 'ETZgVwqLnzZFQfK2YB1rDLratt4cCGwNHcV8jJokrxmm'
+      const { payloadBuilder } = await loadFixture(deployAllocator)
+      // make sure bytes32 helper in sol contract is consistent
+      const encoded = base58ToBytes32(recipient)
+      expect(await payloadBuilder.read.hexStringToBytes32([encoded])).to.equal(
+        encoded
       )
     })
   })
