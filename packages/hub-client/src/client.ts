@@ -8,6 +8,30 @@ export interface MintParams {
   amount: bigint
 }
 
+export interface BurnParams {
+  family: ChainType
+  account: string
+  chainId: number
+  tokenAddress: string
+  amount: bigint
+}
+
+export interface TransferFromParams {
+  family: ChainType
+  account: string
+  chainId: number
+  tokenAddress: string
+  amount: bigint
+  recipientAddress: string
+}
+
+export interface SetOperatorForParams {
+  account: string
+  chainId: number
+  operatorAddress: string
+  approved: boolean
+}
+
 export class HubClient {
   chainId: number
   address: string
@@ -19,6 +43,24 @@ export class HubClient {
 
   // Declare method signatures (but not implementations)
   mint!: (params: MintParams) => Promise<{
+    to: string
+    from?: string
+    data: string
+    value?: string
+  }>
+  burn!: (params: BurnParams) => Promise<{
+    to: string
+    from?: string
+    data: string
+    value?: string
+  }>
+  setOperatorFor!: (params: SetOperatorForParams) => Promise<{
+    to: string
+    from?: string
+    data: string
+    value?: string
+  }>
+  transferFrom!: (params: TransferFromParams) => Promise<{
     to: string
     from?: string
     data: string
