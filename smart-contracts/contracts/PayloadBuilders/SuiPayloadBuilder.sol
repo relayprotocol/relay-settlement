@@ -57,6 +57,10 @@ contract SuiPayloadBuilder is PayloadBuilder {
     return "Eddsa";
   }
 
+  function family() external pure returns (string memory) {
+    return "sui";
+  }
+
   function encodeBCS(
     bytes32 recipient,
     string memory coinType,

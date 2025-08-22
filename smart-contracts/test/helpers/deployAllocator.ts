@@ -20,6 +20,7 @@ export async function deployAllocator(options?: {
       Codec: codec.address,
     },
   })
+  const utils = await hre.viem.deployContract('Utils', [])
   const allocatorParams = [
     options?.owner ?? owner.account.address, // owner
     options?.delay ?? DEFAULT_DELAY, // delay
@@ -33,6 +34,7 @@ export async function deployAllocator(options?: {
     {
       libraries: {
         AuroraSdk: auroraSdk.address,
+        Utils: utils.address,
       },
     }
   )
@@ -42,6 +44,7 @@ export async function deployAllocator(options?: {
     otherAccounts,
     owner,
     publicClient,
+    utils,
     wNEAR,
   }
 }

@@ -12,6 +12,7 @@ import {
   zeroAddress,
 } from 'viem'
 import { deployAllocator } from '../helpers/deployAllocator'
+import { deployHub } from '../helpers/deployHub'
 
 const chainId = 1n
 
@@ -51,8 +52,12 @@ const extractEvent = async (
 
 describe('Allocator signWithdrawPayload', function () {
   async function deployAllocatorWithSetup() {
-    const { allocator, owner, otherAccounts, publicClient, wNEAR } =
+    const { allocator, owner, otherAccounts, publicClient, wNEAR, utils } =
       await deployAllocator()
+    // We have a `hubContract` and `hub` in order to simplify calls to the allocator
+    // (it is much easier to call from an EOA vs impersonate a contract and execute
+    // a call on behalf of it).
+    const { hub: hubContract } = await deployHub()
     const [hub, escrow, attacker] = otherAccounts
 
     const payloadBuilder = await hre.viem.deployContract('DummyPayloadBuilder')
@@ -71,6 +76,32 @@ describe('Allocator signWithdrawPayload', function () {
       }
     )
 
+    // We need the owner to be able to mint for testing purposes
+    await hubContract.write.grantRole(
+      [keccak256('HUB_ORACLE_ROLE' as `0x${string}`), owner.account.address],
+      {
+        account: owner.account,
+      }
+    )
+
+    // The allocator needs to be able to burn tokens on the hub
+    await hubContract.write.grantRole(
+      [keccak256('HUB_ORACLE_ROLE' as `0x${string}`), allocator.address],
+      {
+        account: owner.account,
+      }
+    )
+
+    // Mint tokens on the hub
+    const tokenId = await utils.read.generateTokenId([
+      'dummy',
+      chainId,
+      zeroAddress,
+    ])
+    await hubContract.write.mint([hub.account.address, tokenId, 1n], {
+      account: owner.account,
+    })
+
     // set approvals
     const amount = 9000000000000000000000000n
     await wNEAR.write.mint([amount], {
@@ -82,15 +113,18 @@ describe('Allocator signWithdrawPayload', function () {
     // approve from owner for init()
     await wNEAR.write.approve([allocator.address, amount])
 
-    //
     const txHash = await allocator.write.submitWithdrawRequest(
       [
-        chainId,
-        escrow.account.address,
-        zeroAddress,
-        1n,
-        hub.account.address,
-        '0x' as `0x${string}`,
+        {
+          amount: 1n,
+          chainId,
+          currency: zeroAddress,
+          data: '0x' as `0x${string}`,
+          escrow: escrow.account.address,
+          hub: hubContract.address,
+          receiver: hub.account.address,
+          sender: hub.account.address,
+        },
       ],
       {
         account: hub.account,
@@ -112,6 +146,7 @@ describe('Allocator signWithdrawPayload', function () {
       attacker,
       escrow,
       hub,
+      hubContract,
       owner,
       payloadBuilder,
       payloadId: payloadBuiltEvent.args.payloadId,

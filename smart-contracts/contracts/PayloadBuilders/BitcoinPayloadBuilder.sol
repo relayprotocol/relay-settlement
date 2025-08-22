@@ -258,6 +258,10 @@ contract BitcoinPayloadBuilder is PayloadBuilder {
     return "Ecdsa";
   }
 
+  function family() external pure returns (string memory) {
+    return "bitcoin";
+  }
+
   // Util functions for encoding Bitcoin transaction data
 
   /// @dev Encode a “CompactSize” varint (as in Bitcoin, for script‐lengths or array‐lengths).

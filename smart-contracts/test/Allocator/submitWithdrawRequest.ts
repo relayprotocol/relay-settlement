@@ -8,6 +8,7 @@ import {
   zeroAddress,
 } from 'viem'
 import { DEFAULT_DELAY, deployAllocator } from '../helpers/deployAllocator'
+import { deployHub } from '../helpers/deployHub'
 
 const chainId = 1n
 
@@ -42,8 +43,12 @@ const extractEvent = async (
 
 describe('Allocator submitWithdrawRequest', function () {
   async function deployAllocatorWithSetup() {
-    const { allocator, owner, otherAccounts, publicClient } =
+    const { allocator, owner, otherAccounts, publicClient, utils } =
       await deployAllocator()
+    // We have a `hubContract` and `hub` in order to simplify calls to the allocator
+    // (it is much easier to call from an EOA vs impersonate a contract and execute
+    // a call on behalf of it).
+    const { hub: hubContract } = await deployHub()
     const [hub, escrow, attacker] = otherAccounts
 
     const payloadBuilder = await hre.viem.deployContract('DummyPayloadBuilder')
@@ -62,30 +67,51 @@ describe('Allocator submitWithdrawRequest', function () {
       }
     )
 
+    // We need the owner to be able to mint for testing purposes
+    await hubContract.write.grantRole(
+      [keccak256('HUB_ORACLE_ROLE' as `0x${string}`), owner.account.address],
+      {
+        account: owner.account,
+      }
+    )
+
+    // The allocator needs to be able to burn tokens on the hub
+    await hubContract.write.grantRole(
+      [keccak256('HUB_ORACLE_ROLE' as `0x${string}`), allocator.address],
+      {
+        account: owner.account,
+      }
+    )
+
     return {
       allocator,
       attacker,
       escrow,
       hub,
+      hubContract,
       owner,
       publicClient,
+      utils,
     }
   }
 
   describe('submitWithdrawRequest()', function () {
     it('should fail if the request was not performed by a hub', async () => {
-      const { allocator, attacker, escrow } = await loadFixture(
-        deployAllocatorWithSetup
-      )
+      const { allocator, hubContract, owner, attacker, escrow } =
+        await loadFixture(deployAllocatorWithSetup)
       await expect(
         allocator.write.submitWithdrawRequest(
           [
-            1n, //chainId
-            escrow.account.address, // escrow
-            zeroAddress, // currency
-            1n, // amount
-            attacker.account.address, // receiver
-            '0x' as `0x${string}`, // data
+            [
+              1n, //chainId
+              escrow.account.address, // escrow
+              hubContract.address, // hub
+              owner.account.address, // sender
+              zeroAddress, // currency
+              1n, // amount
+              attacker.account.address, // receiver
+              '0x' as `0x${string}`, // data
+            ],
           ],
           {
             account: attacker.account,
@@ -97,18 +123,22 @@ describe('Allocator submitWithdrawRequest', function () {
     })
 
     it('should fail if no payload builder exists', async () => {
-      const { allocator, hub, escrow } = await loadFixture(
+      const { allocator, hub, hubContract, owner, escrow } = await loadFixture(
         deployAllocatorWithSetup
       )
       await expect(
         allocator.write.submitWithdrawRequest(
           [
-            2n, // chainId
-            escrow.account.address,
-            zeroAddress, // currency
-            1n, // amount
-            hub.account.address, // receiver
-            '0x' as `0x${string}`, // data
+            [
+              2n, // chainId
+              escrow.account.address,
+              hubContract.address, // hub
+              owner.account.address, // sender
+              zeroAddress, // currency
+              1n, // amount
+              hub.account.address, // receiver
+              '0x' as `0x${string}`, // data
+            ],
           ],
           {
             account: hub.account,
@@ -118,18 +148,38 @@ describe('Allocator submitWithdrawRequest', function () {
     })
 
     it('should emit an event with the payload hash', async () => {
-      const { allocator, hub, escrow, publicClient } = await loadFixture(
-        deployAllocatorWithSetup
-      )
+      const {
+        allocator,
+        hub,
+        hubContract,
+        owner,
+        escrow,
+        publicClient,
+        utils,
+      } = await loadFixture(deployAllocatorWithSetup)
+
+      // Mint tokens on the hub
+      const tokenId = await utils.read.generateTokenId([
+        'dummy',
+        chainId,
+        zeroAddress,
+      ])
+      await hubContract.write.mint([owner.account.address, tokenId, 1n], {
+        account: owner.account,
+      })
 
       const txHash = await allocator.write.submitWithdrawRequest(
         [
-          chainId,
-          escrow.account.address,
-          zeroAddress, // currency
-          1n, // amount
-          hub.account.address, // receiver
-          '0x' as `0x${string}`, // data
+          [
+            chainId,
+            escrow.account.address,
+            hubContract.address, // hub
+            owner.account.address, // sender
+            zeroAddress, // currency
+            1n, // amount
+            hub.account.address, // receiver
+            '0x' as `0x${string}`, // data
+          ],
         ],
         {
           account: hub.account,
@@ -147,18 +197,38 @@ describe('Allocator submitWithdrawRequest', function () {
     })
 
     it('should store the unsigned payload', async () => {
-      const { allocator, hub, escrow, publicClient } = await loadFixture(
-        deployAllocatorWithSetup
-      )
+      const {
+        allocator,
+        hub,
+        hubContract,
+        owner,
+        escrow,
+        publicClient,
+        utils,
+      } = await loadFixture(deployAllocatorWithSetup)
+
+      // Mint tokens on the hub
+      const tokenId = await utils.read.generateTokenId([
+        'dummy',
+        chainId,
+        zeroAddress,
+      ])
+      await hubContract.write.mint([owner.account.address, tokenId, 1n], {
+        account: owner.account,
+      })
 
       const txHash = await allocator.write.submitWithdrawRequest(
         [
-          chainId,
-          escrow.account.address,
-          zeroAddress, // currency
-          1n, // amount
-          hub.account.address, // receiver
-          '0x' as `0x${string}`, // data
+          [
+            chainId,
+            escrow.account.address,
+            hubContract.address, // hub
+            owner.account.address, // sender
+            zeroAddress, // currency
+            1n, // amount
+            hub.account.address, // receiver
+            '0x' as `0x${string}`, // data
+          ],
         ],
         {
           account: hub.account,
@@ -176,19 +246,40 @@ describe('Allocator submitWithdrawRequest', function () {
       const payload = await allocator.read.unsignedPayloads([payloadId])
       expect(payload).to.equal(payloadBuiltEvent.args.payload)
     })
+
     it('should store the timestamp after which the payload can be signed', async () => {
-      const { allocator, hub, escrow, publicClient } = await loadFixture(
-        deployAllocatorWithSetup
-      )
+      const {
+        allocator,
+        hub,
+        hubContract,
+        owner,
+        escrow,
+        publicClient,
+        utils,
+      } = await loadFixture(deployAllocatorWithSetup)
+
+      // Mint tokens on the hub
+      const tokenId = await utils.read.generateTokenId([
+        'dummy',
+        chainId,
+        zeroAddress,
+      ])
+      await hubContract.write.mint([owner.account.address, tokenId, 1n], {
+        account: owner.account,
+      })
 
       const txHash = await allocator.write.submitWithdrawRequest(
         [
-          chainId,
-          escrow.account.address,
-          zeroAddress, // currency
-          1n, // amount
-          hub.account.address, // receiver
-          '0x' as `0x${string}`, // data
+          [
+            chainId,
+            escrow.account.address,
+            hubContract.address, // hub
+            owner.account.address, // sender
+            zeroAddress, // currency
+            1n, // amount
+            hub.account.address, // receiver
+            '0x' as `0x${string}`, // data
+          ],
         ],
         {
           account: hub.account,
@@ -209,6 +300,43 @@ describe('Allocator submitWithdrawRequest', function () {
         blockNumber: receipt.blockNumber,
       })
       expect(timestamp).to.equal(block.timestamp + DEFAULT_DELAY)
+    })
+
+    it("should fail if the sender doesn't have enough funds", async () => {
+      const { allocator, hub, hubContract, owner, escrow, utils } =
+        await loadFixture(deployAllocatorWithSetup)
+
+      // Mint tokens on the hub
+      const tokenId = await utils.read.generateTokenId([
+        'dummy',
+        chainId,
+        zeroAddress,
+      ])
+      await hubContract.write.mint([owner.account.address, tokenId, 1n], {
+        account: owner.account,
+      })
+
+      await expect(
+        allocator.write.submitWithdrawRequest(
+          [
+            [
+              chainId,
+              escrow.account.address,
+              hubContract.address, // hub
+              owner.account.address, // sender
+              zeroAddress, // currency
+              2n, // amount
+              hub.account.address, // receiver
+              '0x' as `0x${string}`, // data
+            ],
+          ],
+          {
+            account: hub.account,
+          }
+        )
+      ).to.be.rejectedWith(
+        'Arithmetic operation overflowed outside of an unchecked block'
+      )
     })
   })
 })

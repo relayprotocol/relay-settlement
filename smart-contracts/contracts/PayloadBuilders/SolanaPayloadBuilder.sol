@@ -63,6 +63,10 @@ contract SolanaPayloadBuilder is PayloadBuilder {
     return "Eddsa";
   }
 
+  function family() external pure returns (string memory) {
+    return "solana";
+  }
+
   function encodeBorsh(
     bytes32 recipient,
     bytes32 token,

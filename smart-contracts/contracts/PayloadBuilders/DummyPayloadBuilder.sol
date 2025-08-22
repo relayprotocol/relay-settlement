@@ -28,4 +28,8 @@ contract DummyPayloadBuilder is PayloadBuilder {
   function curve() external pure returns (string memory) {
     return "dummy curve";
   }
+
+  function family() external pure returns (string memory) {
+    return "dummy";
+  }
 }

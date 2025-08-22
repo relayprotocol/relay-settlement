@@ -162,6 +162,10 @@ contract EVMPayloadBuilder is PayloadBuilder {
     return "Ecdsa";
   }
 
+  function family() external pure returns (string memory) {
+    return "ethereum";
+  }
+
   // Converts a string representation of an address to an address type
   function toAddress(string memory s) public pure returns (address) {
     bytes memory b = bytes(s);

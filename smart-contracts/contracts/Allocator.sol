@@ -6,6 +6,9 @@ import {AuroraSdk, NEAR, PromiseCreateArgs, PromiseResult, PromiseResultStatus, 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
+import {Hub} from "./Hub.sol";
+import {Utils} from "./Utils.sol";
+
 interface ISafe {
   function isOwner(address) external view returns (bool);
 }
@@ -28,6 +31,8 @@ interface PayloadBuilder {
   ) external view returns (bytes32[] memory);
 
   function curve() external pure returns (string memory);
+
+  function family() external pure returns (string memory);
 }
 
 // NEAR gas settings
@@ -109,6 +114,18 @@ contract Allocator is AccessControl {
   error PayloadAlreadySigned(bytes32 payloadId);
   error WithdrawalDisabled();
   error SignCallbackFailed(bytes32 payloadId);
+  error WithdrawalRequestFailed();
+
+  struct SubmitWithdrawRequestParams {
+    uint256 chainId;
+    string escrow;
+    address hub;
+    address sender;
+    string currency;
+    uint256 amount;
+    string receiver;
+    bytes data;
+  }
 
   constructor(
     address _owner,
@@ -195,25 +212,19 @@ contract Allocator is AccessControl {
 
   /**
    * @notice submits a withdraw request to the payload builder, store the payload
-   * @param chainId chain ID
-   * @param escrow address of the escrow contract
-   * @param currency address of the currency contract (or zero address for native)
-   * @param amount amount to withdraw
-   * @param receiver address of the receiver
-   * @param data additional data to pass to the payload builder
+   * @param params The withdraw request parameters
    */
   function submitWithdrawRequest(
-    uint256 chainId,
-    string calldata escrow,
-    string calldata currency,
-    uint256 amount,
-    string calldata receiver,
-    bytes calldata data
+    SubmitWithdrawRequestParams calldata params
   ) public returns (bytes32 payloadId) {
     // Check that the calling address has the hub role
     if (!hasRole(HUB_ROLE, msg.sender)) {
       revert CallerIsNotHub(msg.sender);
     }
+
+    uint256 chainId = params.chainId;
+    string memory escrow = params.escrow;
+
     // check if the payload builder is set
     address builder = payloadBuilders[chainId][escrow];
     if (builder == address(0)) {
@@ -223,10 +234,10 @@ contract Allocator is AccessControl {
     bytes memory payload = PayloadBuilder(builder).buildPayload(
       chainId,
       escrow,
-      currency,
-      amount,
-      receiver,
-      data
+      params.currency,
+      params.amount,
+      params.receiver,
+      params.data
     );
     payloadId = keccak256(abi.encodePacked(payload, block.timestamp));
     unsignedPayloads[payloadId] = payload;
@@ -241,6 +252,14 @@ contract Allocator is AccessControl {
         GasSettings(DEFAULT_SIGN_GAS, DEFAULT_CALLBACK_GAS)
       );
     }
+
+    string memory chainFamily = PayloadBuilder(builder).family();
+    uint256 tokenId = Utils.generateTokenId(chainFamily, chainId, params.currency);
+    bool burnResult = Hub(params.hub).burn(params.sender, tokenId, params.amount);
+    if (!burnResult) {
+      revert WithdrawalRequestFailed();
+    }
+
     return payloadId;
   }
 
@@ -258,7 +277,7 @@ contract Allocator is AccessControl {
    */
   function signWithdrawPayload(
     uint256 chainId,
-    string calldata escrow,
+    string memory escrow,
     bytes32 payloadId,
     GasSettings memory gasSettings
   ) public {

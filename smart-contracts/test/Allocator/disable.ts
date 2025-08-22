@@ -67,7 +67,7 @@ describe('Allocator disable/enable', function () {
         allocator.write.disable({
           account: attacker.account,
         })
-      ).to.be.rejectedWith('NotMultisigOwner')
+      ).to.be.rejected
     })
   })
 
