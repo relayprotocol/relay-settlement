@@ -78,7 +78,7 @@ describe('Allocator signWithdrawPayload', function () {
 
     // We need the owner to be able to mint for testing purposes
     await hubContract.write.grantRole(
-      [keccak256('HUB_ORACLE_ROLE' as `0x${string}`), owner.account.address],
+      [keccak256('ORACLE_ROLE' as `0x${string}`), owner.account.address],
       {
         account: owner.account,
       }
@@ -86,7 +86,7 @@ describe('Allocator signWithdrawPayload', function () {
 
     // The allocator needs to be able to burn tokens on the hub
     await hubContract.write.grantRole(
-      [keccak256('HUB_ORACLE_ROLE' as `0x${string}`), allocator.address],
+      [keccak256('ORACLE_ROLE' as `0x${string}`), allocator.address],
       {
         account: owner.account,
       }
@@ -166,7 +166,6 @@ describe('Allocator signWithdrawPayload', function () {
       // wait for the delay
       await time.increase(await allocator.read.delay())
 
-      console.log()
       const signHash = await allocator.write.signWithdrawPayload(
         [chainId, escrow.account.address, payloadId, gasSettings],
         {
