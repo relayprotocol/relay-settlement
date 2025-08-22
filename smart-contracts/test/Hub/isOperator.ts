@@ -1,6 +1,7 @@
 import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
 import { expect } from 'chai'
 import hre from 'hardhat'
+import { keccak256 } from 'viem'
 
 describe('isOperator', function () {
   async function deployHub() {
@@ -10,7 +11,8 @@ describe('isOperator', function () {
     const publicClient = await hre.viem.getPublicClient()
 
     // Add oracle role to oracleUser
-    const addOracleHash = await hub.write.addOracle([
+    const addOracleHash = await hub.write.grantRole([
+      keccak256('ORACLE_ROLE'),
       oracleUser.account.address,
     ])
     await publicClient.waitForTransactionReceipt({ hash: addOracleHash })

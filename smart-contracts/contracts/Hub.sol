@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import "@openzeppelin/contracts/utils/Strings.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
 /// @notice Minimalist and gas efficient standard ERC6909 implementation.
 /// @author Solmate (https://github.com/transmissions11/solmate/blob/main/src/tokens/ERC6909.sol)
 contract Hub is AccessControl {
+  using Strings for uint256;
+
   /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
@@ -31,6 +34,12 @@ contract Hub is AccessControl {
     uint256 amount
   );
 
+  struct TokenMetadata {
+    string name;
+    string symbol;
+    uint8 decimals;
+  }
+
   /*//////////////////////////////////////////////////////////////
                              ERC6909 STORAGE
     //////////////////////////////////////////////////////////////*/
@@ -42,39 +51,29 @@ contract Hub is AccessControl {
   mapping(address => mapping(address => mapping(uint256 => uint256)))
     public allowance;
 
+  mapping(uint256 => TokenMetadata) public tokenMetadata;
+
+  string public contractURI = "";
+
   /*//////////////////////////////////////////////////////////////
                              ROLES
     //////////////////////////////////////////////////////////////*/
 
-  bytes32 public constant HUB_ORACLE_ROLE = keccak256("HUB_ORACLE_ROLE");
-
-  bytes32 public constant HUB_ORACLE_ADMIN_ROLE =
-    keccak256("HUB_ORACLE_ADMIN_ROLE");
+  bytes32 public constant ORACLE_ROLE = keccak256("ORACLE_ROLE");
+  bytes32 public constant EDITOR_ROLE = keccak256("EDITOR_ROLE");
+  bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
   /*//////////////////////////////////////////////////////////////
                              CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
 
   constructor(address adminAddress) {
-    _setRoleAdmin(HUB_ORACLE_ROLE, HUB_ORACLE_ADMIN_ROLE);
-    _grantRole(HUB_ORACLE_ADMIN_ROLE, adminAddress);
+    _setRoleAdmin(ORACLE_ROLE, ADMIN_ROLE);
+    _setRoleAdmin(EDITOR_ROLE, ADMIN_ROLE);
+    _grantRole(ADMIN_ROLE, adminAddress);
   }
 
   /*//////////////////////////////////////////////////////////////
-                        ROLES LOGIC
-    //////////////////////////////////////////////////////////////*/
-  function addOracle(address account) public onlyRole(HUB_ORACLE_ADMIN_ROLE) {
-    _grantRole(HUB_ORACLE_ROLE, account);
-  }
-
-  function removeOracle(
-    address account
-  ) public onlyRole(HUB_ORACLE_ADMIN_ROLE) {
-    _revokeRole(HUB_ORACLE_ROLE, account);
-  }
-
-  /*//////////////////////////////////////////////////////////////
-
                               ERC6909 LOGIC
     //////////////////////////////////////////////////////////////*/
 
@@ -82,7 +81,7 @@ contract Hub is AccessControl {
     address account,
     address operator
   ) public view returns (bool) {
-    return hasRole(HUB_ORACLE_ROLE, account) || _isOperator[account][operator];
+    return hasRole(ORACLE_ROLE, account) || _isOperator[account][operator];
   }
 
   // @notice Internal function to set an operator for an account
@@ -100,7 +99,7 @@ contract Hub is AccessControl {
     address account,
     address operator,
     bool approved
-  ) public onlyRole(HUB_ORACLE_ROLE) returns (bool result) {
+  ) public onlyRole(ORACLE_ROLE) returns (bool result) {
     return _setOperatorFor(account, operator, approved);
   }
 
@@ -162,7 +161,7 @@ contract Hub is AccessControl {
     address receiver,
     uint256 id,
     uint256 amount
-  ) public onlyRole(HUB_ORACLE_ROLE) returns (bool result) {
+  ) public onlyRole(ORACLE_ROLE) returns (bool result) {
     _mint(receiver, id, amount);
     return true;
   }
@@ -171,9 +170,39 @@ contract Hub is AccessControl {
     address sender,
     uint256 id,
     uint256 amount
-  ) public onlyRole(HUB_ORACLE_ROLE) returns (bool result) {
+  ) public onlyRole(ORACLE_ROLE) returns (bool result) {
     _burn(sender, id, amount);
     return true;
+  }
+
+  function setTokenMetadata(
+    uint256 id,
+    TokenMetadata calldata metadata
+  ) public onlyRole(EDITOR_ROLE) {
+    tokenMetadata[id] = metadata;
+  }
+
+  function name(uint256 id) public view returns (string memory) {
+    return tokenMetadata[id].name;
+  }
+
+  function symbol(uint256 id) public view returns (string memory) {
+    return tokenMetadata[id].symbol;
+  }
+
+  function decimals(uint256 id) public view returns (uint8) {
+    if (tokenMetadata[id].decimals == 0) {
+      return 18;
+    }
+    return tokenMetadata[id].decimals;
+  }
+
+  function setContractURI(string calldata uri) public onlyRole(EDITOR_ROLE) {
+    contractURI = uri;
+  }
+
+  function tokenURI(uint256 id) public view returns (string memory) {
+    return string.concat(contractURI, "/", id.toString());
   }
 
   /*//////////////////////////////////////////////////////////////

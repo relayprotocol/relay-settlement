@@ -1,13 +1,10 @@
-import {
-  time,
-  loadFixture,
-} from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
+import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
 import { expect } from 'chai'
 import hre from 'hardhat'
 import { keccak256 } from 'viem'
 
-const HUB_ORACLE_ADMIN_ROLE = keccak256('HUB_ORACLE_ADMIN_ROLE')
-const HUB_ORACLE_ROLE = keccak256('HUB_ORACLE_ROLE')
+const ADMIN_ROLE = keccak256('ADMIN_ROLE')
+const ORACLE_ROLE = keccak256('ORACLE_ROLE')
 
 describe('roles / addOracle', function () {
   async function deployHub() {
@@ -29,7 +26,7 @@ describe('roles / addOracle', function () {
       const { admin, hub } = await loadFixture(deployHub)
 
       expect(
-        await hub.read.hasRole([HUB_ORACLE_ADMIN_ROLE, admin.account.address])
+        await hub.read.hasRole([ADMIN_ROLE, admin.account.address])
       ).to.equal(true)
     })
   })
@@ -39,37 +36,42 @@ describe('roles / addOracle', function () {
       const { publicClient, oracleUser, hub } = await loadFixture(deployHub)
       // no role to start with
       expect(
-        await hub.read.hasRole([HUB_ORACLE_ROLE, oracleUser.account.address])
+        await hub.read.hasRole([ORACLE_ROLE, oracleUser.account.address])
       ).to.equal(false)
 
       // add an oracle
-      const addOracleHash = await hub.write.addOracle([
+      const addOracleHash = await hub.write.grantRole([
+        keccak256('ORACLE_ROLE'),
         oracleUser.account.address,
       ])
       await publicClient.waitForTransactionReceipt({
         hash: addOracleHash,
       })
       expect(
-        await hub.read.hasRole([HUB_ORACLE_ROLE, oracleUser.account.address])
+        await hub.read.hasRole([ORACLE_ROLE, oracleUser.account.address])
       ).to.equal(true)
 
       // remove oracle
-      const removeOracleHash = await hub.write.removeOracle([
+      const removeOracleHash = await hub.write.revokeRole([
+        keccak256('ORACLE_ROLE'),
         oracleUser.account.address,
       ])
       await publicClient.waitForTransactionReceipt({ hash: removeOracleHash })
 
       expect(
-        await hub.read.hasRole([HUB_ORACLE_ROLE, oracleUser.account.address])
+        await hub.read.hasRole([ORACLE_ROLE, oracleUser.account.address])
       ).to.equal(false)
     })
 
     it('reverts if call by an account that is not oracle admin', async () => {
       const { attacker, hub } = await loadFixture(deployHub)
       await expect(
-        hub.write.addOracle([attacker.account.address], {
-          account: attacker.account,
-        })
+        hub.write.grantRole(
+          [keccak256('ORACLE_ROLE'), attacker.account.address],
+          {
+            account: attacker.account,
+          }
+        )
       ).to.be.rejectedWith('AccessControlUnauthorizedAccount')
     })
   })

@@ -26,14 +26,11 @@ describe('Hub Deployment', function () {
   it('should deploy Hub contract with correct oracle admin', async function () {
     const { admin, hub } = await loadFixture(deployHub)
 
-    // Get the HUB_ORACLE_ADMIN_ROLE
-    const HUB_ORACLE_ADMIN_ROLE = await hub.read.HUB_ORACLE_ADMIN_ROLE()
+    // Get the ADMIN_ROLE
+    const ADMIN_ROLE = await hub.read.ADMIN_ROLE()
 
-    // Check if admin has the HUB_ORACLE_ADMIN_ROLE
-    const hasRole = await hub.read.hasRole([
-      HUB_ORACLE_ADMIN_ROLE,
-      admin.account.address,
-    ])
+    // Check if admin has the ADMIN_ROLE
+    const hasRole = await hub.read.hasRole([ADMIN_ROLE, admin.account.address])
     expect(hasRole).to.equal(true)
   })
 })
