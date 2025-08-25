@@ -18,7 +18,7 @@ yarn hardhat deploy:payload-builder --payload-builder DummyPayloadBuilder
 # set dummy payload builder in allocator
 yarn hardhat allocator:set-payload-builder --builder <builder-address> --allocator <allocator-contract-address> --chain-id 1 --escrow <escrow-contract-address> --network aurora-testnet
 
-# grant HUB_ROLE to your address
+# grant APPROVED_WITHDRAWER_ROLE to your address
 yarn hardhat allocator:hub-role --allocator <allocator-contract-address>
 
 # submit withdraw request params (thru block explorer)
@@ -47,14 +47,17 @@ yarn run hardhat full:bitcoin --network aurora-testnet --wnear 0x4861825E75ab145
 Replace `<account-name>` with a unique account name in the following commands
 
 ### Get NEAR in testnet
+
 ```
 near account create-account sponsor-by-faucet-service <account-name> autogenerate-new-keypair save-to-keychain network-config testnet create
 ```
 
 ### Export private key and import in Meteor wallet
+
 ```
 near account export-account <account-name> using-private-key network-config testnet
 ```
 
 ### Bridge to Aurora Testnet
+
 Bridge to Aurora Testnet Via https://testnet.rainbowbridge.app/

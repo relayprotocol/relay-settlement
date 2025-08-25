@@ -12,7 +12,6 @@ import {
   zeroAddress,
 } from 'viem'
 import { deployAllocator } from '../helpers/deployAllocator'
-import { deployHub } from '../helpers/deployHub'
 
 const chainId = 1n
 
@@ -52,13 +51,9 @@ const extractEvent = async (
 
 describe('Allocator signWithdrawPayload', function () {
   async function deployAllocatorWithSetup() {
-    const { allocator, owner, otherAccounts, publicClient, wNEAR, utils } =
+    const { allocator, owner, otherAccounts, publicClient, wNEAR } =
       await deployAllocator()
-    // We have a `hubContract` and `hub` in order to simplify calls to the allocator
-    // (it is much easier to call from an EOA vs impersonate a contract and execute
-    // a call on behalf of it).
-    const { hub: hubContract } = await deployHub()
-    const [hub, escrow, attacker] = otherAccounts
+    const [escrow, attacker, solver] = otherAccounts
 
     const payloadBuilder = await hre.viem.deployContract('DummyPayloadBuilder')
 
@@ -70,45 +65,22 @@ describe('Allocator signWithdrawPayload', function () {
     )
 
     await allocator.write.grantRole(
-      [keccak256('HUB_ROLE' as `0x${string}`), hub.account.address],
+      [
+        keccak256('APPROVED_WITHDRAWER_ROLE' as `0x${string}`),
+        solver.account.address,
+      ],
       {
         account: owner.account,
       }
     )
-
-    // We need the owner to be able to mint for testing purposes
-    await hubContract.write.grantRole(
-      [keccak256('ORACLE_ROLE' as `0x${string}`), owner.account.address],
-      {
-        account: owner.account,
-      }
-    )
-
-    // The allocator needs to be able to burn tokens on the hub
-    await hubContract.write.grantRole(
-      [keccak256('ORACLE_ROLE' as `0x${string}`), allocator.address],
-      {
-        account: owner.account,
-      }
-    )
-
-    // Mint tokens on the hub
-    const tokenId = await utils.read.generateTokenId([
-      'dummy',
-      chainId,
-      zeroAddress,
-    ])
-    await hubContract.write.mint([hub.account.address, tokenId, 1n], {
-      account: owner.account,
-    })
 
     // set approvals
     const amount = 9000000000000000000000000n
     await wNEAR.write.mint([amount], {
-      account: hub.account,
+      account: solver.account,
     })
     await wNEAR.write.approve([allocator.address, 2n], {
-      account: hub.account,
+      account: solver.account,
     })
     // approve from owner for init()
     await wNEAR.write.approve([allocator.address, amount])
@@ -121,13 +93,11 @@ describe('Allocator signWithdrawPayload', function () {
           currency: zeroAddress,
           data: '0x' as `0x${string}`,
           escrow: escrow.account.address,
-          hub: hubContract.address,
-          receiver: hub.account.address,
-          sender: hub.account.address,
+          receiver: solver.account.address,
         },
       ],
       {
-        account: hub.account,
+        account: solver.account,
       }
     )
 
@@ -145,19 +115,18 @@ describe('Allocator signWithdrawPayload', function () {
       allocator,
       attacker,
       escrow,
-      hub,
-      hubContract,
       owner,
       payloadBuilder,
       payloadId: payloadBuiltEvent.args.payloadId,
       publicClient,
+      solver,
       wNEAR,
     }
   }
 
   describe('signWithdrawPayload()', function () {
     it('should successfully sign a payload with custom gas settings', async function () {
-      const { allocator, hub, escrow, payloadId, publicClient, wNEAR } =
+      const { allocator, solver, escrow, payloadId, publicClient, wNEAR } =
         await loadFixture(deployAllocatorWithSetup)
 
       // init transact
@@ -169,7 +138,7 @@ describe('Allocator signWithdrawPayload', function () {
       const signHash = await allocator.write.signWithdrawPayload(
         [chainId, escrow.account.address, payloadId, gasSettings],
         {
-          account: hub.account,
+          account: solver.account,
         }
       )
 
@@ -187,12 +156,12 @@ describe('Allocator signWithdrawPayload', function () {
         topics: transferLog!.topics,
       })
       expect(transferArgs!.value).to.equal(1n)
-      expect(transferArgs.from).to.equal(getAddress(hub.account.address))
+      expect(transferArgs.from).to.equal(getAddress(solver.account.address))
       // can't test transferArgs.to as we dont have access to currentAccountId() from Aurora SDK
     })
 
     it('should revert when trying to sign a payload that is not ready', async function () {
-      const { allocator, hub, escrow, payloadId } = await loadFixture(
+      const { allocator, solver, escrow, payloadId } = await loadFixture(
         deployAllocatorWithSetup
       )
 
@@ -200,31 +169,38 @@ describe('Allocator signWithdrawPayload', function () {
         allocator.write.signWithdrawPayload(
           [chainId, escrow.account.address, payloadId, gasSettings],
           {
-            account: hub.account,
+            account: solver.account,
           }
         )
       ).to.be.rejectedWith('PayloadNotReady')
     })
 
-    it('should revert when contract is disabled', async function () {
-      const { allocator, hub, escrow, payloadId } = await loadFixture(
+    it('should revert if the user was suspended in the meantime', async function () {
+      const { allocator, solver, escrow, payloadId, owner } = await loadFixture(
         deployAllocatorWithSetup
       )
 
       // wait for payload to be ready
       await time.increase(await allocator.read.delay())
 
-      // init xcc sub account
-      // await allocator.write.init()
+      await allocator.write.revokeRole(
+        [
+          keccak256('APPROVED_WITHDRAWER_ROLE' as `0x${string}`),
+          solver.account.address,
+        ],
+        {
+          account: owner.account,
+        }
+      )
 
       await expect(
         allocator.write.signWithdrawPayload(
           [chainId, escrow.account.address, payloadId, gasSettings],
           {
-            account: hub.account,
+            account: solver.account,
           }
         )
-      ).to.be.rejectedWith('WithdrawalDisabled')
+      ).to.be.rejectedWith('CallerIsNotApproved')
     })
   })
 })

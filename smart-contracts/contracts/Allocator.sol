@@ -6,15 +6,13 @@ import {AuroraSdk, NEAR, PromiseCreateArgs, PromiseResult, PromiseResultStatus, 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
-import {Hub} from "./Hub.sol";
-import {Utils} from "./Utils.sol";
-
 interface ISafe {
   function isOwner(address) external view returns (bool);
 }
 
 interface PayloadBuilder {
   error InsufficientAmount(uint256 amount);
+
   function buildPayload(
     uint256 chainId,
     string calldata escrow,
@@ -52,16 +50,12 @@ contract Allocator is AccessControl {
   using AuroraSdk for PromiseResult;
   using Strings for uint256;
 
-  event Enabled(bool enabled);
   event DelayChanged(uint256 delay);
 
   // roles
-  bytes32 public constant HUB_ROLE = keccak256("HUB_ROLE");
+  bytes32 public constant APPROVED_WITHDRAWER_ROLE =
+    keccak256("APPROVED_WITHDRAWER_ROLE");
   bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
-  bytes32 public constant CALLBACK_ROLE = keccak256("CALLBACK_ROLE");
-
-  // enable/disable withdrawals
-  bool public enabled;
 
   // NEAR signer account
   string public nearSigner;
@@ -108,19 +102,16 @@ contract Allocator is AccessControl {
 
   // errors
   error NotMultisigOwner(address account);
-  error CallerIsNotHub(address account);
+  error CallerIsNotApproved(address account);
   error NoPayloadBuilder(uint256 chainId, string escrow);
   error PayloadNotReady(bytes32 payloadId);
   error PayloadAlreadySigned(bytes32 payloadId);
-  error WithdrawalDisabled();
   error SignCallbackFailed(bytes32 payloadId);
   error WithdrawalRequestFailed();
 
   struct SubmitWithdrawRequestParams {
     uint256 chainId;
     string escrow;
-    address hub;
-    address sender;
     string currency;
     uint256 amount;
     string receiver;
@@ -134,15 +125,8 @@ contract Allocator is AccessControl {
     address _wNEAR
   ) {
     // roles
-    _setRoleAdmin(HUB_ROLE, ADMIN_ROLE);
+    _setRoleAdmin(APPROVED_WITHDRAWER_ROLE, ADMIN_ROLE);
     _grantRole(ADMIN_ROLE, _owner);
-    _grantRole(
-      CALLBACK_ROLE,
-      AuroraSdk.nearRepresentitiveImplicitAddress(address(this))
-    );
-
-    // disabled by default. enable on init()
-    enabled = false;
 
     // delay
     delay = _delay;
@@ -178,17 +162,10 @@ contract Allocator is AccessControl {
       500_000_000_000
     );
     initCall.transact();
-    enable(); // enable the contract after initialization
   }
 
-  function disable() public onlyMultisigOwner {
-    enabled = false;
-    emit Enabled(enabled);
-  }
-
-  function enable() public onlyRole(ADMIN_ROLE) {
-    enabled = true;
-    emit Enabled(enabled);
+  function suspend(address withdrawer) public onlyMultisigOwner {
+    _revokeRole(APPROVED_WITHDRAWER_ROLE, withdrawer);
   }
 
   function setDelay(uint256 _delay) public onlyRole(ADMIN_ROLE) {
@@ -218,22 +195,19 @@ contract Allocator is AccessControl {
     SubmitWithdrawRequestParams calldata params
   ) public returns (bytes32 payloadId) {
     // Check that the calling address has the hub role
-    if (!hasRole(HUB_ROLE, msg.sender)) {
-      revert CallerIsNotHub(msg.sender);
+    if (!hasRole(APPROVED_WITHDRAWER_ROLE, msg.sender)) {
+      revert CallerIsNotApproved(msg.sender);
     }
 
-    uint256 chainId = params.chainId;
-    string memory escrow = params.escrow;
-
     // check if the payload builder is set
-    address builder = payloadBuilders[chainId][escrow];
+    address builder = payloadBuilders[params.chainId][params.escrow];
     if (builder == address(0)) {
-      revert NoPayloadBuilder(chainId, escrow);
+      revert NoPayloadBuilder(params.chainId, params.escrow);
     }
 
     bytes memory payload = PayloadBuilder(builder).buildPayload(
-      chainId,
-      escrow,
+      params.chainId,
+      params.escrow,
       params.currency,
       params.amount,
       params.receiver,
@@ -246,20 +220,12 @@ contract Allocator is AccessControl {
     if (delay == 0) {
       // if delay is 0, sign the payload immediately
       signWithdrawPayload(
-        chainId,
-        escrow,
+        params.chainId,
+        params.escrow,
         payloadId,
         GasSettings(DEFAULT_SIGN_GAS, DEFAULT_CALLBACK_GAS)
       );
     }
-
-    string memory chainFamily = PayloadBuilder(builder).family();
-    uint256 tokenId = Utils.generateTokenId(chainFamily, chainId, params.currency);
-    bool burnResult = Hub(params.hub).burn(params.sender, tokenId, params.amount);
-    if (!burnResult) {
-      revert WithdrawalRequestFailed();
-    }
-
     return payloadId;
   }
 
@@ -291,8 +257,8 @@ contract Allocator is AccessControl {
       revert PayloadNotReady(payloadId);
     }
 
-    if (!enabled) {
-      revert WithdrawalDisabled();
+    if (!hasRole(APPROVED_WITHDRAWER_ROLE, msg.sender)) {
+      revert CallerIsNotApproved(msg.sender);
     }
 
     string memory path = Strings.toHexString(uint160(address(this)), 20);
@@ -351,10 +317,15 @@ contract Allocator is AccessControl {
    * It checks if the signing was successful and if so, stores the signed payload in the
    * signedPayloads mapping. It also emits an event to notify that the payload has been signed.
    */
-  function signWithdrawCallback(
-    bytes32 payloadId,
-    bytes32 hashToSign
-  ) public onlyRole(CALLBACK_ROLE) {
+  function signWithdrawCallback(bytes32 payloadId, bytes32 hashToSign) public {
+    if (
+      msg.sender != AuroraSdk.nearRepresentitiveImplicitAddress(address(this))
+    ) {
+      revert AccessControlUnauthorizedAccount(
+        msg.sender,
+        keccak256("SIGNATURE_CALLBACK_ROLE")
+      );
+    }
     // triggering this function requires Aurora precompiles and therefore has no unit tests
     PromiseResult memory result = AuroraSdk.promiseResult(0);
 

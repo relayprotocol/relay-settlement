@@ -1,12 +1,16 @@
 import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
 import { expect } from 'chai'
 import hre from 'hardhat'
-import { encodeFunctionData } from 'viem'
+import { encodeFunctionData, keccak256 } from 'viem'
 import { deployAllocator } from '../helpers/deployAllocator'
 
-describe('Allocator disable/enable', function () {
+const APPROVED_WITHDRAWER_ROLE = keccak256(
+  'APPROVED_WITHDRAWER_ROLE'
+) as `0x${string}`
+
+describe('Allocator suspend/resume', function () {
   async function deployAllocatorWithSafe() {
-    const [owner, admin, attacker] = await hre.viem.getWalletClients()
+    const [owner, admin, attacker, solver] = await hre.viem.getWalletClients()
     const publicClient = await hre.viem.getPublicClient()
 
     const mockSafe = await hre.viem.deployContract('MockSafe', [])
@@ -21,8 +25,8 @@ describe('Allocator disable/enable', function () {
     // simulate multisig execution to enable the allocator
     const data = encodeFunctionData({
       abi: allocator.abi,
-      args: [],
-      functionName: 'enable',
+      args: [APPROVED_WITHDRAWER_ROLE, solver.account.address],
+      functionName: 'grantRole',
     })
 
     const enableHash = await mockSafe.write.execute(
@@ -41,23 +45,37 @@ describe('Allocator disable/enable', function () {
       mockSafe,
       owner,
       publicClient,
+      solver,
     }
   }
 
-  describe('disable()', function () {
-    it('should allow any multisig owner to disable the contract', async function () {
-      const { allocator, admin, publicClient } = await loadFixture(
+  describe('suspend()', function () {
+    it('should allow any multisig owner to suspend the contract', async function () {
+      const { allocator, admin, publicClient, solver } = await loadFixture(
         deployAllocatorWithSafe
       )
 
-      expect(await allocator.read.enabled()).to.equal(true)
+      expect(
+        await allocator.read.hasRole([
+          APPROVED_WITHDRAWER_ROLE,
+          solver.account.address,
+        ])
+      ).to.equal(true)
 
-      const disableHash = await allocator.write.disable({
-        account: admin.account,
-      })
-      await publicClient.waitForTransactionReceipt({ hash: disableHash })
+      const suspendHash = await allocator.write.suspend(
+        [solver.account.address],
+        {
+          account: admin.account,
+        }
+      )
+      await publicClient.waitForTransactionReceipt({ hash: suspendHash })
 
-      expect(await allocator.read.enabled()).to.equal(false)
+      expect(
+        await allocator.read.hasRole([
+          APPROVED_WITHDRAWER_ROLE,
+          solver.account.address,
+        ])
+      ).to.equal(false)
     })
 
     it('should revert when non-admin tries to disable the contract', async function () {
@@ -73,20 +91,28 @@ describe('Allocator disable/enable', function () {
 
   describe('enable()', function () {
     it('should require multisig signature to enable the contract', async function () {
-      const { allocator, owner, admin, publicClient, mockSafe } =
+      const { allocator, owner, admin, publicClient, mockSafe, solver } =
         await loadFixture(deployAllocatorWithSafe)
 
-      const disableHash = await allocator.write.disable({
-        account: admin.account,
-      })
+      const disableHash = await allocator.write.suspend(
+        [solver.account.address],
+        {
+          account: admin.account,
+        }
+      )
       await publicClient.waitForTransactionReceipt({ hash: disableHash })
-      expect(await allocator.read.enabled()).to.equal(false)
+      expect(
+        await allocator.read.hasRole([
+          APPROVED_WITHDRAWER_ROLE,
+          solver.account.address,
+        ])
+      ).to.equal(false)
 
       // simulate multisig execution
       const data = encodeFunctionData({
         abi: allocator.abi,
-        args: [],
-        functionName: 'enable',
+        args: [APPROVED_WITHDRAWER_ROLE, solver.account.address],
+        functionName: 'grantRole',
       })
 
       const enableHash = await mockSafe.write.execute(
@@ -97,24 +123,39 @@ describe('Allocator disable/enable', function () {
       )
 
       await publicClient.waitForTransactionReceipt({ hash: enableHash })
-      expect(await allocator.read.enabled()).to.equal(true)
+      expect(
+        await allocator.read.hasRole([
+          APPROVED_WITHDRAWER_ROLE,
+          solver.account.address,
+        ])
+      ).to.equal(true)
     })
 
     it('should revert when non-owner tries to enable the contract', async function () {
-      const { allocator, admin, attacker, publicClient } = await loadFixture(
-        deployAllocatorWithSafe
-      )
+      const { allocator, admin, attacker, publicClient, solver } =
+        await loadFixture(deployAllocatorWithSafe)
 
-      const disableHash = await allocator.write.disable({
-        account: admin.account,
-      })
+      const disableHash = await allocator.write.suspend(
+        [solver.account.address],
+        {
+          account: admin.account,
+        }
+      )
       await publicClient.waitForTransactionReceipt({ hash: disableHash })
-      expect(await allocator.read.enabled()).to.equal(false)
+      expect(
+        await allocator.read.hasRole([
+          APPROVED_WITHDRAWER_ROLE,
+          solver.account.address,
+        ])
+      ).to.equal(false)
 
       await expect(
-        allocator.write.enable({
-          account: attacker.account,
-        })
+        allocator.write.grantRole(
+          [APPROVED_WITHDRAWER_ROLE, solver.account.address],
+          {
+            account: attacker.account,
+          }
+        )
       ).to.be.rejectedWith('AccessControlUnauthorizedAccount')
     })
   })
