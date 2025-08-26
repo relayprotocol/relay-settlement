@@ -30,6 +30,6 @@ contract DummyPayloadBuilder is PayloadBuilder {
   }
 
   function family() external pure returns (string memory) {
-    return "dummy";
+    return "dummy-vm";
   }
 }

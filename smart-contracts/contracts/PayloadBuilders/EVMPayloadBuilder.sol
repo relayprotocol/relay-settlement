@@ -163,7 +163,7 @@ contract EVMPayloadBuilder is PayloadBuilder {
   }
 
   function family() external pure returns (string memory) {
-    return "ethereum";
+    return "ethereum-vm";
   }
 
   // Converts a string representation of an address to an address type

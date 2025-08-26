@@ -58,7 +58,7 @@ contract SuiPayloadBuilder is PayloadBuilder {
   }
 
   function family() external pure returns (string memory) {
-    return "sui";
+    return "sui-vm";
   }
 
   function encodeBCS(

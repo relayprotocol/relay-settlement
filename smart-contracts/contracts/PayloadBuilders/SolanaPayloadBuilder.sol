@@ -64,7 +64,7 @@ contract SolanaPayloadBuilder is PayloadBuilder {
   }
 
   function family() external pure returns (string memory) {
-    return "solana";
+    return "solana-vm";
   }
 
   function encodeBorsh(

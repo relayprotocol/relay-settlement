@@ -259,7 +259,7 @@ contract BitcoinPayloadBuilder is PayloadBuilder {
   }
 
   function family() external pure returns (string memory) {
-    return "bitcoin";
+    return "bitcoin-vm";
   }
 
   // Util functions for encoding Bitcoin transaction data

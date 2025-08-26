@@ -30,7 +30,7 @@ task(
     zeroAddress
   )
   .addOptionalParam('delay', 'The delay in seconds', DEFAULT_DELAY)
-  .addOptionalParam('payloadType', 'The PayLoad builder in seconds', 'evm')
+  .addOptionalParam('payloadType', 'The Payload builder type', 'ethereum-vm')
   .setAction(
     async (
       {

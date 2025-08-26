@@ -6,41 +6,41 @@ export const tokenIdTestCases: Array<{
 }> = [
   {
     expectedValue:
-      78051395535287417827063584897405809888583020418092851394496101884361051633507n,
+      5126370114286486119248922823807248445856144931672230102669788761404601632355n,
     input: {
       address: '0x0000000000000000000000000000000000000000',
       chainId: 1,
-      family: 'evm',
+      family: 'ethereum-vm',
     },
     name: 'ETH on Ethereum',
   },
   {
     expectedValue:
-      54669162877514710005738411391664089827359327443976864294332674275893289844644n,
+      101142405549722680701516949243527989485095939267215334056209565926507227943481n,
     input: {
       address: 'bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq',
       chainId: 1,
-      family: 'bitcoin',
+      family: 'bitcoin-vm',
     },
     name: 'Bitcoin',
   },
   {
     expectedValue:
-      98561313466494535556816499499729286402645494443814293410896430861984101022560n,
+      108890717977569292143568470585265267208172758058844132994285904278323093890885n,
     input: {
       address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
       chainId: 1,
-      family: 'solana',
+      family: 'solana-vm',
     },
     name: 'USDC on Solana',
   },
   {
     expectedValue:
-      91011626713223330294058701363236552008263148926138155798246432140767289500159n,
+      30815307311220170804965801606391678921022824512560571593430839734064343993402n,
     input: {
       address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
       chainId: 8453,
-      family: 'evm',
+      family: 'ethereum-vm',
     },
     name: 'USDC on Base',
   },

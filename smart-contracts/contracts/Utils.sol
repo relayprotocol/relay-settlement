@@ -6,7 +6,7 @@ import {JSONParserLib} from "solady/src/utils/JSONParserLib.sol";
 library Utils {
   /**
    * @notice Generates a unique ID for a  based on the family (type of chain), chain ID, and account
-   * @param family The blockchain family ('evm', 'solana', 'bitcoin')
+   * @param family The blockchain family ('bitcoin-vm', 'ethereum-vm', 'solana-vm', 'sui-vm')
    * @param chainId The ID of the blockchain network
    * @param token The token address or identifier
    * @dev We pass the token as a string to support identifiers from non-EVM chains.
@@ -18,7 +18,7 @@ library Utils {
     uint256 chainId,
     string memory token
   ) external pure returns (uint256) {
-    if (Strings.equal(family, "evm")) {
+    if (Strings.equal(family, "ethereum-vm")) {
       return
         uint256(
           keccak256(
@@ -31,7 +31,7 @@ library Utils {
 
   /**
    * @notice Generates a virtual address for a given family, chain ID, and account
-   * @param family The blockchain family ('evm', 'solana', 'bitcoin')
+   * @param family The blockchain family ('bitcoin-vm', 'ethereum-vm', 'solana-vm', 'sui-vm')
    * @param chainId The ID of the blockchain network
    * @param account The account address or identifier
    * @return A virtual address derived from the token ID
@@ -41,7 +41,7 @@ library Utils {
     uint256 chainId,
     string memory account
   ) external pure returns (address) {
-    bytes32 addressHash = Strings.equal(family, "evm")
+    bytes32 addressHash = Strings.equal(family, "ethereum-vm")
       ? keccak256(
         abi.encodePacked(family, chainId, Strings.parseAddress(account))
       )

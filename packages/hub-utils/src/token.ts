@@ -10,7 +10,7 @@ import { getCheckSummedAddress } from './utils'
 export function generateTokenId(components: TokenIdComponents): TokenId {
   const { family, chainId, address } = components
   const packedData = ethers.solidityPacked(
-    ['string', 'uint256', family === 'evm' ? 'address' : 'string'],
+    ['string', 'uint256', family === 'ethereum-vm' ? 'address' : 'string'],
     [family, chainId, getCheckSummedAddress(family, address)]
   )
   return BigInt(ethers.keccak256(packedData))

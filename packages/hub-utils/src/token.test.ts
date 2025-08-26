@@ -18,12 +18,12 @@ describe('Token ID Generation', () => {
     const input1: TokenIdComponents = {
       address: addr,
       chainId: 1,
-      family: 'evm',
+      family: 'ethereum-vm',
     }
     const input2: TokenIdComponents = {
       address: addr.toLowerCase(),
       chainId: 1,
-      family: 'evm',
+      family: 'ethereum-vm',
     }
 
     expect(generateTokenId(input1)).toBe(generateTokenId(input2))
