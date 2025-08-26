@@ -76,31 +76,6 @@ describe('Allocator submitWithdrawRequest', function () {
   }
 
   describe('submitWithdrawRequest()', function () {
-    it('should fail if the request was not performed by an approved withdrawer', async () => {
-      const { allocator, owner, attacker, escrow } = await loadFixture(
-        deployAllocatorWithSetup
-      )
-      await expect(
-        allocator.write.submitWithdrawRequest(
-          [
-            [
-              1n, //chainId
-              escrow.account.address, // escrow
-              owner.account.address, // sender
-              zeroAddress, // currency
-              1n, // amount
-              '0x' as `0x${string}`, // data
-            ],
-          ],
-          {
-            account: attacker.account,
-          }
-        )
-      ).to.be.rejectedWith(
-        'CallerIsNotApproved("0x90F79bf6EB2c4f870365E785982E1f101E93b906")'
-      )
-    })
-
     it('should fail if no payload builder exists', async () => {
       const { allocator, hub, owner, escrow } = await loadFixture(
         deployAllocatorWithSetup
@@ -186,8 +161,8 @@ describe('Allocator submitWithdrawRequest', function () {
         allocator.abi
       )
       const payloadId = payloadBuiltEvent.args.payloadId
-      const payload = await allocator.read.unsignedPayloads([payloadId])
-      expect(payload).to.equal(payloadBuiltEvent.args.payload)
+      const [, unsignedPayload] = await allocator.read.payloads([payloadId])
+      expect(unsignedPayload).to.equal(payloadBuiltEvent.args.payload)
     })
 
     it('should store the timestamp after which the payload can be signed', async () => {

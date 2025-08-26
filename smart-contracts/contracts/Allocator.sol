@@ -73,7 +73,7 @@ contract Allocator is AccessControl {
   mapping(uint256 => mapping(string => address)) public payloadBuilders;
 
   // unsigned payloads
-  mapping(bytes32 => bytes) public unsignedPayloads;
+  mapping(bytes32 => Payload) public payloads;
 
   // signed payloads
   mapping(bytes32 => mapping(bytes32 => bytes)) public signedPayloads;
@@ -116,6 +116,11 @@ contract Allocator is AccessControl {
     uint256 amount;
     string receiver;
     bytes data;
+  }
+
+  struct Payload {
+    SubmitWithdrawRequestParams params;
+    bytes unsignedPayload;
   }
 
   constructor(
@@ -194,11 +199,6 @@ contract Allocator is AccessControl {
   function submitWithdrawRequest(
     SubmitWithdrawRequestParams calldata params
   ) public returns (bytes32 payloadId) {
-    // Check that the calling address has the hub role
-    if (!hasRole(APPROVED_WITHDRAWER_ROLE, msg.sender)) {
-      revert CallerIsNotApproved(msg.sender);
-    }
-
     // check if the payload builder is set
     address builder = payloadBuilders[params.chainId][params.escrow];
     if (builder == address(0)) {
@@ -214,7 +214,7 @@ contract Allocator is AccessControl {
       params.data
     );
     payloadId = keccak256(abi.encodePacked(payload, block.timestamp));
-    unsignedPayloads[payloadId] = payload;
+    payloads[payloadId] = Payload({params: params, unsignedPayload: payload});
     payloadTimestamps[payloadId] = block.timestamp + delay;
     emit PayloadBuilt(payloadId, payload, block.timestamp);
     if (delay == 0) {
@@ -264,10 +264,12 @@ contract Allocator is AccessControl {
     string memory path = Strings.toHexString(uint160(address(this)), 20);
     PayloadBuilder payloadBuilder = PayloadBuilder(builder);
 
+    Payload storage payload = payloads[payloadId];
+
     bytes32[] memory hashesToSign = payloadBuilder.hashesToSign(
       chainId,
       escrow,
-      unsignedPayloads[payloadId]
+      payload.unsignedPayload
     );
     for (uint256 i = 0; i < hashesToSign.length; i++) {
       if (signedPayloads[payloadId][hashesToSign[i]].length > 0) {
