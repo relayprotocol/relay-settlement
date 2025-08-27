@@ -3,6 +3,12 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/utils/Strings.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
+import "./ERC20View.sol";
+
+interface IERC20View {
+  function emitTransferEvent(address from, address to, uint256 value) external;
+}
 
 /// @notice Minimalist and gas efficient standard ERC6909 implementation.
 /// @author Solmate (https://github.com/transmissions11/solmate/blob/main/src/tokens/ERC6909.sol)
@@ -51,6 +57,20 @@ contract Hub is AccessControl {
   mapping(address => mapping(address => mapping(uint256 => uint256)))
     public allowance;
 
+  mapping(uint256 => uint256) public totalSupplies;
+
+  /*//////////////////////////////////////////////////////////////
+                          ERC20VIEW STORAGE
+    //////////////////////////////////////////////////////////////*/
+  
+  // tokenId => ERC20View address
+  mapping(uint256 => address) public erc20Views;
+  
+  /*//////////////////////////////////////////////////////////////
+                        ERC20VIEW EVENTS
+    //////////////////////////////////////////////////////////////*/
+  
+  event ERC20ViewCreated(uint256 indexed tokenId, address indexed erc20View);
   mapping(uint256 => TokenMetadata) public tokenMetadata;
 
   string public contractURI = "";
@@ -120,6 +140,7 @@ contract Hub is AccessControl {
     balanceOf[receiver][id] += amount;
 
     emit Transfer(msg.sender, msg.sender, receiver, id, amount);
+    _emitERC20ViewEvent(id, msg.sender, receiver, amount);
 
     return true;
   }
@@ -130,7 +151,7 @@ contract Hub is AccessControl {
     uint256 id,
     uint256 amount
   ) public returns (bool result) {
-    if (msg.sender != sender && !isOperator(sender, msg.sender)) {
+    if (msg.sender != sender && !isOperator(sender, msg.sender) && erc20Views[id] != msg.sender) {
       uint256 allowed = allowance[sender][msg.sender][id];
       if (allowed != type(uint256).max)
         allowance[sender][msg.sender][id] = allowed - amount;
@@ -141,6 +162,7 @@ contract Hub is AccessControl {
     balanceOf[receiver][id] += amount;
 
     emit Transfer(msg.sender, sender, receiver, id, amount);
+    _emitERC20ViewEvent(id, sender, receiver, amount);
 
     return true;
   }
@@ -223,13 +245,54 @@ contract Hub is AccessControl {
 
   function _mint(address receiver, uint256 id, uint256 amount) internal {
     balanceOf[receiver][id] += amount;
+    if (totalSupplies[id] == 0) {
+      _createERC20View(id);
+    }
+    totalSupplies[id] += amount;
 
     emit Transfer(msg.sender, address(0), receiver, id, amount);
+    _emitERC20ViewEvent(id, address(0), receiver, amount);
   }
 
   function _burn(address sender, uint256 id, uint256 amount) internal {
     balanceOf[sender][id] -= amount;
+    totalSupplies[id] -= amount;
 
     emit Transfer(msg.sender, sender, address(0), id, amount);
+    _emitERC20ViewEvent(id, sender, address(0), amount);
+  }
+
+  /*//////////////////////////////////////////////////////////////
+                            INTERNAL HELPERS
+  //////////////////////////////////////////////////////////////*/
+
+  function _emitERC20ViewEvent(
+    uint256 id,
+    address from,
+    address to,
+    uint256 amount
+  ) internal {
+    address erc20ViewAddress = erc20Views[id];
+    if (msg.sender != erc20ViewAddress) {
+      IERC20View(erc20ViewAddress).emitTransferEvent(from, to, amount);
+    }
+  }
+
+  function _createERC20View(
+    uint256 tokenId
+  ) internal returns (address) {
+    if (erc20Views[tokenId] != address(0)) {
+      return erc20Views[tokenId];
+    }
+    
+    ERC20View erc20View = new ERC20View(
+      tokenId
+    );
+
+    address erc20ViewAddress = address(erc20View);
+    erc20Views[tokenId] = erc20ViewAddress;
+    
+    emit ERC20ViewCreated(tokenId, erc20ViewAddress);
+    return erc20ViewAddress;
   }
 }

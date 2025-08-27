@@ -3,7 +3,6 @@ pragma solidity ^0.8.28;
 
 import {PayloadBuilder} from "../Allocator.sol";
 import {Utils} from "../Utils.sol";
-import {JSONParserLib} from "solady/src/utils/JSONParserLib.sol";
 
 contract SolanaPayloadBuilder is PayloadBuilder {
   function buildPayload(
