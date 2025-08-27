@@ -34,7 +34,7 @@ export async function deployAllocator(options?: {
     {
       libraries: {
         AuroraSdk: auroraSdk.address,
-        // Utils: utils.address,
+        Utils: utils.address,
       },
     }
   )

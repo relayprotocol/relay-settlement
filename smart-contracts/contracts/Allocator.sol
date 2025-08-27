@@ -5,6 +5,8 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {AuroraSdk, NEAR, PromiseCreateArgs, PromiseResult, PromiseResultStatus, PromiseWithCallback} from "./aurora-xcc/AuroraSdk.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {Hub} from "./Hub.sol";
+import {Utils} from "./Utils.sol";
 
 interface ISafe {
   function isOwner(address) external view returns (bool);
@@ -51,6 +53,7 @@ contract Allocator is AccessControl {
   using Strings for uint256;
 
   event DelayChanged(uint256 delay);
+  event HubSet(address hub);
 
   // roles
   bytes32 public constant APPROVED_WITHDRAWER_ROLE =
@@ -68,6 +71,9 @@ contract Allocator is AccessControl {
 
   // owner of the contract
   address public owner;
+
+  // address of the hub contract
+  address public hub;
 
   // payload builders mapping
   mapping(uint256 => mapping(string => address)) public payloadBuilders;
@@ -173,6 +179,11 @@ contract Allocator is AccessControl {
     _revokeRole(APPROVED_WITHDRAWER_ROLE, withdrawer);
   }
 
+  function setHub(address _hub) external onlyRole(ADMIN_ROLE) {
+    hub = _hub;
+    emit HubSet(hub);
+  }
+
   function setDelay(uint256 _delay) public onlyRole(ADMIN_ROLE) {
     delay = _delay;
     emit DelayChanged(delay);
@@ -257,14 +268,13 @@ contract Allocator is AccessControl {
       revert PayloadNotReady(payloadId);
     }
 
-    if (!hasRole(APPROVED_WITHDRAWER_ROLE, msg.sender)) {
-      revert CallerIsNotApproved(msg.sender);
-    }
-
-    string memory path = Strings.toHexString(uint160(address(this)), 20);
+    Payload storage payload = payloads[payloadId];
     PayloadBuilder payloadBuilder = PayloadBuilder(builder);
 
-    Payload storage payload = payloads[payloadId];
+    // verify the withdrawal can be achieved
+    verifyWithdrawal(payload, payloadBuilder.family());
+
+    string memory path = Strings.toHexString(uint160(address(this)), 20);
 
     bytes32[] memory hashesToSign = payloadBuilder.hashesToSign(
       chainId,
@@ -384,5 +394,48 @@ contract Allocator is AccessControl {
       str[1 + i * 2] = alphabet[uint256(uint8(hexBytes[i] & 0x0f))];
     }
     return string(str);
+  }
+
+  /**
+   * @notice Verifies if the withdrawal request can be achieved.
+   * @dev The withdrawal can be achieved if the caller is an approved withdrawer, or, if the hub is set, it will first transfer the user's token to this contract's balance.
+   * @param payload The payload containing the withdrawal details
+   * @param family The family of the token being withdrawn
+   */
+  function verifyWithdrawal(
+    Payload memory payload,
+    string memory family
+  ) internal {
+    // Implementation for verifying the withdrawal
+    if (hasRole(APPROVED_WITHDRAWER_ROLE, msg.sender)) {
+      return;
+    }
+
+    // Generate the tokenId
+    uint256 tokenId = Utils.generateTokenId(
+      family,
+      payload.params.chainId,
+      payload.params.currency
+    );
+
+    // Generate the spender's address based on who receives these funds!
+    address spender = Utils.generateAddress(
+      family,
+      payload.params.chainId,
+      payload.params.receiver
+    );
+
+    // Only an operator for the spender can trigger withdrawals.
+    if (!Hub(hub).isOperator(spender, msg.sender)) {
+      revert CallerIsNotApproved(msg.sender);
+    }
+
+    // Actually perform the transfer
+    Hub(hub).transferFrom(
+      spender,
+      address(this),
+      tokenId,
+      payload.params.amount
+    );
   }
 }
