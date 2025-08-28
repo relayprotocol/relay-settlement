@@ -53,6 +53,7 @@ contract Allocator is AccessControl {
   using Strings for uint256;
 
   event DelayChanged(uint256 delay);
+  event EscrowDelayChanged(uint256 chainId, string escrow, uint256 delay);
   event HubSet(address hub);
 
   // roles
@@ -66,8 +67,17 @@ contract Allocator is AccessControl {
   // Aurora SDK instance
   NEAR public near;
 
-  // delay
+  // global delay
   uint256 public delay;
+  
+  // Delay configuration struct
+  struct DelayConfig {
+    uint256 delay;
+    bool isSet;
+  }
+  
+  // per-escrow delay mapping (chainId => escrow address as string => DelayConfig)
+  mapping(uint256 => mapping(string => DelayConfig)) public escrowDelays;
 
   // owner of the contract
   address public owner;
@@ -188,6 +198,22 @@ contract Allocator is AccessControl {
     delay = _delay;
     emit DelayChanged(delay);
   }
+  
+  /**
+   * @notice sets or updates the delay for a specific chain and escrow
+   * @param chainId chain ID
+   * @param escrow address of the escrow contract as string
+   * @param _delay delay in seconds
+   */
+  function setEscrowDelay(
+    uint256 chainId,
+    string calldata escrow,
+    uint256 _delay
+  ) external onlyRole(ADMIN_ROLE) {
+    escrowDelays[chainId][escrow].delay = _delay;
+    escrowDelays[chainId][escrow].isSet = true;
+    emit EscrowDelayChanged(chainId, escrow, _delay);
+  }
 
   /**
    * @notice sets or updates the payload builder for a specific chain
@@ -226,9 +252,15 @@ contract Allocator is AccessControl {
     );
     payloadId = keccak256(abi.encodePacked(payload, block.timestamp));
     payloads[payloadId] = Payload({params: params, unsignedPayload: payload});
-    payloadTimestamps[payloadId] = block.timestamp + delay;
+
+    // Use escrow-specific delay if set, otherwise fall back to global delay
+    uint256 escrowDelay = escrowDelays[params.chainId][params.escrow].delay;
+    uint256 effectiveDelay = escrowDelays[params.chainId][params.escrow].isSet ? escrowDelay : delay;
+    
+    payloadTimestamps[payloadId] = block.timestamp + effectiveDelay;
+
     emit PayloadBuilt(payloadId, payload, block.timestamp);
-    if (delay == 0) {
+    if (effectiveDelay == 0) {
       // if delay is 0, sign the payload immediately
       signWithdrawPayload(
         params.chainId,
