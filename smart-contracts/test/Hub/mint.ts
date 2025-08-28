@@ -1,33 +1,33 @@
 import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect, assert } from 'chai'
+import { expect } from 'chai'
 import hre from 'hardhat'
 import { keccak256 } from 'viem'
 
 describe('mint', function () {
   async function deployHub() {
-    const [admin, oracleUser, regularUser] = await hre.viem.getWalletClients()
+    const [admin, operatorUser, regularUser] = await hre.viem.getWalletClients()
     const hub = await hre.viem.deployContract('Hub', [admin.account.address])
     const publicClient = await hre.viem.getPublicClient()
 
-    // Add oracle role to oracleUser
-    const addOracleHash = await hub.write.grantRole(
-      [keccak256('ORACLE_ROLE'), oracleUser.account.address],
+    // Add operator role to operatorUser
+    const addOperatorHash = await hub.write.grantRole(
+      [keccak256('OPERATOR_ROLE'), operatorUser.account.address],
       {
         account: admin.account,
       }
     )
-    await publicClient.waitForTransactionReceipt({ hash: addOracleHash })
+    await publicClient.waitForTransactionReceipt({ hash: addOperatorHash })
 
     return {
       admin,
       hub,
-      oracleUser,
+      operatorUser,
       publicClient,
       regularUser,
     }
   }
-  it('allows oracle to mint tokens to any address', async function () {
-    const { hub, oracleUser, regularUser, publicClient } =
+  it('allows operator to mint tokens to any address', async function () {
+    const { hub, operatorUser, regularUser, publicClient } =
       await loadFixture(deployHub)
     const tokenId = 1n
     const amount = 100n
@@ -36,7 +36,7 @@ describe('mint', function () {
     const mintHash = await hub.write.mint(
       [regularUser.account.address, tokenId, amount],
       {
-        account: oracleUser.account,
+        account: operatorUser.account,
       }
     )
     await publicClient.waitForTransactionReceipt({ hash: mintHash })
@@ -63,7 +63,7 @@ describe('mint', function () {
   })
 
   it('emits Transfer event with correct parameters', async function () {
-    const { hub, oracleUser, regularUser, publicClient } =
+    const { hub, operatorUser, regularUser, publicClient } =
       await loadFixture(deployHub)
     const tokenId = 1n
     const amount = 100n
@@ -72,7 +72,7 @@ describe('mint', function () {
     const mintHash = await hub.write.mint(
       [regularUser.account.address, tokenId, amount],
       {
-        account: oracleUser.account,
+        account: operatorUser.account,
       }
     )
     await publicClient.waitForTransactionReceipt({ hash: mintHash })
@@ -98,7 +98,7 @@ describe('mint', function () {
       amount: bigint
     }
     expect(args.caller.toLowerCase()).to.equal(
-      oracleUser.account.address.toLowerCase()
+      operatorUser.account.address.toLowerCase()
     )
     expect(args.from.toLowerCase()).to.equal(
       '0x0000000000000000000000000000000000000000'.toLowerCase()
@@ -111,7 +111,7 @@ describe('mint', function () {
   })
 
   it('allows minting multiple tokens with different IDs', async function () {
-    const { hub, oracleUser, regularUser, publicClient } =
+    const { hub, operatorUser, regularUser, publicClient } =
       await loadFixture(deployHub)
     const tokenId1 = 1n
     const tokenId2 = 2n
@@ -122,7 +122,7 @@ describe('mint', function () {
     const mintHash1 = await hub.write.mint(
       [regularUser.account.address, tokenId1, amount1],
       {
-        account: oracleUser.account,
+        account: operatorUser.account,
       }
     )
     await publicClient.waitForTransactionReceipt({ hash: mintHash1 })
@@ -131,7 +131,7 @@ describe('mint', function () {
     const mintHash2 = await hub.write.mint(
       [regularUser.account.address, tokenId2, amount2],
       {
-        account: oracleUser.account,
+        account: operatorUser.account,
       }
     )
     await publicClient.waitForTransactionReceipt({ hash: mintHash2 })

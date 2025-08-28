@@ -5,23 +5,23 @@ import { Address, keccak256 } from 'viem'
 
 describe('ERC20View Auto Creation', function () {
   async function deployHub() {
-    const [admin, oracleUser, regularUser] = await hre.viem.getWalletClients()
+    const [admin, operatorUser, regularUser] = await hre.viem.getWalletClients()
     const hub = await hre.viem.deployContract('Hub', [admin.account.address])
     const publicClient = await hre.viem.getPublicClient()
 
-    // Add oracle role to oracleUser
-    const ORACLE_ROLE = keccak256('ORACLE_ROLE')
+    // Add operator role to operatorUser
+    const OPERATOR_ROLE = keccak256('OPERATOR_ROLE')
     const addOracleHash = await hub.write.grantRole(
-      [ORACLE_ROLE, oracleUser.account.address as Address],
+      [OPERATOR_ROLE, operatorUser.account.address as Address],
       { account: admin.account }
     )
     await publicClient.waitForTransactionReceipt({ hash: addOracleHash })
 
-    return { admin, hub, oracleUser, publicClient, regularUser }
+    return { admin, hub, operatorUser, publicClient, regularUser }
   }
 
   it('automatically creates ERC20View on first token operation', async function () {
-    const { hub, oracleUser, regularUser, publicClient } =
+    const { hub, operatorUser, regularUser, publicClient } =
       await loadFixture(deployHub)
 
     const tokenId = 999n
@@ -33,7 +33,7 @@ describe('ERC20View Auto Creation', function () {
     // Mint tokens to trigger ERC20View creation
     const mintTx = await hub.write.mint(
       [regularUser.account.address, tokenId, 100n],
-      { account: oracleUser.account }
+      { account: operatorUser.account }
     )
     await publicClient.waitForTransactionReceipt({ hash: mintTx })
 
@@ -58,7 +58,7 @@ describe('ERC20View Auto Creation', function () {
   })
 
   it('creates ERC20View for different token IDs', async function () {
-    const { hub, oracleUser, regularUser, publicClient } =
+    const { hub, operatorUser, regularUser, publicClient } =
       await loadFixture(deployHub)
 
     const tokenId1 = 111n
@@ -67,14 +67,14 @@ describe('ERC20View Auto Creation', function () {
     // Mint tokens with first ID
     const mintTx1 = await hub.write.mint(
       [regularUser.account.address, tokenId1, 100n],
-      { account: oracleUser.account }
+      { account: operatorUser.account }
     )
     await publicClient.waitForTransactionReceipt({ hash: mintTx1 })
 
     // Mint tokens with second ID
     const mintTx2 = await hub.write.mint(
       [regularUser.account.address, tokenId2, 100n],
-      { account: oracleUser.account }
+      { account: operatorUser.account }
     )
     await publicClient.waitForTransactionReceipt({ hash: mintTx2 })
 

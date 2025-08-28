@@ -5,30 +5,30 @@ import { keccak256 } from 'viem'
 
 describe('burn', function () {
   async function deployHub() {
-    const [admin, oracleUser, regularUser] = await hre.viem.getWalletClients()
+    const [admin, operatorUser, regularUser] = await hre.viem.getWalletClients()
     const hub = await hre.viem.deployContract('Hub', [admin.account.address])
     const publicClient = await hre.viem.getPublicClient()
 
-    // Add oracle role to oracleUser
-    const addOracleHash = await hub.write.grantRole(
-      [keccak256('ORACLE_ROLE'), oracleUser.account.address],
+    // Add operator role to operatorUser
+    const addOperatorHash = await hub.write.grantRole(
+      [keccak256('OPERATOR_ROLE'), operatorUser.account.address],
       {
         account: admin.account,
       }
     )
-    await publicClient.waitForTransactionReceipt({ hash: addOracleHash })
+    await publicClient.waitForTransactionReceipt({ hash: addOperatorHash })
 
     return {
       admin,
       hub,
-      oracleUser,
+      operatorUser,
       publicClient,
       regularUser,
     }
   }
 
-  it('allows oracle to burn tokens from any address', async function () {
-    const { hub, oracleUser, regularUser, publicClient } =
+  it('allows an operator to burn tokens from any address', async function () {
+    const { hub, operatorUser, regularUser, publicClient } =
       await loadFixture(deployHub)
     const tokenId = 1n
     const amount = 100n
@@ -37,7 +37,7 @@ describe('burn', function () {
     const mintHash = await hub.write.mint(
       [regularUser.account.address, tokenId, amount],
       {
-        account: oracleUser.account,
+        account: operatorUser.account,
       }
     )
     await publicClient.waitForTransactionReceipt({ hash: mintHash })
@@ -46,7 +46,7 @@ describe('burn', function () {
     const burnHash = await hub.write.burn(
       [regularUser.account.address, tokenId, amount],
       {
-        account: oracleUser.account,
+        account: operatorUser.account,
       }
     )
     await publicClient.waitForTransactionReceipt({ hash: burnHash })
@@ -59,8 +59,8 @@ describe('burn', function () {
     expect(balance).to.equal(0n)
   })
 
-  it('reverts when non-oracle tries to burn tokens', async function () {
-    const { hub, oracleUser, regularUser, publicClient } =
+  it('reverts when non-operator tries to burn tokens', async function () {
+    const { hub, operatorUser, regularUser, publicClient } =
       await loadFixture(deployHub)
     const tokenId = 1n
     const amount = 100n
@@ -69,7 +69,7 @@ describe('burn', function () {
     const mintHash = await hub.write.mint(
       [regularUser.account.address, tokenId, amount],
       {
-        account: oracleUser.account,
+        account: operatorUser.account,
       }
     )
     await publicClient.waitForTransactionReceipt({ hash: mintHash })
@@ -83,7 +83,7 @@ describe('burn', function () {
   })
 
   it('emits Transfer event with correct parameters', async function () {
-    const { hub, oracleUser, regularUser, publicClient } =
+    const { hub, operatorUser, regularUser, publicClient } =
       await loadFixture(deployHub)
     const tokenId = 1n
     const amount = 100n
@@ -92,7 +92,7 @@ describe('burn', function () {
     const mintHash = await hub.write.mint(
       [regularUser.account.address, tokenId, amount],
       {
-        account: oracleUser.account,
+        account: operatorUser.account,
       }
     )
     await publicClient.waitForTransactionReceipt({ hash: mintHash })
@@ -101,7 +101,7 @@ describe('burn', function () {
     const burnHash = await hub.write.burn(
       [regularUser.account.address, tokenId, amount],
       {
-        account: oracleUser.account,
+        account: operatorUser.account,
       }
     )
     await publicClient.waitForTransactionReceipt({ hash: burnHash })
@@ -131,7 +131,7 @@ describe('burn', function () {
       amount: bigint
     }
     expect(args.caller.toLowerCase()).to.equal(
-      oracleUser.account.address.toLowerCase()
+      operatorUser.account.address.toLowerCase()
     )
     expect(args.from.toLowerCase()).to.equal(
       regularUser.account.address.toLowerCase()
@@ -144,7 +144,7 @@ describe('burn', function () {
   })
 
   it('reverts when trying to burn more tokens than available', async function () {
-    const { hub, oracleUser, regularUser, publicClient } =
+    const { hub, operatorUser, regularUser, publicClient } =
       await loadFixture(deployHub)
     const tokenId = 1n
     const mintAmount = 100n
@@ -154,7 +154,7 @@ describe('burn', function () {
     const mintHash = await hub.write.mint(
       [regularUser.account.address, tokenId, mintAmount],
       {
-        account: oracleUser.account,
+        account: operatorUser.account,
       }
     )
     await publicClient.waitForTransactionReceipt({ hash: mintHash })
@@ -162,7 +162,7 @@ describe('burn', function () {
     // Attempt to burn more than available
     await expect(
       hub.write.burn([regularUser.account.address, tokenId, burnAmount], {
-        account: oracleUser.account,
+        account: operatorUser.account,
       })
     ).to.be.rejectedWith('reverted with panic code 0x11')
   })

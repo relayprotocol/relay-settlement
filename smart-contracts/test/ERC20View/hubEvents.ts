@@ -5,18 +5,18 @@ import { Address, keccak256 } from 'viem'
 
 describe('ERC20View Hub Events', function () {
   async function deployHubWithERC20View() {
-    const [admin, oracleUser, regularUser, anotherUser, operatorUser] =
+    const [admin, operatorUser, regularUser, anotherUser] =
       await hre.viem.getWalletClients()
     const hub = await hre.viem.deployContract('Hub', [admin.account.address])
     const publicClient = await hre.viem.getPublicClient()
 
-    // Add oracle role to oracleUser
-    const ORACLE_ROLE = keccak256('ORACLE_ROLE')
-    const addOracleHash = await hub.write.grantRole(
-      [ORACLE_ROLE, oracleUser.account.address as Address],
+    // Add operator role to operatorUser
+    const OPERATOR_ROLE = keccak256('OPERATOR_ROLE')
+    const addOperatorHash = await hub.write.grantRole(
+      [OPERATOR_ROLE, operatorUser.account.address as Address],
       { account: admin.account }
     )
-    await publicClient.waitForTransactionReceipt({ hash: addOracleHash })
+    await publicClient.waitForTransactionReceipt({ hash: addOperatorHash })
 
     // Define tokenId
     const tokenId = 1n
@@ -24,7 +24,7 @@ describe('ERC20View Hub Events', function () {
     // Mint tokens to regularUser - this will automatically create the ERC20View
     const mintTx = await hub.write.mint(
       [regularUser.account.address, tokenId, 100n],
-      { account: oracleUser.account }
+      { account: operatorUser.account }
     )
     await publicClient.waitForTransactionReceipt({ hash: mintTx })
 
@@ -44,7 +44,7 @@ describe('ERC20View Hub Events', function () {
       erc20ViewAddress,
       hub,
       operatorUser,
-      oracleUser,
+      operatorUser,
       publicClient,
       regularUser,
       tokenId,
@@ -133,14 +133,14 @@ describe('ERC20View Hub Events', function () {
   })
 
   it('emits Transfer event on Hub mint', async function () {
-    const { hub, erc20View, publicClient, regularUser, oracleUser, tokenId } =
+    const { hub, erc20View, publicClient, regularUser, operatorUser, tokenId } =
       await loadFixture(deployHubWithERC20View)
 
     // Mint more tokens
     const mintAmount = 50n
     const mintTx = await hub.write.mint(
       [regularUser.account.address, tokenId, mintAmount],
-      { account: oracleUser.account }
+      { account: operatorUser.account }
     )
     const mintReceipt = await publicClient.waitForTransactionReceipt({
       hash: mintTx,
@@ -167,14 +167,14 @@ describe('ERC20View Hub Events', function () {
   })
 
   it('emits Transfer event on Hub burn', async function () {
-    const { hub, erc20View, publicClient, regularUser, oracleUser, tokenId } =
+    const { hub, erc20View, publicClient, regularUser, operatorUser, tokenId } =
       await loadFixture(deployHubWithERC20View)
 
     // Burn tokens
     const burnAmount = 10n
     const burnTx = await hub.write.burn(
       [regularUser.account.address, tokenId, burnAmount],
-      { account: oracleUser.account }
+      { account: operatorUser.account }
     )
     const burnReceipt = await publicClient.waitForTransactionReceipt({
       hash: burnTx,

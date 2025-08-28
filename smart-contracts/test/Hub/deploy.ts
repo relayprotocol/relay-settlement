@@ -23,7 +23,7 @@ describe('Hub Deployment', function () {
     }
   }
 
-  it('should deploy Hub contract with correct oracle admin', async function () {
+  it('should deploy Hub contract with correct operator admin', async function () {
     const { admin, hub } = await loadFixture(deployHub)
 
     // Get the ADMIN_ROLE

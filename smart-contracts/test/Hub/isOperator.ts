@@ -5,49 +5,51 @@ import { keccak256 } from 'viem'
 
 describe('isOperator', function () {
   async function deployHub() {
-    const [admin, oracleUser, regularUser, operatorUser] =
+    const [admin, regularUser, operatorUser, anotherUserToBeOperator] =
       await hre.viem.getWalletClients()
     const hub = await hre.viem.deployContract('Hub', [admin.account.address])
     const publicClient = await hre.viem.getPublicClient()
 
-    // Add oracle role to oracleUser
-    const addOracleHash = await hub.write.grantRole([
-      keccak256('ORACLE_ROLE'),
-      oracleUser.account.address,
-    ])
-    await publicClient.waitForTransactionReceipt({ hash: addOracleHash })
+    // Add operator role to operatorUser
+    const addOperatorHash = await hub.write.grantRole(
+      [keccak256('OPERATOR_ROLE'), operatorUser.account.address],
+      {
+        account: admin.account,
+      }
+    )
+    await publicClient.waitForTransactionReceipt({ hash: addOperatorHash })
 
     return {
       admin,
+      anotherUserToBeOperator,
       hub,
       operatorUser,
-      oracleUser,
       publicClient,
       regularUser,
     }
   }
   describe('returns true', () => {
-    it('when operator has oracle role', async function () {
-      const { oracleUser, regularUser, hub } = await loadFixture(deployHub)
+    it('when operator has operator role', async function () {
+      const { operatorUser, regularUser, hub } = await loadFixture(deployHub)
 
-      // Check isOperator from oracle user's perspective
+      // Check isOperator from operator user's perspective
       const isOperator = await hub.read.isOperator([
-        oracleUser.account.address,
         regularUser.account.address,
+        operatorUser.account.address,
       ])
 
       expect(isOperator).to.equal(true)
     })
 
     it('when operator is set', async function () {
-      const { regularUser, oracleUser, operatorUser, hub, publicClient } =
+      const { regularUser, operatorUser, hub, publicClient } =
         await loadFixture(deployHub)
 
       // set operator
       const setOperatorForHash = await hub.write.setOperatorFor(
         [regularUser.account.address, operatorUser.account.address, true],
         {
-          account: oracleUser.account,
+          account: operatorUser.account,
         }
       )
       await publicClient.waitForTransactionReceipt({
@@ -75,23 +77,33 @@ describe('isOperator', function () {
   })
   describe('returns false', () => {
     it('when operator is not set', async function () {
-      const { regularUser, operatorUser, hub } = await loadFixture(deployHub)
+      const { regularUser, anotherUserToBeOperator, hub } =
+        await loadFixture(deployHub)
       const isOperator = await hub.read.isOperator([
         regularUser.account.address,
-        operatorUser.account.address,
+        anotherUserToBeOperator.account.address,
       ])
 
       expect(isOperator).to.equal(false)
     })
     it('when operator is unset', async function () {
-      const { regularUser, oracleUser, operatorUser, hub, publicClient } =
-        await loadFixture(deployHub)
+      const {
+        regularUser,
+        anotherUserToBeOperator,
+        hub,
+        operatorUser,
+        publicClient,
+      } = await loadFixture(deployHub)
 
       // unset operator
       const setOperatorForHash = await hub.write.setOperatorFor(
-        [regularUser.account.address, operatorUser.account.address, false],
+        [
+          regularUser.account.address,
+          anotherUserToBeOperator.account.address,
+          false,
+        ],
         {
-          account: oracleUser.account,
+          account: operatorUser.account,
         }
       )
       await publicClient.waitForTransactionReceipt({
@@ -101,7 +113,7 @@ describe('isOperator', function () {
       // Check isOperator from regular user's perspective
       const isOperator = await hub.read.isOperator([
         regularUser.account.address,
-        operatorUser.account.address,
+        anotherUserToBeOperator.account.address,
       ])
 
       expect(isOperator).to.equal(false)

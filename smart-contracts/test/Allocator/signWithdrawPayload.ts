@@ -224,9 +224,9 @@ describe('Allocator signWithdrawPayload', function () {
         // init transact
         await allocator.write.init()
 
-        // Set the owner as oracle so it can mint tokens
+        // Set the owner as operator so it can mint tokens
         await hub.write.grantRole(
-          [keccak256('ORACLE_ROLE' as `0x${string}`), owner.account.address],
+          [keccak256('OPERATOR_ROLE' as `0x${string}`), owner.account.address],
           {
             account: owner.account,
           }
@@ -321,7 +321,7 @@ describe('Allocator signWithdrawPayload', function () {
         ])
         expect(allocatorBalanceBefore).to.be.equal(0n)
 
-        // Use the oracle to set our EOA as an operator for the user on the hub
+        // Use the operator to set our EOA as an operator for the user on the hub
         await hub.write.setOperatorFor(
           [userHubAddress, user.account.address, true],
           {
@@ -329,7 +329,7 @@ describe('Allocator signWithdrawPayload', function () {
           }
         )
 
-        // Use the oracle to set the Allocator as an operator for the user on the hub
+        // Use the operator to set the Allocator as an operator for the user on the hub
         await hub.write.setOperatorFor(
           [userHubAddress, allocator.address, true],
           {
@@ -399,7 +399,7 @@ describe('Allocator signWithdrawPayload', function () {
         } = await loadFixture(deployAllocatorAndSetHub)
         const [escrow, user] = otherAccounts
 
-        // Use the oracle to set our EOA as an operator for the user on the hub
+        // Use the operator to set our EOA as an operator for the user on the hub
         await hub.write.setOperatorFor(
           [userHubAddress, user.account.address, true],
           {
@@ -407,7 +407,7 @@ describe('Allocator signWithdrawPayload', function () {
           }
         )
 
-        // Use the oracle to set the Allocator as an operator for the user on the hub
+        // Use the operator to set the Allocator as an operator for the user on the hub
         await hub.write.setOperatorFor(
           [userHubAddress, allocator.address, true],
           {
@@ -438,7 +438,7 @@ describe('Allocator signWithdrawPayload', function () {
         } = await loadFixture(deployAllocatorAndSetHub)
         const [escrow, user] = otherAccounts
 
-        // Use the oracle to set our EOA as an operator for the user on the hub
+        // Use the operator to set our EOA as an operator for the user on the hub
         await hub.write.setOperatorFor(
           [userHubAddress, user.account.address, true],
           {
@@ -446,7 +446,7 @@ describe('Allocator signWithdrawPayload', function () {
           }
         )
 
-        // Use the oracle to set the Allocator as an operator for the user on the hub
+        // Use the operator to set the Allocator as an operator for the user on the hub
         await hub.write.setOperatorFor(
           [userHubAddress, allocator.address, true],
           {

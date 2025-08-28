@@ -7,8 +7,7 @@ const EDITOR_ROLE = keccak256('EDITOR_ROLE')
 
 describe('extensions', function () {
   async function deployHub() {
-    const [admin, oracleUser, editor, attacker] =
-      await hre.viem.getWalletClients()
+    const [admin, editor, attacker] = await hre.viem.getWalletClients()
     const hub = await hre.viem.deployContract('Hub', [admin.account.address])
     const publicClient = await hre.viem.getPublicClient()
 
@@ -17,7 +16,6 @@ describe('extensions', function () {
       attacker,
       editor,
       hub,
-      oracleUser,
       publicClient,
     }
   }

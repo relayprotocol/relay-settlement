@@ -62,14 +62,14 @@ contract Hub is AccessControl {
   /*//////////////////////////////////////////////////////////////
                           ERC20VIEW STORAGE
     //////////////////////////////////////////////////////////////*/
-  
+
   // tokenId => ERC20View address
   mapping(uint256 => address) public erc20Views;
-  
+
   /*//////////////////////////////////////////////////////////////
                         ERC20VIEW EVENTS
     //////////////////////////////////////////////////////////////*/
-  
+
   event ERC20ViewCreated(uint256 indexed tokenId, address indexed erc20View);
   mapping(uint256 => TokenMetadata) public tokenMetadata;
 
@@ -79,7 +79,7 @@ contract Hub is AccessControl {
                              ROLES
     //////////////////////////////////////////////////////////////*/
 
-  bytes32 public constant ORACLE_ROLE = keccak256("ORACLE_ROLE");
+  bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
   bytes32 public constant EDITOR_ROLE = keccak256("EDITOR_ROLE");
   bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
@@ -88,7 +88,7 @@ contract Hub is AccessControl {
     //////////////////////////////////////////////////////////////*/
 
   constructor(address adminAddress) {
-    _setRoleAdmin(ORACLE_ROLE, ADMIN_ROLE);
+    _setRoleAdmin(OPERATOR_ROLE, ADMIN_ROLE);
     _setRoleAdmin(EDITOR_ROLE, ADMIN_ROLE);
     _grantRole(ADMIN_ROLE, adminAddress);
   }
@@ -101,7 +101,7 @@ contract Hub is AccessControl {
     address account,
     address operator
   ) public view returns (bool) {
-    return hasRole(ORACLE_ROLE, account) || _isOperator[account][operator];
+    return hasRole(OPERATOR_ROLE, operator) || _isOperator[account][operator];
   }
 
   // @notice Internal function to set an operator for an account
@@ -119,7 +119,7 @@ contract Hub is AccessControl {
     address account,
     address operator,
     bool approved
-  ) public onlyRole(ORACLE_ROLE) returns (bool result) {
+  ) public onlyRole(OPERATOR_ROLE) returns (bool result) {
     return _setOperatorFor(account, operator, approved);
   }
 
@@ -151,7 +151,11 @@ contract Hub is AccessControl {
     uint256 id,
     uint256 amount
   ) public returns (bool result) {
-    if (msg.sender != sender && !isOperator(sender, msg.sender) && erc20Views[id] != msg.sender) {
+    if (
+      msg.sender != sender &&
+      !isOperator(sender, msg.sender) &&
+      erc20Views[id] != msg.sender
+    ) {
       uint256 allowed = allowance[sender][msg.sender][id];
       if (allowed != type(uint256).max)
         allowance[sender][msg.sender][id] = allowed - amount;
@@ -183,7 +187,7 @@ contract Hub is AccessControl {
     address receiver,
     uint256 id,
     uint256 amount
-  ) public onlyRole(ORACLE_ROLE) returns (bool result) {
+  ) public onlyRole(OPERATOR_ROLE) returns (bool result) {
     _mint(receiver, id, amount);
     return true;
   }
@@ -192,7 +196,7 @@ contract Hub is AccessControl {
     address sender,
     uint256 id,
     uint256 amount
-  ) public onlyRole(ORACLE_ROLE) returns (bool result) {
+  ) public onlyRole(OPERATOR_ROLE) returns (bool result) {
     _burn(sender, id, amount);
     return true;
   }
@@ -278,20 +282,16 @@ contract Hub is AccessControl {
     }
   }
 
-  function _createERC20View(
-    uint256 tokenId
-  ) internal returns (address) {
+  function _createERC20View(uint256 tokenId) internal returns (address) {
     if (erc20Views[tokenId] != address(0)) {
       return erc20Views[tokenId];
     }
-    
-    ERC20View erc20View = new ERC20View(
-      tokenId
-    );
+
+    ERC20View erc20View = new ERC20View(tokenId);
 
     address erc20ViewAddress = address(erc20View);
     erc20Views[tokenId] = erc20ViewAddress;
-    
+
     emit ERC20ViewCreated(tokenId, erc20ViewAddress);
     return erc20ViewAddress;
   }

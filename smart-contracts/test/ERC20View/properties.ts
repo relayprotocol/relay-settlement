@@ -5,17 +5,17 @@ import { Address, keccak256 } from 'viem'
 
 describe('ERC20View Properties', function () {
   async function deployHubWithERC20View() {
-    const [admin, oracleUser, regularUser] = await hre.viem.getWalletClients()
+    const [admin, operatorUser, regularUser] = await hre.viem.getWalletClients()
     const hub = await hre.viem.deployContract('Hub', [admin.account.address])
     const publicClient = await hre.viem.getPublicClient()
 
-    // Add oracle role to oracleUser
-    const ORACLE_ROLE = keccak256('ORACLE_ROLE')
-    const addOracleHash = await hub.write.grantRole(
-      [ORACLE_ROLE, oracleUser.account.address as Address],
+    // Add operator role to operatorUser
+    const OPERATOR_ROLE = keccak256('OPERATOR_ROLE')
+    const addOperatorHash = await hub.write.grantRole(
+      [OPERATOR_ROLE, operatorUser.account.address as Address],
       { account: admin.account }
     )
-    await publicClient.waitForTransactionReceipt({ hash: addOracleHash })
+    await publicClient.waitForTransactionReceipt({ hash: addOperatorHash })
 
     const EDITOR_ROLE = keccak256('EDITOR_ROLE')
     const addEditorHash = await hub.write.grantRole(
@@ -24,11 +24,11 @@ describe('ERC20View Properties', function () {
     )
     await publicClient.waitForTransactionReceipt({ hash: addEditorHash })
 
-    return { admin, hub, oracleUser, publicClient, regularUser }
+    return { admin, hub, operatorUser, publicClient, regularUser }
   }
 
   it('creates ERC20View with correct default name, symbol and decimals', async function () {
-    const { hub, oracleUser, regularUser, publicClient, admin } =
+    const { hub, operatorUser, regularUser, publicClient, admin } =
       await loadFixture(deployHubWithERC20View)
 
     const tokenId = 999n
@@ -53,7 +53,7 @@ describe('ERC20View Properties', function () {
     // Mint tokens to trigger ERC20View creation
     const mintTx = await hub.write.mint(
       [regularUser.account.address, tokenId, 100n],
-      { account: oracleUser.account }
+      { account: operatorUser.account }
     )
     await publicClient.waitForTransactionReceipt({ hash: mintTx })
 

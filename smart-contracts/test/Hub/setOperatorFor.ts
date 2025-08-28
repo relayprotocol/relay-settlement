@@ -5,7 +5,7 @@ import { Address, keccak256 } from 'viem'
 
 describe('setOperatorFor', function () {
   async function deployHub() {
-    const [admin, oracleUser, regularUser, operator] =
+    const [admin, operatorUser, regularUser, operator] =
       await hre.viem.getWalletClients()
     const hub = await hre.viem.deployContract('Hub', [admin.account.address])
     const publicClient = await hre.viem.getPublicClient()
@@ -14,7 +14,7 @@ describe('setOperatorFor', function () {
       admin,
       hub,
       operator,
-      oracleUser,
+      operatorUser,
       publicClient,
       regularUser,
     }
@@ -23,26 +23,26 @@ describe('setOperatorFor', function () {
   let admin: any
   let hub: any
   let operator: any
-  let oracleUser: any
+  let operatorUser: any
   let publicClient: any
   let regularUser: any
 
   beforeEach(async function () {
-    ;({ admin, hub, operator, oracleUser, publicClient, regularUser } =
+    ;({ admin, hub, operator, operatorUser, publicClient, regularUser } =
       await loadFixture(deployHub))
 
-    // Add oracle role to oracleUser
-    const addOracleHash = await hub.write.grantRole(
-      [keccak256('ORACLE_ROLE'), oracleUser.account.address as Address],
+    // Add operator role to operatorUser
+    const addOperatorHash = await hub.write.grantRole(
+      [keccak256('OPERATOR_ROLE'), operatorUser.account.address as Address],
       {
         account: admin.account,
       }
     )
-    await publicClient.waitForTransactionReceipt({ hash: addOracleHash })
+    await publicClient.waitForTransactionReceipt({ hash: addOperatorHash })
   })
 
-  it('allows oracle to set operator for any address', async function () {
-    // Set operator from oracle user's perspective
+  it('allows operator to set operator for any address', async function () {
+    // Set operator from operator user's perspective
     const setOperatorForHash = await hub.write.setOperatorFor(
       [
         regularUser.account.address as Address,
@@ -50,7 +50,7 @@ describe('setOperatorFor', function () {
         Boolean(true),
       ],
       {
-        account: oracleUser.account,
+        account: operatorUser.account,
       }
     )
     await publicClient.waitForTransactionReceipt({ hash: setOperatorForHash })
@@ -88,7 +88,7 @@ describe('setOperatorFor', function () {
         Boolean(true),
       ],
       {
-        account: oracleUser.account,
+        account: operatorUser.account,
       }
     )
     await publicClient.waitForTransactionReceipt({ hash: setOperatorForHash })
@@ -108,7 +108,7 @@ describe('setOperatorFor', function () {
         Boolean(false),
       ],
       {
-        account: oracleUser.account,
+        account: operatorUser.account,
       }
     )
     await publicClient.waitForTransactionReceipt({
