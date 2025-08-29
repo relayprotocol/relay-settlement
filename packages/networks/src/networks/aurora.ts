@@ -4,7 +4,7 @@ export const aurora: NetworkConfig = {
   assets: {
     wNEAR: '0xC42C30aC6Cc15faC9bD938618BcaA1a1FaE8501d',
   },
-  chainId: 1313161554,
+  chainId: 1313161554n,
   family: 'ethereum-vm',
   isTestnet: false,
   name: 'Aurora Mainnet (Near)',

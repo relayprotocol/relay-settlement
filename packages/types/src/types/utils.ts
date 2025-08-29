@@ -5,12 +5,12 @@ import { ChainType } from './networks'
 
 export interface TokenIdComponents {
   family: ChainType
-  chainId: number
+  chainId: bigint
   address: string
 }
 
 export interface VirtualAddressComponents {
-  chainId: number
+  chainId: bigint
   address: string
 }
 

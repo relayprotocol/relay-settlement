@@ -1,7 +1,7 @@
 export type ChainType = 'bitcoin-vm' | 'ethereum-vm' | 'solana-vm' | 'sui-vm'
 
 export interface NetworkConfig {
-  chainId: number | bigint
+  chainId: bigint
   name: string
   family: ChainType
   slug: string

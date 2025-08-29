@@ -182,7 +182,7 @@ describe('Allocator EVMPayloadBuilder', function () {
 
       const reconstructedHash = hashTypedData({
         domain: {
-          chainId: Number(chainId),
+          chainId: Number(chainId), // Cast to number for hashTypedData
           name: 'RelayEscrow',
           verifyingContract: escrow.account.address,
           version: '1',

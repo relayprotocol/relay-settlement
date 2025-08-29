@@ -1,10 +1,9 @@
 import networks from '@relay-protocol/networks'
 import { HardhatRuntimeEnvironment } from 'hardhat/types'
-import { parseUnits, PublicClient } from 'viem'
-import { wait } from './wait'
+import { PublicClient } from 'viem'
 
-export function getWNEARAddress(chainId: number): string {
-  const networkConfig = networks[chainId]
+export function getWNEARAddress(chainId: bigint): string {
+  const networkConfig = networks[chainId.toString()]
   if (!networkConfig?.assets?.wNEAR) {
     throw new Error(`No wNEAR address configured for chain ID ${chainId}`)
   }
@@ -18,7 +17,7 @@ export async function checkAndApproveWNEAR(
   to: string,
   allowance: bigint = 1n
 ) {
-  const networkChainId = Number(hre.network.config.chainId)
+  const networkChainId = BigInt(hre.network.config.chainId!)
   const wNEARAddress = getWNEARAddress(networkChainId)
 
   const wNEAR = await hre.viem.getContractAt('MyToken', wNEARAddress)

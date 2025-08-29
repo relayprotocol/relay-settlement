@@ -31,8 +31,8 @@ task('deploy:allocator', 'Deploy the Allocator contract')
       if (!owner) {
         owner = user.account.address
       }
-      const { chainId } = network.config as { chainId: number }
-      const networkConfig = networks[chainId]
+      const { chainId } = network.config as { chainId: bigint }
+      const networkConfig = networks[chainId.toString()]
       if (networkConfig && networkConfig.assets) {
         if (!wNEAR) {
           wNEAR = networkConfig.assets.wNEAR

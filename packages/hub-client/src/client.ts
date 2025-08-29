@@ -3,7 +3,7 @@ import { ChainType } from '@relay-protocol/types'
 export interface MintParams {
   family: ChainType
   account: string
-  chainId: number
+  chainId: bigint
   tokenAddress: string
   amount: bigint
 }
@@ -11,7 +11,7 @@ export interface MintParams {
 export interface BurnParams {
   family: ChainType
   account: string
-  chainId: number
+  chainId: bigint
   tokenAddress: string
   amount: bigint
 }
@@ -19,7 +19,7 @@ export interface BurnParams {
 export interface TransferFromParams {
   family: ChainType
   account: string
-  chainId: number
+  chainId: bigint
   tokenAddress: string
   amount: bigint
   recipientAddress: string
@@ -27,16 +27,16 @@ export interface TransferFromParams {
 
 export interface SetOperatorForParams {
   account: string
-  chainId: number
+  chainId: bigint
   operatorAddress: string
   approved: boolean
 }
 
 export class HubClient {
-  chainId: number
+  chainId: bigint
   address: string
 
-  constructor({ chainId, address }: { chainId: number; address: string }) {
+  constructor({ chainId, address }: { chainId: bigint; address: string }) {
     this.chainId = chainId
     this.address = address
   }

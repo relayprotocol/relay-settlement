@@ -7,7 +7,10 @@ describe('Virtual Addresses', () => {
   test.each(addressesTestCases)('$name', ({ input, expectedAddress }) => {
     const address = generateAddress(input)
 
-    const differentInput = { ...input, chainId: input.chainId + 1 }
+    const differentInput = {
+      ...input,
+      chainId: input.chainId + 1n,
+    }
     const differentAddress = generateAddress(differentInput)
     expect(address).not.toBe(differentAddress)
     expect(address).toBe(expectedAddress)

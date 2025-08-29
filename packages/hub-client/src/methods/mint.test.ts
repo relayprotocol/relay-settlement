@@ -4,7 +4,7 @@ import { createHubClient } from '..'
 
 const hubClient = createHubClient({
   address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-  chainId: 10,
+  chainId: 10n,
 })
 
 describe('mint', () => {
@@ -12,7 +12,7 @@ describe('mint', () => {
     const tx = await hubClient.mint({
       account: '0x1D682340264cF209257f24C3EDcb2a9fc0592535',
       amount: ethers.parseUnits('1', 18),
-      chainId: 10,
+      chainId: 10n,
       family: 'ethereum-vm',
       tokenAddress: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
     })
