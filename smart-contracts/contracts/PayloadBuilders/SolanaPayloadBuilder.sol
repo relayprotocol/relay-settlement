@@ -102,7 +102,9 @@ contract SolanaPayloadBuilder is PayloadBuilder {
   }
 
   // For test
-  function hexStringToBytes32(string memory hexString) public pure returns (bytes32) {
+  function hexStringToBytes32(
+    string memory hexString
+  ) public pure returns (bytes32) {
     return Utils.hexStringToBytes32(hexString);
   }
 }

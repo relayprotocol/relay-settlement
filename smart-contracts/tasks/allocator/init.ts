@@ -17,31 +17,28 @@ task('allocator:init', 'Initialize the Allocator contract')
 
       const allocator = await viem.getContractAt('Allocator', allocatorAddress)
 
-      const isEnabled = await allocator.read.enabled()
-      if (!isEnabled) {
-        // Approve 2 wNEAR for the allocator if necessary
-        const allowance = parseUnits('2', 24)
-        await checkAndApproveWNEAR(
-          hre,
-          publicClient,
-          signer.account.address,
-          allocator.address,
-          allowance
-        )
+      // Approve 2 wNEAR for the allocator if necessary
+      const allowance = parseUnits('2', 24)
+      await checkAndApproveWNEAR(
+        hre,
+        publicClient,
+        signer.account.address,
+        allocator.address,
+        allowance
+      )
 
-        // check wNEAR balance
-        const wNEAR = await viem.getContractAt('MyToken', wNEARAddress)
-        const balance = await wNEAR.read.balanceOf([signer.account.address])
-        console.log(`Current wNEAR balance: ${balance} wei`)
+      // check wNEAR balance
+      const wNEAR = await viem.getContractAt('MyToken', wNEARAddress)
+      const balance = await wNEAR.read.balanceOf([signer.account.address])
+      console.log(`Current wNEAR balance: ${balance} wei`)
 
-        if (balance < 500_000_000_000n) {
-          throw Error(`Insufficient balance ${balance}`)
-        }
-
-        // Call init function
-        const initHash = await allocator.write.init()
-        await publicClient.waitForTransactionReceipt({ hash: initHash })
-        console.log('Allocator initialized successfully')
+      if (balance < allowance) {
+        throw Error(`Insufficient balance ${balance}`)
       }
+
+      // Call init function
+      const initHash = await allocator.write.init()
+      await publicClient.waitForTransactionReceipt({ hash: initHash })
+      console.log('Allocator initialized successfully')
     }
   )

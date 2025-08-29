@@ -39,8 +39,7 @@ contract SuiPayloadBuilder is PayloadBuilder {
     }
 
     // Encode request in BCS-compatible format for Sui
-    return
-      encodeBCS(recipientAddress, currency, amountU64, nonce, expiration);
+    return encodeBCS(recipientAddress, currency, amountU64, nonce, expiration);
   }
 
   function hashesToSign(
@@ -75,21 +74,21 @@ contract SuiPayloadBuilder is PayloadBuilder {
 
     // 2. Amount (8 bytes) - using little-endian format as per BCS
     result = bytes.concat(result, Utils.encodeUint64LE(amount));
-    
+
     // 3. Encode coin_type as TypeNameStruct
     bytes memory coinTypeBytes = bytes(coinType);
-    
+
     // Add length of the string as a single byte if under 128 characters
     // For longer strings, BCS uses a different encoding scheme
     require(coinTypeBytes.length < 128, "Coin type string too long");
     result = bytes.concat(result, bytes1(uint8(coinTypeBytes.length)));
-    
+
     // Add the string data
     result = bytes.concat(result, coinTypeBytes);
-    
+
     // 4. Nonce (8 bytes, little-endian)
     result = bytes.concat(result, Utils.encodeUint64LE(nonce));
-    
+
     // 5. Expiration (8 bytes, little-endian)
     require(expiration >= 0, "Expiration cannot be negative");
     result = bytes.concat(result, Utils.encodeUint64LE(uint64(expiration)));

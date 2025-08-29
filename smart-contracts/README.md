@@ -16,16 +16,16 @@ yarn hardhat ignition verify chain-1313161555
 yarn hardhat deploy:payload-builder --payload-builder DummyPayloadBuilder
 
 # set dummy payload builder in allocator
-yarn hardhat allocator:set-payload-builder --builder <builder-address> --allocator <allocator-contract-address> --chain-id 1 --depository <depository-contract-address> --network aurora-testnet
+yarn hardhat allocator:set-payload-builder --builder <builder-address> --allocator <allocator-contract-address> --chain-id <depository-contract-chain> --depository <depository-contract-address> --network aurora-testnet
 
 # grant APPROVED_WITHDRAWER_ROLE to your address
-yarn hardhat allocator:hub-role --allocator <allocator-contract-address>
+yarn hardhat allocator:allocator:add-withdrawer --allocator <allocator-contract-address>
 
 # submit withdraw request params (thru block explorer)
 yarn hardhat allocator:submit-withdraw --allocator <allocator-address> --chain-id <depository-chain-id> --depository <depository-contract-address>
 
 # sign payload
-yarn hardhat allocator:sign-payload --id <payload-id> --allocator <allocator-address>
+yarn hardhat allocator:sign-payload --payload-id <payload-id> --allocator <allocator-address> --chain-id <depository-contract-chain> --depository <depository-contract-address>
 ```
 
 We also have "end to end" tasks which can be used to deploy everything and submit transactions. This uses a lot of defaults, and roles are granted to the caller's address (you need to set the `DEPLOYER_PRIVATE_KEY` environment variable).

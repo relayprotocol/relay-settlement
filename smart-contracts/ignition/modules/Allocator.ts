@@ -14,9 +14,12 @@ const AllocatorModule = buildModule('Allocator', (m) => {
     },
   })
 
+  const Utils = m.library('Utils')
+
   const allocator = m.contract('Allocator', [owner, delay, signer, wNEAR], {
     libraries: {
       AuroraSdk,
+      Utils,
     },
   })
   return { allocator }

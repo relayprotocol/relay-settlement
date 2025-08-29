@@ -7,15 +7,6 @@ import { bitcoinAddressfromHexPublicKey } from '../../lib/bitcoin'
 
 const DEFAULT_DELAY = '1'
 
-function base58ToBytes32(b58: string): string {
-  const decoded = bs58.decode(b58)
-  // Pad with zeros if needed to ensure 32 bytes
-  const padded = Buffer.alloc(32, 0)
-  // Copy the decoded bytes into the padded buffer
-  padded.set(decoded, padded.length - decoded.length)
-  return '0x' + padded.toString('hex')
-}
-
 task('deploy:allocator', 'Deploy the Allocator contract')
   .addOptionalParam('owner', 'The address of the owner')
   .addOptionalParam('signer', 'The address of the signer')
@@ -52,6 +43,7 @@ task('deploy:allocator', 'Deploy the Allocator contract')
         signer,
         wNEAR,
       }
+
       const { allocator } = await ignition.deploy(AllocatorModule, {
         parameters: {
           Allocator: params,
@@ -66,6 +58,7 @@ task('deploy:allocator', 'Deploy the Allocator contract')
         wNEAR,
       })
 
+      console.log('Allocator initialized successfully')
       return allocator.address
     }
   )

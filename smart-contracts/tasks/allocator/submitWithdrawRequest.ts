@@ -4,11 +4,6 @@ import { decodeEventLog, zeroAddress } from 'viem'
 task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
   .addParam('allocator', 'The address of the allocator contract')
   .addParam('chainId', 'The chain id of the destination address')
-  .addParam(
-    'hub',
-    'The hub contract address which will burn the tokens to be withdrawn'
-  )
-  .addParam('sender', 'The sender / initiator of the withraw request')
   .addParam('depository', 'The depository contract on destination chain')
   .addOptionalParam('currency', 'default to zero', zeroAddress)
   .addOptionalParam('amount', 'Amount to withdraw', '1')
@@ -20,8 +15,6 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
         allocator: allocatorAddress,
         chainId,
         depository,
-        hub,
-        sender,
         currency,
         amount,
         receiver,
@@ -34,18 +27,15 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
 
       const allocator = await viem.getContractAt('Allocator', allocatorAddress)
 
-      const submitWithdrawRequestParams = [
-        {
-          amount,
-          chainId,
-          currency,
-          data,
-          depository,
-          hub,
-          receiver: receiver || signer.account.address,
-          sender,
-        },
-      ] as [any]
+      const submitWithdrawRequestParams = {
+        amount,
+        chainId,
+        currency,
+        data,
+        depository,
+        receiver: receiver || signer.account.address,
+      }
+
       console.log('Submitting withdraw request with params', {
         amount,
         chainId,
@@ -55,7 +45,7 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
         receiver: receiver || signer.account.address,
       })
       const txHash = await allocator.write.submitWithdrawRequest(
-        submitWithdrawRequestParams,
+        [submitWithdrawRequestParams],
         {
           account: signer.account,
         }

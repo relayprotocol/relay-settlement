@@ -1,10 +1,7 @@
 import { task } from 'hardhat/config'
 import { keccak256 } from 'viem'
 
-task(
-  'allocator:grant-withdrawer-role',
-  'Grant APPROVED_WITHDRAWER_ROLE to an address'
-)
+task('allocator:add-withdrawer', 'Grant APPROVED_WITHDRAWER_ROLE to an address')
   .addParam('allocator', 'The address of the Allocator contract')
   .addOptionalParam(
     'account',
