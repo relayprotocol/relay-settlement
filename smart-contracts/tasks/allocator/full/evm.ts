@@ -1,14 +1,7 @@
 import { task } from 'hardhat/config'
-import * as bitcoin from 'bitcoinjs-lib'
-import {
-  decodeAbiParameters,
-  encodeAbiParameters,
-  recoverAddress,
-  recoverPublicKey,
-  recoverTypedDataAddress,
-  zeroAddress,
-} from 'viem'
+import { recoverTypedDataAddress, zeroAddress } from 'viem'
 import { extractNearSignature } from '../../../lib/near'
+import { decodeCallRequest } from '../../../lib/evm'
 import { wait } from '../../../lib/wait'
 import { publicKeyToAddress } from 'viem/utils'
 import { derivePublicKey } from '../../../lib/near'
@@ -209,32 +202,6 @@ task(
       })
     }
   )
-
-export function decodeCallRequest(encoded: `0x${string}`) {
-  const callAbi = [
-    {
-      components: [
-        {
-          components: [
-            { name: 'to', type: 'address' },
-            { name: 'data', type: 'bytes' },
-            { name: 'value', type: 'uint256' },
-            { name: 'allowFailure', type: 'bool' },
-          ],
-          name: 'calls',
-          type: 'tuple[]',
-        },
-        { name: 'nonce', type: 'uint256' },
-        { name: 'expiration', type: 'uint256' },
-      ],
-      name: 'callRequest',
-      type: 'tuple',
-    },
-  ] as const
-
-  const [request] = decodeAbiParameters(callAbi, encoded)
-  return request
-}
 
 const safeStringify = (obj: any) =>
   JSON.stringify(obj, (_, v) => (typeof v === 'bigint' ? v.toString() : v))

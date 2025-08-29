@@ -8,6 +8,7 @@ import 'solidity-coverage'
 import { parseEther } from 'viem'
 
 // allocator actions
+import './tasks/depository/withdraw'
 import './tasks/allocator/addWithdrawer'
 import './tasks/allocator/init'
 import './tasks/allocator/setPayloadBuilder'
