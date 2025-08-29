@@ -95,6 +95,7 @@ describe('Allocator signWithdrawPayload', function () {
           data: '0x' as `0x${string}`,
           escrow: escrow.account.address,
           receiver: solver.account.address,
+          spender: user.account.address,
         },
       ],
       {
@@ -232,6 +233,14 @@ describe('Allocator signWithdrawPayload', function () {
           }
         )
 
+        // Set the Allocator as an operator for the user on the hub
+        await hub.write.grantRole(
+          [keccak256('OPERATOR_ROLE' as `0x${string}`), allocator.address],
+          {
+            account: owner.account,
+          }
+        )
+
         // Get the tokenId so we can later mint some tokens
         const tokenId = await utils.read.generateTokenId([
           'dummy-vm',
@@ -246,8 +255,11 @@ describe('Allocator signWithdrawPayload', function () {
           user.account.address,
         ])
 
-        // and mint!
+        // and mint both for the alias and the EOA
         await hub.write.mint([userHubAddress, tokenId, 1n], {
+          account: owner.account,
+        })
+        await hub.write.mint([user.account.address, tokenId, 2n], {
           account: owner.account,
         })
 
@@ -263,6 +275,7 @@ describe('Allocator signWithdrawPayload', function () {
               data: '0x' as `0x${string}`,
               escrow: escrow.account.address,
               receiver: user.account.address,
+              spender: userHubAddress,
             },
           ],
           {
@@ -290,13 +303,14 @@ describe('Allocator signWithdrawPayload', function () {
           otherAccounts,
           owner,
           payloadId: payloadBuiltEvent.args.payloadId,
+          publicClient,
           tokenId,
           userHubAddress,
           wNEAR,
         }
       }
 
-      it('should first transfer the tokens of the recipient to the Allocator contract', async () => {
+      it('should work for an alias address and transfer its tokens to the allocator', async () => {
         const {
           allocator,
           amount,
@@ -324,14 +338,6 @@ describe('Allocator signWithdrawPayload', function () {
         // Use the operator to set our EOA as an operator for the user on the hub
         await hub.write.setOperatorFor(
           [userHubAddress, user.account.address, true],
-          {
-            account: owner.account,
-          }
-        )
-
-        // Use the operator to set the Allocator as an operator for the user on the hub
-        await hub.write.setOperatorFor(
-          [userHubAddress, allocator.address, true],
           {
             account: owner.account,
           }
@@ -388,43 +394,6 @@ describe('Allocator signWithdrawPayload', function () {
         ).to.be.rejectedWith('CallerIsNotApproved')
       })
 
-      it('should fail if the Allocator is not an operator for the recipient', async () => {
-        const {
-          allocator,
-          payloadId,
-          otherAccounts,
-          owner,
-          hub,
-          userHubAddress,
-        } = await loadFixture(deployAllocatorAndSetHub)
-        const [escrow, user] = otherAccounts
-
-        // Use the operator to set our EOA as an operator for the user on the hub
-        await hub.write.setOperatorFor(
-          [userHubAddress, user.account.address, true],
-          {
-            account: owner.account,
-          }
-        )
-
-        // Use the operator to set the Allocator as an operator for the user on the hub
-        await hub.write.setOperatorFor(
-          [userHubAddress, allocator.address, true],
-          {
-            account: owner.account,
-          }
-        )
-
-        await expect(
-          allocator.write.signWithdrawPayload(
-            [chainId, escrow.account.address, payloadId, gasSettings],
-            {
-              account: user.account,
-            }
-          )
-        ).to.be.rejectedWith('ERC20InsufficientAllowance')
-      })
-
       it('should fail if the tokens from the allocator contract could not be transfered', async () => {
         const {
           allocator,
@@ -438,14 +407,6 @@ describe('Allocator signWithdrawPayload', function () {
         } = await loadFixture(deployAllocatorAndSetHub)
         const [escrow, user] = otherAccounts
 
-        // Use the operator to set our EOA as an operator for the user on the hub
-        await hub.write.setOperatorFor(
-          [userHubAddress, user.account.address, true],
-          {
-            account: owner.account,
-          }
-        )
-
         // Use the operator to set the Allocator as an operator for the user on the hub
         await hub.write.setOperatorFor(
           [userHubAddress, allocator.address, true],
@@ -458,7 +419,7 @@ describe('Allocator signWithdrawPayload', function () {
         await hub.write.transferFrom(
           [userHubAddress, zeroAddress, tokenId, amount],
           {
-            account: user.account,
+            account: owner.account,
           }
         )
 
@@ -470,6 +431,100 @@ describe('Allocator signWithdrawPayload', function () {
             }
           )
         ).to.be.rejected
+      })
+
+      it('should work for an EOA and transfer its tokens to the allocator', async () => {
+        const {
+          allocator,
+          amount,
+          otherAccounts,
+          hub,
+          wNEAR,
+          tokenId,
+          publicClient,
+        } = await loadFixture(deployAllocatorAndSetHub)
+        const [escrow, user] = otherAccounts
+
+        // Submit a new withdraw request
+        const txHash = await allocator.write.submitWithdrawRequest(
+          [
+            {
+              amount,
+              chainId,
+              currency: zeroAddress,
+              data: '0x' as `0x${string}`,
+              escrow: escrow.account.address,
+              receiver: user.account.address,
+              spender: user.account.address,
+            },
+          ],
+          {
+            account: user.account,
+          }
+        )
+
+        const receipt = await publicClient.waitForTransactionReceipt({
+          hash: txHash,
+        })
+
+        const payloadBuiltEvent = await extractEvent(
+          receipt,
+          'PayloadBuilt',
+          allocator.abi
+        )
+
+        const userBalanceBefore = await hub.read.balanceOf([
+          user.account.address,
+          tokenId,
+        ])
+        expect(userBalanceBefore).to.be.equal(2n)
+        const allocatorBalanceBefore = await hub.read.balanceOf([
+          allocator.address,
+          tokenId,
+        ])
+        expect(allocatorBalanceBefore).to.be.equal(0n)
+
+        // set wNEAR approvals
+        const wNearAmount = 9000000000000000000000000n
+        await wNEAR.write.mint([wNearAmount], {
+          account: user.account,
+        })
+        await wNEAR.write.approve([allocator.address, 2n], {
+          account: user.account,
+        })
+        // approve from owner for init()
+        await wNEAR.write.approve([allocator.address, wNearAmount], {
+          account: user.account,
+        })
+
+        // wait for the delay
+        await time.increase(await allocator.read.delay())
+
+        await allocator.write.signWithdrawPayload(
+          [
+            chainId,
+            escrow.account.address,
+            payloadBuiltEvent.args.payloadId,
+            gasSettings,
+          ],
+          {
+            account: user.account,
+          }
+        )
+
+        // Let's now check the balance of tokens for the Allocator
+        const userBalanceAfter = await hub.read.balanceOf([
+          user.account.address,
+          tokenId,
+        ])
+        const allocatorBalanceAfter = await hub.read.balanceOf([
+          allocator.address,
+          tokenId,
+        ])
+        expect(userBalanceAfter).to.be.equal(userBalanceBefore - amount)
+        expect(allocatorBalanceAfter).to.be.equal(
+          allocatorBalanceBefore + amount
+        )
       })
     })
   })

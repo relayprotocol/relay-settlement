@@ -80,18 +80,19 @@ describe('Allocator submitWithdrawRequest', function () {
       const { allocator, hub, owner, escrow } = await loadFixture(
         deployAllocatorWithSetup
       )
+
       await expect(
         allocator.write.submitWithdrawRequest(
           [
-            [
-              2n, // chainId
-              escrow.account.address,
-              owner.account.address, // sender
-              zeroAddress, // currency
-              1n, // amount
-              hub.account.address, // receiver
-              '0x' as `0x${string}`, // data
-            ],
+            {
+              amount: 1n,
+              chainId: 2n,
+              currency: zeroAddress,
+              data: '0x' as `0x${string}`,
+              escrow: escrow.account.address,
+              receiver: owner.account.address,
+              spender: owner.account.address,
+            },
           ],
           {
             account: hub.account,
@@ -107,15 +108,15 @@ describe('Allocator submitWithdrawRequest', function () {
 
       const txHash = await allocator.write.submitWithdrawRequest(
         [
-          [
+          {
+            amount: 1n,
             chainId,
-            escrow.account.address,
-            owner.account.address, // sender
-            zeroAddress, // currency
-            1n, // amount
-            hub.account.address, // receiver
-            '0x' as `0x${string}`, // data
-          ],
+            currency: zeroAddress,
+            data: '0x' as `0x${string}`,
+            escrow: escrow.account.address,
+            receiver: hub.account.address,
+            spender: owner.account.address,
+          },
         ],
         {
           account: hub.account,
@@ -139,14 +140,15 @@ describe('Allocator submitWithdrawRequest', function () {
 
       const txHash = await allocator.write.submitWithdrawRequest(
         [
-          [
+          {
+            amount: 1n,
             chainId,
-            escrow.account.address,
-            zeroAddress, // currency
-            1n, // amount
-            hub.account.address, // receiver
-            '0x' as `0x${string}`, // data
-          ],
+            currency: zeroAddress,
+            data: '0x' as `0x${string}`,
+            escrow: escrow.account.address,
+            receiver: hub.account.address,
+            spender: hub.account.address,
+          },
         ],
         {
           account: hub.account,
@@ -172,14 +174,15 @@ describe('Allocator submitWithdrawRequest', function () {
 
       const txHash = await allocator.write.submitWithdrawRequest(
         [
-          [
+          {
+            amount: 1n,
             chainId,
-            escrow.account.address,
-            zeroAddress, // currency
-            1n, // amount
-            hub.account.address, // receiver
-            '0x' as `0x${string}`, // data
-          ],
+            currency: zeroAddress,
+            data: '0x' as `0x${string}`,
+            escrow: escrow.account.address,
+            receiver: hub.account.address,
+            spender: hub.account.address,
+          },
         ],
         {
           account: hub.account,

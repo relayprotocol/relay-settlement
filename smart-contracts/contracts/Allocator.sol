@@ -69,13 +69,13 @@ contract Allocator is AccessControl {
 
   // global delay
   uint256 public delay;
-  
+
   // Delay configuration struct
   struct DelayConfig {
     uint256 delay;
     bool isSet;
   }
-  
+
   // per-escrow delay mapping (chainId => escrow address as string => DelayConfig)
   mapping(uint256 => mapping(string => DelayConfig)) public escrowDelays;
 
@@ -126,12 +126,13 @@ contract Allocator is AccessControl {
   error WithdrawalRequestFailed();
 
   struct SubmitWithdrawRequestParams {
-    uint256 chainId;
-    string escrow;
-    string currency;
-    uint256 amount;
-    string receiver;
-    bytes data;
+    uint256 chainId; // ChainId of the destination chain on which the user will withdraw
+    string escrow; // Address of the escrow account as a string so we can support non EVM
+    string currency; // Address of the currency to be withdrawn, as a string so we can support non EVM. Use zero address for native.
+    uint256 amount; // Amount to withdraw
+    address spender; // Address of the account that owns the balance in the Hub contract (can be an alias)
+    string receiver; // Address of the account on the destinattion chain as a string so we can support non EVM
+    bytes data; // Additional data to be passed to the payload builder
   }
 
   struct Payload {
@@ -198,7 +199,7 @@ contract Allocator is AccessControl {
     delay = _delay;
     emit DelayChanged(delay);
   }
-  
+
   /**
    * @notice sets or updates the delay for a specific chain and escrow
    * @param chainId chain ID
@@ -255,8 +256,10 @@ contract Allocator is AccessControl {
 
     // Use escrow-specific delay if set, otherwise fall back to global delay
     uint256 escrowDelay = escrowDelays[params.chainId][params.escrow].delay;
-    uint256 effectiveDelay = escrowDelays[params.chainId][params.escrow].isSet ? escrowDelay : delay;
-    
+    uint256 effectiveDelay = escrowDelays[params.chainId][params.escrow].isSet
+      ? escrowDelay
+      : delay;
+
     payloadTimestamps[payloadId] = block.timestamp + effectiveDelay;
 
     emit PayloadBuilt(payloadId, payload, block.timestamp);
@@ -450,21 +453,17 @@ contract Allocator is AccessControl {
       payload.params.currency
     );
 
-    // Generate the spender's address based on who receives these funds!
-    address spender = Utils.generateAddress(
-      family,
-      payload.params.chainId,
-      payload.params.receiver
-    );
-
     // Only an operator for the spender can trigger withdrawals.
-    if (!Hub(hub).isOperator(spender, msg.sender)) {
+    if (
+      !(payload.params.spender == msg.sender ||
+        Hub(hub).isOperator(payload.params.spender, msg.sender))
+    ) {
       revert CallerIsNotApproved(msg.sender);
     }
 
     // Actually perform the transfer
     Hub(hub).transferFrom(
-      spender,
+      payload.params.spender,
       address(this),
       tokenId,
       payload.params.amount
