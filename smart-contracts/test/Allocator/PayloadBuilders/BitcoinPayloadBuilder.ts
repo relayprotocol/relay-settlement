@@ -45,7 +45,7 @@ const scriptPubKey = '0x76a914632a250a7f721ae8583ad911950eeeb82c00e54788ac'
 
 describe('Allocator BitcoinPayloadBuilder', function () {
   async function deployPayloadBuilder() {
-    const [escrow] = await hre.viem.getWalletClients()
+    const [depository] = await hre.viem.getWalletClients()
 
     const publicClient = await hre.viem.getPublicClient()
 
@@ -69,7 +69,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
     return {
       bitcoinAllocatorAddress,
       bitcoinRecipientAddress,
-      escrow,
+      depository,
       payloadBuilder,
       publicClient,
       receiverScript: receiverScript.toString('base64'),
@@ -85,7 +85,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
       await expect(
         payloadBuilder.read.buildPayload([
           1n, // chainId
-          zeroAddress, // escrow
+          zeroAddress, // depository
           zeroAddress, // currency
           amount, // amount
           receiverScript, // receiver
@@ -117,7 +117,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
       await expect(
         payloadBuilder.read.buildPayload([
           1n, // chainId
-          zeroAddress, // escrow
+          zeroAddress, // depository
           zeroAddress, // currency
           amount, // amount
           receiverScript,
@@ -152,7 +152,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
 
       const payload = await payloadBuilder.read.buildPayload([
         1n, // chainId
-        zeroAddress, // escrow
+        zeroAddress, // depository
         '', // currency
         utxosTotalValue, // amount
         receiverScript, // receiver
@@ -195,7 +195,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
 
       const payload = await payloadBuilder.read.buildPayload([
         1n, // chainId
-        zeroAddress, // escrow
+        zeroAddress, // depository
         '', // currency
         (utxosTotalValue * 2n) / 3n, // amount
         receiverScript, // receiver
@@ -234,7 +234,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
 
       const payload = await payloadBuilder.read.buildPayload([
         1n, // chainId
-        zeroAddress, // escrow
+        zeroAddress, // depository
         '', // currency
         utxosTotalValue, // amount
         receiverScript, // receiver
@@ -280,7 +280,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
       await expect(
         payloadBuilder.read.buildPayload([
           1n, // chainId
-          zeroAddress, // escrow
+          zeroAddress, // depository
           '', // currency
           utxosTotalValue, // amount
           receiverScript, // receiver

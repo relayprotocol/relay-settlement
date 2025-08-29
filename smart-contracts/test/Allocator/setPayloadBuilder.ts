@@ -7,11 +7,11 @@ describe('Allocator - setPayloadBuilder', function () {
   async function deployAllocatorWithSetup() {
     const { allocator, owner, otherAccounts, publicClient } =
       await deployAllocator()
-    const [nonOwner, escrow, payloadBuilder] = otherAccounts
+    const [nonOwner, depository, payloadBuilder] = otherAccounts
 
     return {
       allocator,
-      escrow,
+      depository,
       nonOwner,
       owner,
       payloadBuilder,
@@ -19,24 +19,26 @@ describe('Allocator - setPayloadBuilder', function () {
     }
   }
 
-  it('should not have a payload builder if none is set for that escrow and chainId', async function () {
-    const { allocator, escrow } = await loadFixture(deployAllocatorWithSetup)
+  it('should not have a payload builder if none is set for that depository and chainId', async function () {
+    const { allocator, depository } = await loadFixture(
+      deployAllocatorWithSetup
+    )
     const chainId = 1n
     const builder = await allocator.read.payloadBuilders([
       chainId,
-      escrow.account.address,
+      depository.account.address,
     ])
     // Verify payload builder was set
     expect(getAddress(builder)).to.equal(zeroAddress)
   })
 
   it('should allow owner to set payload builder', async function () {
-    const { allocator, owner, escrow, payloadBuilder, publicClient } =
+    const { allocator, owner, depository, payloadBuilder, publicClient } =
       await loadFixture(deployAllocatorWithSetup)
     const chainId = 1n
 
     const setPayloadBuilderHash = await allocator.write.setPayloadBuilder(
-      [chainId, escrow.account.address, payloadBuilder.account.address],
+      [chainId, depository.account.address, payloadBuilder.account.address],
       {
         account: owner.account,
       }
@@ -48,7 +50,7 @@ describe('Allocator - setPayloadBuilder', function () {
     // Verify payload builder was set
     const builder = await allocator.read.payloadBuilders([
       chainId,
-      escrow.account.address,
+      depository.account.address,
     ])
     expect(getAddress(builder)).to.equal(
       getAddress(payloadBuilder.account.address)
@@ -58,7 +60,7 @@ describe('Allocator - setPayloadBuilder', function () {
       getAddress(
         await allocator.read.payloadBuilders([
           chainId + 1n,
-          escrow.account.address,
+          depository.account.address,
         ])
       )
     ).to.equal(zeroAddress)
@@ -85,13 +87,19 @@ describe('Allocator - setPayloadBuilder', function () {
   })
 
   it('should allow owner to update existing payload builder', async function () {
-    const { allocator, owner, nonOwner, escrow, payloadBuilder, publicClient } =
-      await loadFixture(deployAllocatorWithSetup)
+    const {
+      allocator,
+      owner,
+      nonOwner,
+      depository,
+      payloadBuilder,
+      publicClient,
+    } = await loadFixture(deployAllocatorWithSetup)
     const chainId = 1n
 
     // Set initial builder
     const setPayloadBuilderHash = await allocator.write.setPayloadBuilder(
-      [chainId, escrow.account.address, payloadBuilder.account.address],
+      [chainId, depository.account.address, payloadBuilder.account.address],
       {
         account: owner.account,
       }
@@ -102,7 +110,7 @@ describe('Allocator - setPayloadBuilder', function () {
 
     // Update builder
     const updatePayloadBuilderHash = await allocator.write.setPayloadBuilder(
-      [chainId, escrow.account.address, nonOwner.account.address],
+      [chainId, depository.account.address, nonOwner.account.address],
       {
         account: owner.account,
       }
@@ -114,20 +122,19 @@ describe('Allocator - setPayloadBuilder', function () {
     // Verify payload builder was updated
     const builder = await allocator.read.payloadBuilders([
       chainId,
-      escrow.account.address,
+      depository.account.address,
     ])
     expect(getAddress(builder)).to.equal(getAddress(nonOwner.account.address))
   })
 
   it('should not allow non-owner to set payload builder', async function () {
-    const { allocator, nonOwner, escrow, payloadBuilder } = await loadFixture(
-      deployAllocatorWithSetup
-    )
+    const { allocator, nonOwner, depository, payloadBuilder } =
+      await loadFixture(deployAllocatorWithSetup)
     const chainId = 1n
 
     await expect(
       allocator.write.setPayloadBuilder(
-        [chainId, escrow.account.address, payloadBuilder.account.address],
+        [chainId, depository.account.address, payloadBuilder.account.address],
         {
           account: nonOwner.account,
         }

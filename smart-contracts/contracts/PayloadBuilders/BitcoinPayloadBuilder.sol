@@ -115,7 +115,7 @@ contract BitcoinPayloadBuilder is PayloadBuilder {
   /// @param data The UTXOs to spend
   function buildPayload(
     uint256 /* chainId */,
-    string memory /* escrow */,
+    string memory /* depository */,
     string memory /* currency */,
     uint256 amount,
     string memory receiverScript, // Base64 encoded scriptPubKey
@@ -230,7 +230,7 @@ contract BitcoinPayloadBuilder is PayloadBuilder {
   /// @param payload The ABI-encoded `BitcoinTransactionData`
   function hashesToSign(
     uint256, // chainId (ignored)
-    string memory, // escrow (ignored)
+    string memory, // depository (ignored)
     bytes calldata payload
   ) external pure override returns (bytes32[] memory) {
     // 1) Decode the struct you packed in buildPayload(...)

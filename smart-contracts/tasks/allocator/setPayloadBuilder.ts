@@ -2,15 +2,15 @@ import { task } from 'hardhat/config'
 
 task(
   'allocator:set-payload-builder',
-  'Set a payload builder for a specific chain and escrow'
+  'Set a payload builder for a specific chain and depository'
 )
   .addParam('allocator', 'The address of the allocator contract')
   .addParam('chainId', 'The chain ID where the payload builder will be used')
-  .addParam('escrow', 'The address of the escrow contract')
+  .addParam('depository', 'The address of the depository contract')
   .addParam('builder', 'The address of the payload builder contract')
   .setAction(
     async (
-      { allocator: allocatorAddress, chainId, escrow, builder },
+      { allocator: allocatorAddress, chainId, depository, builder },
       { viem }
     ) => {
       const [signer] = await viem.getWalletClients()
@@ -20,11 +20,11 @@ task(
 
       console.log('Setting payload builder...')
       console.log(`Chain ID: ${chainId}`)
-      console.log(`Escrow: ${escrow}`)
+      console.log(`Depository: ${depository}`)
       console.log(`Builder: ${builder}`)
 
       const txHash = await allocator.write.setPayloadBuilder(
-        [BigInt(chainId), escrow, builder],
+        [BigInt(chainId), depository, builder],
         {
           account: signer.account,
         }

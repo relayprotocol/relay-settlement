@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import {PayloadBuilder} from "../Allocator.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
-// Taken from https://github.com/relayprotocol/escrow-contracts/blob/main/packages/ethereum-vm/src/utils/RelayEscrowStructs.sol
+// Taken from https://github.com/relayprotocol/depository-contracts/blob/main/packages/ethereum-vm/src/utils/RelayDepositoryStructs.sol
 struct Call {
   address to;
   bytes data;
@@ -16,15 +16,15 @@ struct CallRequest {
   uint256 nonce;
   uint256 expiration;
 }
-struct CurrentEscrow {
-  address escrow;
+struct CurrentDepository {
+  address depository;
   uint256 chainId;
 }
 
 // Implement the logic to build the payload for EVM chains
 contract EVMPayloadBuilder is PayloadBuilder {
   // EIP712 domain and version
-  string public constant SIGNING_DOMAIN = "RelayEscrow";
+  string public constant SIGNING_DOMAIN = "RelayDepository";
   string public constant SIGNATURE_VERSION = "1";
 
   /// @notice The EIP-712 typehash for the Call struct
@@ -38,10 +38,10 @@ contract EVMPayloadBuilder is PayloadBuilder {
     );
 
   // This must return a "CallRequest calldata request"
-  // as defined in https://github.com/relayprotocol/escrow-contracts/blob/main/packages/ethereum-vm/src/utils/RelayEscrowStructs.sol
+  // as defined in https://github.com/relayprotocol/depository-contracts/blob/main/packages/ethereum-vm/src/utils/RelayDepositoryStructs.sol
   function buildPayload(
     uint256 /* chainId */,
-    string calldata /* escrow */,
+    string calldata /* depository */,
     string calldata currency,
     uint256 amount,
     string memory receiver,
@@ -85,22 +85,22 @@ contract EVMPayloadBuilder is PayloadBuilder {
   /// @return The EIP-712 hash of the payload
   function hashesToSign(
     uint256 chainId,
-    string calldata escrow,
+    string calldata depository,
     bytes calldata payload
   ) external pure returns (bytes32[] memory) {
     bytes32[] memory hashes = new bytes32[](1);
     CallRequest memory request = abi.decode(payload, (CallRequest));
-    bytes32 domainSeparator = buildDomainSeparator(chainId, escrow);
+    bytes32 domainSeparator = buildDomainSeparator(chainId, depository);
     (, bytes32 eip712Hash) = hashCallRequest(request, domainSeparator);
     hashes[0] = eip712Hash;
     return hashes;
   }
 
-  /// @notice Returns an EIP-712 domain separator for the escrow
+  /// @notice Returns an EIP-712 domain separator for the depository
   /// @return The EIP-712 domain separator
   function buildDomainSeparator(
     uint256 chainId,
-    string calldata escrow
+    string calldata depository
   ) internal pure returns (bytes32) {
     return
       keccak256(
@@ -111,7 +111,7 @@ contract EVMPayloadBuilder is PayloadBuilder {
           keccak256(bytes(SIGNING_DOMAIN)),
           keccak256(bytes(SIGNATURE_VERSION)),
           chainId,
-          toAddress(escrow)
+          toAddress(depository)
         )
       );
   }

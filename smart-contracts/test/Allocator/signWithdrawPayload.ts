@@ -54,12 +54,12 @@ describe('Allocator signWithdrawPayload', function () {
   async function deployAllocatorWithSetup() {
     const { allocator, owner, otherAccounts, publicClient, wNEAR, utils } =
       await deployAllocator()
-    const [escrow, user, solver] = otherAccounts
+    const [depository, user, solver] = otherAccounts
 
     const payloadBuilder = await hre.viem.deployContract('DummyPayloadBuilder')
 
     await allocator.write.setPayloadBuilder(
-      [chainId, escrow.account.address, payloadBuilder.address],
+      [chainId, depository.account.address, payloadBuilder.address],
       {
         account: owner.account,
       }
@@ -93,7 +93,7 @@ describe('Allocator signWithdrawPayload', function () {
           chainId,
           currency: zeroAddress,
           data: '0x' as `0x${string}`,
-          escrow: escrow.account.address,
+          depository: depository.account.address,
           receiver: solver.account.address,
           spender: user.account.address,
         },
@@ -115,7 +115,7 @@ describe('Allocator signWithdrawPayload', function () {
 
     return {
       allocator,
-      escrow,
+      depository,
       owner,
       payloadBuilder,
       payloadId: payloadBuiltEvent.args.payloadId,
@@ -130,8 +130,14 @@ describe('Allocator signWithdrawPayload', function () {
   describe('signWithdrawPayload()', function () {
     describe('with an approved signer', () => {
       it('should successfully sign a payload with custom gas settings', async function () {
-        const { allocator, solver, escrow, payloadId, publicClient, wNEAR } =
-          await loadFixture(deployAllocatorWithSetup)
+        const {
+          allocator,
+          solver,
+          depository,
+          payloadId,
+          publicClient,
+          wNEAR,
+        } = await loadFixture(deployAllocatorWithSetup)
 
         // init transact
         await allocator.write.init()
@@ -140,7 +146,7 @@ describe('Allocator signWithdrawPayload', function () {
         await time.increase(await allocator.read.delay())
 
         const signHash = await allocator.write.signWithdrawPayload(
-          [chainId, escrow.account.address, payloadId, gasSettings],
+          [chainId, depository.account.address, payloadId, gasSettings],
           {
             account: solver.account,
           }
@@ -165,13 +171,13 @@ describe('Allocator signWithdrawPayload', function () {
       })
 
       it('should revert when trying to sign a payload that is not ready', async function () {
-        const { allocator, solver, escrow, payloadId } = await loadFixture(
+        const { allocator, solver, depository, payloadId } = await loadFixture(
           deployAllocatorWithSetup
         )
 
         await expect(
           allocator.write.signWithdrawPayload(
-            [chainId, escrow.account.address, payloadId, gasSettings],
+            [chainId, depository.account.address, payloadId, gasSettings],
             {
               account: solver.account,
             }
@@ -191,14 +197,14 @@ describe('Allocator signWithdrawPayload', function () {
           utils,
           ...rest
         } = await deployAllocator()
-        const [escrow, user, solver] = otherAccounts
+        const [depository, user, solver] = otherAccounts
 
         const payloadBuilder = await hre.viem.deployContract(
           'DummyPayloadBuilder'
         )
 
         await allocator.write.setPayloadBuilder(
-          [chainId, escrow.account.address, payloadBuilder.address],
+          [chainId, depository.account.address, payloadBuilder.address],
           {
             account: owner.account,
           }
@@ -273,7 +279,7 @@ describe('Allocator signWithdrawPayload', function () {
               chainId,
               currency: zeroAddress,
               data: '0x' as `0x${string}`,
-              escrow: escrow.account.address,
+              depository: depository.account.address,
               receiver: user.account.address,
               spender: userHubAddress,
             },
@@ -322,7 +328,7 @@ describe('Allocator signWithdrawPayload', function () {
           wNEAR,
           tokenId,
         } = await loadFixture(deployAllocatorAndSetHub)
-        const [escrow, user] = otherAccounts
+        const [depository, user] = otherAccounts
 
         const userBalanceBefore = await hub.read.balanceOf([
           userHubAddress,
@@ -357,7 +363,7 @@ describe('Allocator signWithdrawPayload', function () {
         })
 
         await allocator.write.signWithdrawPayload(
-          [chainId, escrow.account.address, payloadId, gasSettings],
+          [chainId, depository.account.address, payloadId, gasSettings],
           {
             account: user.account,
           }
@@ -382,11 +388,11 @@ describe('Allocator signWithdrawPayload', function () {
         const { allocator, payloadId, otherAccounts } = await loadFixture(
           deployAllocatorAndSetHub
         )
-        const [escrow, user] = otherAccounts
+        const [depository, user] = otherAccounts
 
         await expect(
           allocator.write.signWithdrawPayload(
-            [chainId, escrow.account.address, payloadId, gasSettings],
+            [chainId, depository.account.address, payloadId, gasSettings],
             {
               account: user.account,
             }
@@ -405,7 +411,7 @@ describe('Allocator signWithdrawPayload', function () {
           userHubAddress,
           tokenId,
         } = await loadFixture(deployAllocatorAndSetHub)
-        const [escrow, user] = otherAccounts
+        const [depository, user] = otherAccounts
 
         // Use the operator to set the Allocator as an operator for the user on the hub
         await hub.write.setOperatorFor(
@@ -425,7 +431,7 @@ describe('Allocator signWithdrawPayload', function () {
 
         await expect(
           allocator.write.signWithdrawPayload(
-            [chainId, escrow.account.address, payloadId, gasSettings],
+            [chainId, depository.account.address, payloadId, gasSettings],
             {
               account: user.account,
             }
@@ -443,7 +449,7 @@ describe('Allocator signWithdrawPayload', function () {
           tokenId,
           publicClient,
         } = await loadFixture(deployAllocatorAndSetHub)
-        const [escrow, user] = otherAccounts
+        const [depository, user] = otherAccounts
 
         // Submit a new withdraw request
         const txHash = await allocator.write.submitWithdrawRequest(
@@ -453,7 +459,7 @@ describe('Allocator signWithdrawPayload', function () {
               chainId,
               currency: zeroAddress,
               data: '0x' as `0x${string}`,
-              escrow: escrow.account.address,
+              depository: depository.account.address,
               receiver: user.account.address,
               spender: user.account.address,
             },
@@ -503,7 +509,7 @@ describe('Allocator signWithdrawPayload', function () {
         await allocator.write.signWithdrawPayload(
           [
             chainId,
-            escrow.account.address,
+            depository.account.address,
             payloadBuiltEvent.args.payloadId,
             gasSettings,
           ],

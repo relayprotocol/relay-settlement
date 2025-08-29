@@ -44,12 +44,12 @@ describe('Allocator submitWithdrawRequest', function () {
   async function deployAllocatorWithSetup() {
     const { allocator, owner, otherAccounts, publicClient } =
       await deployAllocator()
-    const [hub, escrow, attacker] = otherAccounts
+    const [hub, depository, attacker] = otherAccounts
 
     const payloadBuilder = await hre.viem.deployContract('DummyPayloadBuilder')
 
     await allocator.write.setPayloadBuilder(
-      [chainId, escrow.account.address, payloadBuilder.address],
+      [chainId, depository.account.address, payloadBuilder.address],
       {
         account: owner.account,
       }
@@ -68,7 +68,7 @@ describe('Allocator submitWithdrawRequest', function () {
     return {
       allocator,
       attacker,
-      escrow,
+      depository,
       hub,
       owner,
       publicClient,
@@ -77,7 +77,7 @@ describe('Allocator submitWithdrawRequest', function () {
 
   describe('submitWithdrawRequest()', function () {
     it('should fail if no payload builder exists', async () => {
-      const { allocator, hub, owner, escrow } = await loadFixture(
+      const { allocator, hub, owner, depository } = await loadFixture(
         deployAllocatorWithSetup
       )
 
@@ -89,7 +89,7 @@ describe('Allocator submitWithdrawRequest', function () {
               chainId: 2n,
               currency: zeroAddress,
               data: '0x' as `0x${string}`,
-              escrow: escrow.account.address,
+              depository: depository.account.address,
               receiver: owner.account.address,
               spender: owner.account.address,
             },
@@ -98,13 +98,14 @@ describe('Allocator submitWithdrawRequest', function () {
             account: hub.account,
           }
         )
-      ).to.be.rejectedWith(`NoPayloadBuilder(2, "${escrow.account.address}")`)
+      ).to.be.rejectedWith(
+        `NoPayloadBuilder(2, "${depository.account.address}")`
+      )
     })
 
     it('should emit an event with the payload hash', async () => {
-      const { allocator, hub, owner, escrow, publicClient } = await loadFixture(
-        deployAllocatorWithSetup
-      )
+      const { allocator, hub, owner, depository, publicClient } =
+        await loadFixture(deployAllocatorWithSetup)
 
       const txHash = await allocator.write.submitWithdrawRequest(
         [
@@ -113,7 +114,7 @@ describe('Allocator submitWithdrawRequest', function () {
             chainId,
             currency: zeroAddress,
             data: '0x' as `0x${string}`,
-            escrow: escrow.account.address,
+            depository: depository.account.address,
             receiver: hub.account.address,
             spender: owner.account.address,
           },
@@ -134,7 +135,7 @@ describe('Allocator submitWithdrawRequest', function () {
     })
 
     it('should store the unsigned payload', async () => {
-      const { allocator, hub, escrow, publicClient } = await loadFixture(
+      const { allocator, hub, depository, publicClient } = await loadFixture(
         deployAllocatorWithSetup
       )
 
@@ -145,7 +146,7 @@ describe('Allocator submitWithdrawRequest', function () {
             chainId,
             currency: zeroAddress,
             data: '0x' as `0x${string}`,
-            escrow: escrow.account.address,
+            depository: depository.account.address,
             receiver: hub.account.address,
             spender: hub.account.address,
           },
@@ -168,7 +169,7 @@ describe('Allocator submitWithdrawRequest', function () {
     })
 
     it('should store the timestamp after which the payload can be signed', async () => {
-      const { allocator, hub, escrow, publicClient } = await loadFixture(
+      const { allocator, hub, depository, publicClient } = await loadFixture(
         deployAllocatorWithSetup
       )
 
@@ -179,7 +180,7 @@ describe('Allocator submitWithdrawRequest', function () {
             chainId,
             currency: zeroAddress,
             data: '0x' as `0x${string}`,
-            escrow: escrow.account.address,
+            depository: depository.account.address,
             receiver: hub.account.address,
             spender: hub.account.address,
           },

@@ -17,7 +17,7 @@ interface PayloadBuilder {
 
   function buildPayload(
     uint256 chainId,
-    string calldata escrow,
+    string calldata depository,
     string calldata currency,
     uint256 amount,
     string calldata receiver,
@@ -26,7 +26,7 @@ interface PayloadBuilder {
 
   function hashesToSign(
     uint256 chainId,
-    string calldata escrow,
+    string calldata depository,
     bytes calldata payload
   ) external view returns (bytes32[] memory);
 
@@ -53,7 +53,7 @@ contract Allocator is AccessControl {
   using Strings for uint256;
 
   event DelayChanged(uint256 delay);
-  event EscrowDelayChanged(uint256 chainId, string escrow, uint256 delay);
+  event DepositoryDelayChanged(uint256 chainId, string depository, uint256 delay);
   event HubSet(address hub);
 
   // roles
@@ -76,8 +76,8 @@ contract Allocator is AccessControl {
     bool isSet;
   }
 
-  // per-escrow delay mapping (chainId => escrow address as string => DelayConfig)
-  mapping(uint256 => mapping(string => DelayConfig)) public escrowDelays;
+  // per-depository delay mapping (chainId => depository address as string => DelayConfig)
+  mapping(uint256 => mapping(string => DelayConfig)) public depositoryDelays;
 
   // owner of the contract
   address public owner;
@@ -100,7 +100,7 @@ contract Allocator is AccessControl {
   // events
   event PayloadBuilderSet(
     uint256 indexed chainId,
-    string indexed escrow,
+    string indexed depository,
     address indexed builder
   );
 
@@ -119,7 +119,7 @@ contract Allocator is AccessControl {
   // errors
   error NotMultisigOwner(address account);
   error CallerIsNotApproved(address account);
-  error NoPayloadBuilder(uint256 chainId, string escrow);
+  error NoPayloadBuilder(uint256 chainId, string depository);
   error PayloadNotReady(bytes32 payloadId);
   error PayloadAlreadySigned(bytes32 payloadId);
   error SignCallbackFailed(bytes32 payloadId);
@@ -127,7 +127,7 @@ contract Allocator is AccessControl {
 
   struct SubmitWithdrawRequestParams {
     uint256 chainId; // ChainId of the destination chain on which the user will withdraw
-    string escrow; // Address of the escrow account as a string so we can support non EVM
+    string depository; // Address of the depository account as a string so we can support non EVM
     string currency; // Address of the currency to be withdrawn, as a string so we can support non EVM. Use zero address for native.
     uint256 amount; // Amount to withdraw
     address spender; // Address of the account that owns the balance in the Hub contract (can be an alias)
@@ -201,19 +201,19 @@ contract Allocator is AccessControl {
   }
 
   /**
-   * @notice sets or updates the delay for a specific chain and escrow
+   * @notice sets or updates the delay for a specific chain and depository
    * @param chainId chain ID
-   * @param escrow address of the escrow contract as string
+   * @param depository address of the depository contract as string
    * @param _delay delay in seconds
    */
-  function setEscrowDelay(
+  function setDepositoryDelay(
     uint256 chainId,
-    string calldata escrow,
+    string calldata depository,
     uint256 _delay
   ) external onlyRole(ADMIN_ROLE) {
-    escrowDelays[chainId][escrow].delay = _delay;
-    escrowDelays[chainId][escrow].isSet = true;
-    emit EscrowDelayChanged(chainId, escrow, _delay);
+    depositoryDelays[chainId][depository].delay = _delay;
+    depositoryDelays[chainId][depository].isSet = true;
+    emit DepositoryDelayChanged(chainId, depository, _delay);
   }
 
   /**
@@ -223,11 +223,11 @@ contract Allocator is AccessControl {
    */
   function setPayloadBuilder(
     uint256 chainId,
-    string calldata escrow,
+    string calldata depository,
     address builder
   ) external onlyRole(ADMIN_ROLE) {
-    payloadBuilders[chainId][escrow] = builder;
-    emit PayloadBuilderSet(chainId, escrow, builder);
+    payloadBuilders[chainId][depository] = builder;
+    emit PayloadBuilderSet(chainId, depository, builder);
   }
 
   /**
@@ -238,14 +238,14 @@ contract Allocator is AccessControl {
     SubmitWithdrawRequestParams calldata params
   ) public returns (bytes32 payloadId) {
     // check if the payload builder is set
-    address builder = payloadBuilders[params.chainId][params.escrow];
+    address builder = payloadBuilders[params.chainId][params.depository];
     if (builder == address(0)) {
-      revert NoPayloadBuilder(params.chainId, params.escrow);
+      revert NoPayloadBuilder(params.chainId, params.depository);
     }
 
     bytes memory payload = PayloadBuilder(builder).buildPayload(
       params.chainId,
-      params.escrow,
+      params.depository,
       params.currency,
       params.amount,
       params.receiver,
@@ -254,10 +254,10 @@ contract Allocator is AccessControl {
     payloadId = keccak256(abi.encodePacked(payload, block.timestamp));
     payloads[payloadId] = Payload({params: params, unsignedPayload: payload});
 
-    // Use escrow-specific delay if set, otherwise fall back to global delay
-    uint256 escrowDelay = escrowDelays[params.chainId][params.escrow].delay;
-    uint256 effectiveDelay = escrowDelays[params.chainId][params.escrow].isSet
-      ? escrowDelay
+    // Use depository-specific delay if set, otherwise fall back to global delay
+    uint256 depositoryDelay = depositoryDelays[params.chainId][params.depository].delay;
+    uint256 effectiveDelay = depositoryDelays[params.chainId][params.depository].isSet
+      ? depositoryDelay
       : delay;
 
     payloadTimestamps[payloadId] = block.timestamp + effectiveDelay;
@@ -267,7 +267,7 @@ contract Allocator is AccessControl {
       // if delay is 0, sign the payload immediately
       signWithdrawPayload(
         params.chainId,
-        params.escrow,
+        params.depository,
         payloadId,
         GasSettings(DEFAULT_SIGN_GAS, DEFAULT_CALLBACK_GAS)
       );
@@ -278,7 +278,7 @@ contract Allocator is AccessControl {
   /**
    * @notice triggers the signing of a previously  submitted withdraw request
    * @param chainId chain ID
-   * @param escrow address of the escrow contract
+   * @param depository address of the depository contract
    * @param payloadId hash of the payload to sign
    * @param gasSettings struct containing gas settings for NEAR operations
    * @dev This function is called by the NEAR signer account to sign the payload.
@@ -289,13 +289,13 @@ contract Allocator is AccessControl {
    */
   function signWithdrawPayload(
     uint256 chainId,
-    string memory escrow,
+    string memory depository,
     bytes32 payloadId,
     GasSettings memory gasSettings
   ) public {
-    address builder = payloadBuilders[chainId][escrow];
+    address builder = payloadBuilders[chainId][depository];
     if (builder == address(0)) {
-      revert NoPayloadBuilder(chainId, escrow);
+      revert NoPayloadBuilder(chainId, depository);
     }
 
     // check if the payload is ready to be signed
@@ -313,7 +313,7 @@ contract Allocator is AccessControl {
 
     bytes32[] memory hashesToSign = payloadBuilder.hashesToSign(
       chainId,
-      escrow,
+      depository,
       payload.unsignedPayload
     );
     for (uint256 i = 0; i < hashesToSign.length; i++) {

@@ -16,13 +16,13 @@ yarn hardhat ignition verify chain-1313161555
 yarn hardhat deploy:payload-builder --payload-builder DummyPayloadBuilder
 
 # set dummy payload builder in allocator
-yarn hardhat allocator:set-payload-builder --builder <builder-address> --allocator <allocator-contract-address> --chain-id 1 --escrow <escrow-contract-address> --network aurora-testnet
+yarn hardhat allocator:set-payload-builder --builder <builder-address> --allocator <allocator-contract-address> --chain-id 1 --depository <depository-contract-address> --network aurora-testnet
 
 # grant APPROVED_WITHDRAWER_ROLE to your address
 yarn hardhat allocator:hub-role --allocator <allocator-contract-address>
 
 # submit withdraw request params (thru block explorer)
-yarn hardhat allocator:submit-withdraw --allocator <allocator-address> --chain-id <escrow-chain-id> --escrow <escrow-contract-address>
+yarn hardhat allocator:submit-withdraw --allocator <allocator-address> --chain-id <depository-chain-id> --depository <depository-contract-address>
 
 # sign payload
 yarn hardhat allocator:sign-payload --id <payload-id> --allocator <allocator-address>
@@ -33,7 +33,7 @@ We also have "end to end" tasks which can be used to deploy everything and submi
 For EVM (Ethereum, L2... etc):
 
 ```bash
-yarn run hardhat full:evm --network aurora-testnet --wnear 0x4861825E75ab14553E5aF711EbbE6873d369d146  --chain-id 84532 --escrow 0x9229808f111ff3EAf6826736c74462fece0f6583
+yarn run hardhat full:evm --network aurora-testnet --wnear 0x4861825E75ab14553E5aF711EbbE6873d369d146  --chain-id 84532 --depository 0x9229808f111ff3EAf6826736c74462fece0f6583
 ```
 
 For Bitcoin. You first need to deploy the EVM version... because it provides the private key that needs to be supplied to the Bitcoin payload builder at deployment time (replace the last argument). Also, this script requires that you fund the Bitcoin address first (as the payload is construted from UTXO).

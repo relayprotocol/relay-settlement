@@ -6,14 +6,17 @@ task('allocator:sign-payload', 'Sign payload on allocator')
   .addParam('allocator', 'The address of the allocator contract')
   .addParam('payloadId', 'The payloadId to use')
   .addParam('chainId', 'The chainId on which the withdrawal will be made')
-  .addParam('escrow', 'The escrow contract address from which to withdraw')
+  .addParam(
+    'depository',
+    'The depository contract address from which to withdraw'
+  )
   .addOptionalParam('wnear', 'The address of the wNEAR contract')
   .setAction(
     async (
       {
         allocator: allocatorAddress,
         payloadId,
-        escrow,
+        depository,
         chainId,
         wnear: wNEARAddress,
       },
@@ -43,7 +46,7 @@ task('allocator:sign-payload', 'Sign payload on allocator')
       const txHash = await allocator.write.signWithdrawPayload(
         [
           chainId,
-          escrow,
+          depository,
           payloadId,
           {
             callbackGas: 30_000_000_000_000n,

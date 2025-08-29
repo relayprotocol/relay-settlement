@@ -3,7 +3,7 @@ import { expect } from 'chai'
 import hre from 'hardhat'
 import { encodeAbiParameters } from 'viem'
 import {
-  decodeEscrowRequest,
+  decodeDepositoryRequest,
   normalizeType,
   hashRequest,
 } from '../../../lib/sui'
@@ -11,12 +11,12 @@ import { Hex } from 'viem'
 
 describe('Allocator SuiPayloadBuilder', function () {
   async function deployAllocator() {
-    const [escrow, receiver] = await hre.viem.getWalletClients()
+    const [depository, receiver] = await hre.viem.getWalletClients()
     const publicClient = await hre.viem.getPublicClient()
     const payloadBuilder = await hre.viem.deployContract('SuiPayloadBuilder')
 
     return {
-      escrow,
+      depository,
       payloadBuilder,
       publicClient,
       receiver,
@@ -25,7 +25,7 @@ describe('Allocator SuiPayloadBuilder', function () {
 
   describe('buildPayload()', function () {
     it('should build a payload when using SUI (native currency)', async () => {
-      const { payloadBuilder, escrow } = await loadFixture(deployAllocator)
+      const { payloadBuilder, depository } = await loadFixture(deployAllocator)
 
       // Create a transfer request for SUI
       const transferRequest = {
@@ -49,7 +49,7 @@ describe('Allocator SuiPayloadBuilder', function () {
 
       const payload = await payloadBuilder.read.buildPayload([
         1n, // chainId (unused)
-        escrow.account.address, // escrow (unused)
+        depository.account.address, // depository (unused)
         transferRequest.coin_type.name,
         transferRequest.amount,
         transferRequest.recipient,
@@ -60,7 +60,7 @@ describe('Allocator SuiPayloadBuilder', function () {
     })
 
     it('should build a payload when using a custom coin', async () => {
-      const { payloadBuilder, escrow } = await loadFixture(deployAllocator)
+      const { payloadBuilder, depository } = await loadFixture(deployAllocator)
 
       // Define a custom coin type (similar to USDC in the Sui tests)
       const customCoin =
@@ -88,7 +88,7 @@ describe('Allocator SuiPayloadBuilder', function () {
 
       const payload = await payloadBuilder.read.buildPayload([
         1n, // chainId (unused)
-        escrow.account.address, // escrow (unused)
+        depository.account.address, // depository (unused)
         transferRequest.coin_type.name,
         transferRequest.amount,
         transferRequest.recipient,
@@ -104,7 +104,7 @@ describe('Allocator SuiPayloadBuilder', function () {
 
   describe('hashesToSign()', function () {
     it('should hash a payload correctly using SHA-256', async () => {
-      const { payloadBuilder, escrow } = await loadFixture(deployAllocator)
+      const { payloadBuilder, depository } = await loadFixture(deployAllocator)
 
       // Create a sample Sui transfer request
       const transferRequest = {
@@ -122,7 +122,7 @@ describe('Allocator SuiPayloadBuilder', function () {
 
       const hash = await payloadBuilder.read.hashesToSign([
         1n, // chainId (unused)
-        escrow.account.address, // escrow (unused)
+        depository.account.address, // depository (unused)
         bytes as Hex,
       ])
 
@@ -137,7 +137,7 @@ describe('Allocator SuiPayloadBuilder', function () {
     })
   })
 
-  describe('decodeEscrowRequest', function () {
+  describe('decodeDepositoryRequest', function () {
     const amount = 1n
     const expiration = 1749096009n
     const nonce = 1749095710252n
@@ -145,7 +145,7 @@ describe('Allocator SuiPayloadBuilder', function () {
       '0x622f2b76c7331bbe04365995bcb287e0648cd4631455a25e62f54c76e5e28143'
 
     it('should correctly decode a native SUI transfer request', async () => {
-      const { payloadBuilder, escrow } = await loadFixture(deployAllocator)
+      const { payloadBuilder, depository } = await loadFixture(deployAllocator)
 
       // Create a sample Sui transfer request
       const transferRequest = {
@@ -162,7 +162,7 @@ describe('Allocator SuiPayloadBuilder', function () {
       // Encode the request using the contract
       const payload = await payloadBuilder.read.buildPayload([
         1n, // chainId (unused)
-        escrow.account.address, // escrow (unused)
+        depository.account.address, // depository (unused)
         transferRequest.coin_type.name,
         transferRequest.amount,
         transferRequest.recipient,
@@ -173,7 +173,7 @@ describe('Allocator SuiPayloadBuilder', function () {
       ])
 
       // Decode the payload using our utility function
-      const decodedRequest = decodeEscrowRequest(payload)
+      const decodedRequest = decodeDepositoryRequest(payload)
 
       // Compare the decoded values with the original request
       expect(decodedRequest.recipient).to.equal(transferRequest.recipient)
@@ -188,7 +188,7 @@ describe('Allocator SuiPayloadBuilder', function () {
     })
 
     it('should correctly decode a custom coin transfer request', async () => {
-      const { payloadBuilder, escrow } = await loadFixture(deployAllocator)
+      const { payloadBuilder, depository } = await loadFixture(deployAllocator)
 
       // Define a custom coin type (similar to USDC in the Sui tests)
       const customCoin =
@@ -209,7 +209,7 @@ describe('Allocator SuiPayloadBuilder', function () {
       // Encode the request using the contract
       const payload = await payloadBuilder.read.buildPayload([
         1n, // chainId (unused)
-        escrow.account.address, // escrow (unused)
+        depository.account.address, // depository (unused)
         transferRequest.coin_type.name,
         transferRequest.amount,
         transferRequest.recipient,
@@ -220,7 +220,7 @@ describe('Allocator SuiPayloadBuilder', function () {
       ])
 
       // Decode the payload using our utility function
-      const decodedRequest = decodeEscrowRequest(payload)
+      const decodedRequest = decodeDepositoryRequest(payload)
 
       // Compare the decoded values with the original request
       expect(decodedRequest.recipient).to.equal(transferRequest.recipient)

@@ -80,7 +80,7 @@ task('bitcoin:send', 'Send Bitcoin to an address').setAction(
 
     const payload = await payloadBuilder.read.buildPayload([
       1n, // chainId
-      zeroAddress, // escrow
+      zeroAddress, // depository
       '', // currency (empty string, not zeroAddress)
       amount, // amount
       receiverScript, // receiver

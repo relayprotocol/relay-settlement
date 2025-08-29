@@ -2,15 +2,15 @@ import { BorshCoder } from '@coral-xyz/anchor'
 import bs58 from 'bs58'
 import { sha256 } from 'js-sha256'
 
-export type RelayEscrow = {
+export type RelayDepository = {
   version: '0.1.0'
-  name: 'relay_escrow'
+  name: 'relay_depository'
   instructions: [
     {
       name: 'initialize'
       accounts: [
         {
-          name: 'relayEscrow'
+          name: 'relayDepository'
           isMut: true
           isSigner: false
         },
@@ -41,7 +41,7 @@ export type RelayEscrow = {
       name: 'setAllocator'
       accounts: [
         {
-          name: 'relayEscrow'
+          name: 'relayDepository'
           isMut: true
           isSigner: false
         },
@@ -62,7 +62,7 @@ export type RelayEscrow = {
       name: 'depositNative'
       accounts: [
         {
-          name: 'relayEscrow'
+          name: 'relayDepository'
           isMut: false
           isSigner: false
         },
@@ -104,7 +104,7 @@ export type RelayEscrow = {
       name: 'depositToken'
       accounts: [
         {
-          name: 'relayEscrow'
+          name: 'relayDepository'
           isMut: false
           isSigner: false
         },
@@ -171,7 +171,7 @@ export type RelayEscrow = {
       name: 'executeTransfer'
       accounts: [
         {
-          name: 'relayEscrow'
+          name: 'relayDepository'
           isMut: false
           isSigner: false
         },
@@ -246,7 +246,7 @@ export type RelayEscrow = {
   ]
   accounts: [
     {
-      name: 'relayEscrow'
+      name: 'relayDepository'
       type: {
         kind: 'struct'
         fields: [
@@ -407,10 +407,10 @@ export type RelayEscrow = {
   ]
 }
 
-export const IDL: RelayEscrow = {
+export const IDL: RelayDepository = {
   accounts: [
     {
-      name: 'relayEscrow',
+      name: 'relayDepository',
       type: {
         fields: [
           {
@@ -543,7 +543,7 @@ export const IDL: RelayEscrow = {
         {
           isMut: true,
           isSigner: false,
-          name: 'relayEscrow',
+          name: 'relayDepository',
         },
         {
           isMut: true,
@@ -574,7 +574,7 @@ export const IDL: RelayEscrow = {
         {
           isMut: true,
           isSigner: false,
-          name: 'relayEscrow',
+          name: 'relayDepository',
         },
         {
           isMut: false,
@@ -595,7 +595,7 @@ export const IDL: RelayEscrow = {
         {
           isMut: false,
           isSigner: false,
-          name: 'relayEscrow',
+          name: 'relayDepository',
         },
         {
           isMut: true,
@@ -637,7 +637,7 @@ export const IDL: RelayEscrow = {
         {
           isMut: false,
           isSigner: false,
-          name: 'relayEscrow',
+          name: 'relayDepository',
         },
         {
           isMut: false,
@@ -704,7 +704,7 @@ export const IDL: RelayEscrow = {
         {
           isMut: false,
           isSigner: false,
-          name: 'relayEscrow',
+          name: 'relayDepository',
         },
         {
           isMut: true,
@@ -776,7 +776,7 @@ export const IDL: RelayEscrow = {
       name: 'executeTransfer',
     },
   ],
-  name: 'relay_escrow',
+  name: 'relay_depository',
   types: [
     {
       name: 'TransferRequest',
@@ -823,7 +823,7 @@ export const hashRequest = (request: any) => {
   }
 }
 
-export const decodeEscrowRequest = (payload: string) => {
+export const decodeDepositoryRequest = (payload: string) => {
   if (payload.startsWith('0x')) {
     payload = payload.substring(2)
   }

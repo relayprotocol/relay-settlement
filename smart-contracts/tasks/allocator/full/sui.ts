@@ -4,7 +4,7 @@ import nacl from 'tweetnacl'
 import { fromHex, parseEventLogs, zeroAddress } from 'viem'
 import { wait } from '../../../lib/wait'
 import { derivePublicKey } from '../../../lib/near'
-import { normalizeType, decodeEscrowRequest } from '../../../lib/sui'
+import { normalizeType, decodeDepositoryRequest } from '../../../lib/sui'
 import { checkAndApproveWNEAR } from '../../../lib/aurora'
 
 const DEFAULT_DELAY = '1'
@@ -15,10 +15,10 @@ task(
 )
   .addParam('owner', 'The address of the owner')
   .addOptionalParam('chainId', 'The chain ID on which we withdraw')
-  .addOptionalParam('escrow', 'The address of the escrow contract')
+  .addOptionalParam('depository', 'The address of the depository contract')
   .addOptionalParam('signer', 'The address of the signer')
   .addOptionalParam('wnear', 'The address of the wNEAR token')
-  .addOptionalParam('amount', 'The amount to withdraw from the escrow', '1')
+  .addOptionalParam('amount', 'The amount to withdraw from the depository', '1')
   .addOptionalParam(
     'recipient',
     'The address that will receive the withdrawn amount',
@@ -26,7 +26,7 @@ task(
   )
   .addOptionalParam(
     'currency',
-    'The currency to withdraw from the escrow',
+    'The currency to withdraw from the depository',
     '0x2::sui::SUI'
   )
   .addOptionalParam('delay', 'The delay in seconds', DEFAULT_DELAY)
@@ -38,7 +38,7 @@ task(
         wnear,
         delay,
         chainId = 1115111n,
-        escrow: escrowAddress,
+        depository: depositoryAddress,
         amount,
         currency,
         recipient,
@@ -61,7 +61,7 @@ task(
       const allocator = await viem.getContractAt('Allocator', allocatorAddress)
       let payloadBuilderAddress = await allocator.read.payloadBuilders([
         chainId,
-        escrowAddress,
+        depositoryAddress,
       ])
       if (payloadBuilderAddress === zeroAddress) {
         console.log('PayloadBuilder not set, deploying a new one...')
@@ -72,7 +72,7 @@ task(
 
         const tx = await allocator.write.setPayloadBuilder([
           chainId,
-          escrowAddress,
+          depositoryAddress,
           payloadBuilderAddress,
         ])
         await publicClient.waitForTransactionReceipt({
@@ -101,7 +101,7 @@ task(
           currency === zeroAddress
             ? normalizeType('0x2::sui::SUI')
             : normalizeType(currency),
-        escrow: escrowAddress,
+        depository: depositoryAddress,
         receiver: recipient,
         wnear,
       })
@@ -110,7 +110,7 @@ task(
       const payload = await allocator.read.unsignedPayloads([payloadId])
 
       // decode payload
-      const message = await decodeEscrowRequest(payload)
+      const message = await decodeDepositoryRequest(payload)
       console.log(message)
 
       // Trigger a signature
@@ -119,7 +119,7 @@ task(
       await run('allocator:sign-payload', {
         allocator: allocatorAddress,
         chainId: chainId.toString(),
-        escrow: escrowAddress,
+        depository: depositoryAddress,
         payloadId,
         wnear,
       })
@@ -131,7 +131,7 @@ task(
       )
       const payloadHashes = await payloadBuilder.read.hashesToSign([
         chainId,
-        escrowAddress,
+        depositoryAddress,
         payload,
       ])
 

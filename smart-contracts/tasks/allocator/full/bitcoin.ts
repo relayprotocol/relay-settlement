@@ -22,10 +22,14 @@ task(
   'Deploy the Allocator contract, initializes it, sets a payload builder, submits a withdraw request, triggers a signature, and verifies the payload'
 )
   .addOptionalParam('owner', 'The address of the owner')
-  .addOptionalParam('escrow', 'The address of the escrow EOA')
+  .addOptionalParam('depository', 'The address of the depository EOA')
   .addOptionalParam('signer', 'The address of the signer')
   .addOptionalParam('wnear', 'The address of the wNEAR token, used to pay fees')
-  .addOptionalParam('amount', 'The amount to withdraw from the escrow', '1000')
+  .addOptionalParam(
+    'amount',
+    'The amount to withdraw from the depository',
+    '1000'
+  )
   .addParam(
     'publicKey',
     'The public key of the signer (ethereum format: 0x...)'
@@ -60,7 +64,7 @@ task(
 
       let bitcoinPayloadBuilderAddress = await allocator.read.payloadBuilders([
         bitcoinChainId,
-        zeroAddress, // No escrow contract for Bitcoin
+        zeroAddress, // No depository contract for Bitcoin
       ])
       if (bitcoinPayloadBuilderAddress === zeroAddress) {
         console.log('Bitcoin PayloadBuilder not set, deploying a new one...')
@@ -83,19 +87,19 @@ task(
       }
 
       // Let's now submit a withdraw request to the Bitcoin PayloadBuilder
-      const escrowAddress = bitcoinAddressfromHexPublicKey(publicKey)
+      const depositoryAddress = bitcoinAddressfromHexPublicKey(publicKey)
 
-      const btcBalance = await getBalance(escrowAddress)
+      const btcBalance = await getBalance(depositoryAddress)
       console.log(
-        `BTC Balance (${escrowAddress}): ${btcBalance.btc} BTC, ${btcBalance.satoshis} satoshis`
+        `BTC Balance (${depositoryAddress}): ${btcBalance.btc} BTC, ${btcBalance.satoshis} satoshis`
       )
 
       const feeRate = await estimateFeeRate()
-      const utxos = await fetchUtxo(escrowAddress!)
+      const utxos = await fetchUtxo(depositoryAddress!)
 
       if (utxos.length === 0) {
         throw new Error(
-          `No UTXOs found for address ${escrowAddress}. Please fund the address with some BTC first!`
+          `No UTXOs found for address ${depositoryAddress}. Please fund the address with some BTC first!`
         )
       }
 
@@ -124,7 +128,7 @@ task(
         chainId: bitcoinChainId.toString(),
         currency: zeroAddress,
         data: payloadData,
-        escrow: zeroAddress,
+        depository: zeroAddress,
         receiver: receiverScript,
         wnear,
       })
@@ -138,7 +142,7 @@ task(
       await run('allocator:sign-payload', {
         allocator: allocatorAddress,
         chainId: bitcoinChainId.toString(),
-        escrow: zeroAddress,
+        depository: zeroAddress,
         payloadId,
         wnear,
       })
@@ -150,7 +154,7 @@ task(
       )
       const payloadHashes = await payloadBuilder.read.hashesToSign([
         bitcoinChainId,
-        zeroAddress, // No escrow contract for Bitcoin
+        zeroAddress, // No depository contract for Bitcoin
         payload,
       ])
 

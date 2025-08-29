@@ -6,7 +6,7 @@ import {PayloadBuilder} from "../Allocator.sol";
 contract DummyPayloadBuilder is PayloadBuilder {
   function buildPayload(
     uint256 /** chainId */,
-    string calldata /* escrow */,
+    string calldata /* depository */,
     string calldata /* currency */,
     uint256 /* amount */,
     string calldata /* receiver */,
@@ -17,7 +17,7 @@ contract DummyPayloadBuilder is PayloadBuilder {
 
   function hashesToSign(
     uint256 /** chainId */,
-    string calldata /* escrow */,
+    string calldata /* depository */,
     bytes calldata payload
   ) external pure override returns (bytes32[] memory hashes) {
     hashes = new bytes32[](1);

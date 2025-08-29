@@ -20,13 +20,13 @@ task(
 )
   .addOptionalParam('owner', 'The address of the owner')
   .addParam('chainId', 'The chain ID on which we withdraw')
-  .addParam('escrow', 'The address of the escrow contract')
+  .addParam('depository', 'The address of the depository contract')
   .addOptionalParam('signer', 'The address of the signer')
   .addOptionalParam('wnear', 'The address of the wNEAR token')
-  .addOptionalParam('amount', 'The amount to withdraw from the escrow', '1')
+  .addOptionalParam('amount', 'The amount to withdraw from the depository', '1')
   .addOptionalParam(
     'currency',
-    'The currency to withdraw from the escrow',
+    'The currency to withdraw from the depository',
     zeroAddress
   )
   .setAction(
@@ -36,7 +36,7 @@ task(
         signer,
         wnear,
         chainId,
-        escrow: escrowAddress,
+        depository: depositoryAddress,
         amount,
         currency,
       },
@@ -58,7 +58,7 @@ task(
 
       let payloadBuilderAddress = await allocator.read.payloadBuilders([
         chainId,
-        escrowAddress,
+        depositoryAddress,
       ])
 
       if (payloadBuilderAddress === zeroAddress) {
@@ -70,7 +70,7 @@ task(
 
         const tx = await allocator.write.setPayloadBuilder([
           chainId,
-          escrowAddress,
+          depositoryAddress,
           payloadBuilderAddress,
         ])
         await publicClient.waitForTransactionReceipt({
@@ -90,7 +90,7 @@ task(
         amount,
         chainId,
         currency,
-        escrow: escrowAddress,
+        depository: depositoryAddress,
         wnear,
       })
 
@@ -104,7 +104,7 @@ task(
       await run('allocator:sign-payload', {
         allocator: allocatorAddress,
         chainId,
-        escrow: escrowAddress,
+        depository: depositoryAddress,
         payloadId,
         wnear,
       })
@@ -117,7 +117,7 @@ task(
       )
       const payloadHashes = await payloadBuilder.read.hashesToSign([
         chainId,
-        escrowAddress,
+        depositoryAddress,
         payload,
       ])
 
@@ -180,7 +180,7 @@ task(
         domain: {
           chainId: Number(chainId),
           name: await payloadBuilder.read.SIGNING_DOMAIN(),
-          verifyingContract: escrowAddress,
+          verifyingContract: depositoryAddress,
           version: await payloadBuilder.read.SIGNATURE_VERSION(),
         },
         message: request,
@@ -195,14 +195,14 @@ task(
         )
       }
       console.log(
-        '🔍 Recovered address (make sure it is the allocator on the escrow contract):',
+        '🔍 Recovered address (make sure it is the allocator on the depository contract):',
         signerAddress
       )
       console.log(
         '🔍 Recovered public key which can be used to compute addresses on all chains with the same curve:',
         allocatorPublicKey
       )
-      console.log('📡 Transaction data to submit to the Escrow contract:')
+      console.log('📡 Transaction data to submit to the Depository contract:')
       console.log({
         payload: safeStringify(request),
         signature,

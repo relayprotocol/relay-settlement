@@ -7,18 +7,18 @@ import hre from 'hardhat'
 import { encodeAbiParameters } from 'viem'
 import {
   base58ToBytes32,
-  decodeEscrowRequest,
+  decodeDepositoryRequest,
   hashRequest,
 } from '../../../lib/solana'
 
 describe('Allocator SolanaPayloadBuilder', function () {
   async function deployAllocator() {
-    const [escrow, receiver] = await hre.viem.getWalletClients()
+    const [depository, receiver] = await hre.viem.getWalletClients()
     const publicClient = await hre.viem.getPublicClient()
     const payloadBuilder = await hre.viem.deployContract('SolanaPayloadBuilder')
 
     return {
-      escrow,
+      depository,
       payloadBuilder,
       publicClient,
       receiver,
@@ -27,7 +27,7 @@ describe('Allocator SolanaPayloadBuilder', function () {
 
   describe('buildPayload()', function () {
     it('should build a payload when using SOL (native currency)', async () => {
-      const { payloadBuilder, escrow } = await loadFixture(deployAllocator)
+      const { payloadBuilder, depository } = await loadFixture(deployAllocator)
       const transferRequest = {
         amount: new BN(100000000),
         expiration: new BN(1749096009),
@@ -56,7 +56,7 @@ describe('Allocator SolanaPayloadBuilder', function () {
 
       const payload = await payloadBuilder.read.buildPayload([
         1n, // chainId (unused)
-        escrow.account.address, // escrow (unused)
+        depository.account.address, // depository (unused)
         '', // currency (empty string for SOL)
         amount,
         receiverHex,
@@ -67,7 +67,7 @@ describe('Allocator SolanaPayloadBuilder', function () {
     })
 
     it('should build a payload when using an SPL token', async () => {
-      const { payloadBuilder, escrow } = await loadFixture(deployAllocator)
+      const { payloadBuilder, depository } = await loadFixture(deployAllocator)
       const transferRequest = {
         amount: new BN(100000000),
         expiration: new BN(1749096049),
@@ -96,7 +96,7 @@ describe('Allocator SolanaPayloadBuilder', function () {
 
       const payload = await payloadBuilder.read.buildPayload([
         1n,
-        escrow.account.address,
+        depository.account.address,
         tokenHex,
         amount,
         receiverHex,
@@ -112,7 +112,7 @@ describe('Allocator SolanaPayloadBuilder', function () {
 
   describe('hashesToSign()', function () {
     it('should hash a payload correctly using SHA-256', async () => {
-      const { payloadBuilder, escrow } = await loadFixture(deployAllocator)
+      const { payloadBuilder, depository } = await loadFixture(deployAllocator)
 
       // Use the new test data payload
       const payload =
@@ -120,7 +120,7 @@ describe('Allocator SolanaPayloadBuilder', function () {
 
       const hash = await payloadBuilder.read.hashesToSign([
         1n, // chainId (unused)
-        escrow.account.address, // escrow (unused)
+        depository.account.address, // depository (unused)
         payload,
       ])
 
@@ -131,21 +131,21 @@ describe('Allocator SolanaPayloadBuilder', function () {
     })
   })
 
-  describe('decodeEscrowRequest', function () {
+  describe('decodeDepositoryRequest', function () {
     const amount = 1n
     const expiration = 1749096009n
     const nonce = 1749095710252n
     const recipient = 'ETZgVwqLnzZFQfK2YB1rDLratt4cCGwNHcV8jJokrxmm'
 
     async function deployAllocator() {
-      const [escrow, receiver] = await hre.viem.getWalletClients()
+      const [depository, receiver] = await hre.viem.getWalletClients()
       const publicClient = await hre.viem.getPublicClient()
       const payloadBuilder = await hre.viem.deployContract(
         'SolanaPayloadBuilder'
       )
 
       return {
-        escrow,
+        depository,
         payloadBuilder,
         publicClient,
         receiver,
@@ -153,7 +153,7 @@ describe('Allocator SolanaPayloadBuilder', function () {
     }
 
     it('should correctly decode a native SOL transfer request', async () => {
-      const { payloadBuilder, escrow } = await loadFixture(deployAllocator)
+      const { payloadBuilder, depository } = await loadFixture(deployAllocator)
 
       // Create a test transfer request
       const transferRequest = {
@@ -167,7 +167,7 @@ describe('Allocator SolanaPayloadBuilder', function () {
       // Encode the request using the contract
       const payload = await payloadBuilder.read.buildPayload([
         1n, // chainId (unused)
-        escrow.account.address, // escrow (unused)
+        depository.account.address, // depository (unused)
         '', // currency (empty string for SOL)
         amount, // amount
         base58ToBytes32(recipient), // receiver
@@ -178,7 +178,7 @@ describe('Allocator SolanaPayloadBuilder', function () {
       ])
 
       // Decode the payload using our utility function
-      const decodedRequest = decodeEscrowRequest(payload)
+      const decodedRequest = decodeDepositoryRequest(payload)
 
       // Compare the decoded values with the original request
       expect(decodedRequest.recipient.toBase58()).to.equal(
@@ -197,7 +197,7 @@ describe('Allocator SolanaPayloadBuilder', function () {
     })
 
     it('should correctly decode an SPL token transfer request', async () => {
-      const { payloadBuilder, escrow } = await loadFixture(deployAllocator)
+      const { payloadBuilder, depository } = await loadFixture(deployAllocator)
 
       const token = '5nUXHYLUrYv9PmeN4RKZ1iwUFBGWmoqMTajEiKNsXRdE'
       // Create a test transfer request with an SPL token
@@ -212,7 +212,7 @@ describe('Allocator SolanaPayloadBuilder', function () {
       // Encode the request using the contract
       const payload = await payloadBuilder.read.buildPayload([
         1n, // chainId (unused)
-        escrow.account.address, // escrow (unused)
+        depository.account.address, // depository (unused)
         base58ToBytes32(token), // currency
         amount, // amount
         base58ToBytes32(recipient), // receiver
@@ -223,7 +223,7 @@ describe('Allocator SolanaPayloadBuilder', function () {
       ])
 
       // Decode the payload using our utility function
-      const decodedRequest = decodeEscrowRequest(payload)
+      const decodedRequest = decodeDepositoryRequest(payload)
 
       // Compare the decoded values with the original request
       expect(decodedRequest.recipient.toString()).to.equal(recipient)

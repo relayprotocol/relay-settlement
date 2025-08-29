@@ -39,7 +39,7 @@ export function hashRequest(request) {
 }
 
 // Decode a BCS encoded payload
-export function decodeEscrowRequest(payload) {
+export function decodeDepositoryRequest(payload) {
   try {
     // Remove 0x prefix if present
     const hex = payload.startsWith('0x') ? payload.substring(2) : payload

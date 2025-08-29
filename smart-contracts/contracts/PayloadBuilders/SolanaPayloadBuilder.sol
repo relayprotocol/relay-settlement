@@ -7,7 +7,7 @@ import {Utils} from "../Utils.sol";
 contract SolanaPayloadBuilder is PayloadBuilder {
   function buildPayload(
     uint256 /* chainId */,
-    string calldata /* escrow */,
+    string calldata /* depository */,
     string memory currency,
     uint256 amount,
     string memory receiver,
@@ -50,7 +50,7 @@ contract SolanaPayloadBuilder is PayloadBuilder {
 
   function hashesToSign(
     uint256 /* chainId */,
-    string calldata /* escrow */,
+    string calldata /* depository */,
     bytes calldata payload
   ) external pure override returns (bytes32[] memory hashes) {
     hashes = new bytes32[](1);

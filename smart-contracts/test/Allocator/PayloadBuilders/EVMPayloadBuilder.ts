@@ -32,7 +32,7 @@ const CALL_REQUEST_ABI = [
 
 describe('Allocator EVMPayloadBuilder', function () {
   async function deployAllocator() {
-    const [escrow, receiver] = await hre.viem.getWalletClients()
+    const [depository, receiver] = await hre.viem.getWalletClients()
 
     const publicClient = await hre.viem.getPublicClient()
 
@@ -40,7 +40,7 @@ describe('Allocator EVMPayloadBuilder', function () {
     const myToken = await hre.viem.deployContract('MyToken', [])
 
     return {
-      escrow,
+      depository,
       myToken,
       payloadBuilder,
       publicClient,
@@ -50,13 +50,13 @@ describe('Allocator EVMPayloadBuilder', function () {
 
   describe('buildPayload()', function () {
     it('should build a payload when using the native currency', async () => {
-      const { payloadBuilder, escrow, receiver, publicClient } =
+      const { payloadBuilder, depository, receiver, publicClient } =
         await loadFixture(deployAllocator)
 
       const amount = parseUnits('0.1', 18)
       const payload = await payloadBuilder.read.buildPayload([
         1n, // chainId
-        escrow.account.address, // escrow
+        depository.account.address, // depository
         zeroAddress, // currency
         amount, // amount
         receiver.account.address, // receiver
@@ -77,7 +77,7 @@ describe('Allocator EVMPayloadBuilder', function () {
       expect(call.value).to.equal(amount)
       expect(call.allowFailure).to.equal(false)
 
-      await escrow.sendTransaction({
+      await depository.sendTransaction({
         data: call.data,
         to: call.to,
         value: call.value,
@@ -90,13 +90,13 @@ describe('Allocator EVMPayloadBuilder', function () {
     })
 
     it('should build a payload when using an ERC20 token', async () => {
-      const { payloadBuilder, escrow, receiver, myToken } =
+      const { payloadBuilder, depository, receiver, myToken } =
         await loadFixture(deployAllocator)
 
       const amount = parseUnits('1337', 18)
       const payload = await payloadBuilder.read.buildPayload([
         1n, // chainId
-        escrow.account.address, // escrow
+        depository.account.address, // depository
         myToken.address, // currency
         amount, // amount
         receiver.account.address, // receiver
@@ -118,7 +118,7 @@ describe('Allocator EVMPayloadBuilder', function () {
       expect(call.value).to.equal(0n)
       expect(call.allowFailure).to.equal(false)
 
-      await escrow.sendTransaction({
+      await depository.sendTransaction({
         data: call.data,
         to: call.to,
         value: call.value,
@@ -133,14 +133,14 @@ describe('Allocator EVMPayloadBuilder', function () {
 
   describe('hashesToSign()', function () {
     it('should hash a payload correctly using EIP712', async () => {
-      const { payloadBuilder, escrow, receiver } =
+      const { payloadBuilder, depository, receiver } =
         await loadFixture(deployAllocator)
 
       const amount = parseUnits('0.1', 18)
       const chainId = 1n // Mainnet chain ID
       const payload = await payloadBuilder.read.buildPayload([
         chainId, // chainId
-        escrow.account.address, // escrow
+        depository.account.address, // depository
         zeroAddress, // currency
         amount, // amount
         receiver.account.address, // receiver
@@ -150,7 +150,7 @@ describe('Allocator EVMPayloadBuilder', function () {
       // Let's now check that the hash corresponds to what the EVM would generate when asking the user to sign the payload.
       const hashes = await payloadBuilder.read.hashesToSign([
         chainId, // chainId
-        escrow.account.address, // escrow
+        depository.account.address, // depository
         payload,
       ])
       expect(hashes).to.be.a('array')
@@ -183,8 +183,8 @@ describe('Allocator EVMPayloadBuilder', function () {
       const reconstructedHash = hashTypedData({
         domain: {
           chainId: Number(chainId), // Cast to number for hashTypedData
-          name: 'RelayEscrow',
-          verifyingContract: escrow.account.address,
+          name: 'RelayDepository',
+          verifyingContract: depository.account.address,
           version: '1',
         },
         message,

@@ -9,7 +9,7 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
     'The hub contract address which will burn the tokens to be withdrawn'
   )
   .addParam('sender', 'The sender / initiator of the withraw request')
-  .addParam('escrow', 'The escrow contract on destination chain')
+  .addParam('depository', 'The depository contract on destination chain')
   .addOptionalParam('currency', 'default to zero', zeroAddress)
   .addOptionalParam('amount', 'Amount to withdraw', '1')
   .addOptionalParam('receiver', 'account to receive tokens (default to signer)')
@@ -19,7 +19,7 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
       {
         allocator: allocatorAddress,
         chainId,
-        escrow,
+        depository,
         hub,
         sender,
         currency,
@@ -40,7 +40,7 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
           chainId,
           currency,
           data,
-          escrow,
+          depository,
           hub,
           receiver: receiver || signer.account.address,
           sender,
@@ -51,7 +51,7 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
         chainId,
         currency,
         data,
-        escrow,
+        depository,
         receiver: receiver || signer.account.address,
       })
       const txHash = await allocator.write.submitWithdrawRequest(
