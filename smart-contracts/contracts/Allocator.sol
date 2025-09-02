@@ -53,7 +53,11 @@ contract Allocator is AccessControl {
   using Strings for uint256;
 
   event DelayChanged(uint256 delay);
-  event DepositoryDelayChanged(uint256 chainId, string depository, uint256 delay);
+  event DepositoryDelayChanged(
+    uint256 chainId,
+    string depository,
+    uint256 delay
+  );
   event HubSet(address hub);
 
   // roles
@@ -255,14 +259,17 @@ contract Allocator is AccessControl {
     payloads[payloadId] = Payload({params: params, unsignedPayload: payload});
 
     // Use depository-specific delay if set, otherwise fall back to global delay
-    uint256 depositoryDelay = depositoryDelays[params.chainId][params.depository].delay;
-    uint256 effectiveDelay = depositoryDelays[params.chainId][params.depository].isSet
+    uint256 depositoryDelay = depositoryDelays[params.chainId][
+      params.depository
+    ].delay;
+    uint256 effectiveDelay = depositoryDelays[params.chainId][params.depository]
+      .isSet
       ? depositoryDelay
       : delay;
 
     payloadTimestamps[payloadId] = block.timestamp + effectiveDelay;
 
-    emit PayloadBuilt(payloadId, payload, block.timestamp);
+    emit PayloadBuilt(payloadId, payload, payloadTimestamps[payloadId]);
     if (effectiveDelay == 0) {
       // if delay is 0, sign the payload immediately
       signWithdrawPayload(

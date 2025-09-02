@@ -4,6 +4,7 @@ import hre from 'hardhat'
 import {
   decodeEventLog,
   keccak256,
+  toHex,
   TransactionReceipt,
   zeroAddress,
 } from 'viem'
@@ -131,7 +132,18 @@ describe('Allocator submitWithdrawRequest', function () {
         'PayloadBuilt',
         allocator.abi
       )
+      const [block, defaultDelay, [initialDelay, initialIsSet]] =
+        await Promise.all([
+          publicClient.getBlock(),
+          allocator.read.delay(),
+          allocator.read.depositoryDelays([chainId, depository]),
+        ])
       expect(payloadBuiltEvent).to.not.equal(undefined)
+      expect(payloadBuiltEvent.args.payloadId).to.not.equal(undefined)
+      expect(payloadBuiltEvent.args.payload).to.equal(toHex('dummy payload'))
+      expect(payloadBuiltEvent.args.timestamp).to.equal(
+        block.timestamp + (initialIsSet ? initialDelay : defaultDelay)
+      )
     })
 
     it('should store the unsigned payload', async () => {
