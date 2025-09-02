@@ -1,8 +1,6 @@
 import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
 import { expect } from 'chai'
 import { DEFAULT_DELAY, deployAllocator } from '../helpers/deployAllocator'
-import hre from 'hardhat'
-import { encodeFunctionData } from 'viem'
 
 describe('Allocator setDelay', function () {
   describe('setDelay()', function () {
@@ -14,7 +12,7 @@ describe('Allocator setDelay', function () {
         allocator.write.setDelay([1000n], {
           account: attacker.account,
         })
-      ).to.be.rejectedWith('AccessControlUnauthorizedAccount')
+      ).to.be.rejectedWith('OwnableUnauthorizedAccount')
     })
     it('should let the owner set the delay', async function () {
       const { allocator, owner, publicClient } =
@@ -167,6 +165,20 @@ describe('Allocator setDelay', function () {
       ])
       expect(depositoryDelay).to.equal(zeroDelay)
       expect(isSet).to.equal(true)
+    })
+
+    it('should revert when an attacker tries to set the delay', async function () {
+      const { allocator, otherAccounts } = await loadFixture(deployAllocator)
+      const attacker = otherAccounts[0]
+      const chainId = 1n
+      const depository = 'depository1'
+      const zeroDelay = 0n
+
+      await expect(
+        allocator.write.setDepositoryDelay([chainId, depository, zeroDelay], {
+          account: attacker.account,
+        })
+      ).to.be.rejectedWith('OwnableUnauthorizedAccount')
     })
   })
 })

@@ -11,6 +11,19 @@ describe('Allocator', function () {
         await allocator.read.owner()
       )
     })
+    it('should allow the owner to transfer ownership', async function () {
+      const { owner, otherAccounts, allocator } =
+        await loadFixture(deployAllocator)
+      // Transfer ownership to otherAccount
+      await allocator.write.transferOwnership(
+        [otherAccounts[3].account.address],
+        { account: owner.account }
+      )
+      // Check new owner
+      expect(await allocator.read.owner()).to.equal(
+        ethers.getAddress(otherAccounts[3].account.address)
+      )
+    })
 
     it('should have delay set', async function () {
       const { allocator } = await loadFixture(deployAllocator)

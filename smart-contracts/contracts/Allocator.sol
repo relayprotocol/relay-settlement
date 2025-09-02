@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {AuroraSdk, NEAR, PromiseCreateArgs, PromiseResult, PromiseResultStatus, PromiseWithCallback} from "./aurora-xcc/AuroraSdk.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
@@ -47,7 +48,7 @@ uint64 constant DEFAULT_CALLBACK_GAS = 10_000_000_000_000; // 10 Tgas
 
 /// @title Allocator
 /// @notice Manages cross-chain withdrawal requests and payload signing using NEAR MPC signer
-contract Allocator is AccessControl {
+contract Allocator is AccessControl, Ownable {
   using AuroraSdk for NEAR;
   using AuroraSdk for PromiseCreateArgs;
   using AuroraSdk for PromiseWithCallback;
@@ -84,9 +85,6 @@ contract Allocator is AccessControl {
 
   // per-depository delay mapping (chainId => depository address as string => DelayConfig)
   mapping(uint256 => mapping(string => DelayConfig)) public depositoryDelays;
-
-  // owner of the contract
-  address public owner;
 
   // address of the hub contract
   address public hub;
@@ -151,7 +149,7 @@ contract Allocator is AccessControl {
     uint256 _delay,
     string memory _signer,
     address _wNEAR
-  ) {
+  )  Ownable(_owner) {
     // roles
     _setRoleAdmin(APPROVED_WITHDRAWER_ROLE, ADMIN_ROLE);
     _grantRole(ADMIN_ROLE, _owner);
@@ -162,20 +160,17 @@ contract Allocator is AccessControl {
     // set signer and Aurora SDK
     nearSigner = _signer;
     near = AuroraSdk.initNear(IERC20(_wNEAR));
-
-    // TODO:  check if is _owner is a valid multisig
-    owner = _owner;
   }
 
   modifier onlyMultisigOwner() {
-    if (!ISafe(owner).isOwner(msg.sender)) revert NotMultisigOwner(msg.sender);
+    if (!ISafe(owner()).isOwner(msg.sender)) revert NotMultisigOwner(msg.sender);
     _;
   }
 
   /// @notice initializes XCC sub-account for the contract
   /// You need to approve 2 wNEAR for the CS Signer to init the sub-account
   /// @notice This calls the simplest possible contract on NEAR to bootstrap itself and initialize the XCC subaccount.
-  function init() public onlyRole(ADMIN_ROLE) {
+  function init() public onlyOwner {
     // Make a cross-contract call to trigger sub-account creation.
     // solhint-disable-next-line quotes
     PromiseCreateArgs memory initCall = near.call(
@@ -198,14 +193,14 @@ contract Allocator is AccessControl {
 
   /// @notice Sets the hub contract address
   /// @param _hub Hub contract address
-  function setHub(address _hub) external onlyRole(ADMIN_ROLE) {
+  function setHub(address _hub) external onlyOwner {
     hub = _hub;
     emit HubSet(hub);
   }
 
   /// @notice Sets the global delay for withdrawal requests
   /// @param _delay Delay in seconds
-  function setDelay(uint256 _delay) public onlyRole(ADMIN_ROLE) {
+  function setDelay(uint256 _delay) public onlyOwner {
     delay = _delay;
     emit DelayChanged(delay);
   }
@@ -218,7 +213,7 @@ contract Allocator is AccessControl {
     uint256 chainId,
     string calldata depository,
     uint256 _delay
-  ) external onlyRole(ADMIN_ROLE) {
+  ) external onlyOwner {
     depositoryDelays[chainId][depository].delay = _delay;
     depositoryDelays[chainId][depository].isSet = true;
     emit DepositoryDelayChanged(chainId, depository, _delay);
@@ -231,7 +226,7 @@ contract Allocator is AccessControl {
     uint256 chainId,
     string calldata depository,
     address builder
-  ) external onlyRole(ADMIN_ROLE) {
+  ) external onlyOwner {
     payloadBuilders[chainId][depository] = builder;
     emit PayloadBuilderSet(chainId, depository, builder);
   }
