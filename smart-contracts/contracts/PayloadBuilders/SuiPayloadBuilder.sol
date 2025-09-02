@@ -4,6 +4,8 @@ pragma solidity ^0.8.28;
 import {PayloadBuilder} from "../Allocator.sol";
 import {Utils} from "../Utils.sol";
 
+/// @title SuiPayloadBuilder
+/// @notice Builds BCS-encoded payloads for Sui chain withdrawals
 contract SuiPayloadBuilder is PayloadBuilder {
   function buildPayload(
     uint256 /* chainId */,
@@ -60,6 +62,13 @@ contract SuiPayloadBuilder is PayloadBuilder {
     return "sui-vm";
   }
 
+  /// @notice Encodes the Sui transaction payload in BCS-compatible format.
+  /// @param recipient The 32-byte recipient address.
+  /// @param coinType The string representation of the Sui coin type. Example: "0x2::sui::SUI"
+  /// @param amount The amount to transfer
+  /// @param nonce The unique nonce for the tx
+  /// @param expiration The expiration timestamp (in seconds)
+  /// @return The BCS-encoded transaction payload
   function encodeBCS(
     bytes32 recipient,
     string memory coinType,

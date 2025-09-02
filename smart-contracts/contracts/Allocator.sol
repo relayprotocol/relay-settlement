@@ -45,6 +45,8 @@ struct GasSettings {
 uint64 constant DEFAULT_SIGN_GAS = 30_000_000_000_000; // 30 Tgas
 uint64 constant DEFAULT_CALLBACK_GAS = 10_000_000_000_000; // 10 Tgas
 
+/// @title Allocator
+/// @notice Manages cross-chain withdrawal requests and payload signing using NEAR MPC signer
 contract Allocator is AccessControl {
   using AuroraSdk for NEAR;
   using AuroraSdk for PromiseCreateArgs;
@@ -170,11 +172,9 @@ contract Allocator is AccessControl {
     _;
   }
 
-  /**
-   * @notice initializes XCC sub-account for the contract
-   * You need to approve 2 wNEAR for the CS Signer to init the sub-account
-   * @notice This calls the simplest possible contract on NEAR to bootstrap itself and initialize the XCC subaccount.
-   */
+  /// @notice initializes XCC sub-account for the contract
+  /// You need to approve 2 wNEAR for the CS Signer to init the sub-account
+  /// @notice This calls the simplest possible contract on NEAR to bootstrap itself and initialize the XCC subaccount.
   function init() public onlyRole(ADMIN_ROLE) {
     // Make a cross-contract call to trigger sub-account creation.
     // solhint-disable-next-line quotes
@@ -190,26 +190,30 @@ contract Allocator is AccessControl {
     initCall.transact();
   }
 
+  /// @notice prevents a withdrawer from withdrawing
+  /// @param withdrawer Address to prevent from withdrawing
   function suspend(address withdrawer) public onlyMultisigOwner {
     _revokeRole(APPROVED_WITHDRAWER_ROLE, withdrawer);
   }
 
+  /// @notice Sets the hub contract address
+  /// @param _hub Hub contract address
   function setHub(address _hub) external onlyRole(ADMIN_ROLE) {
     hub = _hub;
     emit HubSet(hub);
   }
 
+  /// @notice Sets the global delay for withdrawal requests
+  /// @param _delay Delay in seconds
   function setDelay(uint256 _delay) public onlyRole(ADMIN_ROLE) {
     delay = _delay;
     emit DelayChanged(delay);
   }
 
-  /**
-   * @notice sets or updates the delay for a specific chain and depository
-   * @param chainId chain ID
-   * @param depository address of the depository contract as string
-   * @param _delay delay in seconds
-   */
+  /// @notice sets or updates the delay for a specific chain and depository
+  /// @param chainId chain ID
+  /// @param depository address of the depository contract as string
+  /// @param _delay delay in seconds
   function setDepositoryDelay(
     uint256 chainId,
     string calldata depository,
@@ -220,11 +224,9 @@ contract Allocator is AccessControl {
     emit DepositoryDelayChanged(chainId, depository, _delay);
   }
 
-  /**
-   * @notice sets or updates the payload builder for a specific chain
-   * @param chainId chain ID
-   * @param builder address of the payload builder contract
-   */
+  /// @notice sets or updates the payload builder for a specific chain
+  /// @param chainId chain ID
+  /// @param builder address of the payload builder contract
   function setPayloadBuilder(
     uint256 chainId,
     string calldata depository,
@@ -234,10 +236,8 @@ contract Allocator is AccessControl {
     emit PayloadBuilderSet(chainId, depository, builder);
   }
 
-  /**
-   * @notice submits a withdraw request to the payload builder, store the payload
-   * @param params The withdraw request parameters
-   */
+  /// @notice submits a withdraw request to the payload builder, store the returned payload
+  /// @param params The withdraw request parameters
   function submitWithdrawRequest(
     SubmitWithdrawRequestParams calldata params
   ) public returns (bytes32 payloadId) {
@@ -282,18 +282,16 @@ contract Allocator is AccessControl {
     return payloadId;
   }
 
-  /**
-   * @notice triggers the signing of a previously  submitted withdraw request
-   * @param chainId chain ID
-   * @param depository address of the depository contract
-   * @param payloadId hash of the payload to sign
-   * @param gasSettings struct containing gas settings for NEAR operations
-   * @dev This function is called by the NEAR signer account to sign the payload.
-   * It checks if the payload is ready to be signed (i.e. the delay has passed) and
-   * if the payload has not already been signed. If the payload is ready, it calls
-   * the NEAR signer account to sign the payload and then calls the signWithdrawCallback
-   * function to handle the result of the signing.
-   */
+  /// @notice triggers the signing of a previously submitted withdraw request
+  /// @param chainId chain ID
+  /// @param depository address of the depository contract
+  /// @param payloadId hash of the payload to sign
+  /// @param gasSettings struct containing gas settings for NEAR operations
+  /// @dev This function is called by the NEAR signer account to sign the payload.
+  /// It checks if the payload is ready to be signed (i.e. the delay has passed) and
+  /// if the payload has not already been signed. If the payload is ready, it calls
+  /// the NEAR signer account to sign the payload and then calls the signWithdrawCallback
+  /// function to handle the result of the signing.
   function signWithdrawPayload(
     uint256 chainId,
     string memory depository,
@@ -364,13 +362,11 @@ contract Allocator is AccessControl {
     }
   }
 
-  /**
-   * @notice callback function to handle the result of the signing
-   * @param payloadId hash of the payload that was signed
-   * @dev This function is called by the NEAR signer account after the signing is complete.
-   * It checks if the signing was successful and if so, stores the signed payload in the
-   * signedPayloads mapping. It also emits an event to notify that the payload has been signed.
-   */
+  /// @notice callback function to handle the result of the signing
+  /// @param payloadId hash of the payload that was signed
+  /// @dev This function is called by the NEAR signer account after the signing is complete.
+  /// It checks if the signing was successful and if so, stores the signed payload in the
+  /// signedPayloads mapping. It also emits an event to notify that the payload has been signed.
   function signWithdrawCallback(bytes32 payloadId, bytes32 hashToSign) public {
     if (
       msg.sender != AuroraSdk.nearRepresentitiveImplicitAddress(address(this))
@@ -391,11 +387,12 @@ contract Allocator is AccessControl {
     emit PayloadWithdrawSigned(payloadId, hashToSign, result.output);
   }
 
-  /*
-   * @notice Encodes a JSON request for the signer
-   * @param payloadHashToSign The hash of the payload to sign
-   * @return The encoded JSON request
-   */
+  /// @notice Encodes a JSON request for the signer
+  /// @param payloadHashToSign The hash of the payload to sign
+  /// @param curve The curve to use for signing
+  /// @param path The path for the signer
+  /// @param domain_id The domain ID
+  /// @return The encoded JSON request
   function encodeJSONRequest(
     bytes32 payloadHashToSign,
     string memory curve,
@@ -421,11 +418,9 @@ contract Allocator is AccessControl {
       );
   }
 
-  /**
-   * @notice Converts a bytes32 value to its string representation
-   * @param hexBytes The bytes32 value to convert
-   * @return The string representation of the bytes32 value
-   */
+  /// @notice Converts a bytes32 value to its string representation
+  /// @param hexBytes The bytes32 value to convert
+  /// @return The string representation of the bytes32 value
   function stringifyBytes(
     bytes32 hexBytes
   ) public pure returns (string memory) {
@@ -438,12 +433,11 @@ contract Allocator is AccessControl {
     return string(str);
   }
 
-  /**
-   * @notice Verifies if the withdrawal request can be achieved.
-   * @dev The withdrawal can be achieved if the caller is an approved withdrawer, or, if the hub is set, it will first transfer the user's token to this contract's balance.
-   * @param payload The payload containing the withdrawal details
-   * @param family The family of the token being withdrawn
-   */
+  /// @notice Verifies if the withdrawal request can be achieved.
+  /// @dev The withdrawal can be achieved if the caller is an approved withdrawer, or,
+  /// if the hub is set, it will first transfer the user's token to this contract's balance.
+  /// @param payload The payload containing the withdrawal details
+  /// @param family The family of the token being withdrawn
   function verifyWithdrawal(
     Payload memory payload,
     string memory family

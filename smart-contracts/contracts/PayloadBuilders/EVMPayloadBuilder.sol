@@ -21,7 +21,8 @@ struct CurrentDepository {
   uint256 chainId;
 }
 
-// Implement the logic to build the payload for EVM chains
+/// @title EVMPayloadBuilder
+/// @notice Builds EIP-712 compliant payloads for EVM chain withdrawals
 contract EVMPayloadBuilder is PayloadBuilder {
   // EIP712 domain and version
   string public constant SIGNING_DOMAIN = "RelayDepository";

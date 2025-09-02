@@ -4,6 +4,8 @@ pragma solidity ^0.8.28;
 import {PayloadBuilder} from "../Allocator.sol";
 import {Utils} from "../Utils.sol";
 
+/// @title SolanaPayloadBuilder
+/// @notice Builds Borsh-encoded payloads for Solana chain withdrawals
 contract SolanaPayloadBuilder is PayloadBuilder {
   function buildPayload(
     uint256 /* chainId */,
@@ -66,6 +68,13 @@ contract SolanaPayloadBuilder is PayloadBuilder {
     return "solana-vm";
   }
 
+  /// @notice Encodes the Solana transaction payload in Borsh-compatible format.
+  /// @param recipient The recipient public key.
+  /// @param token The token public key. If zero, indicates SOL; otherwise, SPL token.
+  /// @param amount The amount to transfer
+  /// @param nonce The unique nonce for the tx
+  /// @param expiration The expiration timestamp (in seconds)
+  /// @return The Borsh-encoded transaction payload
   function encodeBorsh(
     bytes32 recipient,
     bytes32 token,

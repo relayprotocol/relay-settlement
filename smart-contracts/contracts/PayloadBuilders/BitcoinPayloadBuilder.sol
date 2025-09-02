@@ -34,6 +34,8 @@ struct BitcoinTransactionData {
   BitcoinTransactionDataOutput[] outputs;
 }
 
+/// @title BitcoinPayloadBuilder
+/// @notice Builds Bitcoin transaction payloads for cross-chain withdrawals
 contract BitcoinPayloadBuilder is PayloadBuilder {
   error InsufficientUTXOValue(uint64 totalInput, uint256 requiredAmount);
   error FeesTooHigh(uint64 amount, uint256 fees);

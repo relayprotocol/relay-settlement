@@ -3,6 +3,8 @@ pragma solidity ^0.8.28;
 
 import {PayloadBuilder} from "../Allocator.sol";
 
+/// @title DummyPayloadBuilder
+/// @notice Dummy implementation for testing purposes
 contract DummyPayloadBuilder is PayloadBuilder {
   function buildPayload(
     uint256 /** chainId */,
