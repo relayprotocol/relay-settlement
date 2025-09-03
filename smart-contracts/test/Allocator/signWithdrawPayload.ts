@@ -130,14 +130,8 @@ describe('Allocator signWithdrawPayload', function () {
   describe('signWithdrawPayload()', function () {
     describe('with an approved signer', () => {
       it('should successfully sign a payload with custom gas settings', async function () {
-        const {
-          allocator,
-          solver,
-          depository,
-          payloadId,
-          publicClient,
-          wNEAR,
-        } = await loadFixture(deployAllocatorWithSetup)
+        const { allocator, solver, payloadId, publicClient, wNEAR } =
+          await loadFixture(deployAllocatorWithSetup)
 
         // init transact
         await allocator.write.init()
@@ -146,7 +140,7 @@ describe('Allocator signWithdrawPayload', function () {
         await time.increase(await allocator.read.delay())
 
         const signHash = await allocator.write.signWithdrawPayload(
-          [chainId, depository.account.address, payloadId, gasSettings],
+          [payloadId, gasSettings],
           {
             account: solver.account,
           }
@@ -171,17 +165,14 @@ describe('Allocator signWithdrawPayload', function () {
       })
 
       it('should revert when trying to sign a payload that is not ready', async function () {
-        const { allocator, solver, depository, payloadId } = await loadFixture(
+        const { allocator, solver, payloadId } = await loadFixture(
           deployAllocatorWithSetup
         )
 
         await expect(
-          allocator.write.signWithdrawPayload(
-            [chainId, depository.account.address, payloadId, gasSettings],
-            {
-              account: solver.account,
-            }
-          )
+          allocator.write.signWithdrawPayload([payloadId, gasSettings], {
+            account: solver.account,
+          })
         ).to.be.rejectedWith('PayloadNotReady')
       })
     })
@@ -362,12 +353,9 @@ describe('Allocator signWithdrawPayload', function () {
           account: user.account,
         })
 
-        await allocator.write.signWithdrawPayload(
-          [chainId, depository.account.address, payloadId, gasSettings],
-          {
-            account: user.account,
-          }
-        )
+        await allocator.write.signWithdrawPayload([payloadId, gasSettings], {
+          account: user.account,
+        })
 
         // Let's now check the balance of tokens for the Allocator
         const userBalanceAfter = await hub.read.balanceOf([
@@ -391,12 +379,9 @@ describe('Allocator signWithdrawPayload', function () {
         const [depository, user] = otherAccounts
 
         await expect(
-          allocator.write.signWithdrawPayload(
-            [chainId, depository.account.address, payloadId, gasSettings],
-            {
-              account: user.account,
-            }
-          )
+          allocator.write.signWithdrawPayload([payloadId, gasSettings], {
+            account: user.account,
+          })
         ).to.be.rejectedWith('CallerIsNotApproved')
       })
 
@@ -430,12 +415,9 @@ describe('Allocator signWithdrawPayload', function () {
         )
 
         await expect(
-          allocator.write.signWithdrawPayload(
-            [chainId, depository.account.address, payloadId, gasSettings],
-            {
-              account: user.account,
-            }
-          )
+          allocator.write.signWithdrawPayload([payloadId, gasSettings], {
+            account: user.account,
+          })
         ).to.be.rejected
       })
 
@@ -507,12 +489,7 @@ describe('Allocator signWithdrawPayload', function () {
         await time.increase(await allocator.read.delay())
 
         await allocator.write.signWithdrawPayload(
-          [
-            chainId,
-            depository.account.address,
-            payloadBuiltEvent.args.payloadId,
-            gasSettings,
-          ],
+          [payloadBuiltEvent.args.payloadId, gasSettings],
           {
             account: user.account,
           }

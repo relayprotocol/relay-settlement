@@ -268,8 +268,6 @@ contract Allocator is AccessControl, Ownable {
     if (effectiveDelay == 0) {
       // if delay is 0, sign the payload immediately
       signWithdrawPayload(
-        params.chainId,
-        params.depository,
         payloadId,
         GasSettings(DEFAULT_SIGN_GAS, DEFAULT_CALLBACK_GAS)
       );
@@ -278,8 +276,6 @@ contract Allocator is AccessControl, Ownable {
   }
 
   /// @notice triggers the signing of a previously submitted withdraw request
-  /// @param chainId chain ID
-  /// @param depository address of the depository contract
   /// @param payloadId hash of the payload to sign
   /// @param gasSettings struct containing gas settings for NEAR operations
   /// @dev This function is called by the NEAR signer account to sign the payload.
@@ -288,14 +284,19 @@ contract Allocator is AccessControl, Ownable {
   /// the NEAR signer account to sign the payload and then calls the signWithdrawCallback
   /// function to handle the result of the signing.
   function signWithdrawPayload(
-    uint256 chainId,
-    string memory depository,
     bytes32 payloadId,
     GasSettings memory gasSettings
   ) public {
-    address builder = payloadBuilders[chainId][depository];
+    Payload storage payload = payloads[payloadId];
+
+    address builder = payloadBuilders[payload.params.chainId][
+      payload.params.depository
+    ];
     if (builder == address(0)) {
-      revert NoPayloadBuilder(chainId, depository);
+      revert NoPayloadBuilder(
+        payload.params.chainId,
+        payload.params.depository
+      );
     }
 
     // check if the payload is ready to be signed
@@ -303,17 +304,16 @@ contract Allocator is AccessControl, Ownable {
       revert PayloadNotReady(payloadId);
     }
 
-    Payload storage payload = payloads[payloadId];
     PayloadBuilder payloadBuilder = PayloadBuilder(builder);
 
     // verify the withdrawal can be achieved
-    verifyWithdrawal(payload, payloadBuilder.family());
+    verifyWithdrawal(payload, payloadBuilder);
 
     string memory path = Strings.toHexString(uint160(address(this)), 20);
 
     bytes32[] memory hashesToSign = payloadBuilder.hashesToSign(
-      chainId,
-      depository,
+      payload.params.chainId,
+      payload.params.depository,
       payload.unsignedPayload
     );
     for (uint256 i = 0; i < hashesToSign.length; i++) {
@@ -432,10 +432,10 @@ contract Allocator is AccessControl, Ownable {
   /// @dev The withdrawal can be achieved if the caller is an approved withdrawer, or,
   /// if the hub is set, it will first transfer the user's token to this contract's balance.
   /// @param payload The payload containing the withdrawal details
-  /// @param family The family of the token being withdrawn
+  /// @param payloadBuilder The payload builder containing the withdrawal details
   function verifyWithdrawal(
     Payload memory payload,
-    string memory family
+    PayloadBuilder payloadBuilder
   ) internal {
     // Implementation for verifying the withdrawal
     if (hasRole(APPROVED_WITHDRAWER_ROLE, msg.sender)) {
@@ -444,7 +444,7 @@ contract Allocator is AccessControl, Ownable {
 
     // Generate the tokenId
     uint256 tokenId = Utils.generateTokenId(
-      family,
+      payloadBuilder.family(),
       payload.params.chainId,
       payload.params.currency
     );
