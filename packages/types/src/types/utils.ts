@@ -10,6 +10,7 @@ export interface TokenIdComponents {
 }
 
 export interface VirtualAddressComponents {
+  family: ChainType
   chainId: bigint
   address: string
 }

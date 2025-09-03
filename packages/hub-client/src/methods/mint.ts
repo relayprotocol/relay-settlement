@@ -1,7 +1,7 @@
+import { Hub } from '@relay-protocol/abis'
+import { generateAddress, generateTokenId } from '@relay-protocol/hub-utils'
 import { ethers } from 'ethers'
 import { HubClient, MintParams, SubmitTxParams } from '../client'
-import { generateAddress, generateTokenId } from '@relay-protocol/hub-utils'
-import { Hub } from '@relay-protocol/abis'
 
 export const mint = async (
   params: MintParams,
@@ -17,6 +17,7 @@ export const mint = async (
   const owner = generateAddress({
     address: params.account,
     chainId: params.chainId,
+    family: params.family,
   })
 
   const hubIface = new ethers.Interface(Hub)

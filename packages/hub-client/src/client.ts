@@ -26,6 +26,7 @@ export interface TransferFromParams {
 }
 
 export interface SetOperatorForParams {
+  family: ChainType
   account: string
   chainId: bigint
   operatorAddress: string

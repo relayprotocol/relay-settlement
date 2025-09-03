@@ -1,7 +1,7 @@
-import { ethers } from 'ethers'
-import { HubClient, BurnParams, SubmitTxParams } from '../client'
-import { generateAddress, generateTokenId } from '@relay-protocol/hub-utils'
 import { Hub } from '@relay-protocol/abis'
+import { generateAddress, generateTokenId } from '@relay-protocol/hub-utils'
+import { ethers } from 'ethers'
+import { BurnParams, HubClient, SubmitTxParams } from '../client'
 
 export const burn = async (
   params: BurnParams,
@@ -17,6 +17,7 @@ export const burn = async (
   const owner = generateAddress({
     address: params.account,
     chainId: params.chainId,
+    family: params.family,
   })
 
   const hubIface = new ethers.Interface(Hub)

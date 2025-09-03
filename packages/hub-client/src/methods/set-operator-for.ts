@@ -1,7 +1,7 @@
+import { Hub } from '@relay-protocol/abis'
+import { generateAddress } from '@relay-protocol/hub-utils'
 import { ethers } from 'ethers'
 import { HubClient, SetOperatorForParams, SubmitTxParams } from '../client'
-import { generateAddress } from '@relay-protocol/hub-utils'
-import { Hub } from '@relay-protocol/abis'
 
 export const setOperatorFor = async (
   params: SetOperatorForParams,
@@ -11,11 +11,13 @@ export const setOperatorFor = async (
   const owner = generateAddress({
     address: params.account,
     chainId: params.chainId,
+    family: params.family,
   })
   // then, create the recipient address
   const operator = generateAddress({
     address: params.operatorAddress,
     chainId: params.chainId,
+    family: params.family,
   })
 
   const hubIface = new ethers.Interface(Hub)

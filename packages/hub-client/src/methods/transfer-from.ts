@@ -1,7 +1,7 @@
-import { ethers } from 'ethers'
-import { HubClient, TransferFromParams, SubmitTxParams } from '../client'
-import { generateAddress, generateTokenId } from '@relay-protocol/hub-utils'
 import { Hub } from '@relay-protocol/abis'
+import { generateAddress, generateTokenId } from '@relay-protocol/hub-utils'
+import { ethers } from 'ethers'
+import { HubClient, SubmitTxParams, TransferFromParams } from '../client'
 
 export const transferFrom = async (
   params: TransferFromParams,
@@ -17,11 +17,13 @@ export const transferFrom = async (
   const owner = generateAddress({
     address: params.account,
     chainId: params.chainId,
+    family: params.family,
   })
   // then, create the recipient address
   const recipient = generateAddress({
     address: params.recipientAddress,
     chainId: params.chainId,
+    family: params.family,
   })
 
   const hubIface = new ethers.Interface(Hub)

@@ -1,7 +1,7 @@
+import { addressesTestCases, tokenIdTestCases } from '@relay-protocol/fixtures'
 import { expect } from 'chai'
-import { tokenIdTestCases, addressesTestCases } from '@relay-protocol/fixtures'
 
-import { generateTokenId, generateAddress } from '@relay-protocol/hub-utils'
+import { generateAddress, generateTokenId } from '@relay-protocol/hub-utils'
 import hre from 'hardhat'
 
 describe('Token ID Generation', () => {
