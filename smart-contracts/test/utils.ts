@@ -44,10 +44,19 @@ describe('Virtual Address Generation', () => {
           input.chainId,
           input.address,
         ])
-        expect(virtualAddress).to.equal(virtualAddress)
         expect(virtualAddress).to.equal(expectedAddress)
         expect(solidityVirtualAddress).to.equal(expectedAddress)
       })
+    })
+  })
+
+  describe('toAddress', function () {
+    it('should return the address of the payload builder', async () => {
+      const address = await utils.read.toAddress([
+        // eslint-disable-next-line evm-address-to-checksummed/evm-address-to-checksummed
+        '0x81dd955d02d337db81ba6c9c5f6213e647672052', // lowercase on purpose
+      ])
+      expect(address).to.equal('0x81Dd955D02D337DB81BA6c9C5F6213E647672052')
     })
   })
 })

@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import {PayloadBuilder} from "../Allocator.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {Utils} from "../Utils.sol";
 
 // Taken from https://github.com/relayprotocol/depository-contracts/blob/main/packages/ethereum-vm/src/utils/RelayDepositoryStructs.sol
 struct Call {
@@ -53,13 +54,13 @@ contract EVMPayloadBuilder is PayloadBuilder {
       nonce: uint256(keccak256(abi.encodePacked(block.timestamp))),
       expiration: block.timestamp + 10 days // Can we get the delay from the Allocator?
     });
-    address currencyAddress = toAddress(currency);
+    address currencyAddress = Utils.toAddress(currency);
 
     if (currencyAddress == address(0)) {
       // If this is a native transfer, we need to set the value to the amount
       // and the data to an empty bytes array
       request.calls[0] = Call({
-        to: toAddress(receiver),
+        to: Utils.toAddress(receiver),
         data: bytes(""),
         value: amount,
         allowFailure: false
@@ -70,7 +71,7 @@ contract EVMPayloadBuilder is PayloadBuilder {
         to: currencyAddress,
         data: abi.encodeWithSignature(
           "transfer(address,uint256)",
-          toAddress(receiver),
+          Utils.toAddress(receiver),
           amount
         ),
         value: 0,
@@ -112,7 +113,7 @@ contract EVMPayloadBuilder is PayloadBuilder {
           keccak256(bytes(SIGNING_DOMAIN)),
           keccak256(bytes(SIGNATURE_VERSION)),
           chainId,
-          toAddress(depository)
+          Utils.toAddress(depository)
         )
       );
   }
@@ -165,28 +166,5 @@ contract EVMPayloadBuilder is PayloadBuilder {
 
   function family() external pure returns (string memory) {
     return "ethereum-vm";
-  }
-
-  // Converts a string representation of an address to an address type
-  function toAddress(string memory s) public pure returns (address) {
-    bytes memory b = bytes(s);
-    require(b.length == 42, "Invalid address length");
-
-    uint160 result = 0;
-    for (uint256 i = 2; i < 42; i++) {
-      result <<= 4;
-      uint8 c = uint8(b[i]);
-
-      if (c >= 48 && c <= 57) {
-        result |= uint160(c - 48); // 0-9
-      } else if (c >= 65 && c <= 70) {
-        result |= uint160(c - 55); // A-F
-      } else if (c >= 97 && c <= 102) {
-        result |= uint160(c - 87); // a-f
-      } else {
-        revert("Invalid character in address");
-      }
-    }
-    return address(result);
   }
 }

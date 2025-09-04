@@ -58,9 +58,11 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
             currency: zeroAddress,
             data: '0x' as `0x${string}`,
             depository: depository.account.address,
+            nonce: keccak256('0xnonce'),
             receiver: owner.account.address,
             spender: owner.account.address,
           },
+          '0x',
         ],
         {
           account: hub.account,
@@ -88,9 +90,11 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
           currency: zeroAddress,
           data: '0x' as `0x${string}`,
           depository: depository.account.address,
+          nonce: keccak256('0xnonce'),
           receiver: hub.account.address,
           spender: owner.account.address,
         },
+        '0x',
       ])
     ).to.be.rejectedWith('PayloadNotReady')
     await allocator.write.setDepositoryDelay([
@@ -145,9 +149,11 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
             currency: zeroAddress,
             data: '0x' as `0x${string}`,
             depository: depository.account.address,
+            nonce: keccak256('0xnonce'),
             receiver: owner.account.address,
             spender: owner.account.address,
           },
+          '0x',
         ],
         {
           account: owner.account,
@@ -188,9 +194,11 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
             currency: zeroAddress,
             data: '0x' as `0x${string}`,
             depository: depository.account.address,
+            nonce: keccak256('0xnonce'),
             receiver: owner.account.address,
             spender: owner.account.address,
           },
+          '0x',
         ],
         {
           account: owner.account,

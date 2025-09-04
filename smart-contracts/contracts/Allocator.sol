@@ -3,6 +3,8 @@ pragma solidity ^0.8.28;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {AuroraSdk, NEAR, PromiseCreateArgs, PromiseResult, PromiseResultStatus, PromiseWithCallback} from "./aurora-xcc/AuroraSdk.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
@@ -36,24 +38,19 @@ interface PayloadBuilder {
   function family() external pure returns (string memory);
 }
 
-// NEAR gas settings
-struct GasSettings {
-  uint64 signGas;
-  uint64 callbackGas;
-}
-
 // Default gas settings
 uint64 constant DEFAULT_SIGN_GAS = 30_000_000_000_000; // 30 Tgas
 uint64 constant DEFAULT_CALLBACK_GAS = 10_000_000_000_000; // 10 Tgas
 
 /// @title Allocator
 /// @notice Manages cross-chain withdrawal requests and payload signing using NEAR MPC signer
-contract Allocator is AccessControl, Ownable {
+contract Allocator is AccessControl, Ownable, EIP712 {
   using AuroraSdk for NEAR;
   using AuroraSdk for PromiseCreateArgs;
   using AuroraSdk for PromiseWithCallback;
   using AuroraSdk for PromiseResult;
   using Strings for uint256;
+  using ECDSA for bytes32;
 
   event DelayChanged(uint256 delay);
   event DepositoryDelayChanged(
@@ -62,6 +59,14 @@ contract Allocator is AccessControl, Ownable {
     uint256 delay
   );
   event HubSet(address hub);
+
+  // EIP712
+  string public constant SIGNING_DOMAIN = "Allocator";
+  string public constant SIGNATURE_VERSION = "1";
+  bytes32 public constant PAYLOAD_TYPEHASH =
+    keccak256(
+      "SubmitWithdrawRequest(uint256 chainId,string depository,string currency,uint256 amount,address spender,string receiver,bytes data,bytes32 nonce)"
+    );
 
   // roles
   bytes32 public constant APPROVED_WITHDRAWER_ROLE =
@@ -101,6 +106,9 @@ contract Allocator is AccessControl, Ownable {
   // payload timestamps
   mapping(bytes32 => uint256) public payloadTimestamps;
 
+  // used nonces for replay protection
+  mapping(bytes32 => bool) public usedNonces;
+
   // events
   event PayloadBuilderSet(
     uint256 indexed chainId,
@@ -129,7 +137,7 @@ contract Allocator is AccessControl, Ownable {
   error SignCallbackFailed(bytes32 payloadId);
   error WithdrawalRequestFailed();
 
-  struct SubmitWithdrawRequestParams {
+  struct SubmitWithdrawRequest {
     uint256 chainId; // ChainId of the destination chain on which the user will withdraw
     string depository; // Address of the depository account as a string so we can support non EVM
     string currency; // Address of the currency to be withdrawn, as a string so we can support non EVM. Use zero address for native.
@@ -137,11 +145,18 @@ contract Allocator is AccessControl, Ownable {
     address spender; // Address of the account that owns the balance in the Hub contract (can be an alias)
     string receiver; // Address of the account on the destinattion chain as a string so we can support non EVM
     bytes data; // Additional data to be passed to the payload builder
+    bytes32 nonce; // Nonce for replay protection
   }
 
   struct Payload {
-    SubmitWithdrawRequestParams params;
+    SubmitWithdrawRequest params;
     bytes unsignedPayload;
+  }
+
+  // NEAR gas settings
+  struct GasSettings {
+    uint64 signGas;
+    uint64 callbackGas;
   }
 
   constructor(
@@ -149,7 +164,7 @@ contract Allocator is AccessControl, Ownable {
     uint256 _delay,
     string memory _signer,
     address _wNEAR
-  ) Ownable(_owner) {
+  ) Ownable(_owner) EIP712(SIGNING_DOMAIN, SIGNATURE_VERSION) {
     // roles
     _setRoleAdmin(APPROVED_WITHDRAWER_ROLE, ADMIN_ROLE);
     _grantRole(ADMIN_ROLE, _owner);
@@ -232,14 +247,17 @@ contract Allocator is AccessControl, Ownable {
     emit PayloadBuilderSet(chainId, depository, builder);
   }
 
-  /// @notice submits a withdraw request to the payload builder, store the returned payload
+  /// @notice submits a withdraw request to the payload builder, store the returned payload, and trigger its signature immediately
   /// @param params The withdraw request parameters
+  /// @param signature The signature of the withdraw request, if sent on behalf of a recipient
   function submitAndSignWithdrawRequest(
-    SubmitWithdrawRequestParams calldata params
+    SubmitWithdrawRequest calldata params,
+    bytes memory signature
   ) public returns (bytes32 payloadId) {
     payloadId = _submitWithdrawRequest(params);
     signWithdrawPayload(
       payloadId,
+      signature,
       GasSettings(DEFAULT_SIGN_GAS, DEFAULT_CALLBACK_GAS)
     );
   }
@@ -247,7 +265,7 @@ contract Allocator is AccessControl, Ownable {
   /// @notice submits a withdraw request to the payload builder, store the returned payload
   /// @param params The withdraw request parameters
   function submitWithdrawRequest(
-    SubmitWithdrawRequestParams calldata params
+    SubmitWithdrawRequest calldata params
   ) public returns (bytes32 payloadId) {
     return _submitWithdrawRequest(params);
   }
@@ -255,7 +273,7 @@ contract Allocator is AccessControl, Ownable {
   /// @notice submits a withdraw request to the payload builder, store the returned payload
   /// @param params The withdraw request parameters
   function _submitWithdrawRequest(
-    SubmitWithdrawRequestParams calldata params
+    SubmitWithdrawRequest calldata params
   ) internal returns (bytes32 payloadId) {
     // check if the payload builder is set
     address builder = payloadBuilders[params.chainId][params.depository];
@@ -286,12 +304,12 @@ contract Allocator is AccessControl, Ownable {
     payloadTimestamps[payloadId] = block.timestamp + effectiveDelay;
 
     emit PayloadBuilt(payloadId, payload, payloadTimestamps[payloadId]);
-
     return payloadId;
   }
 
   /// @notice triggers the signing of a previously submitted withdraw request
   /// @param payloadId hash of the payload to sign
+  /// @param signature The signature of the withdraw request, if sent on behalf of a recipient
   /// @param gasSettings struct containing gas settings for NEAR operations
   /// @dev This function is called by the NEAR signer account to sign the payload.
   /// It checks if the payload is ready to be signed (i.e. the delay has passed) and
@@ -300,17 +318,16 @@ contract Allocator is AccessControl, Ownable {
   /// function to handle the result of the signing.
   function signWithdrawPayload(
     bytes32 payloadId,
+    bytes memory signature,
     GasSettings memory gasSettings
   ) public {
-    Payload storage payload = payloads[payloadId];
-
-    address builder = payloadBuilders[payload.params.chainId][
-      payload.params.depository
+    address builder = payloadBuilders[payloads[payloadId].params.chainId][
+      payloads[payloadId].params.depository
     ];
     if (builder == address(0)) {
       revert NoPayloadBuilder(
-        payload.params.chainId,
-        payload.params.depository
+        payloads[payloadId].params.chainId,
+        payloads[payloadId].params.depository
       );
     }
 
@@ -322,14 +339,14 @@ contract Allocator is AccessControl, Ownable {
     PayloadBuilder payloadBuilder = PayloadBuilder(builder);
 
     // verify the withdrawal can be achieved
-    verifyWithdrawal(payload, payloadBuilder);
+    verifyWithdrawal(payloads[payloadId], payloadBuilder, signature);
 
     string memory path = Strings.toHexString(uint160(address(this)), 20);
 
     bytes32[] memory hashesToSign = payloadBuilder.hashesToSign(
-      payload.params.chainId,
-      payload.params.depository,
-      payload.unsignedPayload
+      payloads[payloadId].params.chainId,
+      payloads[payloadId].params.depository,
+      payloads[payloadId].unsignedPayload
     );
     for (uint256 i = 0; i < hashesToSign.length; i++) {
       if (signedPayloads[payloadId][hashesToSign[i]].length > 0) {
@@ -448,26 +465,38 @@ contract Allocator is AccessControl, Ownable {
   /// if the hub is set, it will first transfer the user's token to this contract's balance.
   /// @param payload The payload containing the withdrawal details
   /// @param payloadBuilder The payload builder containing the withdrawal details
+  /// @param signature A signature for the withdrawal request, if sent on behalf of a recipient
   function verifyWithdrawal(
     Payload memory payload,
-    PayloadBuilder payloadBuilder
+    PayloadBuilder payloadBuilder,
+    bytes memory signature
   ) internal {
     // Implementation for verifying the withdrawal
     if (hasRole(APPROVED_WITHDRAWER_ROLE, msg.sender)) {
       return;
     }
 
+    string memory family = payloadBuilder.family();
+
     // Generate the tokenId
     uint256 tokenId = Utils.generateTokenId(
-      payloadBuilder.family(),
+      family,
       payload.params.chainId,
       payload.params.currency
     );
 
-    // Only an operator for the spender can trigger withdrawals.
+    address spenderAlias = Utils.generateAddress(
+      family,
+      payload.params.chainId,
+      payload.params.receiver
+    );
+
+    // Only an operator for the spender can trigger withdrawals or a valid signature by the recipient must be provided.
     if (
       !(payload.params.spender == msg.sender ||
-        Hub(hub).isOperator(payload.params.spender, msg.sender))
+        Hub(hub).isOperator(payload.params.spender, msg.sender) ||
+        (spenderAlias == payload.params.spender &&
+          signatureMatchesReceiver(payload.params, signature)))
     ) {
       revert CallerIsNotApproved(msg.sender);
     }
@@ -479,5 +508,47 @@ contract Allocator is AccessControl, Ownable {
       tokenId,
       payload.params.amount
     );
+  }
+
+  /// @notice Checks if the signature matches the receiver's address (for EVM destination chains)
+  /// @param params The withdrawal request parameters
+  /// @param signature The signature to verify
+  function signatureMatchesReceiver(
+    SubmitWithdrawRequest memory params,
+    bytes memory signature
+  ) internal returns (bool) {
+    if (signature.length == 0) return false;
+
+    address signer = Utils.toAddress(params.receiver);
+
+    // Check if nonce has been used before
+    if (usedNonces[params.nonce]) {
+      return false;
+    }
+
+    // Create the digest using EIP712
+    bytes32 digest = _hashTypedDataV4(
+      keccak256(
+        abi.encode(
+          PAYLOAD_TYPEHASH,
+          params.chainId,
+          keccak256(bytes(params.depository)),
+          keccak256(bytes(params.currency)),
+          params.amount,
+          params.spender,
+          keccak256(bytes(params.receiver)),
+          keccak256(params.data),
+          params.nonce
+        )
+      )
+    );
+
+    if (digest.recover(signature) != signer) {
+      return false;
+    }
+
+    // Mark nonce as used to prevent replay
+    usedNonces[params.nonce] = true;
+    return true;
   }
 }

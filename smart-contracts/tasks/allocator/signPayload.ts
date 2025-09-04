@@ -13,13 +13,7 @@ task('allocator:sign-payload', 'Sign payload on allocator')
   .addOptionalParam('wnear', 'The address of the wNEAR contract')
   .setAction(
     async (
-      {
-        allocator: allocatorAddress,
-        payloadId,
-        depository,
-        chainId,
-        wnear: wNEARAddress,
-      },
+      { allocator: allocatorAddress, payloadId, wnear: wNEARAddress },
       hre
     ) => {
       const { viem, network } = hre
@@ -46,6 +40,7 @@ task('allocator:sign-payload', 'Sign payload on allocator')
       const txHash = await allocator.write.signWithdrawPayload(
         [
           payloadId,
+          '0x',
           {
             callbackGas: 30_000_000_000_000n,
             signGas: 10_000_000_000_000n,

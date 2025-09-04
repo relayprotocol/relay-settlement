@@ -36,7 +36,16 @@ describe('Allocator EVMPayloadBuilder', function () {
 
     const publicClient = await hre.viem.getPublicClient()
 
-    const payloadBuilder = await hre.viem.deployContract('EVMPayloadBuilder')
+    const utils = await hre.viem.deployContract('Utils', [])
+    const payloadBuilder = await hre.viem.deployContract(
+      'EVMPayloadBuilder',
+      [],
+      {
+        libraries: {
+          Utils: utils.address,
+        },
+      }
+    )
     const myToken = await hre.viem.deployContract('MyToken', [])
 
     return {
@@ -205,16 +214,6 @@ describe('Allocator EVMPayloadBuilder', function () {
       })
 
       expect(hashes[0]).to.equal(reconstructedHash)
-    })
-  })
-
-  describe('toAddress', function () {
-    it('should return the address of the payload builder', async () => {
-      const { payloadBuilder } = await loadFixture(deployAllocator)
-      const address = await payloadBuilder.read.toAddress([
-        '0x81Dd955D02D337DB81BA6c9C5F6213E647672052',
-      ])
-      expect(address).to.equal('0x81Dd955D02D337DB81BA6c9C5F6213E647672052')
     })
   })
 })
