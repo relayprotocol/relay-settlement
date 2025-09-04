@@ -1,45 +1,11 @@
 import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
 import { expect } from 'chai'
 import hre from 'hardhat'
-import {
-  decodeEventLog,
-  keccak256,
-  toHex,
-  TransactionReceipt,
-  zeroAddress,
-} from 'viem'
+import { keccak256, toHex, zeroAddress } from 'viem'
 import { DEFAULT_DELAY, deployAllocator } from '../helpers/deployAllocator'
+import { extractEvent } from '../helpers/extractEvent'
 
 const chainId = 1n
-
-interface PayloadBuiltEvent {
-  args: {
-    payloadId: `0x${string}`
-    payload: `0x${string}`
-  }
-}
-
-const extractEvent = async (
-  receipt: TransactionReceipt,
-  eventName: string,
-  abi: any
-) => {
-  const [event] = receipt.logs
-    .map((log) => {
-      try {
-        return decodeEventLog({
-          abi,
-          data: log.data,
-          eventName,
-          topics: log.topics,
-        })
-      } catch {
-        return null // or filter out unrecognized events
-      }
-    })
-    .filter((e) => e !== null)
-  return event as unknown as PayloadBuiltEvent
-}
 
 describe('Allocator submitWithdrawRequest', function () {
   async function deployAllocatorWithSetup() {

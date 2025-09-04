@@ -149,7 +149,7 @@ contract Allocator is AccessControl, Ownable {
     uint256 _delay,
     string memory _signer,
     address _wNEAR
-  )  Ownable(_owner) {
+  ) Ownable(_owner) {
     // roles
     _setRoleAdmin(APPROVED_WITHDRAWER_ROLE, ADMIN_ROLE);
     _grantRole(ADMIN_ROLE, _owner);
@@ -163,7 +163,8 @@ contract Allocator is AccessControl, Ownable {
   }
 
   modifier onlyMultisigOwner() {
-    if (!ISafe(owner()).isOwner(msg.sender)) revert NotMultisigOwner(msg.sender);
+    if (!ISafe(owner()).isOwner(msg.sender))
+      revert NotMultisigOwner(msg.sender);
     _;
   }
 
@@ -233,9 +234,29 @@ contract Allocator is AccessControl, Ownable {
 
   /// @notice submits a withdraw request to the payload builder, store the returned payload
   /// @param params The withdraw request parameters
+  function submitAndSignWithdrawRequest(
+    SubmitWithdrawRequestParams calldata params
+  ) public returns (bytes32 payloadId) {
+    payloadId = _submitWithdrawRequest(params);
+    signWithdrawPayload(
+      payloadId,
+      GasSettings(DEFAULT_SIGN_GAS, DEFAULT_CALLBACK_GAS)
+    );
+  }
+
+  /// @notice submits a withdraw request to the payload builder, store the returned payload
+  /// @param params The withdraw request parameters
   function submitWithdrawRequest(
     SubmitWithdrawRequestParams calldata params
   ) public returns (bytes32 payloadId) {
+    return _submitWithdrawRequest(params);
+  }
+
+  /// @notice submits a withdraw request to the payload builder, store the returned payload
+  /// @param params The withdraw request parameters
+  function _submitWithdrawRequest(
+    SubmitWithdrawRequestParams calldata params
+  ) internal returns (bytes32 payloadId) {
     // check if the payload builder is set
     address builder = payloadBuilders[params.chainId][params.depository];
     if (builder == address(0)) {
@@ -265,13 +286,7 @@ contract Allocator is AccessControl, Ownable {
     payloadTimestamps[payloadId] = block.timestamp + effectiveDelay;
 
     emit PayloadBuilt(payloadId, payload, payloadTimestamps[payloadId]);
-    if (effectiveDelay == 0) {
-      // if delay is 0, sign the payload immediately
-      signWithdrawPayload(
-        payloadId,
-        GasSettings(DEFAULT_SIGN_GAS, DEFAULT_CALLBACK_GAS)
-      );
-    }
+
     return payloadId;
   }
 
