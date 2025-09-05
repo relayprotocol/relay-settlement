@@ -22,11 +22,10 @@ jobs:
       - name: Get changed files
         id: changed-files
         uses: tj-actions/changed-files@v45
-        if: ${{ !env.all_tests }}
         with:
           files: |
             ${{ matrix.folders }}/**
-        # Define a reusable condition variable
+
       - name: Should it run
         id: should-it-run
         run: echo "should_run=$([ '${{ steps.changed-files.outputs.any_modified }}' = 'true' ] || [ '${{ env.all_tests }}' = 'true' ] && echo true || echo false)" >> $GITHUB_OUTPUT
