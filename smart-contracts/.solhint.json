@@ -1,6 +1,12 @@
 {
   "extends": "solhint:recommended",
   "rules": {
+    "no-unused-vars": [
+      "error",
+      {
+        "validateParameters": true
+      }
+    ],
     "avoid-low-level-calls": "off",
     "ordering": "off",
     "func-visibility": [
