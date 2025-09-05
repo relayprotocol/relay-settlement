@@ -4,6 +4,7 @@ import '@nomiclabs/hardhat-solhint'
 import { networks as nets } from '@relay-protocol/networks'
 import type { HardhatUserConfig } from 'hardhat/config'
 import 'solidity-coverage'
+import 'hardhat-gas-reporter'
 
 import { parseEther } from 'viem'
 

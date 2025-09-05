@@ -31,7 +31,7 @@
     "eslint-plugin-mocha": "10.5.0",
     "eslint-plugin-prettier": "5.2.3",
     "hardhat": "2.23.0",
-    "hardhat-gas-reporter": "1.0.8",
+    "hardhat-gas-reporter": "2.3.0",
     "prettier": "3.5.3",
     "prettier-plugin-solidity": "2.0.0",
     "solhint": "5.1.0",
