@@ -11,6 +11,9 @@ jobs:
       matrix:
         folders:
           ['smart-contracts', 'packages/hub-client', 'packages/hub-utils']
+    env:
+      all_tests: ${{ contains(github.event.pull_request.labels.*.name, 'run-all-tests')}}
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,26 +22,31 @@ jobs:
       - name: Get changed files
         id: changed-files
         uses: tj-actions/changed-files@v45
+        if: ${{ !env.all_tests }}
         with:
           files: |
             ${{ matrix.folders }}/**
+        # Define a reusable condition variable
+      - name: Should it run
+        id: should-it-run
+        run: echo "should_run=$([ '${{ steps.changed-files.outputs.any_modified }}' = 'true' ] || [ '${{ env.all_tests }}' = 'true' ] && echo true || echo false)" >> $GITHUB_OUTPUT
 
       - uses: actions/setup-node@v4
-        if: steps.changed-files.outputs.any_modified == 'true'
+        if: steps.should-it-run.outputs.should_run == 'true'
         with:
           node-version: 22
 
       - run: yarn
-        if: steps.changed-files.outputs.any_modified == 'true'
+        if: steps.should-it-run.outputs.should_run == 'true'
         shell: bash
 
       - run: 'yarn build'
-        if: steps.changed-files.outputs.any_modified == 'true'
+        if: steps.should-it-run.outputs.should_run == 'true'
         shell: bash
 
       - name: Set workspace name
         id: workspace-name
-        if: steps.changed-files.outputs.any_modified == 'true'
+        if: steps.should-it-run.outputs.should_run == 'true'
         run: |
           if [[ "${{ matrix.folders }}" == packages/* ]]; then
             echo "WORKSPACE_NAME=$(echo ${{ matrix.folders }} | sed 's|packages/||')" >> $GITHUB_OUTPUT
@@ -49,22 +57,22 @@ jobs:
 
       - name: 'run lint'
         run: yarn workspace @relay-protocol/${{ steps.workspace-name.outputs.WORKSPACE_NAME }} lint
-        if: steps.changed-files.outputs.any_modified == 'true'
+        if: steps.should-it-run.outputs.should_run == 'true'
         shell: bash
 
       - name: 'run tests'
         run: yarn workspace @relay-protocol/${{ steps.workspace-name.outputs.WORKSPACE_NAME }} run test
-        if: steps.changed-files.outputs.any_modified == 'true'
+        if: steps.should-it-run.outputs.should_run == 'true'
         shell: bash
 
       - name: 'run coverage'
         run: yarn workspace @relay-protocol/${{matrix.folders}} run coverage
-        if: steps.changed-files.outputs.any_modified == 'true' && matrix.folders == 'smart-contracts'
+        if: steps.should-it-run.outputs.should_run == 'true' && matrix.folders == 'smart-contracts'
         shell: bash
 
       - name: 'Upload coverage report'
         uses: actions/upload-artifact@v4
-        if: steps.changed-files.outputs.any_modified == 'true' && matrix.folders == 'smart-contracts'
+        if: steps.should-it-run.outputs.should_run == 'true' && matrix.folders == 'smart-contracts'
         with:
           name: coverage-report
           path: ${{ matrix.folders }}/coverage/
