@@ -1,11 +1,10 @@
 import { Hub } from '@relay-protocol/abis'
 import { generateAddress } from '@relay-protocol/hub-utils'
 import { ethers } from 'ethers'
-import { HubClient, SetOperatorForParams, SubmitTxParams } from '../client'
+import { SetOperatorForParams, SubmitTxParams } from '../client'
 
 export const setOperatorFor = async (
-  params: SetOperatorForParams,
-  _client: HubClient
+  params: SetOperatorForParams
 ): Promise<SubmitTxParams> => {
   // Create the owner address
   const owner = generateAddress({

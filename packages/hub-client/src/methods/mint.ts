@@ -1,12 +1,9 @@
 import { Hub } from '@relay-protocol/abis'
 import { generateAddress, generateTokenId } from '@relay-protocol/hub-utils'
 import { ethers } from 'ethers'
-import { HubClient, MintParams, SubmitTxParams } from '../client'
+import { MintParams, SubmitTxParams } from '../client'
 
-export const mint = async (
-  params: MintParams,
-  _client: HubClient
-): Promise<SubmitTxParams> => {
+export const mint = async (params: MintParams): Promise<SubmitTxParams> => {
   // First, create a tokenId param
   const tokenId = generateTokenId({
     address: params.tokenAddress,

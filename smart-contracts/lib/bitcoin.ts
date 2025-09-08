@@ -178,7 +178,7 @@ export function buildBitcoinTransactionFromPayload(transaction) {
   })
 
   // Calculate total input and output values
-  const totalInput = transaction.inputs.reduce((sum, input, i) => {
+  const totalInput = transaction.inputs.reduce((sum, input) => {
     const valueBytes = Buffer.from(input.value.slice(2), 'hex')
     const value = valueBytes.readBigUInt64LE(0)
     return sum + value

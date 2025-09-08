@@ -1,6 +1,5 @@
 import * as bitcoin from 'bitcoinjs-lib'
 import networks from '@relay-protocol/networks'
-import bs58 from 'bs58'
 import { task } from 'hardhat/config'
 import AllocatorModule from '../../ignition/modules/Allocator'
 import { bitcoinAddressfromHexPublicKey } from '../../lib/bitcoin'

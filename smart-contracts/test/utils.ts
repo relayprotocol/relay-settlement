@@ -11,7 +11,7 @@ describe('Token ID Generation', () => {
     utils = await hre.viem.deployContract('Utils')
   })
 
-  tokenIdTestCases.forEach(({ input, expectedValue, name }, i) => {
+  tokenIdTestCases.forEach(({ input, expectedValue, name }) => {
     describe(name, () => {
       it('token ID should be the same token in lib and contract', async () => {
         const tokenId = generateTokenId(input)
@@ -35,7 +35,7 @@ describe('Virtual Address Generation', () => {
     utils = await hre.viem.deployContract('Utils')
   })
 
-  addressesTestCases.forEach(({ input, expectedAddress, name }, i) => {
+  addressesTestCases.forEach(({ input, expectedAddress, name }) => {
     describe(name, () => {
       it('address should be identical in lib and contract', async () => {
         const virtualAddress = generateAddress(input)

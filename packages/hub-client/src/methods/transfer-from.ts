@@ -1,11 +1,10 @@
 import { Hub } from '@relay-protocol/abis'
 import { generateAddress, generateTokenId } from '@relay-protocol/hub-utils'
 import { ethers } from 'ethers'
-import { HubClient, SubmitTxParams, TransferFromParams } from '../client'
+import { SubmitTxParams, TransferFromParams } from '../client'
 
 export const transferFrom = async (
-  params: TransferFromParams,
-  _client: HubClient
+  params: TransferFromParams
 ): Promise<SubmitTxParams> => {
   // First, create a tokenId param
   const tokenId = generateTokenId({

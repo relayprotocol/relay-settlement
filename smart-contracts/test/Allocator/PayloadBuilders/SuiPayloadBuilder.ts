@@ -138,12 +138,6 @@ describe('Allocator SuiPayloadBuilder', function () {
   })
 
   describe('decodeDepositoryRequest', function () {
-    const amount = 1n
-    const expiration = 1749096009n
-    const nonce = 1749095710252n
-    const recipient =
-      '0x622f2b76c7331bbe04365995bcb287e0648cd4631455a25e62f54c76e5e28143'
-
     it('should correctly decode a native SUI transfer request', async () => {
       const { payloadBuilder, depository } = await loadFixture(deployAllocator)
 

@@ -193,7 +193,7 @@ task(
             bitcoin.networks.bitcoin
           )
           console.log('  Address:', address)
-        } catch (e) {
+        } catch {
           console.log(
             '  Address: Unable to decode - possibly OP_RETURN or non-standard'
           )

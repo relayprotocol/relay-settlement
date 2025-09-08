@@ -43,25 +43,29 @@ export class HubClient {
   }
 
   // Declare method signatures (but not implementations)
-  mint!: (params: MintParams) => Promise<{
+
+  mint!: (_params: MintParams) => Promise<{
     to: string
     from?: string
     data: string
     value?: string
   }>
-  burn!: (params: BurnParams) => Promise<{
+
+  burn!: (_params: BurnParams) => Promise<{
     to: string
     from?: string
     data: string
     value?: string
   }>
-  setOperatorFor!: (params: SetOperatorForParams) => Promise<{
+
+  setOperatorFor!: (_params: SetOperatorForParams) => Promise<{
     to: string
     from?: string
     data: string
     value?: string
   }>
-  transferFrom!: (params: TransferFromParams) => Promise<{
+
+  transferFrom!: (_params: TransferFromParams) => Promise<{
     to: string
     from?: string
     data: string

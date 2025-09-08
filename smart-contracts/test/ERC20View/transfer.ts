@@ -87,8 +87,9 @@ describe('ERC20View Transfer', function () {
   })
 
   it('reverts when trying to transfer more than balance', async function () {
-    const { erc20View, hub, publicClient, regularUser, anotherUser } =
-      await loadFixture(deployHubWithERC20View)
+    const { erc20View, hub, regularUser, anotherUser } = await loadFixture(
+      deployHubWithERC20View
+    )
 
     // Get current balance
     const currentBalance = await hub.read.balanceOf([

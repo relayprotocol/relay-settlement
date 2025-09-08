@@ -8,7 +8,6 @@ const evmAddressPlugin = require('eslint-plugin-evm-address-to-checksummed')
 const jsonPlugin = require('eslint-plugin-json')
 const sortKeysFix = require('eslint-plugin-sort-keys-fix')
 
-
 /**
  * @type {ESLintConfig}
  */
@@ -56,8 +55,12 @@ module.exports = [
       'brace-style': 'off',
       'no-constant-condition': 'off',
       'no-promise-executor-return': 'off',
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-non-null-assertion': 'off',
-      '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_' },
+      ],
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-var-requires': 'warn',
       '@typescript-eslint/no-empty-function': 'warn',
