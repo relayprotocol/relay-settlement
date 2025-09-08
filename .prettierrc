@@ -2,6 +2,9 @@
   "trailingComma": "es5",
   "singleQuote": true,
   "semi": false,
+  "plugins": [
+    "prettier-plugin-solidity"
+  ],
   "overrides": [
     {
       "files": "*.sol",
