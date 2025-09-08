@@ -472,11 +472,17 @@ contract Allocator is AccessControl, Ownable, EIP712 {
   function stringifyBytes(
     bytes32 hexBytes
   ) public pure returns (string memory) {
-    bytes memory alphabet = "0123456789abcdef";
+    bytes16 alphabet = 0x30313233343536373839616263646566; // "0123456789abcdef"
     bytes memory str = new bytes(64);
-    for (uint256 i = 0; i < 32; i++) {
-      str[i * 2] = alphabet[uint256(uint8(hexBytes[i] >> 4))];
-      str[1 + i * 2] = alphabet[uint256(uint8(hexBytes[i] & 0x0f))];
+    for (uint256 i = 0; i < 32; ) {
+      uint8 b = uint8(hexBytes[i]);
+      // precompute offset
+      uint256 offset = i << 1; // i * 2
+      str[offset] = alphabet[b >> 4]; // high nibble
+      str[offset + 1] = alphabet[b & 0x0f]; // low nibble
+      unchecked {
+        i++;
+      }
     }
     return string(str);
   }
