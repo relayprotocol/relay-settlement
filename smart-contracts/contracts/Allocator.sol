@@ -5,14 +5,7 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {
-  AuroraSdk,
-  NEAR,
-  PromiseCreateArgs,
-  PromiseResult,
-  PromiseResultStatus,
-  PromiseWithCallback
-} from "./aurora-xcc/AuroraSdk.sol";
+import {AuroraSdk, NEAR, PromiseCreateArgs, PromiseResult, PromiseResultStatus, PromiseWithCallback} from "./aurora-xcc/AuroraSdk.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Hub} from "./Hub.sol";
@@ -79,6 +72,9 @@ contract Allocator is AccessControl, Ownable, EIP712 {
   bytes32 public constant APPROVED_WITHDRAWER_ROLE =
     keccak256("APPROVED_WITHDRAWER_ROLE");
   bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
+  
+  // precompute the hash of the curve
+  bytes32 private constant ECDSA_HASH = keccak256("Ecdsa");
 
   // NEAR signer account
   string public nearSigner;
@@ -88,6 +84,9 @@ contract Allocator is AccessControl, Ownable, EIP712 {
 
   // global delay
   uint256 public delay;
+
+  // used by the MPC signer to sign the payload
+  string public SIGNER_PATH;
 
   // Delay configuration struct
   struct DelayConfig {
@@ -182,6 +181,9 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     // set signer and Aurora SDK
     nearSigner = _signer;
     near = AuroraSdk.initNear(IERC20(_wNEAR));
+
+    // compute path at deployment
+    SIGNER_PATH = Strings.toHexString(uint160(address(this)), 20);
   }
 
   modifier onlyMultisigOwner() {
@@ -328,14 +330,11 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     bytes memory signature,
     GasSettings memory gasSettings
   ) public {
-    address builder = payloadBuilders[payloads[payloadId].params.chainId][
-      payloads[payloadId].params.depository
-    ];
+    Payload storage payload = payloads[payloadId];
+    SubmitWithdrawRequest memory params = payload.params;
+    address builder = payloadBuilders[params.chainId][params.depository];
     if (builder == address(0)) {
-      revert NoPayloadBuilder(
-        payloads[payloadId].params.chainId,
-        payloads[payloadId].params.depository
-      );
+      revert NoPayloadBuilder(params.chainId, params.depository);
     }
 
     // check if the payload is ready to be signed
@@ -348,52 +347,58 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     // verify the withdrawal can be achieved
     verifyWithdrawal(payloads[payloadId], payloadBuilder, signature);
 
-    string memory path = Strings.toHexString(uint160(address(this)), 20);
-
     bytes32[] memory hashesToSign = payloadBuilder.hashesToSign(
-      payloads[payloadId].params.chainId,
-      payloads[payloadId].params.depository,
-      payloads[payloadId].unsignedPayload
+      params.chainId,
+      params.depository,
+      payload.unsignedPayload
     );
+
     for (uint256 i = 0; i < hashesToSign.length; i++) {
-      if (signedPayloads[payloadId][hashesToSign[i]].length > 0) {
-        revert PayloadAlreadySigned(payloadId);
-      }
-
-      // Encode the JSON request for the signer
-      bytes memory data = encodeJSONRequest(
-        hashesToSign[i],
-        payloadBuilder.curve(),
-        path,
-        keccak256(abi.encodePacked(payloadBuilder.curve())) ==
-          keccak256(abi.encodePacked("Ecdsa"))
-          ? 0
-          : 1
-      );
-
-      // Now get NEAR to sign the payload!
-      PromiseCreateArgs memory callSign = near.call(
-        nearSigner,
-        "sign",
-        data,
-        // the docs here https://github.com/aurora-is-near/chain-signatures-signer/tree/main?tab=readme-ov-file#signing-the-payload
-        // states that 1 yoctoNEAR is usually enough to sign the call successfully
-        1, // attachedNear
-        gasSettings.signGas
-      );
-      PromiseCreateArgs memory callback = near.auroraCall(
-        address(this),
-        abi.encodeWithSelector(
-          this.signWithdrawCallback.selector,
-          payloadId,
-          hashesToSign[i]
-        ),
-        0,
-        gasSettings.callbackGas
-      );
-
-      callSign.then(callback).transact();
+      _signUsingChainSignatures(payloadId, hashesToSign[i], payloadBuilder, gasSettings);
     }
+  }
+
+  function _signUsingChainSignatures(
+    bytes32 payloadId,
+    bytes32 hashToSign,
+    PayloadBuilder payloadBuilder,
+    GasSettings memory gasSettings
+  ) internal {
+    if (signedPayloads[payloadId][hashToSign].length > 0) {
+      revert PayloadAlreadySigned(payloadId);
+    }
+
+    // Encode the JSON request for the signer
+    bytes memory data = encodeJSONRequest(
+      hashToSign,
+      payloadBuilder.curve(),
+      keccak256(abi.encodePacked(payloadBuilder.curve())) == ECDSA_HASH
+        ? "0"
+        : "1"
+    );
+
+    // Now get NEAR to sign the payload!
+    PromiseCreateArgs memory callSign = near.call(
+      nearSigner,
+      "sign",
+      data,
+      // the docs here https://github.com/aurora-is-near/chain-signatures-signer/tree/main?tab=readme-ov-file#signing-the-payload
+      // states that 1 yoctoNEAR is usually enough to sign the call successfully
+      1, // attachedNear
+      gasSettings.signGas
+    );
+    PromiseCreateArgs memory callback = near.auroraCall(
+      address(this),
+      abi.encodeWithSelector(
+        this.signWithdrawCallback.selector,
+        payloadId,
+        hashToSign
+      ),
+      0,
+      gasSettings.callbackGas
+    );
+
+    callSign.then(callback).transact();
   }
 
   /// @notice callback function to handle the result of the signing
@@ -424,15 +429,13 @@ contract Allocator is AccessControl, Ownable, EIP712 {
   /// @notice Encodes a JSON request for the signer
   /// @param payloadHashToSign The hash of the payload to sign
   /// @param curve The curve to use for signing
-  /// @param path The path for the signer
   /// @param domain_id The domain ID
   /// @return The encoded JSON request
   function encodeJSONRequest(
     bytes32 payloadHashToSign,
     string memory curve,
-    string memory path,
-    uint256 domain_id
-  ) public pure returns (bytes memory) {
+    string memory domain_id
+  ) public view returns (bytes memory) {
     return
       abi.encodePacked(
         // solhint-disable-next-line quotes
@@ -443,10 +446,10 @@ contract Allocator is AccessControl, Ownable, EIP712 {
         stringifyBytes(payloadHashToSign),
         // solhint-disable-next-line quotes
         '"},"path":"',
-        path,
+        SIGNER_PATH,
         // solhint-disable-next-line quotes
         '","domain_id":',
-        Strings.toString(domain_id),
+        domain_id,
         // solhint-disable-next-line quotes
         "}}"
       );

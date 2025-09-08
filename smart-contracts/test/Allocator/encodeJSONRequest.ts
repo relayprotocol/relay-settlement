@@ -9,13 +9,14 @@ describe('Allocator encodeJSONRequest', function () {
 
     // Create a test payload hash
     const payloadHash = keccak256('0x1234')
-    const path = '0x1234567890123456789012345678901234567890'
     const version = 1n
+    // compute path hash
+    const allocatorAddress = allocator.address.toLowerCase().replace(/^0x/, '')
+    const path = '0x' + allocatorAddress.padStart(40, '0')
 
     const result = await allocator.read.encodeJSONRequest([
       payloadHash,
       'Ecdsa',
-      path,
       version,
     ])
 
@@ -34,13 +35,15 @@ describe('Allocator encodeJSONRequest', function () {
     const { allocator } = await loadFixture(deployAllocator)
 
     const payloadHash = keccak256('0x1234')
-    const path = '0xaBcDef1234567890123456789012345678901234'
     const version = 1n
+
+    // compute path hash
+    const allocatorAddress = allocator.address.toLowerCase().replace(/^0x/, '')
+    const path = '0x' + allocatorAddress.padStart(40, '0')
 
     const result = await allocator.read.encodeJSONRequest([
       payloadHash,
       'Ecdsa',
-      path,
       version,
     ])
 
