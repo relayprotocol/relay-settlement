@@ -38,9 +38,11 @@ interface PayloadBuilder {
   function family() external pure returns (string memory);
 }
 
-// Default gas settings
-uint64 constant DEFAULT_SIGN_GAS = 30_000_000_000_000; // 30 Tgas
-uint64 constant DEFAULT_CALLBACK_GAS = 10_000_000_000_000; // 10 Tgas
+// NEAR gas settings
+struct GasSettings {
+  uint64 signGas;
+  uint64 callbackGas;
+}
 
 /// @title Allocator
 /// @notice Manages cross-chain withdrawal requests and payload signing using NEAR MPC signer
@@ -75,6 +77,13 @@ contract Allocator is AccessControl, Ownable, EIP712 {
   
   // precompute the hash of the curve
   bytes32 private constant ECDSA_HASH = keccak256("Ecdsa");
+
+  // precompute the hash of the curve
+  bytes32 private constant ECDSA_HASH = keccak256("Ecdsa");
+
+  // Default gas settings
+  uint64 immutable DEFAULT_SIGN_GAS;
+  uint64 immutable DEFAULT_CALLBACK_GAS;
 
   // NEAR signer account
   string public nearSigner;
@@ -159,18 +168,16 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     bytes unsignedPayload;
   }
 
-  // NEAR gas settings
-  struct GasSettings {
-    uint64 signGas;
-    uint64 callbackGas;
-  }
-
   constructor(
     address _owner,
     uint256 _delay,
     string memory _signer,
     address _wNEAR
   ) Ownable(_owner) EIP712(SIGNING_DOMAIN, SIGNATURE_VERSION) {
+    // gas
+    DEFAULT_SIGN_GAS = 30_000_000_000_000; // 30 Tgas
+    DEFAULT_CALLBACK_GAS = 10_000_000_000_000; // 10 Tgas
+
     // roles
     _setRoleAdmin(APPROVED_WITHDRAWER_ROLE, ADMIN_ROLE);
     _grantRole(ADMIN_ROLE, _owner);
