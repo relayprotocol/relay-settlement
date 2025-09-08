@@ -1,5 +1,5 @@
 import { task } from 'hardhat/config'
-import { decodeEventLog, zeroAddress } from 'viem'
+import { decodeEventLog, keccak256, zeroAddress } from 'viem'
 
 task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
   .addParam('allocator', 'The address of the allocator contract')
@@ -33,17 +33,15 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
         currency,
         data,
         depository,
+        nonce: keccak256(`0x${new Date().getTime().toString()}`),
         receiver: receiver || signer.account.address,
+        spender: receiver || signer.account.address,
       }
 
-      console.log('Submitting withdraw request with params', {
-        amount,
-        chainId,
-        currency,
-        data,
-        depository,
-        receiver: receiver || signer.account.address,
-      })
+      console.log(
+        'Submitting withdraw request with params',
+        submitWithdrawRequestParams
+      )
       const txHash = await allocator.write.submitWithdrawRequest(
         [submitWithdrawRequestParams],
         {

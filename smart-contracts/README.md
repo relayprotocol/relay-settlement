@@ -12,11 +12,11 @@ yarn hardhat deploy:allocator --owner <multisig-address> --delay 1
 # verfy contracts
 yarn hardhat ignition verify chain-1313161555
 
-# deploy the payload builder
-yarn hardhat deploy:payload-builder --payload-builder DummyPayloadBuilder
+# deploy the EVM payload builder (you can deploy other types as well)
+yarn run hardhat ignition deploy ignition/modules/EVMPayloadBuilder.ts
 
 # set dummy payload builder in allocator
-yarn hardhat allocator:set-payload-builder --builder <builder-address> --allocator <allocator-contract-address> --chain-id <depository-contract-chain> --depository <depository-contract-address> --network aurora-testnet
+yarn hardhat allocator:set-payload-builder --builder <builder-address> --allocator <allocator-contract-address> --chain-id <depository-contract-chain> --depository <depository-contract-address>
 
 # grant APPROVED_WITHDRAWER_ROLE to your address
 yarn hardhat allocator:allocator:add-withdrawer --allocator <allocator-contract-address>
@@ -25,7 +25,11 @@ yarn hardhat allocator:allocator:add-withdrawer --allocator <allocator-contract-
 yarn hardhat allocator:submit-withdraw --allocator <allocator-address> --chain-id <depository-chain-id> --depository <depository-contract-address>
 
 # sign payload
-yarn hardhat allocator:sign-payload --payload-id <payload-id> --allocator <allocator-address> --chain-id <depository-contract-chain> --depository <depository-contract-address>
+yarn hardhat allocator:sign-payload --payload-id <payload-id> --allocator <allocator-address>
+
+# submit the withdrawal to the depository contract (passing the payload builder enables formatting of the transaction)
+yarn hardhat depository:withdraw --payload-id <payload-id> --allocator <allocator-address> --payload-builder-type <payload-builder-name>
+
 ```
 
 We also have "end to end" tasks which can be used to deploy everything and submit transactions. This uses a lot of defaults, and roles are granted to the caller's address (you need to set the `DEPLOYER_PRIVATE_KEY` environment variable).

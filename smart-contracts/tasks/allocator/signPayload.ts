@@ -5,11 +5,6 @@ import { checkAndApproveWNEAR, getWNEARAddress } from '../../lib/aurora'
 task('allocator:sign-payload', 'Sign payload on allocator')
   .addParam('allocator', 'The address of the allocator contract')
   .addParam('payloadId', 'The payloadId to use')
-  .addParam('chainId', 'The chainId on which the withdrawal will be made')
-  .addParam(
-    'depository',
-    'The depository contract address from which to withdraw'
-  )
   .addOptionalParam('wnear', 'The address of the wNEAR contract')
   .setAction(
     async (

@@ -62,8 +62,16 @@ const networks = {
   },
 }
 
+const etherscan = {
+  apiKey: {
+    arbitrumSepolia: 'W5XNFPZS8D6JZ5AXVWD4XCG8B5ZH5JCD4Y',
+    auroraTestnet: 'T',
+  },
+  customChains: [],
+}
+
 Object.keys(nets).forEach((id) => {
-  const { slug, rpc } = nets[id]
+  const { slug, rpc, etherscan: networkEtherscan } = nets[id]
   let accounts
   const network = {
     chainId: Number(id),
@@ -75,6 +83,10 @@ Object.keys(nets).forEach((id) => {
   networks[slug] = {
     ...network,
     accounts,
+  }
+  if (networkEtherscan) {
+    etherscan.apiKey[slug] = networkEtherscan.apiKey
+    etherscan.customChains.push(networkEtherscan.config)
   }
 })
 
@@ -99,13 +111,6 @@ if (forkUrl) {
       url: forkUrl,
     },
   }
-}
-
-const etherscan = {
-  apiKey: {
-    arbitrumSepolia: 'W5XNFPZS8D6JZ5AXVWD4XCG8B5ZH5JCD4Y',
-    auroraTestnet: 'T',
-  },
 }
 
 const config: HardhatUserConfig = {
