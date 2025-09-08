@@ -21,6 +21,7 @@ export async function deployAllocator(options?: {
     },
   })
   const utils = await hre.viem.deployContract('Utils', [])
+  const chainSignatures = await hre.viem.deployContract('ChainSignatures', [])
   const allocatorParams = [
     options?.owner ?? owner.account.address, // owner
     options?.delay ?? DEFAULT_DELAY, // delay
@@ -34,6 +35,7 @@ export async function deployAllocator(options?: {
     {
       libraries: {
         AuroraSdk: auroraSdk.address,
+        ChainSignatures: chainSignatures.address,
         Utils: utils.address,
       },
     }

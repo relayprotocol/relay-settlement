@@ -1,23 +1,22 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
 import { expect } from 'chai'
-import { deployAllocator } from '../helpers/deployAllocator'
 import { hexToBytes, keccak256 } from 'viem'
+import hre from 'hardhat'
 
-describe('Allocator encodeJSONRequest', function () {
+describe('ChainSignatures encodeJSONRequest', function () {
   it('should correctly encode a JSON request with a payload hash', async function () {
-    const { allocator } = await loadFixture(deployAllocator)
+    const chainSignatures = await hre.viem.deployContract('ChainSignatures', [])
 
     // Create a test payload hash
     const payloadHash = keccak256('0x1234')
-    const version = 1n
+    const domainId = '1'
     // compute path hash
-    const allocatorAddress = allocator.address.toLowerCase().replace(/^0x/, '')
-    const path = '0x' + allocatorAddress.padStart(40, '0')
+    const path = '0xpath'
 
-    const result = await allocator.read.encodeJSONRequest([
+    const result = await chainSignatures.read.encodeJSONRequest([
       payloadHash,
       'Ecdsa',
-      version,
+      path,
+      domainId,
     ])
 
     // Convert result to string for easier comparison
@@ -28,23 +27,23 @@ describe('Allocator encodeJSONRequest', function () {
     expect(jsonResult.request.payload_v2).to.be.an('object')
     expect(jsonResult.request.payload_v2.Ecdsa).to.be.an('string')
     expect(jsonResult.request.path).to.equal(path)
-    expect(jsonResult.request.domain_id).to.equal(Number(version))
+    expect(jsonResult.request.domain_id).to.equal(Number(domainId))
   })
 
   it('should handle different paths', async function () {
-    const { allocator } = await loadFixture(deployAllocator)
+    const chainSignatures = await hre.viem.deployContract('ChainSignatures', [])
 
     const payloadHash = keccak256('0x1234')
-    const version = 1n
+    const domainId = '1'
 
     // compute path hash
-    const allocatorAddress = allocator.address.toLowerCase().replace(/^0x/, '')
-    const path = '0x' + allocatorAddress.padStart(40, '0')
+    const path = '0xpath'
 
-    const result = await allocator.read.encodeJSONRequest([
+    const result = await chainSignatures.read.encodeJSONRequest([
       payloadHash,
       'Ecdsa',
-      version,
+      path,
+      domainId,
     ])
 
     const resultStr = Buffer.from(hexToBytes(result)).toString('utf8')

@@ -10,6 +10,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Hub} from "./Hub.sol";
 import {Utils} from "./Utils.sol";
+import {ChainSignatures} from "./ChainSignatures.sol";
 
 interface ISafe {
   function isOwner(address) external view returns (bool);
@@ -74,9 +75,6 @@ contract Allocator is AccessControl, Ownable, EIP712 {
   bytes32 public constant APPROVED_WITHDRAWER_ROLE =
     keccak256("APPROVED_WITHDRAWER_ROLE");
   bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
-  
-  // precompute the hash of the curve
-  bytes32 private constant ECDSA_HASH = keccak256("Ecdsa");
 
   // precompute the hash of the curve
   bytes32 private constant ECDSA_HASH = keccak256("Ecdsa");
@@ -372,7 +370,12 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     );
 
     for (uint256 i = 0; i < hashesToSign.length; i++) {
-      _signUsingChainSignatures(payloadId, hashesToSign[i], payloadBuilder, gasSettings);
+      _signUsingChainSignatures(
+        payloadId,
+        hashesToSign[i],
+        payloadBuilder,
+        gasSettings
+      );
     }
   }
 
@@ -387,9 +390,10 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     }
 
     // Encode the JSON request for the signer
-    bytes memory data = encodeJSONRequest(
+    bytes memory data = ChainSignatures.encodeJSONRequest(
       hashToSign,
       payloadBuilder.curve(),
+      SIGNER_PATH,
       keccak256(abi.encodePacked(payloadBuilder.curve())) == ECDSA_HASH
         ? "0"
         : "1"
@@ -442,56 +446,6 @@ contract Allocator is AccessControl, Ownable, EIP712 {
 
     signedPayloads[payloadId][hashToSign] = result.output;
     emit PayloadWithdrawSigned(payloadId, hashToSign, result.output);
-  }
-
-  /// @notice Encodes a JSON request for the signer
-  /// @param payloadHashToSign The hash of the payload to sign
-  /// @param curve The curve to use for signing
-  /// @param domain_id The domain ID
-  /// @return The encoded JSON request
-  function encodeJSONRequest(
-    bytes32 payloadHashToSign,
-    string memory curve,
-    string memory domain_id
-  ) public view returns (bytes memory) {
-    return
-      abi.encodePacked(
-        // solhint-disable-next-line quotes
-        '{"request":{"payload_v2": { "',
-        curve,
-        // solhint-disable-next-line quotes
-        '":"',
-        stringifyBytes(payloadHashToSign),
-        // solhint-disable-next-line quotes
-        '"},"path":"',
-        SIGNER_PATH,
-        // solhint-disable-next-line quotes
-        '","domain_id":',
-        domain_id,
-        // solhint-disable-next-line quotes
-        "}}"
-      );
-  }
-
-  /// @notice Converts a bytes32 value to its string representation
-  /// @param hexBytes The bytes32 value to convert
-  /// @return The string representation of the bytes32 value
-  function stringifyBytes(
-    bytes32 hexBytes
-  ) public pure returns (string memory) {
-    bytes16 alphabet = 0x30313233343536373839616263646566; // "0123456789abcdef"
-    bytes memory str = new bytes(64);
-    for (uint256 i = 0; i < 32; ) {
-      uint8 b = uint8(hexBytes[i]);
-      // precompute offset
-      uint256 offset = i << 1; // i * 2
-      str[offset] = alphabet[b >> 4]; // high nibble
-      str[offset + 1] = alphabet[b & 0x0f]; // low nibble
-      unchecked {
-        i++;
-      }
-    }
-    return string(str);
   }
 
   /// @notice Verifies if the withdrawal request can be achieved.

@@ -1,14 +1,13 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
+import hre from 'hardhat'
 import { expect } from 'chai'
 import { keccak256 } from 'viem'
-import { deployAllocator } from '../helpers/deployAllocator'
 
 describe('Allocator stringifyBytes()', function () {
   it('should correctly convert mixed case hex bytes to a string', async function () {
-    const { allocator } = await loadFixture(deployAllocator)
+    const chainSignatures = await hre.viem.deployContract('ChainSignatures', [])
 
     const bytes = keccak256('0x1A2b3C4d')
-    const result = await allocator.read.stringifyBytes([bytes])
+    const result = await chainSignatures.read.stringifyBytes([bytes])
 
     // Expected decimal values:
     expect(result).to.equal(

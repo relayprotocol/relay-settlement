@@ -7,6 +7,7 @@ const AllocatorModule = buildModule('Allocator', (m) => {
   const wNEAR = m.getParameter('wNEAR')
   const Codec = m.library('Codec')
   const AuroraXccUtils = m.library('AuroraXccUtils')
+  const ChainSignatures = m.library('ChainSignatures')
   const AuroraSdk = m.library('AuroraSdk', {
     libraries: {
       AuroraXccUtils,
@@ -19,6 +20,7 @@ const AllocatorModule = buildModule('Allocator', (m) => {
   const allocator = m.contract('Allocator', [owner, delay, signer, wNEAR], {
     libraries: {
       AuroraSdk,
+      ChainSignatures,
       Utils,
     },
   })
