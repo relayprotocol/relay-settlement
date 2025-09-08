@@ -8,7 +8,7 @@ const APPROVED_WITHDRAWER_ROLE = keccak256(
   'APPROVED_WITHDRAWER_ROLE'
 ) as `0x${string}`
 
-describe('Allocator suspend/resume', function () {
+describe('Allocator suspend', function () {
   async function deployAllocatorWithSafe() {
     const [owner, admin, attacker, solver] = await hre.viem.getWalletClients()
     const publicClient = await hre.viem.getPublicClient()
@@ -89,8 +89,8 @@ describe('Allocator suspend/resume', function () {
     })
   })
 
-  describe('enable()', function () {
-    it('should require multisig signature to enable the contract', async function () {
+  describe('re-add role after being suspended', function () {
+    it('should require multisig signature to add a new WITHDRAWER', async function () {
       const { allocator, owner, admin, publicClient, mockSafe, solver } =
         await loadFixture(deployAllocatorWithSafe)
 
@@ -131,7 +131,7 @@ describe('Allocator suspend/resume', function () {
       ).to.equal(true)
     })
 
-    it('should revert when non-owner tries to enable the contract', async function () {
+    it('should revert when non-owner tries to add a new WITHDRAWER', async function () {
       const { allocator, admin, attacker, publicClient, solver } =
         await loadFixture(deployAllocatorWithSafe)
 
@@ -156,7 +156,7 @@ describe('Allocator suspend/resume', function () {
             account: attacker.account,
           }
         )
-      ).to.be.rejectedWith('AccessControlUnauthorizedAccount')
+      ).to.be.rejectedWith('OwnableUnauthorizedAccount')
     })
   })
 })

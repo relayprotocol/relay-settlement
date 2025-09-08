@@ -210,6 +210,17 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     initCall.transact();
   }
 
+  function grantRole(bytes32 role, address newOwner) public override onlyOwner {
+    _grantRole(role, newOwner);
+  }
+
+  function revokeRole(
+    bytes32 role,
+    address newOwner
+  ) public override onlyOwner {
+    _revokeRole(role, newOwner);
+  }
+
   /// @notice prevents a withdrawer from withdrawing
   /// @param withdrawer Address to prevent from withdrawing
   function suspend(address withdrawer) public onlyMultisigOwner {
