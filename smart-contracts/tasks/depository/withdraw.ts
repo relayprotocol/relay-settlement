@@ -24,13 +24,7 @@ task('depository:withdraw', 'Withdraw from depository')
 
   .setAction(
     async (
-      {
-        allocator: allocatorAddress,
-        payloadId,
-        depository,
-        chainId,
-        payloadBuilderType,
-      },
+      { allocator: allocatorAddress, payloadId, payloadBuilderType },
       hre
     ) => {
       const { viem } = hre
