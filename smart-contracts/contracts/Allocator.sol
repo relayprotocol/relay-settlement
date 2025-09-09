@@ -90,14 +90,14 @@ contract Allocator is AccessControl, Ownable, EIP712 {
   NEAR public near;
 
   // global delay
-  uint256 public delay;
+  uint64 public delay;
 
   // used by the MPC signer to sign the payload
   string public SIGNER_PATH;
 
   // Delay configuration struct
   struct DelayConfig {
-    uint256 delay;
+    uint64 delay;
     bool isSet;
   }
 
@@ -168,7 +168,7 @@ contract Allocator is AccessControl, Ownable, EIP712 {
 
   constructor(
     address _owner,
-    uint256 _delay,
+    uint64 _delay,
     string memory _signer,
     address _wNEAR
   ) Ownable(_owner) EIP712(SIGNING_DOMAIN, SIGNATURE_VERSION) {
@@ -241,7 +241,7 @@ contract Allocator is AccessControl, Ownable, EIP712 {
 
   /// @notice Sets the global delay for withdrawal requests
   /// @param _delay Delay in seconds
-  function setDelay(uint256 _delay) public onlyOwner {
+  function setDelay(uint64 _delay) public onlyOwner {
     delay = _delay;
     emit DelayChanged(delay);
   }
@@ -253,7 +253,7 @@ contract Allocator is AccessControl, Ownable, EIP712 {
   function setDepositoryDelay(
     uint256 chainId,
     string calldata depository,
-    uint256 _delay
+    uint64 _delay
   ) external onlyOwner {
     depositoryDelays[chainId][depository].delay = _delay;
     depositoryDelays[chainId][depository].isSet = true;
