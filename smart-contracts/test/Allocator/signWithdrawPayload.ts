@@ -2,12 +2,12 @@ import {
   loadFixture,
   time,
 } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
+import { generateAddress } from '@relay-protocol/hub-utils'
 import { expect } from 'chai'
 import hre from 'hardhat'
 import { decodeEventLog, getAddress, keccak256, zeroAddress } from 'viem'
 import { deployAllocator } from '../helpers/deployAllocator'
 import { deployHub } from '../helpers/deployHub'
-import { generateAddress } from '@relay-protocol/hub-utils'
 import { extractEvent } from '../helpers/extractEvent'
 
 const chainId = 1n
@@ -53,19 +53,18 @@ describe('Allocator signWithdrawPayload', function () {
     // approve from owner for init()
     await wNEAR.write.approve([allocator.address, wNearAmount])
 
+    const requestParams = {
+      amount: 1n,
+      chainId,
+      currency: zeroAddress,
+      data: '0x' as `0x${string}`,
+      depository: depository.account.address,
+      nonce: keccak256('0xnonce'),
+      receiver: solver.account.address,
+      spender: user.account.address,
+    }
     const txHash = await allocator.write.submitWithdrawRequest(
-      [
-        {
-          amount: 1n,
-          chainId,
-          currency: zeroAddress,
-          data: '0x' as `0x${string}`,
-          depository: depository.account.address,
-          nonce: keccak256('0xnonce'),
-          receiver: solver.account.address,
-          spender: user.account.address,
-        },
-      ],
+      [requestParams],
       {
         account: solver.account,
       }
@@ -86,18 +85,19 @@ describe('Allocator signWithdrawPayload', function () {
       depository,
       owner,
       payloadBuilder,
-      payloadId: payloadBuiltEvent.args.payloadId,
       publicClient,
+      requestParams,
       solver,
       user,
       utils,
       wNEAR,
+      withdrawRequestHash: payloadBuiltEvent.args.withdrawRequestHash,
     }
   }
 
   describe('with an approved signer', () => {
     it('should successfully sign a payload with custom gas settings', async function () {
-      const { allocator, solver, payloadId, publicClient, wNEAR } =
+      const { allocator, solver, publicClient, wNEAR, requestParams } =
         await loadFixture(deployAllocatorWithSetup)
 
       // init transact
@@ -107,7 +107,7 @@ describe('Allocator signWithdrawPayload', function () {
       await time.increase(await allocator.read.delay())
 
       const signHash = await allocator.write.signWithdrawPayload(
-        [payloadId, '0x', gasSettings],
+        [requestParams, '0x', gasSettings],
         {
           account: solver.account,
         }
@@ -132,14 +132,17 @@ describe('Allocator signWithdrawPayload', function () {
     })
 
     it('should revert when trying to sign a payload that is not ready', async function () {
-      const { allocator, solver, payloadId } = await loadFixture(
+      const { allocator, solver, requestParams } = await loadFixture(
         deployAllocatorWithSetup
       )
 
       await expect(
-        allocator.write.signWithdrawPayload([payloadId, '0x', gasSettings], {
-          account: solver.account,
-        })
+        allocator.write.signWithdrawPayload(
+          [requestParams, '0x', gasSettings],
+          {
+            account: solver.account,
+          }
+        )
       ).to.be.rejectedWith('PayloadNotReady')
     })
   })
@@ -232,19 +235,18 @@ describe('Allocator signWithdrawPayload', function () {
       const amount = 1n
 
       // Submit the withdraw request
+      const requestParams = {
+        amount,
+        chainId,
+        currency: zeroAddress,
+        data: '0x' as `0x${string}`,
+        depository: depository.account.address,
+        nonce: keccak256('0xnonce'),
+        receiver: user.account.address,
+        spender: userHubAddress,
+      }
       const txHash = await allocator.write.submitWithdrawRequest(
-        [
-          {
-            amount,
-            chainId,
-            currency: zeroAddress,
-            data: '0x' as `0x${string}`,
-            depository: depository.account.address,
-            nonce: keccak256('0xnonce'),
-            receiver: user.account.address,
-            spender: userHubAddress,
-          },
-        ],
+        [requestParams],
         {
           account: solver.account,
         }
@@ -269,11 +271,12 @@ describe('Allocator signWithdrawPayload', function () {
         hub,
         otherAccounts,
         owner,
-        payloadId: payloadBuiltEvent.args.payloadId,
         publicClient,
+        requestParams,
         tokenId,
         userHubAddress,
         wNEAR,
+        withdrawRequestHash: payloadBuiltEvent.args.withdrawRequestHash,
       }
     }
 
@@ -281,13 +284,14 @@ describe('Allocator signWithdrawPayload', function () {
       const {
         allocator,
         amount,
-        payloadId,
+
         otherAccounts,
         owner,
         hub,
         userHubAddress,
         wNEAR,
         tokenId,
+        requestParams,
       } = await loadFixture(deployAllocatorAndSetHub)
       const [user] = otherAccounts
 
@@ -324,7 +328,7 @@ describe('Allocator signWithdrawPayload', function () {
       })
 
       await allocator.write.signWithdrawPayload(
-        [payloadId, '0x', gasSettings],
+        [requestParams, '0x', gasSettings],
         {
           account: user.account,
         }
@@ -344,15 +348,18 @@ describe('Allocator signWithdrawPayload', function () {
     })
 
     it('should fail if the caller is not an operator for the recipient', async () => {
-      const { allocator, payloadId, otherAccounts } = await loadFixture(
+      const { allocator, requestParams, otherAccounts } = await loadFixture(
         deployAllocatorAndSetHub
       )
       const [user] = otherAccounts
 
       await expect(
-        allocator.write.signWithdrawPayload([payloadId, '0x', gasSettings], {
-          account: user.account,
-        })
+        allocator.write.signWithdrawPayload(
+          [requestParams, '0x', gasSettings],
+          {
+            account: user.account,
+          }
+        )
       ).to.be.rejectedWith('CallerIsNotApproved')
     })
 
@@ -360,10 +367,11 @@ describe('Allocator signWithdrawPayload', function () {
       const {
         allocator,
         amount,
-        payloadId,
+
         otherAccounts,
         owner,
         hub,
+        requestParams,
         userHubAddress,
         tokenId,
       } = await loadFixture(deployAllocatorAndSetHub)
@@ -386,52 +394,34 @@ describe('Allocator signWithdrawPayload', function () {
       )
 
       await expect(
-        allocator.write.signWithdrawPayload([payloadId, '0x', gasSettings], {
-          account: user.account,
-        })
+        allocator.write.signWithdrawPayload(
+          [requestParams, '0x', gasSettings],
+          {
+            account: user.account,
+          }
+        )
       ).to.be.rejected
     })
 
     it('should work for an EOA and transfer its tokens to the allocator', async () => {
-      const {
-        allocator,
-        amount,
-        otherAccounts,
-        hub,
-        wNEAR,
-        tokenId,
-        publicClient,
-      } = await loadFixture(deployAllocatorAndSetHub)
+      const { allocator, amount, otherAccounts, hub, wNEAR, tokenId } =
+        await loadFixture(deployAllocatorAndSetHub)
       const [depository, user] = otherAccounts
 
       // Submit a new withdraw request
-      const txHash = await allocator.write.submitWithdrawRequest(
-        [
-          {
-            amount,
-            chainId,
-            currency: zeroAddress,
-            data: '0x' as `0x${string}`,
-            depository: depository.account.address,
-            nonce: keccak256('0xnonce'),
-            receiver: user.account.address,
-            spender: user.account.address,
-          },
-        ],
-        {
-          account: user.account,
-        }
-      )
-
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash: txHash,
+      const newRequestParams = {
+        amount,
+        chainId,
+        currency: zeroAddress,
+        data: '0x' as `0x${string}`,
+        depository: depository.account.address,
+        nonce: keccak256('0xnonce'),
+        receiver: user.account.address,
+        spender: user.account.address,
+      }
+      await allocator.write.submitWithdrawRequest([newRequestParams], {
+        account: user.account,
       })
-
-      const payloadBuiltEvent = await extractEvent(
-        receipt,
-        'PayloadBuilt',
-        allocator.abi
-      )
 
       const userBalanceBefore = await hub.read.balanceOf([
         user.account.address,
@@ -461,7 +451,7 @@ describe('Allocator signWithdrawPayload', function () {
       await time.increase(await allocator.read.delay())
 
       await allocator.write.signWithdrawPayload(
-        [payloadBuiltEvent.args.payloadId, '0x', gasSettings],
+        [newRequestParams, '0x', gasSettings],
         {
           account: user.account,
         }
@@ -482,8 +472,9 @@ describe('Allocator signWithdrawPayload', function () {
 
     describe('when using signatures to withdraw', () => {
       it('should fail if the spender is an alias of the receiver but no signature is provided', async () => {
-        const { allocator, amount, otherAccounts, wNEAR, publicClient } =
-          await loadFixture(deployAllocatorAndSetHub)
+        const { allocator, amount, otherAccounts, wNEAR } = await loadFixture(
+          deployAllocatorAndSetHub
+        )
         const [depository, user] = otherAccounts
 
         const spender = generateAddress({
@@ -493,33 +484,19 @@ describe('Allocator signWithdrawPayload', function () {
         })
 
         // Submit a new withdraw request
-        const txHash = await allocator.write.submitWithdrawRequest(
-          [
-            {
-              amount,
-              chainId,
-              currency: zeroAddress,
-              data: '0x' as `0x${string}`,
-              depository: depository.account.address,
-              nonce: keccak256('0xnonce'),
-              receiver: user.account.address,
-              spender,
-            },
-          ],
-          {
-            account: user.account,
-          }
-        )
-
-        const receipt = await publicClient.waitForTransactionReceipt({
-          hash: txHash,
+        const newRequestParams = {
+          amount,
+          chainId,
+          currency: zeroAddress,
+          data: '0x' as `0x${string}`,
+          depository: depository.account.address,
+          nonce: keccak256('0xnonce'),
+          receiver: user.account.address,
+          spender,
+        }
+        await allocator.write.submitWithdrawRequest([newRequestParams], {
+          account: user.account,
         })
-
-        const payloadBuiltEvent = await extractEvent(
-          receipt,
-          'PayloadBuilt',
-          allocator.abi
-        )
 
         // set wNEAR approvals
         const wNearAmount = 9000000000000000000000000n
@@ -539,7 +516,7 @@ describe('Allocator signWithdrawPayload', function () {
 
         await expect(
           allocator.write.signWithdrawPayload(
-            [payloadBuiltEvent.args.payloadId, '0x', gasSettings],
+            [newRequestParams, '0x', gasSettings],
             {
               account: user.account,
             }
@@ -559,33 +536,19 @@ describe('Allocator signWithdrawPayload', function () {
         })
 
         // Submit a new withdraw request
-        const txHash = await allocator.write.submitWithdrawRequest(
-          [
-            {
-              amount,
-              chainId,
-              currency: zeroAddress,
-              data: '0x' as `0x${string}`,
-              depository: depository.account.address,
-              nonce: keccak256('0xnonce'),
-              receiver: user.account.address,
-              spender,
-            },
-          ],
-          {
-            account: user.account,
-          }
-        )
-
-        const receipt = await publicClient.waitForTransactionReceipt({
-          hash: txHash,
+        const newRequestParams = {
+          amount,
+          chainId,
+          currency: zeroAddress,
+          data: '0x' as `0x${string}`,
+          depository: depository.account.address,
+          nonce: keccak256('0xnonce'),
+          receiver: user.account.address,
+          spender,
+        }
+        await allocator.write.submitWithdrawRequest([newRequestParams], {
+          account: user.account,
         })
-
-        const payloadBuiltEvent = await extractEvent(
-          receipt,
-          'PayloadBuilt',
-          allocator.abi
-        )
 
         // set wNEAR approvals
         const wNearAmount = 9000000000000000000000000n
@@ -641,7 +604,7 @@ describe('Allocator signWithdrawPayload', function () {
 
         await expect(
           allocator.write.signWithdrawPayload(
-            [payloadBuiltEvent.args.payloadId, signature, gasSettings],
+            [newRequestParams, signature, gasSettings],
             {
               account: user.account,
             }
@@ -671,33 +634,19 @@ describe('Allocator signWithdrawPayload', function () {
         const nonce = keccak256('0xnonce')
 
         // Submit a new withdraw request
-        const txHash = await allocator.write.submitWithdrawRequest(
-          [
-            {
-              amount,
-              chainId,
-              currency: zeroAddress,
-              data: '0x' as `0x${string}`,
-              depository: depository.account.address,
-              nonce,
-              receiver: user.account.address,
-              spender,
-            },
-          ],
-          {
-            account: user.account,
-          }
-        )
-
-        const receipt = await publicClient.waitForTransactionReceipt({
-          hash: txHash,
+        const newRequestParams = {
+          amount,
+          chainId,
+          currency: zeroAddress,
+          data: '0x' as `0x${string}`,
+          depository: depository.account.address,
+          nonce,
+          receiver: user.account.address,
+          spender,
+        }
+        await allocator.write.submitWithdrawRequest([newRequestParams], {
+          account: user.account,
         })
-
-        const payloadBuiltEvent = await extractEvent(
-          receipt,
-          'PayloadBuilt',
-          allocator.abi
-        )
 
         const spenderBalanceBefore = await hub.read.balanceOf([
           spender,
@@ -760,7 +709,7 @@ describe('Allocator signWithdrawPayload', function () {
         })
 
         await allocator.write.signWithdrawPayload(
-          [payloadBuiltEvent.args.payloadId, signature, gasSettings],
+          [newRequestParams, signature, gasSettings],
           {
             account: user.account,
           }
@@ -804,34 +753,20 @@ describe('Allocator signWithdrawPayload', function () {
         // Generate unique nonces for the replay attack test
         const nonce1 = keccak256('replay_test_1')
 
+        const requestParams = {
+          amount,
+          chainId,
+          currency: zeroAddress,
+          data: '0x' as `0x${string}`,
+          depository: depository.account.address,
+          nonce: nonce1,
+          receiver: user.account.address,
+          spender,
+        }
         // Submit the first withdraw request
-        const txHash1 = await allocator.write.submitWithdrawRequest(
-          [
-            {
-              amount,
-              chainId,
-              currency: zeroAddress,
-              data: '0x' as `0x${string}`,
-              depository: depository.account.address,
-              nonce: nonce1,
-              receiver: user.account.address,
-              spender,
-            },
-          ],
-          {
-            account: user.account,
-          }
-        )
-
-        const receipt1 = await publicClient.waitForTransactionReceipt({
-          hash: txHash1,
+        await allocator.write.submitWithdrawRequest([requestParams], {
+          account: user.account,
         })
-
-        const payloadBuiltEvent1 = await extractEvent(
-          receipt1,
-          'PayloadBuilt',
-          allocator.abi
-        )
 
         // Use the same nonce as in the first transaction
         const nonce = nonce1
@@ -883,40 +818,20 @@ describe('Allocator signWithdrawPayload', function () {
 
         // First signature should work
         await allocator.write.signWithdrawPayload(
-          [payloadBuiltEvent1.args.payloadId, signature, gasSettings],
+          [requestParams, signature, gasSettings],
           {
             account: user.account,
           }
         )
 
         // Now submit a second request with the same signature structure but incremented nonce
-        const txHash2 = await allocator.write.submitWithdrawRequest(
-          [
-            {
-              amount,
-              chainId,
-              currency: zeroAddress,
-              data: '0x' as `0x${string}`,
-              depository: depository.account.address,
-              nonce: keccak256('0xnonce'),
-              receiver: user.account.address,
-              spender, // Same request structure
-            },
-          ],
-          {
-            account: user.account,
-          }
-        )
-
-        const receipt2 = await publicClient.waitForTransactionReceipt({
-          hash: txHash2,
+        const newRequestParams = {
+          ...requestParams,
+          nonce: keccak256('0xnonce'),
+        }
+        await allocator.write.submitWithdrawRequest([newRequestParams], {
+          account: user.account,
         })
-
-        const payloadBuiltEvent2 = await extractEvent(
-          receipt2,
-          'PayloadBuilt',
-          allocator.abi
-        )
 
         // Wait for delay
         await time.increase(await allocator.read.delay())
@@ -924,7 +839,7 @@ describe('Allocator signWithdrawPayload', function () {
         // Trying to reuse the same signature should fail (nonce mismatch)
         await expect(
           allocator.write.signWithdrawPayload(
-            [payloadBuiltEvent2.args.payloadId, signature, gasSettings],
+            [newRequestParams, signature, gasSettings],
             {
               account: user.account,
             }

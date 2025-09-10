@@ -107,7 +107,7 @@ describe('Allocator submitWithdrawRequest', function () {
           allocator.read.depositoryDelays([chainId, depository]),
         ])
       expect(payloadBuiltEvent).to.not.equal(undefined)
-      expect(payloadBuiltEvent.args.payloadId).to.not.equal(undefined)
+      expect(payloadBuiltEvent.args.withdrawRequestHash).to.not.equal(undefined)
       expect(payloadBuiltEvent.args.payload).to.equal(toHex('dummy payload'))
       expect(payloadBuiltEvent.args.timestamp).to.equal(
         block.timestamp + (initialIsSet ? initialDelay : defaultDelay)
@@ -144,8 +144,10 @@ describe('Allocator submitWithdrawRequest', function () {
         'PayloadBuilt',
         allocator.abi
       )
-      const payloadId = payloadBuiltEvent.args.payloadId
-      const [, unsignedPayload] = await allocator.read.payloads([payloadId])
+      const withdrawRequestHash = payloadBuiltEvent.args.withdrawRequestHash
+      const unsignedPayload = await allocator.read.payloads([
+        withdrawRequestHash,
+      ])
       expect(unsignedPayload).to.equal(payloadBuiltEvent.args.payload)
     })
 
@@ -180,8 +182,10 @@ describe('Allocator submitWithdrawRequest', function () {
         allocator.abi
       )
 
-      const payloadId = payloadBuiltEvent.args.payloadId
-      const timestamp = await allocator.read.payloadTimestamps([payloadId])
+      const withdrawRequestHash = payloadBuiltEvent.args.withdrawRequestHash
+      const timestamp = await allocator.read.payloadTimestamps([
+        withdrawRequestHash,
+      ])
       const block = await publicClient.getBlock({
         blockNumber: receipt.blockNumber,
       })
