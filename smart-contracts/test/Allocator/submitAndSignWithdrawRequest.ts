@@ -7,6 +7,11 @@ import { extractEvent } from '../helpers/extractEvent'
 
 const chainId = 1n
 
+const gasSettings = {
+  callbackGas: 5000000000000n,
+  signGas: 20000000000000n,
+}
+
 describe('Allocator submitAndSignWithdrawRequest', function () {
   async function deployAllocatorWithSetup() {
     const { allocator, owner, otherAccounts, ...rest } = await deployAllocator()
@@ -63,6 +68,7 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
             spender: owner.account.address,
           },
           '0x',
+          gasSettings,
         ],
         {
           account: hub.account,
@@ -95,6 +101,7 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
           spender: owner.account.address,
         },
         '0x',
+        gasSettings,
       ])
     ).to.be.rejectedWith('PayloadNotReady')
     await allocator.write.setDepositoryDelay([
@@ -154,6 +161,7 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
             spender: owner.account.address,
           },
           '0x',
+          gasSettings,
         ],
         {
           account: owner.account,
@@ -199,6 +207,7 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
             spender: owner.account.address,
           },
           '0x',
+          gasSettings,
         ],
         {
           account: owner.account,

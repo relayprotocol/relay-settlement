@@ -79,10 +79,6 @@ contract Allocator is AccessControl, Ownable, EIP712 {
   // precompute the hash of the curve
   bytes32 private constant ECDSA_HASH = keccak256("Ecdsa");
 
-  // Default gas settings
-  uint64 immutable DEFAULT_SIGN_GAS;
-  uint64 immutable DEFAULT_CALLBACK_GAS;
-
   // NEAR signer account
   string public nearSigner;
 
@@ -167,10 +163,6 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     string memory _signer,
     address _wNEAR
   ) Ownable(_owner) EIP712(SIGNING_DOMAIN, SIGNATURE_VERSION) {
-    // gas
-    DEFAULT_SIGN_GAS = 30_000_000_000_000; // 30 Tgas
-    DEFAULT_CALLBACK_GAS = 10_000_000_000_000; // 10 Tgas
-
     // roles
     _setRoleAdmin(APPROVED_WITHDRAWER_ROLE, ADMIN_ROLE);
     _grantRole(ADMIN_ROLE, _owner);
@@ -272,14 +264,11 @@ contract Allocator is AccessControl, Ownable, EIP712 {
   /// @param signature The signature of the withdraw request, if sent on behalf of a recipient
   function submitAndSignWithdrawRequest(
     SubmitWithdrawRequest calldata params,
-    bytes memory signature
+    bytes memory signature,
+    GasSettings memory gasSettings
   ) public {
     _submitWithdrawRequest(params);
-    signWithdrawPayload(
-      params,
-      signature,
-      GasSettings(DEFAULT_SIGN_GAS, DEFAULT_CALLBACK_GAS)
-    );
+    signWithdrawPayload(params, signature, gasSettings);
   }
 
   /// @notice submits a withdraw request to the payload builder, store the returned payload
