@@ -94,7 +94,7 @@ task(
 
       // Check and approve wNEAR allowance
       await checkAndApproveWNEAR(hre, publicClient, owner, allocatorAddress)
-      const payloadId = await run('allocator:submit-withdraw', {
+      const withdrawRequestHash = await run('allocator:submit-withdraw', {
         allocator: allocatorAddress,
         amount,
         chainId: chainId.toString(),
@@ -105,7 +105,9 @@ task(
       })
 
       // Get the payload
-      const payload = await allocator.read.unsignedPayloads([payloadId])
+      const payload = await allocator.read.unsignedPayloads([
+        withdrawRequestHash,
+      ])
 
       // decode payload
       const message = await decodeDepositoryRequest(payload)
@@ -118,7 +120,7 @@ task(
         allocator: allocatorAddress,
         chainId: chainId.toString(),
         depository: depositoryAddress,
-        payloadId,
+        withdrawRequestHash,
         wnear,
       })
 
@@ -135,7 +137,7 @@ task(
 
       // Wait 10 seconds to "wait" for the signature to arrive
       let signedPayload = await allocator.read.signedPayloads([
-        payloadId,
+        withdrawRequestHash,
         payloadHashes[0],
       ])
       while (signedPayload === '0x') {
@@ -143,7 +145,7 @@ task(
         console.log('Waiting for signed payload...')
         await wait(1)
         signedPayload = await allocator.read.signedPayloads([
-          payloadId,
+          withdrawRequestHash,
           payloadHashes[0],
         ])
       }

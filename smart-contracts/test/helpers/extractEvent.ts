@@ -2,7 +2,7 @@ import { decodeEventLog, decodeEventLog, TransactionReceipt } from 'viem'
 
 interface PayloadBuiltEvent {
   args: {
-    payloadId: `0x${string}`
+    withdrawRequestHash: `0x${string}`
     payload: `0x${string}`
   }
 }

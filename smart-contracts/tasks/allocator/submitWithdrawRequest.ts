@@ -73,8 +73,8 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
         return // Exit or handle the missing event scenario
       }
 
-      const { payloadId } = payloadBuiltEvent.args
-      console.log(`payloadId: ${payloadId}`)
-      return payloadId
+      const { withdrawRequestHash } = payloadBuiltEvent.args
+      console.log(`withdrawRequestHash: ${withdrawRequestHash}`)
+      return withdrawRequestHash
     }
   )

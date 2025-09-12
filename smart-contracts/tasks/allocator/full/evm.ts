@@ -78,7 +78,7 @@ task(
       })
 
       // Submit a withdraw request to the Allocator for an EVM chain!
-      const payloadId = await run('allocator:submit-withdraw', {
+      const withdrawRequestHash = await run('allocator:submit-withdraw', {
         allocator: allocatorAddress,
         amount,
         chainId,
@@ -88,7 +88,9 @@ task(
       })
 
       // Get the payload
-      const payload = await allocator.read.unsignedPayloads([payloadId])
+      const payload = await allocator.read.unsignedPayloads([
+        withdrawRequestHash,
+      ])
       const request = decodeCallRequest(payload)
 
       // Trigger a signature
@@ -98,7 +100,7 @@ task(
         allocator: allocatorAddress,
         chainId,
         depository: depositoryAddress,
-        payloadId,
+        withdrawRequestHash,
         wnear,
       })
 
@@ -116,14 +118,14 @@ task(
 
       // Wait 10 seconds to "wait" for the signature to arrive
       let signedPayload = await allocator.read.signedPayloads([
-        payloadId,
+        withdrawRequestHash,
         payloadHashes[0],
       ])
       while (signedPayload === '0x') {
         console.log('Waiting for signed payload...')
         await wait(1)
         signedPayload = await allocator.read.signedPayloads([
-          payloadId,
+          withdrawRequestHash,
           payloadHashes[0],
         ])
       }

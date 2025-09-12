@@ -122,7 +122,7 @@ task(
         .toOutputScript(recipient, bitcoin.networks.testnet)
         .toString('base64')
 
-      const payloadId = await run('allocator:submit-withdraw', {
+      const withdrawRequestHash = await run('allocator:submit-withdraw', {
         allocator: allocatorAddress,
         amount,
         chainId: bitcoinChainId.toString(),
@@ -134,7 +134,9 @@ task(
       })
 
       // Get the payload
-      const payload = await allocator.read.unsignedPayloads([payloadId])
+      const payload = await allocator.read.unsignedPayloads([
+        withdrawRequestHash,
+      ])
 
       // Trigger a signature
       await wait(delay)
@@ -143,7 +145,7 @@ task(
         allocator: allocatorAddress,
         chainId: bitcoinChainId.toString(),
         depository: zeroAddress,
-        payloadId,
+        withdrawRequestHash,
         wnear,
       })
 
@@ -162,11 +164,17 @@ task(
 
       for (let i = 0; i < payloadHashes.length; i++) {
         const hash = payloadHashes[i]
-        let signature = await allocator.read.signedPayloads([payloadId, hash])
+        let signature = await allocator.read.signedPayloads([
+          withdrawRequestHash,
+          hash,
+        ])
         while (signature === '0x') {
           console.log('Waiting for signed payload...')
           await wait(1)
-          signature = await allocator.read.signedPayloads([payloadId, hash])
+          signature = await allocator.read.signedPayloads([
+            withdrawRequestHash,
+            hash,
+          ])
         }
         signedHashes.push(extractNearSignature(signature))
       }
