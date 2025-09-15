@@ -7,6 +7,7 @@ const typescriptEslint = require('typescript-eslint')
 const evmAddressPlugin = require('eslint-plugin-evm-address-to-checksummed')
 const jsonPlugin = require('eslint-plugin-json')
 const sortKeysFix = require('eslint-plugin-sort-keys-fix')
+const noOnlyTestsPlugin = require('eslint-plugin-no-only-tests')
 
 /**
  * @type {ESLintConfig}
@@ -41,11 +42,13 @@ module.exports = [
       'evm-address-to-checksummed': evmAddressPlugin,
       json: jsonPlugin,
       'sort-keys-fix': sortKeysFix,
+      'no-only-tests': noOnlyTestsPlugin,
     },
     rules: {
       'prettier/prettier': 'error',
       'linebreak-style': ['error', 'unix'],
       'mocha/no-exclusive-tests': 'error',
+      'no-only-tests/no-only-tests': 'error',
       quotes: [
         'error',
         'single',

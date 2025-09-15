@@ -1598,6 +1598,7 @@ __metadata:
     eslint-plugin-evm-address-to-checksummed: "npm:0.0.6"
     eslint-plugin-json: "npm:4.0.1"
     eslint-plugin-mocha: "npm:10.5.0"
+    eslint-plugin-no-only-tests: "npm:3.3.0"
     eslint-plugin-prettier: "npm:5.2.6"
     eslint-plugin-sort-keys-fix: "npm:1.1.2"
     typescript-eslint: "npm:8.31.0"
@@ -4391,6 +4392,13 @@ __metadata:
   peerDependencies:
     eslint: ">=7.0.0"
   checksum: 10c0/49b5d3a9df038048bd4483f4d4c3b9581eec74309e197abf202376fe3d3a07812dd753a917c83fa89028f89d74be321303dc4917387e9a67450649f0e3a1ffe9
+  languageName: node
+  linkType: hard
+
+"eslint-plugin-no-only-tests@npm:3.3.0":
+  version: 3.3.0
+  resolution: "eslint-plugin-no-only-tests@npm:3.3.0"
+  checksum: 10c0/a04425d9d3bcd745267168782eb12a3a712b8357264ddd4e204204318975c2c21e2c1efe68113181de908548a85762205b61d8f92ec9dc5e0a5ae54c0240a24d
   languageName: node
   linkType: hard
 
