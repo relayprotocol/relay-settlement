@@ -22,11 +22,6 @@ address constant PROMISE_RESULT_PRECOMPILE = 0x0A3540F79BE10EF14890e87c1A0040A68
 address constant wNEAR_MAINNET = 0x4861825E75ab14553E5aF711EbbE6873d369d146;
 
 struct NEAR {
-  /// Wether the represenative NEAR account id for this contract
-  /// has already been created or not. This is required since the
-  /// first cross contract call requires attaching extra deposit
-  /// to cover storage staking balance.
-  bool initialized;
   /// Address of wNEAR token contract. It is used to charge the user
   /// required tokens for paying NEAR storage fees and attached balance
   /// for cross contract calls.
@@ -43,7 +38,7 @@ library AuroraSdk {
   /// Create an instance of NEAR object. Requires the address at which
   /// wNEAR ERC20 token contract is deployed.
   function initNear(IERC20 wNEAR) public returns (NEAR memory) {
-    NEAR memory near = NEAR(false, wNEAR);
+    NEAR memory near = NEAR(wNEAR);
     near.wNEAR.approve(
       XCC_PRECOMPILE,
       0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
@@ -140,52 +135,31 @@ library AuroraSdk {
   /// until transact is called. It can be combined with other promises using
   /// `then` combinator.
   ///
-  /// Input is not checekd during promise creation. If it is invalid, the
+  /// Input is not checked during promise creation. If it is invalid, the
   /// transaction will be scheduled either way, but it will fail during execution.
   function call(
-    NEAR storage near,
+    NEAR storage,
     string memory targetAccountId,
     string memory method,
     bytes memory args,
     uint128 nearBalance,
     uint64 nearGas
-  ) public returns (PromiseCreateArgs memory) {
-    /// Need to capture nearBalance before we modify it so that we don't
-    /// double-charge the user for their initialization cost.
-    PromiseCreateArgs memory promise_args = PromiseCreateArgs(
-      targetAccountId,
-      method,
-      args,
-      nearBalance,
-      nearGas
-    );
-
-    if (!near.initialized) {
-      /// If the contract needs to be initialized, we need to attach
-      /// 2 NEAR (= 2 * 10^24 yoctoNEAR) to the promise.
-      nearBalance += 2_000_000_000_000_000_000_000_000;
-      near.initialized = true;
-    }
-
-    if (nearBalance > 0) {
-      near.wNEAR.transferFrom(msg.sender, address(this), uint256(nearBalance));
-    }
-
-    return promise_args;
+  ) public pure returns (PromiseCreateArgs memory) {
+    return
+      PromiseCreateArgs(targetAccountId, method, args, nearBalance, nearGas);
   }
 
   /// Similar to `call`. It is a wrapper that simplifies the creation of a promise
   /// to a contract inside `Aurora`.
   function auroraCall(
-    NEAR storage near,
+    NEAR storage,
     address target,
     bytes memory args,
     uint128 nearBalance,
     uint64 nearGas
   ) public returns (PromiseCreateArgs memory) {
     return
-      call(
-        near,
+      PromiseCreateArgs(
         currentAccountId(),
         "call",
         abi.encodePacked(uint8(0), target, uint256(0), args.encode()),

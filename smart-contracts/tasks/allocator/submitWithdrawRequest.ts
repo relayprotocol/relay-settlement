@@ -27,13 +27,14 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
 
       const allocator = await viem.getContractAt('Allocator', allocatorAddress)
 
+      const nonce = keccak256(`0x${new Date().getTime().toString()}`)
       const submitWithdrawRequestParams = {
         amount,
         chainId,
         currency,
         data,
         depository,
-        nonce: keccak256(`0x${new Date().getTime().toString()}`),
+        nonce,
         receiver: receiver || signer.account.address,
         spender: receiver || signer.account.address,
       }

@@ -9,11 +9,11 @@ Deploy, set up and use the allocator. Multiple tasks exist to set things up:
 # (will deploy 3 libraires + 1 contract Allocator)
 yarn hardhat deploy:allocator --owner <multisig-address> --delay 1
 
-# verfy contracts
-yarn hardhat ignition verify chain-1313161555
-
 # deploy the EVM payload builder (you can deploy other types as well)
 yarn run hardhat ignition deploy ignition/modules/EVMPayloadBuilder.ts
+
+# verify contracts
+yarn hardhat ignition verify chain-1313161555
 
 # grant APPROVED_WITHDRAWER_ROLE to your address
 yarn hardhat allocator:add-withdrawer --allocator <allocator-contract-address>
@@ -24,11 +24,11 @@ yarn hardhat allocator:set-payload-builder --builder <builder-address> --allocat
 # submit withdraw request params (thru block explorer)
 yarn hardhat allocator:submit-withdraw --allocator <allocator-address> --chain-id <depository-chain-id> --depository <depository-contract-address>
 
-# sign payload (needs the exact same parameters as the submit-withdraw step)
-yarn hardhat allocator:sign-payload --allocator <allocator-address> --chain-id <depository-chain-id> --depository <depository-contract-address> --nonce <nonce payload submitted above>
+# sign payload
+yarn hardhat allocator:sign-payload --allocator <allocator-address> --chain-id <depository-chain-id> --depository <depository-contract-address> --nonce <nonce from withdraw request>
 
 # submit the withdrawal to the depository contract (passing the payload builder enables formatting of the transaction)
-yarn hardhat depository:withdraw --payload-id <payload-id> --allocator <allocator-address> --payload-builder-type <payload-builder-name>
+yarn hardhat depository:withdraw --withdraw-request-hash <withdraw-request-hash> --allocator <allocator-address> --payload-builder-type <payload-builder-name>
 
 ```
 

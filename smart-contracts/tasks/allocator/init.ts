@@ -1,5 +1,5 @@
 import { task } from 'hardhat/config'
-import { parseUnits } from 'viem'
+import { formatUnits, parseUnits } from 'viem'
 import { checkAndApproveWNEAR, getWNEARAddress } from '../../lib/aurora'
 
 task('allocator:init', 'Initialize the Allocator contract')
@@ -27,15 +27,20 @@ task('allocator:init', 'Initialize the Allocator contract')
         allowance
       )
 
-      // check wNEAR balance
       const wNEAR = await viem.getContractAt('MyToken', wNEARAddress)
-      const balance = await wNEAR.read.balanceOf([signer.account.address])
-      console.log(`Current wNEAR balance: ${balance} wei`)
+      // check wNEAR balance
+      const userBalance = await wNEAR.read.balanceOf([signer.account.address])
+      console.log(
+        `Current user wNEAR balance: ${formatUnits(userBalance, 24)} wNEAR`
+      )
+      console.log(formatUnits(2000000000000000000000000n, 24))
 
-      if (balance < allowance) {
-        throw Error(`Insufficient balance ${balance}`)
-      }
+      const allocatorBalance = await wNEAR.read.balanceOf([allocator.address])
+      console.log(
+        `Current allocator wNEAR balance: ${formatUnits(allocatorBalance, 24)} wNEAR`
+      )
 
+      console.log('Initializing Allocator (and funding it!)...')
       // Call init function
       const initHash = await allocator.write.init()
       await publicClient.waitForTransactionReceipt({ hash: initHash })

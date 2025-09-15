@@ -1,5 +1,5 @@
-import * as bitcoin from 'bitcoinjs-lib'
 import networks from '@relay-protocol/networks'
+import * as bitcoin from 'bitcoinjs-lib'
 import { task } from 'hardhat/config'
 import AllocatorModule from '../../ignition/modules/Allocator'
 import { bitcoinAddressfromHexPublicKey } from '../../lib/bitcoin'
@@ -16,6 +16,9 @@ task('deploy:allocator', 'Deploy the Allocator contract')
       { owner, signer, wnear: wNEAR, delay },
       { ignition, run, network, viem }
     ) => {
+      // recompile before deploying
+      await run('compile')
+
       const [user] = await viem.getWalletClients()
 
       if (!owner) {

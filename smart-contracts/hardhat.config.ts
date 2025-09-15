@@ -2,30 +2,31 @@ import '@nomicfoundation/hardhat-ignition'
 import '@nomicfoundation/hardhat-toolbox-viem'
 import '@nomiclabs/hardhat-solhint'
 import { networks as nets } from '@relay-protocol/networks'
+import 'hardhat-gas-reporter'
 import type { HardhatUserConfig } from 'hardhat/config'
 import 'solidity-coverage'
-import 'hardhat-gas-reporter'
 
 import { parseEther } from 'viem'
 
 // allocator actions
-import './tasks/depository/withdraw'
 import './tasks/allocator/addWithdrawer'
 import './tasks/allocator/init'
 import './tasks/allocator/setPayloadBuilder'
 import './tasks/allocator/signPayload'
 import './tasks/allocator/submitWithdrawRequest'
+import './tasks/allocator/withdrawToNear'
+import './tasks/depository/withdraw'
 
 // allocator test suite
-import './tasks/allocator/full/evm'
 import './tasks/allocator/full/bitcoin'
+import './tasks/allocator/full/evm'
 import './tasks/allocator/full/solana'
 import './tasks/allocator/full/sui'
 import './tasks/allocator/PayloadBuilders/sendBitcoinTx'
 
 // deployments
-import './tasks/deployments/hub'
 import './tasks/deployments/allocator'
+import './tasks/deployments/hub'
 
 // helpers
 import './tasks/computeSignatures'

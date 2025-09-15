@@ -97,8 +97,24 @@ describe('Allocator signWithdrawPayload', function () {
 
   describe('with an approved signer', () => {
     it('should successfully sign a payload with custom gas settings', async function () {
-      const { allocator, solver, publicClient, wNEAR, requestParams } =
+      const { allocator, solver, owner, publicClient, wNEAR, requestParams } =
         await loadFixture(deployAllocatorWithSetup)
+
+      const fee = 1n
+      // setSignatureFee
+      const setFeeTx = await allocator.write.setSignatureFee([fee], {
+        account: owner.account,
+      })
+      await publicClient.waitForTransactionReceipt({
+        hash: setFeeTx,
+      })
+
+      // approve sig fee
+      const signatureFee = await allocator.read.signatureFee()
+      console.log({ signatureFee })
+      await wNEAR.write.approve([allocator.address, signatureFee], {
+        account: solver.account,
+      })
 
       // init transact
       await allocator.write.init()
@@ -126,15 +142,21 @@ describe('Allocator signWithdrawPayload', function () {
         data: transferLog!.data,
         topics: transferLog!.topics,
       })
-      expect(transferArgs!.value).to.equal(1n)
+      expect(transferArgs!.value).to.equal(signatureFee)
       expect(transferArgs.from).to.equal(getAddress(solver.account.address))
       // can't test transferArgs.to as we dont have access to currentAccountId() from Aurora SDK
     })
 
     it('should revert when trying to sign a payload that is not ready', async function () {
-      const { allocator, solver, requestParams } = await loadFixture(
+      const { allocator, solver, requestParams, wNEAR } = await loadFixture(
         deployAllocatorWithSetup
       )
+
+      // approve sig fee
+      const signatureFee = await allocator.read.signatureFee()
+      await wNEAR.write.approve([allocator.address, signatureFee], {
+        account: solver.account,
+      })
 
       await expect(
         allocator.write.signWithdrawPayload(
@@ -348,10 +370,18 @@ describe('Allocator signWithdrawPayload', function () {
     })
 
     it('should fail if the caller is not an operator for the recipient', async () => {
-      const { allocator, requestParams, otherAccounts } = await loadFixture(
-        deployAllocatorAndSetHub
-      )
+      const { allocator, requestParams, otherAccounts, wNEAR } =
+        await loadFixture(deployAllocatorAndSetHub)
       const [user] = otherAccounts
+
+      // approve sig fee
+      const signatureFee = await allocator.read.signatureFee()
+      await wNEAR.write.mint([signatureFee], {
+        account: user.account,
+      })
+      await wNEAR.write.approve([allocator.address, signatureFee], {
+        account: user.account,
+      })
 
       await expect(
         allocator.write.signWithdrawPayload(
@@ -809,7 +839,10 @@ describe('Allocator signWithdrawPayload', function () {
         await wNEAR.write.mint([wNearAmount], {
           account: user.account,
         })
-        await wNEAR.write.approve([allocator.address, 4n], {
+
+        // approve sig fee
+        const signatureFee = await allocator.read.signatureFee()
+        await wNEAR.write.approve([allocator.address, signatureFee + 4n], {
           account: user.account,
         })
 
@@ -835,6 +868,11 @@ describe('Allocator signWithdrawPayload', function () {
 
         // Wait for delay
         await time.increase(await allocator.read.delay())
+
+        // approve again
+        await wNEAR.write.approve([allocator.address, signatureFee], {
+          account: user.account,
+        })
 
         // Trying to reuse the same signature should fail (nonce mismatch)
         await expect(

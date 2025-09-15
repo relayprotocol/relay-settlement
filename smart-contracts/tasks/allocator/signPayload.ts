@@ -58,13 +58,23 @@ task('allocator:sign-payload', 'Sign payload on allocator')
         spender: receiver || signer.account.address,
       }
 
+      // approve sig fee
+      const signatureFee = await allocator.read.signatureFee()
+      await checkAndApproveWNEAR(
+        hre,
+        publicClient,
+        signer.account.address,
+        allocator.address,
+        signatureFee
+      )
+
       console.log('Signing payload', submitWithdrawRequestParams)
       const txHash = await allocator.write.signWithdrawPayload(
         [
           submitWithdrawRequestParams,
           '0x',
           {
-            callbackGas: 30_000_000_000_000n,
+            callbackGas: 50_000_000_000_000n,
             signGas: 10_000_000_000_000n,
           },
         ],

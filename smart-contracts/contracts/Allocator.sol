@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
@@ -11,6 +11,10 @@ import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Hub} from "./Hub.sol";
 import {Utils} from "./Utils.sol";
 import {ChainSignatures} from "./ChainSignatures.sol";
+
+interface IEvmERC20 is IERC20 {
+  function withdrawToNear(bytes memory recipient, uint256 amount) external;
+}
 
 interface ISafe {
   function isOwner(address) external view returns (bool);
@@ -62,6 +66,7 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     uint256 delay
   );
   event HubSet(address hub);
+  event SignatureFeeChanged(uint256 fee);
 
   // EIP712
   string public constant SIGNING_DOMAIN = "Allocator";
@@ -91,6 +96,8 @@ contract Allocator is AccessControl, Ownable, EIP712 {
   // used by the MPC signer to sign the payload
   string public SIGNER_PATH;
 
+  // Fee to be captured in wNEAR to cover gas on Near paid by this contract
+  uint256 public signatureFee;
   // Delay configuration struct
   struct DelayConfig {
     uint256 delay;
@@ -172,10 +179,13 @@ contract Allocator is AccessControl, Ownable, EIP712 {
 
     // set signer and Aurora SDK
     nearSigner = _signer;
-    near = AuroraSdk.initNear(IERC20(_wNEAR));
+    near = AuroraSdk.initNear(IERC20(_wNEAR)); // this does an unlimited approval for wNEAR for the precompile.
 
     // compute path at deployment
     SIGNER_PATH = Strings.toHexString(uint160(address(this)), 20);
+
+    // Fee - default to 0
+    signatureFee = 0;
   }
 
   modifier onlyMultisigOwner() {
@@ -188,11 +198,18 @@ contract Allocator is AccessControl, Ownable, EIP712 {
   /// You need to approve 2 wNEAR for the CS Signer to init the sub-account
   /// @notice This calls the simplest possible contract on NEAR to bootstrap itself and initialize the XCC subaccount.
   function init() public onlyOwner {
+    // this will initialize the XCC sub-account on NEAR
+    // 2 Near are required for storage staking
+    near.wNEAR.transferFrom(
+      msg.sender,
+      address(this),
+      uint256(2_000_000_000_000_000_000_000_000)
+    );
+
     // Make a cross-contract call to trigger sub-account creation.
-    // solhint-disable-next-line quotes
+    // we are calling the "system" account with empty data on NEAR to trigger sub-account creation
+    // as "system" is a special account that is not part of the chain state.
     PromiseCreateArgs memory initCall = near.call(
-      // we are calling the "system" account with empty data on NEAR to trigger sub-account creation
-      // as "system" is a special account that is not part of the chain state.
       "system",
       "",
       "",
@@ -217,6 +234,13 @@ contract Allocator is AccessControl, Ownable, EIP712 {
   /// @param withdrawer Address to prevent from withdrawing
   function suspend(address withdrawer) public onlyMultisigOwner {
     _revokeRole(APPROVED_WITHDRAWER_ROLE, withdrawer);
+  }
+
+  /// @notice Sets the hub contract address
+  /// @param _fee Signature fee in wNEAR
+  function setSignatureFee(uint256 _fee) external onlyOwner {
+    signatureFee = _fee;
+    emit SignatureFeeChanged(signatureFee);
   }
 
   /// @notice Sets the hub contract address
@@ -338,6 +362,11 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     bytes memory signature,
     GasSettings memory gasSettings
   ) public {
+    if (signatureFee > 0) {
+      // We capture the fee for ourselves first
+      near.wNEAR.transferFrom(msg.sender, address(this), signatureFee);
+    }
+
     bytes32 withdrawRequestHash = keccak256(abi.encode(params));
 
     // make sure the payload exists
@@ -371,6 +400,34 @@ contract Allocator is AccessControl, Ownable, EIP712 {
         gasSettings
       );
     }
+  }
+
+  /// @notice withdraws the wNEAR balance of this contract
+  /// from the Aurora contract to the NEAR network
+  function withdrawToNear(uint256 amount) external {
+    // withdraw wNEAR to the NEAR network
+    IEvmERC20(address(near.wNEAR)).withdrawToNear(
+      bytes(AuroraSdk.nearRepresentative(address(this))),
+      amount
+    );
+
+    // unwrap the wNEAR on the NEAR network
+    uint64 NEAR_WITHDRAW_GAS = 2_000_000_000_000;
+    PromiseCreateArgs memory unwrapCall = near.call(
+      "wrap.testnet",
+      "near_withdraw",
+      abi.encodePacked(
+        // solhint-disable-next-line quotes
+        '{"amount": "',
+        Strings.toString(amount),
+        // solhint-disable-next-line quotes
+        '"}'
+      ),
+      1, // requires attached deposit of exactly 1 yoctoNEAR
+      NEAR_WITHDRAW_GAS // nearGas
+    );
+
+    unwrapCall.transact();
   }
 
   function _signUsingChainSignatures(

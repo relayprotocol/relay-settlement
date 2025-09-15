@@ -15,7 +15,7 @@ import { extractNearSignature } from '../../lib/near'
 
 task('depository:withdraw', 'Withdraw from depository')
   .addParam('allocator', 'The address of the allocator contract')
-  .addParam('payloadId', 'The payloadId to use')
+  .addParam('withdrawRequestHash', 'The withdrawRequestHash to use')
   .addOptionalParam(
     'payloadBuilderType',
     'The type of the payload builder. (EVMPayloadBuilder, ...)',
@@ -24,14 +24,14 @@ task('depository:withdraw', 'Withdraw from depository')
 
   .setAction(
     async (
-      { allocator: allocatorAddress, payloadId, payloadBuilderType },
+      { allocator: allocatorAddress, withdrawRequestHash, payloadBuilderType },
       hre
     ) => {
       const { viem } = hre
 
       const allocator = await viem.getContractAt('Allocator', allocatorAddress)
       const [withdrawParams, rawPayload] = await allocator.read.payloads([
-        payloadId,
+        withdrawRequestHash,
       ])
 
       const payloadBuilderAddress = await allocator.read.payloadBuilders([
@@ -57,7 +57,7 @@ task('depository:withdraw', 'Withdraw from depository')
       for (let i = 0; i < payloadHashes.length; i++) {
         const hash = payloadHashes[i]
         const signature = await allocator.read.signedPayloads([
-          payloadId,
+          withdrawRequestHash,
           hash as `0x${string}`,
         ])
         signedPayloads[hash] = extractNearSignature(signature)

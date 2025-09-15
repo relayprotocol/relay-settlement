@@ -78,7 +78,7 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
   })
 
   it('should fail if there is a delay', async () => {
-    const { allocator, hub, owner, depository } = await loadFixture(
+    const { allocator, hub, owner, depository, wNEAR } = await loadFixture(
       deployAllocatorWithSetup
     )
 
@@ -87,6 +87,12 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
       depository.account.address,
       1000,
     ])
+
+    // approve sig fee
+    const signatureFee = await allocator.read.signatureFee()
+    await wNEAR.write.approve([allocator.address, signatureFee], {
+      account: owner.account,
+    })
 
     await expect(
       allocator.write.submitAndSignWithdrawRequest([

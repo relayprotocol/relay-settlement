@@ -9,7 +9,7 @@ export async function deployAllocator(options?: {
   const publicClient = await hre.viem.getPublicClient()
 
   // deploy wNear
-  const wNEAR = await hre.viem.deployContract('MyToken')
+  const wNEAR = await hre.viem.deployContract('MockWNEAR')
 
   //depoloy libs
   const auroraXccUtils = await hre.viem.deployContract('AuroraXccUtils')
