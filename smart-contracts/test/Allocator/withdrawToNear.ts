@@ -5,7 +5,8 @@ import { deployAllocator } from '../helpers/deployAllocator'
 
 describe('Allocator withdrawToNear', function () {
   async function deployAllocatorWithSetup() {
-    const { allocator, owner, wNEAR, publicClient } = await deployAllocator()
+    const { allocator, owner, wNEAR, publicClient, otherAccounts } =
+      await deployAllocator()
 
     // Mint wNEAR to allocator contract
     const amount = 1000000000000000000000n // 1000 tokens
@@ -16,6 +17,7 @@ describe('Allocator withdrawToNear', function () {
     return {
       allocator,
       amount,
+      otherAccounts,
       owner,
       publicClient,
       wNEAR,
@@ -23,14 +25,39 @@ describe('Allocator withdrawToNear', function () {
   }
 
   it('should withdraw wNEAR to NEAR and emit WithdrawToNear event', async () => {
-    const { allocator, wNEAR, publicClient, amount } = await loadFixture(
-      deployAllocatorWithSetup
-    )
+    const { owner, otherAccounts, amount, allocator, wNEAR, publicClient } =
+      await loadFixture(deployAllocatorWithSetup)
 
+    const [someone] = otherAccounts
+
+    // fund allocator contract
+    await wNEAR.write.transfer([allocator.address, amount], {
+      account: owner.account,
+    })
+
+    const allocatorBalanceBefore = await wNEAR.read.balanceOf([
+      allocator.address,
+    ])
+    const balanceBefore = await wNEAR.read.balanceOf([someone.account.address])
+
+    // approve 1 yNEAR to process near tx
+    await wNEAR.write.approve([allocator.address, 1n], {
+      account: someone.account,
+    })
+
+    // send tx
     const txHash = await allocator.write.withdrawToNear([amount])
     const receipt = await publicClient.waitForTransactionReceipt({
       hash: txHash,
     })
+
+    const allocatorBalanceAfter = await wNEAR.read.balanceOf([
+      allocator.address,
+    ])
+    const balanceAfter = await wNEAR.read.balanceOf([someone.account.address])
+
+    expect(balanceAfter).to.equal(balanceBefore)
+    expect(allocatorBalanceBefore - amount).to.equal(allocatorBalanceAfter)
 
     // Check that transfer event was emitted by wNEAR
     const transferLog = receipt.logs.find(

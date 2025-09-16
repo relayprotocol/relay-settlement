@@ -13,7 +13,7 @@ contract MockWNEAR is ERC20, ERC20Permit {
     _mint(msg.sender, amount);
   }
 
-  function withdrawToNear(bytes memory, uint256 amount) external {
-    _burn(msg.sender, amount);
+  function withdrawToNear(bytes memory /*recipient*/, uint256 amount) external {
+    _burn(_msgSender(), amount);
   }
 }
