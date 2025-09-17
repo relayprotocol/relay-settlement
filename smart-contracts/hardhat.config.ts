@@ -27,10 +27,17 @@ import './tasks/allocator/PayloadBuilders/sendBitcoinTx'
 // deployments
 import './tasks/deployments/allocator'
 import './tasks/deployments/hub'
+import './tasks/deployments/relayMultisigSigner'
 
 // helpers
 import './tasks/computeSignatures'
 import './tasks/exportAbis'
+
+// Relay Multisig signer
+import './tasks/relayMultisigSigner/simulate'
+import './tasks/relayMultisigSigner/submit'
+import './tasks/relayMultisigSigner/check-hashes'
+import './tasks/relayMultisigSigner/execute-transactions'
 
 // get pk from shell
 const { DEPLOYER_PRIVATE_KEY } = process.env

@@ -41,7 +41,6 @@ task('allocator:sign-payload', 'Sign payload on allocator')
       const allowance = parseUnits('1', 24)
       await checkAndApproveWNEAR(
         hre,
-        publicClient,
         signer.account.address,
         allocator.address,
         allowance

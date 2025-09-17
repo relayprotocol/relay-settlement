@@ -93,7 +93,7 @@ task(
       }
 
       // Check and approve wNEAR allowance
-      await checkAndApproveWNEAR(hre, publicClient, owner, allocatorAddress)
+      await checkAndApproveWNEAR(hre, owner, allocatorAddress)
       const withdrawRequestHash = await run('allocator:submit-withdraw', {
         allocator: allocatorAddress,
         amount,

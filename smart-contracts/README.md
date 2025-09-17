@@ -65,3 +65,18 @@ near account export-account <account-name> using-private-key network-config test
 ### Bridge to Aurora Testnet
 
 Bridge to Aurora Testnet Via https://testnet.rainbowbridge.app/
+
+## Relay Multisig Signer
+
+A smart contract that can use Near's Chain Signatures (via Aurora) to sign hashes submitted from a Multisig. This lets the Relay team control smart contracts (and EOAs) on various chains (EVM, Bitcoin, Solana... etc) from a multisig wallet without sharing a private key.
+
+### Example of flow:
+
+TODO: support Solana, Bitcoin, ... etc
+
+1. A transactions manifest file is created. It represents the transaction(s) to be executed on each chain. This file should be created from a script (it's format is validated when loaded by the scripts below).
+2. It is possible to simulate all the transactions using `relay-multisig-signer:simulate --transactions <manifest.json>`
+3. The hashes for each transaction are generated and submitted to the SAFE multisig using the task `relay-multisig-signer:submit --transactions <manifest.json> --relay-multisig-signer <multisig signer address>`
+4. The signers on the multisig can verify that the SAFE transaction they are signing is correct by running `relay-multisig-signer:check-hashes --transactions <manifest.json> --relay-multisig-signer <multisig signer address> --safe-transaction-nonce <transaction number>`. If they match they can sign (approve the multisig tx).
+5. Once the SAFE transaction has been executed, anyone can execute all the transactions from the bundle using
+   `relay-multisig-signer:execute-transactions --transactions <manifest.json> --relay-multisig-signer <multisig signer address> --safe-transaction-nonce <transaction number>`

@@ -39,7 +39,7 @@
     "solidity-coverage": "0.8.16",
     "ts-node": "8.0.0",
     "typescript": "5.0.4",
-    "viem": "2.7.6"
+    "viem": "2.37.3"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.27.0",
@@ -50,6 +50,7 @@
     "@relay-protocol/fixtures": "workspace:*",
     "@relay-protocol/hub-utils": "workspace:*",
     "@relay-protocol/networks": "workspace:*",
+    "@safe-global/sdk-starter-kit": "3.0.1",
     "@solana/web3.js": "1.98.2",
     "base58-solidity": "1.0.2",
     "bip32": "5.0.0-rc.0",
@@ -62,6 +63,7 @@
     "secp256k1": "5.0.1",
     "solady": "0.1.19",
     "tiny-secp256k1": "2.2.3",
-    "tweetnacl": "1.0.3"
+    "tweetnacl": "1.0.3",
+    "zod": "4.1.8"
   }
 }

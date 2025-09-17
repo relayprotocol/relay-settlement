@@ -21,7 +21,6 @@ task('allocator:init', 'Initialize the Allocator contract')
       const allowance = parseUnits('2', 24)
       await checkAndApproveWNEAR(
         hre,
-        publicClient,
         signer.account.address,
         allocator.address,
         allowance
