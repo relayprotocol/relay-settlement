@@ -3,6 +3,7 @@ import * as bitcoin from 'bitcoinjs-lib'
 import { task } from 'hardhat/config'
 import AllocatorModule from '../../ignition/modules/Allocator'
 import { bitcoinAddressfromHexPublicKey } from '../../lib/bitcoin'
+import EVMPayloadBuilderModule from '../../ignition/modules/EVMPayloadBuilder'
 
 const DEFAULT_DELAY = '1'
 
@@ -75,6 +76,19 @@ task('deploy:payload-builder', 'Deploys a PayloadBuilder contract')
     )
     return payloadBuilderContract.address
   })
+
+task(
+  'deploy:evm-payload-builder',
+  'Deploys an EVM Payload Builder contract'
+).setAction(async (_, { ignition }) => {
+  // Let's now deploy the payload builder contract
+  const { evmPayloadBuilder } = await ignition.deploy(EVMPayloadBuilderModule, {
+    parameters: {},
+  })
+
+  console.log(`EvmPayloadBuilder deployed to: ${evmPayloadBuilder.address}`)
+  return evmPayloadBuilder.address
+})
 
 task('deploy:bitcoin-payload-builder', 'Deploys a PayloadBuilder contract')
   .addParam('allocatorPublicKey', 'The ethereum public key of the allocator')
