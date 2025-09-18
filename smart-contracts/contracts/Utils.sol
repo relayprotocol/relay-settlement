@@ -5,6 +5,7 @@ import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {JSONParserLib} from "solady/src/utils/JSONParserLib.sol";
 
 /// @title Utils Library
+/// @author Relay Protocol
 /// @notice A utility library providing helper functions for cross-chain operations
 /// @dev Contains functions for token ID generation, address generation, and data encoding
 library Utils {
@@ -95,7 +96,9 @@ library Utils {
     return bytes32(parsed);
   }
 
-  // Converts a string representation of an address to an address type
+  /// @notice Converts a string representation of an address to an address type
+  /// @param s The string representation of the address
+  /// @return The address type
   function toAddress(string memory s) public pure returns (address) {
     bytes memory b = bytes(s);
     require(b.length == 42, "Invalid address length");

@@ -1,12 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
-
-import {PayloadBuilder} from "../Allocator.sol";
+import {IPayloadBuilder} from "../Allocator.sol";
 import {Utils} from "../Utils.sol";
 
 /// @title SuiPayloadBuilder
+/// @author Relay Protocol
 /// @notice Builds BCS-encoded payloads for Sui chain withdrawals
-contract SuiPayloadBuilder is PayloadBuilder {
+contract SuiPayloadBuilder is IPayloadBuilder {
+  error CoinTypeTooLong();
+  error InvalidExpiration();
+
+  /// @notice Builds BCS-encoded payload for Sui withdrawal
+  /// @param currency Sui coin type (e.g., "0x2::sui::SUI")
+  /// @param amount Amount to withdraw
+  /// @param receiver Recipient address
+  /// @param data Optional nonce and expiration (empty for defaults)
+  /// @return BCS-encoded transaction payload
   function buildPayload(
     uint256 /* chainId */,
     string calldata /* depository */,
@@ -44,6 +53,9 @@ contract SuiPayloadBuilder is PayloadBuilder {
     return encodeBCS(recipientAddress, currency, amountU64, nonce, expiration);
   }
 
+  /// @notice Returns message hash to sign for Sui transaction
+  /// @param payload BCS-encoded transaction payload
+  /// @return hashes Array with single SHA256 hash
   function hashesToSign(
     uint256 /* chainId */,
     string calldata /* depository */,
@@ -54,21 +66,25 @@ contract SuiPayloadBuilder is PayloadBuilder {
     return hashes;
   }
 
+  /// @notice Returns cryptographic curve for Sui signing
+  /// @return curve "Eddsa" for Sui
   function curve() external pure returns (string memory) {
     return "Eddsa";
   }
 
+  /// @notice Returns blockchain family identifier
+  /// @return family "sui-vm" for Sui
   function family() external pure returns (string memory) {
     return "sui-vm";
   }
 
-  /// @notice Encodes the Sui transaction payload in BCS-compatible format.
-  /// @param recipient The 32-byte recipient address.
-  /// @param coinType The string representation of the Sui coin type. Example: "0x2::sui::SUI"
-  /// @param amount The amount to transfer
-  /// @param nonce The unique nonce for the tx
-  /// @param expiration The expiration timestamp (in seconds)
-  /// @return The BCS-encoded transaction payload
+  /// @notice Encodes Sui transaction payload in BCS format
+  /// @param recipient Recipient address (32 bytes)
+  /// @param coinType Sui coin type string (e.g., "0x2::sui::SUI")
+  /// @param amount Amount to transfer
+  /// @param nonce Unique transaction nonce
+  /// @param expiration Expiration timestamp (seconds)
+  /// @return BCS-encoded transaction payload
   function encodeBCS(
     bytes32 recipient,
     string memory coinType,
@@ -89,7 +105,7 @@ contract SuiPayloadBuilder is PayloadBuilder {
 
     // Add length of the string as a single byte if under 128 characters
     // For longer strings, BCS uses a different encoding scheme
-    require(coinTypeBytes.length < 128, "Coin type string too long");
+    if (coinTypeBytes.length >= 128) revert CoinTypeTooLong();
     result = bytes.concat(result, bytes1(uint8(coinTypeBytes.length)));
 
     // Add the string data
@@ -99,7 +115,7 @@ contract SuiPayloadBuilder is PayloadBuilder {
     result = bytes.concat(result, Utils.encodeUint64LE(nonce));
 
     // 5. Expiration (8 bytes, little-endian)
-    require(expiration >= 0, "Expiration cannot be negative");
+    if (expiration < 0) revert InvalidExpiration();
     result = bytes.concat(result, Utils.encodeUint64LE(uint64(expiration)));
 
     return result;

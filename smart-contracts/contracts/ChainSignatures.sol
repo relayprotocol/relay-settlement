@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+/// @title ChainSignatures
+/// @author Relay Protocol
+/// @notice Library for encoding JSON requests for chain signatures
 library ChainSignatures {
   /// @notice Encodes a JSON request for the signer
   /// @param payloadHashToSign The hash of the payload to sign

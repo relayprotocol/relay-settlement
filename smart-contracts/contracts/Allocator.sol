@@ -12,17 +12,40 @@ import {Hub} from "./Hub.sol";
 import {Utils} from "./Utils.sol";
 import {ChainSignatures} from "./ChainSignatures.sol";
 
+/// @title IEvmERC20
+/// @notice Interface for EVM ERC20 tokens that support withdrawal to NEAR
+// solhint-disable-next-line use-natspec
 interface IEvmERC20 is IERC20 {
+  /// @notice Withdraws tokens to NEAR network
+  /// @param recipient The recipient address on NEAR
+  /// @param amount The amount to withdraw
   function withdrawToNear(bytes memory recipient, uint256 amount) external;
 }
 
+/// @title ISafe
+/// @notice Interface for Safe multisig contract
+// solhint-disable-next-line use-natspec
 interface ISafe {
-  function isOwner(address) external view returns (bool);
+  /// @notice Checks if an address is an owner of the Safe
+  /// @param owner The address to check
+  /// @return True if the address is an owner
+  function isOwner(address owner) external view returns (bool);
 }
 
-interface PayloadBuilder {
+/// @title IPayloadBuilder
+/// @author Relay Protocol
+/// @notice Interface for payload builders that create withdrawal payloads for different chains
+interface IPayloadBuilder {
   error InsufficientAmount(uint256 amount);
 
+  /// @notice Builds a withdrawal payload for the specified parameters
+  /// @param chainId The destination chain ID
+  /// @param depository The depository address
+  /// @param currency The currency address
+  /// @param amount The amount to withdraw
+  /// @param receiver The receiver address
+  /// @param data Additional data
+  /// @return The built payload
   function buildPayload(
     uint256 chainId,
     string calldata depository,
@@ -32,14 +55,23 @@ interface PayloadBuilder {
     bytes calldata data
   ) external view returns (bytes memory);
 
+  /// @notice Returns the hashes that need to be signed for the payload
+  /// @param chainId The destination chain ID
+  /// @param depository The depository address
+  /// @param payload The payload to sign
+  /// @return Array of hashes to sign
   function hashesToSign(
     uint256 chainId,
     string calldata depository,
     bytes calldata payload
   ) external view returns (bytes32[] memory);
 
+  /// @notice Returns the curve used for signing
+  /// @return The curve name
   function curve() external pure returns (string memory);
 
+  /// @notice Returns the family of the payload builder
+  /// @return The family name
   function family() external pure returns (string memory);
 }
 
@@ -50,6 +82,7 @@ struct GasSettings {
 }
 
 /// @title Allocator
+/// @author Relay Protocol
 /// @notice Manages cross-chain withdrawal requests and payload signing using NEAR MPC signer
 contract Allocator is AccessControl, Ownable, EIP712 {
   using AuroraSdk for NEAR;
@@ -59,85 +92,100 @@ contract Allocator is AccessControl, Ownable, EIP712 {
   using Strings for uint256;
   using ECDSA for bytes32;
 
+  /// @notice Emitted when the global delay is changed
   event DelayChanged(uint256 delay);
+  /// @notice Emitted when a depository-specific delay is changed
   event DepositoryDelayChanged(
     uint256 chainId,
     string depository,
     uint256 delay
   );
+  /// @notice Emitted when the hub contract is set
   event HubSet(address hub);
+  /// @notice Emitted when the signature fee is changed
   event SignatureFeeChanged(uint256 fee);
 
   // EIP712
+  /// @notice The signing domain for EIP712
   string public constant SIGNING_DOMAIN = "Allocator";
+  /// @notice The signature version for EIP712
   string public constant SIGNATURE_VERSION = "1";
+  /// @notice The type hash for SubmitWithdrawRequest
   bytes32 public constant PAYLOAD_TYPEHASH =
     keccak256(
       "SubmitWithdrawRequest(uint256 chainId,string depository,string currency,uint256 amount,address spender,string receiver,bytes data,bytes32 nonce)"
     );
 
   // roles
+  /// @notice Role for approved withdrawers
   bytes32 public constant APPROVED_WITHDRAWER_ROLE =
     keccak256("APPROVED_WITHDRAWER_ROLE");
+  /// @notice Role for administrators
   bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
-  // precompute the hash of the curve
+  /// @notice Precompute the hash of the curve
   bytes32 private constant ECDSA_HASH = keccak256("Ecdsa");
 
-  // NEAR signer account
+  /// @notice Gas for withdrawals to NEAR
+  uint64 public immutable NEAR_WITHDRAW_GAS = 2_000_000_000_000;
+
+  /// @notice The NEAR signer account address
   string public nearSigner;
 
-  // Aurora SDK instance
+  /// @notice The Aurora SDK NEAR instance
   NEAR public near;
 
-  // global delay
+  /// @notice Global delay for withdrawal requests
   uint256 public delay;
 
-  // used by the MPC signer to sign the payload
-  string public SIGNER_PATH;
+  /// @notice Path used by the MPC signer to sign the payload
+  string public signerPath;
 
-  // Fee to be captured in wNEAR to cover gas on Near paid by this contract
+  /// @notice Fee in wNEAR to cover gas on NEAR
   uint256 public signatureFee;
-  // Delay configuration struct
+
+  /// @notice Delay configuration struct
   struct DelayConfig {
     uint256 delay;
     bool isSet;
   }
 
-  // per-depository delay mapping (chainId => depository address as string => DelayConfig)
+  /// @notice Mapping of delays per-depository : chain ID => depository => delay
   mapping(uint256 => mapping(string => DelayConfig)) public depositoryDelays;
 
-  // address of the hub contract
+  /// @notice Address of the hub contract
   address public hub;
 
-  // payload builders mapping
+  /// @notice Mapping of payload builders: chain ID => depository => payload builder address
   mapping(uint256 => mapping(string => address)) public payloadBuilders;
 
-  // signed payloads
+  /// @notice Signed payloads: withdrawal request hash => hash to sign => signed payload
   mapping(bytes32 => mapping(bytes32 => bytes)) public signedPayloads;
 
-  // payload timestamps
+  /// @notice Payload timestamps: withdrawal request hash => timestamp when payload becomes ready
   mapping(bytes32 => uint256) public payloadTimestamps;
 
-  // unsigned payloads
+  /// @notice Unsigned payloads: withdrawal request hash => payload
   mapping(bytes32 => bytes) public payloads;
 
-  // used nonces for replay protection
+  /// @notice Used nonces for replay protection: nonce => whether it has been used
   mapping(bytes32 => bool) public usedNonces;
 
-  // events
+  /// @notice Emitted when a payload builder is set for a chain and depository
   event PayloadBuilderSet(
     uint256 indexed chainId,
     string indexed depository,
     address indexed builder
   );
 
+  /// @notice Emitted when a payload is built
   event PayloadBuilt(
     bytes32 indexed withdrawRequestHash,
     bytes payload,
     uint256 timestamp
   );
 
+  /// @notice Emitted when a payload is signed
   event PayloadWithdrawSigned(
     bytes32 indexed withdrawRequestHash,
     bytes32 indexed hashToSign,
@@ -164,6 +212,11 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     bytes32 nonce; // Nonce for replay protection
   }
 
+  /// @notice Constructor for Allocator contract
+  /// @param _owner The owner of the contract
+  /// @param _delay The global delay for withdrawal requests
+  /// @param _signer The NEAR signer account
+  /// @param _wNEAR The wNEAR token address
   constructor(
     address _owner,
     uint256 _delay,
@@ -182,7 +235,7 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     near = AuroraSdk.initNear(IERC20(_wNEAR)); // this does an unlimited approval for wNEAR for the precompile.
 
     // compute path at deployment
-    SIGNER_PATH = Strings.toHexString(uint160(address(this)), 20);
+    signerPath = Strings.toHexString(uint160(address(this)), 20);
 
     // Fee - default to 0
     signatureFee = 0;
@@ -219,10 +272,16 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     initCall.transact();
   }
 
+  /// @notice Grants a role to an address
+  /// @param role The role to grant
+  /// @param newOwner The address to grant the role to
   function grantRole(bytes32 role, address newOwner) public override onlyOwner {
     _grantRole(role, newOwner);
   }
 
+  /// @notice Revokes a role from an address
+  /// @param role The role to revoke
+  /// @param newOwner The address to revoke the role from
   function revokeRole(
     bytes32 role,
     address newOwner
@@ -297,6 +356,7 @@ contract Allocator is AccessControl, Ownable, EIP712 {
 
   /// @notice submits a withdraw request to the payload builder, store the returned payload
   /// @param params The withdraw request parameters
+  /// @return withdrawRequestHash The hash of the withdrawal request
   function submitWithdrawRequest(
     SubmitWithdrawRequest calldata params
   ) public returns (bytes32 withdrawRequestHash) {
@@ -305,6 +365,7 @@ contract Allocator is AccessControl, Ownable, EIP712 {
 
   /// @notice submits a withdraw request to the payload builder, store the returned payload
   /// @param params The withdraw request parameters
+  /// @return withdrawRequestHash The hash of the withdrawal request
   function _submitWithdrawRequest(
     SubmitWithdrawRequest calldata params
   ) internal returns (bytes32 withdrawRequestHash) {
@@ -316,7 +377,7 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     }
 
     // build payload
-    bytes memory payload = PayloadBuilder(builder).buildPayload(
+    bytes memory payload = IPayloadBuilder(builder).buildPayload(
       params.chainId,
       params.depository,
       params.currency,
@@ -381,7 +442,7 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     }
 
     address builder = payloadBuilders[params.chainId][params.depository];
-    PayloadBuilder payloadBuilder = PayloadBuilder(builder);
+    IPayloadBuilder payloadBuilder = IPayloadBuilder(builder);
 
     // verify the withdrawal can be achieved
     verifyWithdrawal(params, payloadBuilder, signature);
@@ -412,7 +473,6 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     );
 
     // unwrap the wNEAR on the NEAR network
-    uint64 NEAR_WITHDRAW_GAS = 2_000_000_000_000;
     PromiseCreateArgs memory unwrapCall = near.call(
       "wrap.testnet",
       "near_withdraw",
@@ -430,10 +490,15 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     unwrapCall.transact();
   }
 
+  /// @notice Signs a hash using chain signatures
+  /// @param withdrawRequestHash The withdrawal request hash
+  /// @param hashToSign The hash to sign
+  /// @param payloadBuilder The payload builder
+  /// @param gasSettings The gas settings for NEAR operations
   function _signUsingChainSignatures(
     bytes32 withdrawRequestHash,
     bytes32 hashToSign,
-    PayloadBuilder payloadBuilder,
+    IPayloadBuilder payloadBuilder,
     GasSettings memory gasSettings
   ) internal {
     if (signedPayloads[withdrawRequestHash][hashToSign].length > 0) {
@@ -444,7 +509,7 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     bytes memory data = ChainSignatures.encodeJSONRequest(
       hashToSign,
       payloadBuilder.curve(),
-      SIGNER_PATH,
+      signerPath,
       keccak256(abi.encodePacked(payloadBuilder.curve())) == ECDSA_HASH
         ? "0"
         : "1"
@@ -511,7 +576,7 @@ contract Allocator is AccessControl, Ownable, EIP712 {
   /// @param signature A signature for the withdrawal request, if sent on behalf of a recipient
   function verifyWithdrawal(
     SubmitWithdrawRequest calldata params,
-    PayloadBuilder payloadBuilder,
+    IPayloadBuilder payloadBuilder,
     bytes memory signature
   ) internal {
     // Implementation for verifying the withdrawal
@@ -556,6 +621,7 @@ contract Allocator is AccessControl, Ownable, EIP712 {
   /// @notice Checks if the signature matches the receiver's address (for EVM destination chains)
   /// @param params The withdrawal request parameters
   /// @param signature The signature to verify
+  /// @return True if the signature matches the receiver
   function signatureMatchesReceiver(
     SubmitWithdrawRequest memory params,
     bytes memory signature

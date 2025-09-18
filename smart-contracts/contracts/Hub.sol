@@ -6,12 +6,20 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "./ERC20View.sol";
 
+/// @title IERC20View
+/// @author Relay Protocol
+/// @notice Interface for ERC20View contract
 interface IERC20View {
+  /// @notice Emits a transfer event
+  /// @param from The sender address
+  /// @param to The recipient address
+  /// @param value The amount transferred
   function emitTransferEvent(address from, address to, uint256 value) external;
 }
 
-/// @notice Minimalist and gas efficient standard ERC6909 implementation.
-/// @author Solmate (https://github.com/transmissions11/solmate/blob/main/src/tokens/ERC6909.sol)
+/// @title Hub
+/// @author Relay Protocol
+/// @notice Based on Solmate standard ERC6909 implementation. (https://github.com/transmissions11/solmate/blob/main/src/tokens/ERC6909.sol)
 contract Hub is AccessControl {
   using Strings for uint256;
 
@@ -19,12 +27,14 @@ contract Hub is AccessControl {
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
 
+  /// @notice Emitted when an operator is set for an owner
   event OperatorSet(
     address indexed owner,
     address indexed operator,
     bool approved
   );
 
+  /// @notice Emitted when an approval is made
   event Approval(
     address indexed owner,
     address indexed spender,
@@ -32,6 +42,7 @@ contract Hub is AccessControl {
     uint256 amount
   );
 
+  /// @notice Emitted when a transfer occurs
   event Transfer(
     address caller,
     address indexed from,
@@ -52,11 +63,14 @@ contract Hub is AccessControl {
 
   mapping(address => mapping(address => bool)) internal _isOperator;
 
+  /// @notice Mapping of owner to token ID to balance
   mapping(address => mapping(uint256 => uint256)) public balanceOf;
 
+  /// @notice Mapping of owner to spender to token ID to allowance
   mapping(address => mapping(address => mapping(uint256 => uint256)))
     public allowance;
 
+  /// @notice Mapping of token ID to total supply
   mapping(uint256 => uint256) public totalSupplies;
 
   /*//////////////////////////////////////////////////////////////
@@ -64,29 +78,38 @@ contract Hub is AccessControl {
     //////////////////////////////////////////////////////////////*/
 
   // tokenId => ERC20View address
+  /// @notice Mapping of token ID to ERC20View contract address
   mapping(uint256 => address) public erc20Views;
 
   /*//////////////////////////////////////////////////////////////
                         ERC20VIEW EVENTS
     //////////////////////////////////////////////////////////////*/
 
+  /// @notice Emitted when an ERC20View is created
   event ERC20ViewCreated(uint256 indexed tokenId, address indexed erc20View);
+  /// @notice Mapping of token ID to token metadata
   mapping(uint256 => TokenMetadata) public tokenMetadata;
 
+  /// @notice Contract URI for metadata
   string public contractURI = "";
 
   /*//////////////////////////////////////////////////////////////
                              ROLES
     //////////////////////////////////////////////////////////////*/
 
+  /// @notice Role for operators
   bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
+  /// @notice Role for editors
   bytes32 public constant EDITOR_ROLE = keccak256("EDITOR_ROLE");
+  /// @notice Role for administrators
   bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
   /*//////////////////////////////////////////////////////////////
                              CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
 
+  /// @notice Constructor for Hub contract
+  /// @param adminAddress The address to grant admin role
   constructor(address adminAddress) {
     _setRoleAdmin(OPERATOR_ROLE, ADMIN_ROLE);
     _setRoleAdmin(EDITOR_ROLE, ADMIN_ROLE);
@@ -97,6 +120,10 @@ contract Hub is AccessControl {
                               ERC6909 LOGIC
     //////////////////////////////////////////////////////////////*/
 
+  /// @notice Checks if an address is an operator for an account
+  /// @param account The account address
+  /// @param operator The operator address
+  /// @return True if the operator is authorized
   function isOperator(
     address account,
     address operator
@@ -104,7 +131,11 @@ contract Hub is AccessControl {
     return hasRole(OPERATOR_ROLE, operator) || _isOperator[account][operator];
   }
 
-  // @notice Internal function to set an operator for an account
+  /// @notice Internal function to set an operator for an account
+  /// @param account The account address
+  /// @param operator The operator address
+  /// @param approved Whether to approve the operator
+  /// @return result True if successful
   function _setOperatorFor(
     address account,
     address operator,
@@ -115,6 +146,11 @@ contract Hub is AccessControl {
     return true;
   }
 
+  /// @notice Sets an operator for an account (only callable by OPERATOR_ROLE)
+  /// @param account The account address
+  /// @param operator The operator address
+  /// @param approved Whether to approve the operator
+  /// @return result True if successful
   function setOperatorFor(
     address account,
     address operator,
@@ -123,6 +159,10 @@ contract Hub is AccessControl {
     return _setOperatorFor(account, operator, approved);
   }
 
+  /// @notice Sets an operator for the caller
+  /// @param operator The operator address
+  /// @param approved Whether to approve the operator
+  /// @return result True if successful
   function setOperator(
     address operator,
     bool approved
@@ -130,6 +170,11 @@ contract Hub is AccessControl {
     return _setOperatorFor(msg.sender, operator, approved);
   }
 
+  /// @notice Transfers tokens to another address
+  /// @param receiver The recipient address
+  /// @param id The token ID
+  /// @param amount The amount to transfer
+  /// @return result True if successful
   function transfer(
     address receiver,
     uint256 id,
@@ -145,6 +190,12 @@ contract Hub is AccessControl {
     return true;
   }
 
+  /// @notice Transfers tokens from one address to another
+  /// @param sender The sender address
+  /// @param receiver The recipient address
+  /// @param id The token ID
+  /// @param amount The amount to transfer
+  /// @return result True if successful
   function transferFrom(
     address sender,
     address receiver,
@@ -171,6 +222,11 @@ contract Hub is AccessControl {
     return true;
   }
 
+  /// @notice Approves a spender to spend tokens
+  /// @param spender The spender address
+  /// @param id The token ID
+  /// @param amount The amount to approve
+  /// @return result True if successful
   function approve(
     address spender,
     uint256 id,
@@ -183,6 +239,11 @@ contract Hub is AccessControl {
     return true;
   }
 
+  /// @notice Mints tokens to a receiver (only callable by OPERATOR_ROLE)
+  /// @param receiver The recipient address
+  /// @param id The token ID
+  /// @param amount The amount to mint
+  /// @return result True if successful
   function mint(
     address receiver,
     uint256 id,
@@ -192,6 +253,11 @@ contract Hub is AccessControl {
     return true;
   }
 
+  /// @notice Burns tokens from a sender (only callable by OPERATOR_ROLE)
+  /// @param sender The sender address
+  /// @param id The token ID
+  /// @param amount The amount to burn
+  /// @return result True if successful
   function burn(
     address sender,
     uint256 id,
@@ -201,6 +267,9 @@ contract Hub is AccessControl {
     return true;
   }
 
+  /// @notice Sets token metadata (only callable by EDITOR_ROLE)
+  /// @param id The token ID
+  /// @param metadata The token metadata
   function setTokenMetadata(
     uint256 id,
     TokenMetadata calldata metadata
@@ -208,14 +277,23 @@ contract Hub is AccessControl {
     tokenMetadata[id] = metadata;
   }
 
+  /// @notice Returns the name of a token
+  /// @param id The token ID
+  /// @return The token name
   function name(uint256 id) public view returns (string memory) {
     return tokenMetadata[id].name;
   }
 
+  /// @notice Returns the symbol of a token
+  /// @param id The token ID
+  /// @return The token symbol
   function symbol(uint256 id) public view returns (string memory) {
     return tokenMetadata[id].symbol;
   }
 
+  /// @notice Returns the decimals of a token
+  /// @param id The token ID
+  /// @return The token decimals
   function decimals(uint256 id) public view returns (uint8) {
     if (tokenMetadata[id].decimals == 0) {
       return 18;
@@ -223,10 +301,15 @@ contract Hub is AccessControl {
     return tokenMetadata[id].decimals;
   }
 
+  /// @notice Sets the contract URI (only callable by EDITOR_ROLE)
+  /// @param uri The contract URI
   function setContractURI(string calldata uri) public onlyRole(EDITOR_ROLE) {
     contractURI = uri;
   }
 
+  /// @notice Returns the token URI
+  /// @param id The token ID
+  /// @return The token URI
   function tokenURI(uint256 id) public view returns (string memory) {
     return string.concat(contractURI, "/", id.toString());
   }
@@ -235,6 +318,9 @@ contract Hub is AccessControl {
                               ERC165 LOGIC
     //////////////////////////////////////////////////////////////*/
 
+  /// @notice Checks if the contract supports an interface
+  /// @param interfaceId The interface ID to check
+  /// @return result True if the interface is supported
   function supportsInterface(
     bytes4 interfaceId
   ) public pure override(AccessControl) returns (bool result) {
@@ -247,6 +333,10 @@ contract Hub is AccessControl {
                         INTERNAL MINT/BURN LOGIC
     //////////////////////////////////////////////////////////////*/
 
+  /// @notice Internal function to mint tokens
+  /// @param receiver The recipient address
+  /// @param id The token ID
+  /// @param amount The amount to mint
   function _mint(address receiver, uint256 id, uint256 amount) internal {
     balanceOf[receiver][id] += amount;
     if (totalSupplies[id] == 0) {
@@ -258,6 +348,10 @@ contract Hub is AccessControl {
     _emitERC20ViewEvent(id, address(0), receiver, amount);
   }
 
+  /// @notice Internal function to burn tokens
+  /// @param sender The sender address
+  /// @param id The token ID
+  /// @param amount The amount to burn
   function _burn(address sender, uint256 id, uint256 amount) internal {
     balanceOf[sender][id] -= amount;
     totalSupplies[id] -= amount;
@@ -270,6 +364,11 @@ contract Hub is AccessControl {
                             INTERNAL HELPERS
   //////////////////////////////////////////////////////////////*/
 
+  /// @notice Internal function to emit ERC20View events
+  /// @param id The token ID
+  /// @param from The sender address
+  /// @param to The recipient address
+  /// @param amount The amount transferred
   function _emitERC20ViewEvent(
     uint256 id,
     address from,
@@ -282,6 +381,9 @@ contract Hub is AccessControl {
     }
   }
 
+  /// @notice Internal function to create an ERC20View contract
+  /// @param tokenId The token ID
+  /// @return The address of the created ERC20View contract
   function _createERC20View(uint256 tokenId) internal returns (address) {
     if (erc20Views[tokenId] != address(0)) {
       return erc20Views[tokenId];

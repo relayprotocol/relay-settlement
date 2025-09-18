@@ -1,52 +1,62 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
-
-import {PayloadBuilder} from "../Allocator.sol";
+import {IPayloadBuilder} from "../Allocator.sol";
 import {Base64} from "solady/src/utils/Base64.sol";
 import "../Utils.sol";
 
+/// @notice Bitcoin transaction parameters
 struct BitcoinTransactionParams {
-  UTXO[] utxos; // Array of UTXOs to spend
-  uint64 feeRate; // Fee rate in satoshis per byte
+  UTXO[] utxos; /// @notice UTXOs to spend
+  uint64 feeRate; /// @notice Fee rate in satoshis per byte
 }
 
+/// @notice Bitcoin UTXO structure
 struct UTXO {
-  bytes32 txid; // Transaction ID in little-endian format (reversed from display)
-  uint32 index;
-  uint64 value;
-  bytes scriptPubKey;
+  bytes32 txid; /// @notice Transaction ID in little-endian format
+  uint32 index; /// @notice Output index
+  uint64 value; /// @notice UTXO value in satoshis
+  bytes scriptPubKey; /// @notice Output script
 }
 
+/// @notice Bitcoin transaction input data
 struct BitcoinTransactionDataInput {
-  bytes txid;
-  bytes index;
-  bytes script;
-  bytes value;
+  bytes txid; /// @notice Transaction ID bytes
+  bytes index; /// @notice Output index bytes
+  bytes script; /// @notice Script bytes
+  bytes value; /// @notice Value bytes
 }
 
+/// @notice Bitcoin transaction output data
 struct BitcoinTransactionDataOutput {
-  bytes value;
-  bytes script;
+  bytes value; /// @notice Output value bytes
+  bytes script; /// @notice Output script bytes
 }
 
+/// @notice Complete Bitcoin transaction data
 struct BitcoinTransactionData {
-  BitcoinTransactionDataInput[] inputs;
-  BitcoinTransactionDataOutput[] outputs;
+  BitcoinTransactionDataInput[] inputs; /// @notice Transaction inputs
+  BitcoinTransactionDataOutput[] outputs; /// @notice Transaction outputs
 }
 
 /// @title BitcoinPayloadBuilder
+/// @author Relay Protocol
 /// @notice Builds Bitcoin transaction payloads for cross-chain withdrawals
-contract BitcoinPayloadBuilder is PayloadBuilder {
+contract BitcoinPayloadBuilder is IPayloadBuilder {
   error InsufficientUTXOValue(uint64 totalInput, uint256 requiredAmount);
   error FeesTooHigh(uint64 amount, uint256 fees);
+  /// @notice The change script bytes for Bitcoin transactions
   bytes public changeScriptBytes;
 
-  /// @notice Constructor that initializes the payload builder with a change script.
-  /// @param changeScript Base64 encoded scriptPubKey for the change output. It can be generated with bitcoinjs for a specific address.  We do not pass base58 addresses because handling base58 in solidity is actually pretty expensive (gas) and we don't really need to build these onchain anyway.
+  /// @notice Initializes Bitcoin payload builder with change script
+  /// @param changeScript Base64 encoded scriptPubKey for change output
   constructor(string memory changeScript) {
     changeScriptBytes = Base64.decode(changeScript);
   }
 
+  /// @notice Validates UTXO amounts and calculates change
+  /// @param amount Required amount to send
+  /// @param utxos Available UTXOs
+  /// @return change Amount to return as change
   function validateAmounts(
     uint256 amount,
     UTXO[] memory utxos
@@ -63,6 +73,9 @@ contract BitcoinPayloadBuilder is PayloadBuilder {
     change = totalInput - uint64(amount);
   }
 
+  /// @notice Builds transaction inputs from UTXOs
+  /// @param utxos UTXOs to convert to inputs
+  /// @return inputs Formatted transaction inputs
   function buildInputs(
     UTXO[] memory utxos
   ) internal pure returns (BitcoinTransactionDataInput[] memory inputs) {
@@ -79,6 +92,13 @@ contract BitcoinPayloadBuilder is PayloadBuilder {
     }
   }
 
+  /// @notice Builds transaction outputs including change
+  /// @param receiverScript Base64 encoded receiver scriptPubKey
+  /// @param amount Amount to send to receiver
+  /// @param change Amount to return as change
+  /// @param inputsLength Number of inputs for fee calculation
+  /// @param feeRate Fee rate in satoshis per byte
+  /// @return outputs Formatted transaction outputs
   function buildOutputs(
     string memory receiverScript,
     uint64 amount,
@@ -109,18 +129,18 @@ contract BitcoinPayloadBuilder is PayloadBuilder {
     }
   }
 
-  /// This builds a payload for a Bitcoin transaction
-  /// @notice The payload is a BitcoinTransactionData struct that contains the inputs and outputs. It is _not_ a Bitcoin "raw" transaction.
-  /// But an object that can be used to build Bitcoin transactions offchain, when combined with the signatures
-  /// @param amount The amount to send
-  /// @param receiverScript The scriptPubKey of the receiver
-  /// @param data The UTXOs to spend
+  /// @notice Builds Bitcoin transaction payload
+  /// @dev Returns BitcoinTransactionData struct, not a _raw_ transaction
+  /// @param amount Amount to send in satoshis
+  /// @param receiverScript Base64 encoded receiver scriptPubKey
+  /// @param data Encoded BitcoinTransactionParams
+  /// @return Encoded BitcoinTransactionData
   function buildPayload(
     uint256 /* chainId */,
     string memory /* depository */,
     string memory /* currency */,
     uint256 amount,
-    string memory receiverScript, // Base64 encoded scriptPubKey
+    string memory receiverScript,
     bytes calldata data
   ) external view override returns (bytes memory) {
     BitcoinTransactionParams memory params = abi.decode(
@@ -147,7 +167,10 @@ contract BitcoinPayloadBuilder is PayloadBuilder {
       abi.encode(BitcoinTransactionData({inputs: inputs, outputs: outputs}));
   }
 
-  /// @dev Build the “legacy” SIGHASH_ALL preimage for input #whichInput.
+  /// @notice Builds SIGHASH_ALL preimage for specific input
+  /// @param txData Complete transaction data
+  /// @param whichInput Index of input to build preimage for
+  /// @return Preimage bytes for signing
   function buildPreImageForInput(
     BitcoinTransactionData memory txData,
     uint256 whichInput
@@ -156,16 +179,16 @@ contract BitcoinPayloadBuilder is PayloadBuilder {
     bytes memory versionLE = Utils.encodeUint32LE(1);
 
     // --- 2) varint(inputCount) ---
-    uint256 nInputs = txData.inputs.length;
-    bytes memory inputCountLE = encodeVarInt(nInputs);
+    uint256 numInputs = txData.inputs.length;
+    bytes memory inputCountLE = encodeVarInt(numInputs);
 
     // --- 3) serialize all inputs, but only input #whichInput gets its scriptPubKey as "scriptSig" ---
     bytes memory allInputs;
-    for (uint256 i = 0; i < nInputs; i++) {
+    for (uint256 i = 0; i < numInputs; i++) {
       // a) txid is already reversed in buildInputs → use as‐is (32 bytes)
-      bytes memory prevTxid_LE = txData.inputs[i].txid; // 32 bytes
+      bytes memory prevTxidLe = txData.inputs[i].txid; // 32 bytes
       // b) output index (4 bytes LE)
-      bytes memory prevIndex_LE = txData.inputs[i].index; // 4 bytes
+      bytes memory prevIndexLe = txData.inputs[i].index; // 4 bytes
       // c) scriptSig length + scriptSig bytes
       bytes memory scriptSigLen;
       bytes memory scriptSigBytes;
@@ -182,11 +205,11 @@ contract BitcoinPayloadBuilder is PayloadBuilder {
       bytes memory sequenceLE = Utils.encodeUint32LE(0xFFFFFFFF);
 
       // e) concat this input's fields:
-      //    [ prevTxid_LE || prevIndex_LE || scriptSigLen || scriptSigBytes || sequenceLE ]
+      //    [ prevTxidLe || prevIndexLe || scriptSigLen || scriptSigBytes || sequenceLE ]
       allInputs = bytes.concat(
         allInputs,
-        prevTxid_LE,
-        prevIndex_LE,
+        prevTxidLe,
+        prevIndexLe,
         scriptSigLen,
         scriptSigBytes,
         sequenceLE
@@ -194,12 +217,12 @@ contract BitcoinPayloadBuilder is PayloadBuilder {
     }
 
     // --- 4) varint(outputCount) ---
-    uint256 nOutputs = txData.outputs.length;
-    bytes memory outputCountLE = encodeVarInt(nOutputs);
+    uint256 numOutputs = txData.outputs.length;
+    bytes memory outputCountLE = encodeVarInt(numOutputs);
 
     // --- 5) serialize all outputs: each is [ valueLE (8b) || varint(scriptLen) || scriptBytes ] ---
     bytes memory allOutputs;
-    for (uint256 j = 0; j < nOutputs; j++) {
+    for (uint256 j = 0; j < numOutputs; j++) {
       // a) 8‐byte LE value
       bytes memory valueLE = txData.outputs[j].value; // your encodeUint64LE already returned 8‐byte LE
 
@@ -228,8 +251,9 @@ contract BitcoinPayloadBuilder is PayloadBuilder {
       );
   }
 
-  ///  @notice Given the ABI-encoded `BitcoinTransactionData`, produce one double-SHA256 digest per input.
-  /// @param payload The ABI-encoded `BitcoinTransactionData`
+  /// @notice Returns message hashes to sign for Bitcoin transaction
+  /// @param payload Encoded BitcoinTransactionData
+  /// @return Array of double-SHA256 hashes to sign
   function hashesToSign(
     uint256, // chainId (ignored)
     string memory, // depository (ignored)
@@ -255,18 +279,21 @@ contract BitcoinPayloadBuilder is PayloadBuilder {
     return digests;
   }
 
-  // This is used by Near to identify the curve used for signing
+  /// @notice Returns cryptographic curve for Bitcoin signing
+  /// @return curve "Ecdsa" for Bitcoin
   function curve() external pure returns (string memory) {
     return "Ecdsa";
   }
 
+  /// @notice Returns blockchain family identifier
+  /// @return family "bitcoin-vm" for Bitcoin
   function family() external pure returns (string memory) {
     return "bitcoin-vm";
   }
 
-  // Util functions for encoding Bitcoin transaction data
-
-  /// @dev Encode a “CompactSize” varint (as in Bitcoin, for script‐lengths or array‐lengths).
+  /// @notice Encodes Bitcoin CompactSize varint
+  /// @param value Value to encode
+  /// @return Encoded varint bytes
   function encodeVarInt(uint256 value) internal pure returns (bytes memory) {
     if (value < 0xFD) {
       // 1 byte

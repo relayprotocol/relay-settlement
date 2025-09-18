@@ -1,12 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
-
-import {PayloadBuilder} from "../Allocator.sol";
+import {IPayloadBuilder} from "../Allocator.sol";
 import {Utils} from "../Utils.sol";
 
 /// @title SolanaPayloadBuilder
+/// @author Relay Protocol
 /// @notice Builds Borsh-encoded payloads for Solana chain withdrawals
-contract SolanaPayloadBuilder is PayloadBuilder {
+contract SolanaPayloadBuilder is IPayloadBuilder {
+  error InvalidExpiration();
+  /// @notice Builds Borsh-encoded payload for Solana withdrawal
+  /// @param currency SPL token address (empty for SOL)
+  /// @param amount Amount to withdraw
+  /// @param receiver Recipient public key
+  /// @param data Optional nonce and expiration (empty for defaults)
+  /// @return Borsh-encoded transaction payload
   function buildPayload(
     uint256 /* chainId */,
     string calldata /* depository */,
@@ -50,6 +57,9 @@ contract SolanaPayloadBuilder is PayloadBuilder {
       encodeBorsh(recipientPubkey, tokenPubkey, amountU64, nonce, expiration);
   }
 
+  /// @notice Returns message hash to sign for Solana transaction
+  /// @param payload Borsh-encoded transaction payload
+  /// @return hashes Array with single SHA256 hash
   function hashesToSign(
     uint256 /* chainId */,
     string calldata /* depository */,
@@ -60,21 +70,25 @@ contract SolanaPayloadBuilder is PayloadBuilder {
     return hashes;
   }
 
+  /// @notice Returns cryptographic curve for Solana signing
+  /// @return curve "Eddsa" for Solana
   function curve() external pure returns (string memory) {
     return "Eddsa";
   }
 
+  /// @notice Returns blockchain family identifier
+  /// @return family "solana-vm" for Solana
   function family() external pure returns (string memory) {
     return "solana-vm";
   }
 
-  /// @notice Encodes the Solana transaction payload in Borsh-compatible format.
-  /// @param recipient The recipient public key.
-  /// @param token The token public key. If zero, indicates SOL; otherwise, SPL token.
-  /// @param amount The amount to transfer
-  /// @param nonce The unique nonce for the tx
-  /// @param expiration The expiration timestamp (in seconds)
-  /// @return The Borsh-encoded transaction payload
+  /// @notice Encodes Solana transaction payload in Borsh format
+  /// @param recipient Recipient public key (32 bytes)
+  /// @param token SPL token public key (zero for SOL)
+  /// @param amount Amount to transfer
+  /// @param nonce Unique transaction nonce
+  /// @param expiration Expiration timestamp (seconds)
+  /// @return Borsh-encoded transaction payload
   function encodeBorsh(
     bytes32 recipient,
     bytes32 token,
@@ -104,13 +118,15 @@ contract SolanaPayloadBuilder is PayloadBuilder {
     result = bytes.concat(result, Utils.encodeUint64LE(nonce));
 
     // 5. Expiration (8 bytes, little-endian)
-    require(expiration >= 0, "Expiration cannot be negative");
+    if (expiration < 0) revert InvalidExpiration();
     result = bytes.concat(result, Utils.encodeUint64LE(uint64(expiration)));
 
     return result;
   }
 
-  // For test
+  /// @notice Converts hex string to bytes32 (for testing)
+  /// @param hexString Hex string to convert
+  /// @return bytes32 representation
   function hexStringToBytes32(
     string memory hexString
   ) public pure returns (bytes32) {

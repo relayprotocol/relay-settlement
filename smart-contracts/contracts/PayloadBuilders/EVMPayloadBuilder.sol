@@ -1,46 +1,56 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
-
-import {PayloadBuilder} from "../Allocator.sol";
+import {IPayloadBuilder} from "../Allocator.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {Utils} from "../Utils.sol";
 
 // Taken from https://github.com/relayprotocol/depository-contracts/blob/main/packages/ethereum-vm/src/utils/RelayDepositoryStructs.sol
+/// @notice Individual call within a batch request
 struct Call {
-  address to;
-  bytes data;
-  uint256 value;
-  bool allowFailure;
+  address to; /// @notice Target contract address
+  bytes data; /// @notice Call data
+  uint256 value; /// @notice ETH value to send
+  bool allowFailure; /// @notice Whether call can fail without reverting batch
 }
+
+/// @notice Batch call request for depository
 struct CallRequest {
-  Call[] calls;
-  uint256 nonce;
-  uint256 expiration;
+  Call[] calls; /// @notice Array of calls to execute
+  uint256 nonce; /// @notice Request nonce for replay protection
+  uint256 expiration; /// @notice Request expiration timestamp
 }
+
+/// @notice Current depository information
 struct CurrentDepository {
-  address depository;
-  uint256 chainId;
+  address depository; /// @notice Depository contract address
+  uint256 chainId; /// @notice Chain ID where depository is deployed
 }
 
 /// @title EVMPayloadBuilder
+/// @author Relay Protocol
 /// @notice Builds EIP-712 compliant payloads for EVM chain withdrawals
-contract EVMPayloadBuilder is PayloadBuilder {
-  // EIP712 domain and version
+contract EVMPayloadBuilder is IPayloadBuilder {
+  // EIP712 domain configuration
+  /// @notice The signing domain for EIP712
   string public constant SIGNING_DOMAIN = "RelayDepository";
+  /// @notice The signature version for EIP712
   string public constant SIGNATURE_VERSION = "1";
 
-  /// @notice The EIP-712 typehash for the Call struct
+  /// @notice EIP-712 typehash for Call struct
   bytes32 public constant CALL_TYPEHASH =
     keccak256("Call(address to,bytes data,uint256 value,bool allowFailure)");
 
-  /// @notice The EIP-712 typehash for the CallRequest struct
+  /// @notice EIP-712 typehash for CallRequest struct
   bytes32 public constant CALL_REQUEST_TYPEHASH =
     keccak256(
       "CallRequest(Call[] calls,uint256 nonce,uint256 expiration)Call(address to,bytes data,uint256 value,bool allowFailure)"
     );
 
-  // This must return a "CallRequest calldata request"
-  // as defined in https://github.com/relayprotocol/depository-contracts/blob/main/packages/ethereum-vm/src/utils/RelayDepositoryStructs.sol
+  /// @notice Builds EIP-712 compliant CallRequest for EVM withdrawal
+  /// @param currency Token address (zero for native ETH)
+  /// @param amount Amount to withdraw
+  /// @param receiver Recipient address
+  /// @return Encoded CallRequest struct
   function buildPayload(
     uint256 /* chainId */,
     string calldata /* depository */,
@@ -82,9 +92,11 @@ contract EVMPayloadBuilder is PayloadBuilder {
     return abi.encode(request);
   }
 
-  /// @notice Returns the single EIP-712 hash to sign for the given CallRequest
-  /// @param payload The encoded CallRequest payload to hash
-  /// @return The EIP-712 hash of the payload
+  /// @notice Returns EIP-712 hash to sign for CallRequest
+  /// @param chainId Target chain ID
+  /// @param depository Depository contract address
+  /// @param payload Encoded CallRequest
+  /// @return Array with single EIP-712 hash
   function hashesToSign(
     uint256 chainId,
     string calldata depository,
@@ -98,8 +110,10 @@ contract EVMPayloadBuilder is PayloadBuilder {
     return hashes;
   }
 
-  /// @notice Returns an EIP-712 domain separator for the depository
-  /// @return The EIP-712 domain separator
+  /// @notice Builds EIP-712 domain separator for depository
+  /// @param chainId Target chain ID
+  /// @param depository Depository contract address
+  /// @return EIP-712 domain separator
   function buildDomainSeparator(
     uint256 chainId,
     string calldata depository
@@ -118,10 +132,11 @@ contract EVMPayloadBuilder is PayloadBuilder {
       );
   }
 
-  /// @notice Helper function to hash a CallRequest and return the EIP-712 digest
-  /// @param request The CallRequest to hash
-  /// @return structHash The struct hash
-  /// @return eip712Hash The EIP712 hash
+  /// @notice Hashes CallRequest and returns EIP-712 digest
+  /// @param request CallRequest to hash
+  /// @param domainSeparator EIP-712 domain separator
+  /// @return structHash Struct hash
+  /// @return eip712Hash Complete EIP-712 hash
   function hashCallRequest(
     CallRequest memory request,
     bytes32 domainSeparator
@@ -160,10 +175,14 @@ contract EVMPayloadBuilder is PayloadBuilder {
     eip712Hash = MessageHashUtils.toTypedDataHash(domainSeparator, structHash);
   }
 
+  /// @notice Returns cryptographic curve for EVM signing
+  /// @return curve "Ecdsa" for EVM chains
   function curve() external pure returns (string memory) {
     return "Ecdsa";
   }
 
+  /// @notice Returns blockchain family identifier
+  /// @return family "ethereum-vm" for EVM chains
   function family() external pure returns (string memory) {
     return "ethereum-vm";
   }
