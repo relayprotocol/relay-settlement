@@ -82,7 +82,7 @@ task(
       }
       console.log(`Payload builder: ${payloadBuilderAddress}`)
 
-      await run('allocator:grant-hub-role', {
+      await run('allocator:grant-withdrawer-role', {
         account: owner,
         allocator: allocatorAddress,
       })

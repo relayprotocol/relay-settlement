@@ -9,6 +9,7 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
   .addOptionalParam('amount', 'Amount to withdraw', '1')
   .addOptionalParam('receiver', 'account to receive tokens (default to signer)')
   .addOptionalParam('data', 'additional data', '0x')
+  .addOptionalParam('nonce', 'a unique nonce for this request', '0x')
   .setAction(
     async (
       {
@@ -19,6 +20,7 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
         amount,
         receiver,
         data,
+        nonce,
       },
       { viem }
     ) => {
@@ -27,7 +29,10 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
 
       const allocator = await viem.getContractAt('Allocator', allocatorAddress)
 
-      const nonce = keccak256(`0x${new Date().getTime().toString()}`)
+      if (!nonce) {
+        nonce = keccak256(`0x${new Date().getTime().toString()}`)
+      }
+
       const submitWithdrawRequestParams = {
         amount,
         chainId,

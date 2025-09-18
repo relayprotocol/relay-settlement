@@ -57,7 +57,7 @@ task(
       const allocator = await viem.getContractAt('Allocator', allocatorAddress)
       const delay = await allocator.read.delay()
 
-      await run('allocator:grant-hub-role', {
+      await run('allocator:grant-withdrawer-role', {
         account: owner,
         allocator: allocatorAddress,
       })

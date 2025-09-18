@@ -42,7 +42,7 @@ task('allocator:sign-payload', 'Sign payload on allocator')
       await checkAndApproveWNEAR(
         hre,
         signer.account.address,
-        allocator.address,
+        allocatorAddress,
         allowance
       )
 
@@ -59,15 +59,29 @@ task('allocator:sign-payload', 'Sign payload on allocator')
 
       // approve sig fee
       const signatureFee = await allocator.read.signatureFee()
-      await checkAndApproveWNEAR(
-        hre,
-        publicClient,
-        signer.account.address,
-        allocator.address,
-        signatureFee
-      )
+
+      if (signatureFee > 0n) {
+        await checkAndApproveWNEAR(
+          hre,
+          signer.account.address,
+          allocatorAddress,
+          signatureFee
+        )
+      }
 
       console.log('Signing payload', submitWithdrawRequestParams)
+
+      const wNEAR = await hre.viem.getContractAt('MyToken', wNEARAddress)
+      // Funding a bit more for the signatures!
+      // await wNEAR.write.transfer([allocator.address, 100n])
+      const balance = await wNEAR.read.balanceOf([allocatorAddress])
+      if (balance === 0n) {
+        console.log(
+          'Funding allocator with 1 1yoctoNear for the signature calls'
+        )
+        await wNEAR.write.transfer([allocatorAddress, 1n])
+      }
+
       const txHash = await allocator.write.signWithdrawPayload(
         [
           submitWithdrawRequestParams,

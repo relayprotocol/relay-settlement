@@ -32,17 +32,20 @@ task('allocator:init', 'Initialize the Allocator contract')
       console.log(
         `Current user wNEAR balance: ${formatUnits(userBalance, 24)} wNEAR`
       )
-      console.log(formatUnits(2000000000000000000000000n, 24))
 
       const allocatorBalance = await wNEAR.read.balanceOf([allocator.address])
       console.log(
         `Current allocator wNEAR balance: ${formatUnits(allocatorBalance, 24)} wNEAR`
       )
+      if (allocatorBalance >= allowance) {
+        console.log('Allocator already initialized!')
+      } else {
+        console.log('Initializing Allocator (and funding it!)...')
+        // Call init function
+        const initHash = await allocator.write.init()
+        await publicClient.waitForTransactionReceipt({ hash: initHash })
 
-      console.log('Initializing Allocator (and funding it!)...')
-      // Call init function
-      const initHash = await allocator.write.init()
-      await publicClient.waitForTransactionReceipt({ hash: initHash })
-      console.log('Allocator initialized successfully')
+        console.log('Allocator initialized successfully')
+      }
     }
   )

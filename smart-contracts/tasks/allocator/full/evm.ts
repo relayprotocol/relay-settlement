@@ -1,11 +1,11 @@
 import { task } from 'hardhat/config'
-import { recoverTypedDataAddress, zeroAddress } from 'viem'
+import { keccak256, recoverTypedDataAddress, zeroAddress } from 'viem'
 import { extractNearSignature } from '../../../lib/near'
-import { decodeCallRequest } from '../../../lib/evm'
 import { wait } from '../../../lib/wait'
 import { publicKeyToAddress } from 'viem/utils'
 import { derivePublicKey } from '../../../lib/near'
 import { base58 } from '@scure/base'
+import { decodeCallRequest } from '../../../lib/evm'
 
 task(
   'full:evm',
@@ -14,6 +14,10 @@ task(
   .addOptionalParam('owner', 'The address of the owner')
   .addParam('chainId', 'The chain ID on which we withdraw')
   .addParam('depository', 'The address of the depository contract')
+  .addOptionalParam(
+    'allocator',
+    'The address of the allocator contract if it was already deployed'
+  )
   .addOptionalParam('signer', 'The address of the signer')
   .addOptionalParam('wnear', 'The address of the wNEAR token')
   .addOptionalParam('amount', 'The amount to withdraw from the depository', '1')
@@ -30,21 +34,26 @@ task(
         wnear,
         chainId,
         depository: depositoryAddress,
+        allocator: allocatorAddress,
         amount,
         currency,
       },
       { viem, run }
     ) => {
+      const [admin] = await viem.getWalletClients()
+
       // recompile contracts
       await run('compile')
 
       const publicClient = await viem.getPublicClient()
 
-      const allocatorAddress = await run('deploy:allocator', {
-        owner,
-        signer,
-        wnear,
-      })
+      if (!allocatorAddress) {
+        allocatorAddress = await run('deploy:allocator', {
+          owner,
+          signer,
+          wnear,
+        })
+      }
 
       const allocator = await viem.getContractAt('Allocator', allocatorAddress)
       const delay = await allocator.read.delay()
@@ -57,9 +66,7 @@ task(
       if (payloadBuilderAddress === zeroAddress) {
         console.log('PayloadBuilder not set, deploying a new one...')
 
-        payloadBuilderAddress = await run('deploy:payload-builder', {
-          payloadBuilder: 'EVMPayloadBuilder',
-        })
+        payloadBuilderAddress = await run('deploy:evm-payload-builder')
 
         const tx = await allocator.write.setPayloadBuilder([
           chainId,
@@ -72,10 +79,15 @@ task(
       }
       console.log(`Payload builder: ${payloadBuilderAddress}`)
 
-      await run('allocator:grant-hub-role', {
+      if (!owner) {
+        owner = admin.account.address
+      }
+      await run('allocator:grant-withdrawer-role', {
         account: owner,
         allocator: allocatorAddress,
       })
+
+      const nonce = keccak256(`0x${new Date().getTime().toString()}`)
 
       // Submit a withdraw request to the Allocator for an EVM chain!
       const withdrawRequestHash = await run('allocator:submit-withdraw', {
@@ -84,22 +96,29 @@ task(
         chainId,
         currency,
         depository: depositoryAddress,
+        nonce,
         wnear,
       })
 
       // Get the payload
-      const payload = await allocator.read.unsignedPayloads([
-        withdrawRequestHash,
-      ])
-      const request = decodeCallRequest(payload)
+      const payload = await allocator.read.payloads([withdrawRequestHash])
 
       // Trigger a signature
       await wait(Number(delay))
+      const timestamp = await allocator.read.payloadTimestamps([
+        withdrawRequestHash,
+      ])
+      while (new Date().getTime() < Number(timestamp) * 1000) {
+        await wait(1)
+      }
 
       await run('allocator:sign-payload', {
         allocator: allocatorAddress,
+        amount,
         chainId,
+        currency,
         depository: depositoryAddress,
+        nonce,
         withdrawRequestHash,
         wnear,
       })
@@ -169,6 +188,8 @@ task(
       const signerAddress = publicKeyToAddress(
         allocatorPublicKey as `0x${string}`
       )
+
+      const request = decodeCallRequest(payload)
 
       // EIP-712 verification
       const recoveredFromTypedData = await recoverTypedDataAddress({
