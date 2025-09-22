@@ -1,17 +1,21 @@
 import { JsonRpcProvider } from '@near-js/providers'
+import { networks } from '@relay-protocol/networks'
 import { fromHex } from 'viem'
+
+// default values are Aurora testnet
+const { near: nearNetwork } = networks['1313161555']
 
 export async function derivePublicKey(
   path: string,
   predecessor: string,
-  domainId: number
+  domainId: number,
+  signerContractId: string = nearNetwork!.signer,
+  rpcUrl: string = nearNetwork!.rpc
 ): Promise<{ curve: string; publicKey: string }> {
-  // Create a connection to testnet RPC
+  // Create a connection to the specified RPC
   const provider = new JsonRpcProvider({
-    url: 'https://test.rpc.fastnear.com',
+    url: rpcUrl,
   })
-
-  const contractId = 'v1.signer-prod.testnet'
 
   const args = {
     domain_id: domainId,
@@ -21,7 +25,7 @@ export async function derivePublicKey(
 
   const args_base64 = Buffer.from(JSON.stringify(args)).toString('base64')
   const result = await provider.query({
-    account_id: contractId,
+    account_id: signerContractId,
     args_base64,
     finality: 'optimistic',
     method_name: 'derived_public_key',

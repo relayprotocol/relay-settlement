@@ -19,6 +19,10 @@ export const aurora: NetworkConfig = {
   family: 'ethereum-vm',
   isTestnet: false,
   name: 'Aurora Mainnet (Near)',
+  near: {
+    rpc: 'https://rpc.mainnet.near.org',
+    signer: 'v1.signer',
+  },
   rpc: process.env.RPC_1313161554
     ? [process.env.RPC_1313161554]
     : ['https://mainnet.aurora.dev'],

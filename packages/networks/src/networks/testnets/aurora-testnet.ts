@@ -8,6 +8,10 @@ export const auroraTestnet: NetworkConfig = {
   family: 'ethereum-vm',
   isTestnet: true,
   name: 'Aurora testnet',
+  near: {
+    rpc: 'https://test.rpc.fastnear.com',
+    signer: 'v1.signer-prod.testnet',
+  },
   rpc: process.env.RPC_1313161555
     ? [process.env.RPC_1313161555]
     : ['https://testnet.aurora.dev'],

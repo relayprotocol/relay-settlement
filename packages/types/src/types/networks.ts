@@ -22,6 +22,10 @@ export interface NetworkConfig {
   isTestnet: boolean
   assets?: NetworkAssets
   rpc: [string, ...string[]]
+  near?: {
+    rpc: string
+    signer: string
+  }
 }
 
 interface NetworkAssets {
