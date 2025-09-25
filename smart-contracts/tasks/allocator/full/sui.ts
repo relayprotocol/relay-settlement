@@ -81,7 +81,7 @@ task(
       }
       console.log(`Payload builder: ${payloadBuilderAddress}`)
 
-      await run('allocator:grant-withdrawer-role', {
+      await run('allocator:add-withdrawer', {
         account: owner,
         allocator: allocatorAddress,
       })

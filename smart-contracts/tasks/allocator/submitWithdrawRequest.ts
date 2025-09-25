@@ -10,6 +10,11 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
   .addOptionalParam('receiver', 'account to receive tokens (default to signer)')
   .addOptionalParam('data', 'additional data', '0x')
   .addOptionalParam('nonce', 'a unique nonce for this request', '0x')
+  .addOptionalParam(
+    'spender',
+    'the address that spends tokens on the hub',
+    zeroAddress
+  )
   .setAction(
     async (
       {
@@ -21,6 +26,7 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
         receiver,
         data,
         nonce,
+        spender,
       },
       { viem }
     ) => {
@@ -41,7 +47,7 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
         depository,
         nonce,
         receiver: receiver || signer.account.address,
-        spender: receiver || signer.account.address,
+        spender: spender || receiver || signer.account.address,
       }
 
       console.log(

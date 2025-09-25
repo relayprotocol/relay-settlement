@@ -111,7 +111,6 @@ describe('Allocator signWithdrawPayload', function () {
 
       // approve sig fee
       const signatureFee = await allocator.read.signatureFee()
-      console.log({ signatureFee })
       await wNEAR.write.approve([allocator.address, signatureFee], {
         account: solver.account,
       })

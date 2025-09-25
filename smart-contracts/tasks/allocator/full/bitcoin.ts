@@ -1,7 +1,12 @@
 import { task } from 'hardhat/config'
 import * as bitcoin from 'bitcoinjs-lib'
 
-import { decodeAbiParameters, encodeAbiParameters, zeroAddress } from 'viem'
+import {
+  decodeAbiParameters,
+  encodeAbiParameters,
+  keccak256,
+  zeroAddress,
+} from 'viem'
 import {
   addSignedInputsToTransaction,
   BITCOIN_TRANSACTION_ABI,
@@ -16,6 +21,7 @@ import {
 } from '../../../lib/bitcoin'
 import { extractNearSignature } from '../../../lib/near'
 import { wait } from '../../../lib/wait'
+import { networks } from '@relay-protocol/networks'
 
 task(
   'full:bitcoin',
@@ -30,23 +36,27 @@ task(
     'The amount to withdraw from the depository',
     '1000'
   )
-  .addParam(
-    'publicKey',
-    'The public key of the signer (ethereum format: 0x...)'
-  )
   .addParam('recipient', 'The Bitcoin address to send the funds to')
   .setAction(
-    async (
-      { owner, signer, wnear, amount, recipient, publicKey },
-      { viem, run }
-    ) => {
+    async ({ owner, signer, wnear, amount, recipient }, { viem, run }) => {
       // recompile contracts
+      const publicClient = await viem.getPublicClient()
+
       await run('compile')
+
+      const { near: nearNetwork } = networks[await publicClient.getChainId()]
+      const [admin] = await viem.getWalletClients()
+
+      if (!signer) {
+        signer = nearNetwork!.signer
+      }
+
+      if (!owner) {
+        owner = admin.account.address
+      }
 
       // A fake chainId for Bitcoin, since we don't have a real one in the testnet
       const bitcoinChainId = 817781938n
-
-      const publicClient = await viem.getPublicClient()
 
       const allocatorAddress = await run('deploy:allocator', {
         owner,
@@ -57,7 +67,7 @@ task(
       const allocator = await viem.getContractAt('Allocator', allocatorAddress)
       const delay = await allocator.read.delay()
 
-      await run('allocator:grant-withdrawer-role', {
+      await run('allocator:add-withdrawer', {
         account: owner,
         allocator: allocatorAddress,
       })
@@ -66,6 +76,12 @@ task(
         bitcoinChainId,
         zeroAddress, // No depository contract for Bitcoin
       ])
+
+      const publicKey = await run('allocator:signer-address', {
+        allocator: allocatorAddress,
+        family: 'bitcoin-vm',
+      })
+
       if (bitcoinPayloadBuilderAddress === zeroAddress) {
         console.log('Bitcoin PayloadBuilder not set, deploying a new one...')
 
@@ -119,8 +135,18 @@ task(
       )
 
       const receiverScript = bitcoin.address
-        .toOutputScript(recipient, bitcoin.networks.testnet)
+        .toOutputScript(recipient, bitcoin.networks.testnet) // TODO: handle prod?
         .toString('base64')
+
+      const nonce = keccak256(`0x${new Date().getTime().toString()}`)
+
+      const hasRole = await allocator.read.hasRole([
+        keccak256('APPROVED_WITHDRAWER_ROLE'),
+        owner!,
+      ])
+      if (!hasRole) {
+        throw new Error(`${owner} is not a withdrawer`)
+      }
 
       const withdrawRequestHash = await run('allocator:submit-withdraw', {
         allocator: allocatorAddress,
@@ -129,23 +155,32 @@ task(
         currency: zeroAddress,
         data: payloadData,
         depository: zeroAddress,
+        nonce,
         receiver: receiverScript,
         wnear,
       })
 
       // Get the payload
-      const payload = await allocator.read.unsignedPayloads([
-        withdrawRequestHash,
-      ])
+      const payload = await allocator.read.payloads([withdrawRequestHash])
 
       // Trigger a signature
-      await wait(delay)
+      await wait(Number(delay))
+      const timestamp = await allocator.read.payloadTimestamps([
+        withdrawRequestHash,
+      ])
+      while (new Date().getTime() < Number(timestamp) * 1000) {
+        await wait(1)
+      }
 
       await run('allocator:sign-payload', {
         allocator: allocatorAddress,
+        amount,
         chainId: bitcoinChainId.toString(),
+        currency: zeroAddress,
+        data: payloadData,
         depository: zeroAddress,
-        withdrawRequestHash,
+        nonce,
+        receiver: receiverScript,
         wnear,
       })
 

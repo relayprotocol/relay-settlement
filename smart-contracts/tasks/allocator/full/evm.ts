@@ -82,7 +82,7 @@ task(
       if (!owner) {
         owner = admin.account.address
       }
-      await run('allocator:grant-withdrawer-role', {
+      await run('allocator:add-withdrawer', {
         account: owner,
         allocator: allocatorAddress,
       })

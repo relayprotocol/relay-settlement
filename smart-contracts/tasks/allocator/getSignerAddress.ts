@@ -34,6 +34,6 @@ task(
       allocatorAddress,
       family
     )
-    console.log(`\n${family.toUpperCase()} signer: ${signerAddress}`)
+    console.log(`${family} signer: ${signerAddress}`)
     return signerAddress
   })

@@ -12,6 +12,11 @@ task('allocator:sign-payload', 'Sign payload on allocator')
   .addOptionalParam('receiver', 'account to receive tokens (default to signer)')
   .addOptionalParam('data', 'additional data', '0x')
   .addOptionalParam('wnear', 'The address of the wNEAR contract')
+  .addOptionalParam(
+    'spender',
+    'the address that spends tokens on the hub',
+    zeroAddress
+  )
   .setAction(
     async (
       {
@@ -24,6 +29,7 @@ task('allocator:sign-payload', 'Sign payload on allocator')
         data,
         wnear: wNEARAddress,
         nonce,
+        spender,
       },
       hre
     ) => {
@@ -54,7 +60,7 @@ task('allocator:sign-payload', 'Sign payload on allocator')
         depository,
         nonce,
         receiver: receiver || signer.account.address,
-        spender: receiver || signer.account.address,
+        spender: spender || receiver || signer.account.address,
       }
 
       // approve sig fee
@@ -73,13 +79,15 @@ task('allocator:sign-payload', 'Sign payload on allocator')
 
       const wNEAR = await hre.viem.getContractAt('MyToken', wNEARAddress)
       // Funding a bit more for the signatures!
-      // await wNEAR.write.transfer([allocator.address, 100n])
       const balance = await wNEAR.read.balanceOf([allocatorAddress])
       if (balance === 0n) {
         console.log(
           'Funding allocator with 1 1yoctoNear for the signature calls'
         )
-        await wNEAR.write.transfer([allocatorAddress, 1n])
+        const fundTx = await wNEAR.write.transfer([allocatorAddress, 1n])
+        await publicClient.waitForTransactionReceipt({
+          hash: fundTx,
+        })
       }
 
       const txHash = await allocator.write.signWithdrawPayload(
@@ -87,8 +95,8 @@ task('allocator:sign-payload', 'Sign payload on allocator')
           submitWithdrawRequestParams,
           '0x',
           {
-            callbackGas: 50_000_000_000_000n,
-            signGas: 10_000_000_000_000n,
+            callbackGas: 100_000_000_000_000n,
+            signGas: 200_000_000_000_000n,
           },
         ],
         {

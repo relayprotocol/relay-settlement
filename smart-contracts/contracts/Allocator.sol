@@ -207,7 +207,7 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     string currency; // Address of the currency to be withdrawn, as a string so we can support non EVM. Use zero address for native.
     uint256 amount; // Amount to withdraw
     address spender; // Address of the account that owns the balance in the Hub contract (can be an alias)
-    string receiver; // Address of the account on the destinattion chain as a string so we can support non EVM
+    string receiver; // Address of the account on the destination chain as a string so we can support non EVM
     bytes data; // Additional data to be passed to the payload builder
     bytes32 nonce; // Nonce for replay protection
   }
@@ -504,7 +504,6 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     if (signedPayloads[withdrawRequestHash][hashToSign].length > 0) {
       revert PayloadAlreadySigned(withdrawRequestHash);
     }
-
     // Encode the JSON request for the signer
     bytes memory data = ChainSignatures.encodeJSONRequest(
       hashToSign,
@@ -514,7 +513,6 @@ contract Allocator is AccessControl, Ownable, EIP712 {
         ? "0"
         : "1"
     );
-
     // Now get NEAR to sign the payload!
     PromiseCreateArgs memory callSign = near.call(
       nearSigner,
@@ -525,7 +523,6 @@ contract Allocator is AccessControl, Ownable, EIP712 {
       1, // attachedNear
       gasSettings.signGas
     );
-
     PromiseCreateArgs memory callback = near.auroraCall(
       address(this),
       abi.encodeWithSelector(
@@ -536,7 +533,6 @@ contract Allocator is AccessControl, Ownable, EIP712 {
       0,
       gasSettings.callbackGas
     );
-
     callSign.then(callback).transact();
   }
 
