@@ -9,7 +9,6 @@ import {
   parseEther,
   serializeTransaction,
 } from 'viem'
-
 import { z } from 'zod'
 import { RelayMultisigSigner$Type } from '../../artifacts/contracts/RelayMultisigSigner.sol/RelayMultisigSigner'
 
@@ -69,22 +68,29 @@ export type Transaction = z.infer<typeof TransactionSchema>
 
 export const TransactionsSchema = z.array(TransactionSchema)
 
+// Keeping track of offsets if there are multiple transactions from the same address
+const nonceOffsets: Record<string, Record<number, number>> = {}
+
 export const buildEvmTransaction = async (
   tx: z.infer<typeof EthereumTxSchema>
 ) => {
   const networkClient = createPublicClient({
     transport: http(tx.rpc),
   })
+  const chainId = await networkClient.getChainId()
 
   const nonce = await networkClient.getTransactionCount({
     address: tx.from,
   })
-  if (nonce > tx.nonce) {
+  if (!nonceOffsets[tx.from]) {
+    nonceOffsets[tx.from] = {}
+  }
+  const expectedNonce = nonce + (nonceOffsets[tx.from][chainId] || 0)
+  if (expectedNonce !== tx.nonce) {
     throw new Error(
-      `❌ Nonce mismatch: the transaction nonce is ${tx.nonce} but the current nonce is ${nonce}. This tx will not be executed!`
+      `❌ Nonce mismatch: the transaction nonce is ${tx.nonce} but the current nonce is ${expectedNonce}. This tx will not be executed!`
     )
   }
-  const chainId = await networkClient.getChainId()
   const raw = {
     chainId,
     data: tx.calldata,
@@ -106,6 +112,9 @@ export const buildEvmTransaction = async (
     console.error('❌ Ethereum transaction failed:', tx, error.message)
     return null
   }
+
+  // Add to the offset!
+  nonceOffsets[tx.from][chainId] = (nonceOffsets[tx.from][chainId] || 0) + 1
 
   // Add the fees now only!
   return {
