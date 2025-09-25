@@ -95,8 +95,8 @@ task('allocator:sign-payload', 'Sign payload on allocator')
           submitWithdrawRequestParams,
           '0x',
           {
-            callbackGas: 100_000_000_000_000n,
-            signGas: 200_000_000_000_000n,
+            callbackGas: 50_000_000_000_000n,
+            signGas: 10_000_000_000_000n,
           },
         ],
         {
