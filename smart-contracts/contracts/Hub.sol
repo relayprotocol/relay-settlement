@@ -15,6 +15,15 @@ interface IERC20View {
   /// @param to The recipient address
   /// @param value The amount transferred
   function emitTransferEvent(address from, address to, uint256 value) external;
+  /// @notice Emits an approval event
+  /// @param owner The owner address
+  /// @param spender The spender address
+  /// @param value The approved amount
+  function emitApprovalEvent(
+    address owner,
+    address spender,
+    uint256 value
+  ) external;
 }
 
 /// @title Hub
@@ -22,6 +31,18 @@ interface IERC20View {
 /// @notice Based on Solmate standard ERC6909 implementation. (https://github.com/transmissions11/solmate/blob/main/src/tokens/ERC6909.sol)
 contract Hub is AccessControl {
   using Strings for uint256;
+
+  /*//////////////////////////////////////////////////////////////
+                            CUSTOM ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+  /// @notice Error thrown when non-ERC20View tries to call approveFor
+  /// @param caller The address that attempted to call approveFor
+  /// @param expectedERC20View The expected ERC20View address for the token
+  error OnlyERC20ViewCanCallApproveFor(
+    address caller,
+    address expectedERC20View
+  );
 
   /*//////////////////////////////////////////////////////////////
                                  EVENTS
@@ -235,6 +256,31 @@ contract Hub is AccessControl {
     allowance[msg.sender][spender][id] = amount;
 
     emit Approval(msg.sender, spender, id, amount);
+    _emitERC20ViewApprovalEvent(id, msg.sender, spender, amount);
+
+    return true;
+  }
+
+  /// @notice Approves a spender to spend tokens on behalf of owner (only callable by ERC20View)
+  /// @param owner The owner address
+  /// @param spender The spender address
+  /// @param id The token ID
+  /// @param amount The amount to approve
+  /// @return result True if successful
+  function approveFor(
+    address owner,
+    address spender,
+    uint256 id,
+    uint256 amount
+  ) public returns (bool result) {
+    if (erc20Views[id] != msg.sender) {
+      revert OnlyERC20ViewCanCallApproveFor(msg.sender, erc20Views[id]);
+    }
+
+    allowance[owner][spender][id] = amount;
+
+    emit Approval(owner, spender, id, amount);
+    // Note: The ERC20View will emit its own Approval event
 
     return true;
   }
@@ -378,6 +424,23 @@ contract Hub is AccessControl {
     address erc20ViewAddress = erc20Views[id];
     if (msg.sender != erc20ViewAddress) {
       IERC20View(erc20ViewAddress).emitTransferEvent(from, to, amount);
+    }
+  }
+
+  /// @notice Internal function to emit ERC20View approval events
+  /// @param id The token ID
+  /// @param owner The owner address
+  /// @param spender The spender address
+  /// @param amount The approved amount
+  function _emitERC20ViewApprovalEvent(
+    uint256 id,
+    address owner,
+    address spender,
+    uint256 amount
+  ) internal {
+    address erc20ViewAddress = erc20Views[id];
+    if (msg.sender != erc20ViewAddress) {
+      IERC20View(erc20ViewAddress).emitApprovalEvent(owner, spender, amount);
     }
   }
 

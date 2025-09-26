@@ -42,6 +42,28 @@ interface IHub {
   /// @param id The token ID
   /// @return The token URI
   function tokenURI(uint256 id) external view returns (string memory);
+  /// @notice Returns the allowance of a spender for an owner
+  /// @param owner The owner address
+  /// @param spender The spender address
+  /// @param id The token ID
+  /// @return The allowance amount
+  function allowance(
+    address owner,
+    address spender,
+    uint256 id
+  ) external view returns (uint256);
+  /// @notice Approves a spender to spend tokens on behalf of owner
+  /// @param owner The owner address
+  /// @param spender The spender address
+  /// @param id The token ID
+  /// @param amount The amount to approve
+  /// @return True if successful
+  function approveFor(
+    address owner,
+    address spender,
+    uint256 id,
+    uint256 amount
+  ) external returns (bool);
 }
 
 /// @title ERC20View
@@ -58,22 +80,6 @@ contract ERC20View {
   event Transfer(address indexed from, address indexed to, uint256 value);
 
   /*//////////////////////////////////////////////////////////////
-                            CUSTOM ERRORS
-    //////////////////////////////////////////////////////////////*/
-
-  error ERC20ViewTransferFailed(
-    address from,
-    address to,
-    uint256 tokenId,
-    uint256 value
-  );
-  error ERC20ViewInsufficientAllowance(
-    address spender,
-    uint256 allowance,
-    uint256 needed
-  );
-
-  /*//////////////////////////////////////////////////////////////
                                 STORAGE
     //////////////////////////////////////////////////////////////*/
 
@@ -81,10 +87,6 @@ contract ERC20View {
   IHub public immutable hub;
   /// @notice The token ID this view represents
   uint256 public immutable tokenId;
-
-  // ERC20 allowances mapping: owner => spender => amount
-  /// @notice Mapping of owner to spender to allowance amount
-  mapping(address => mapping(address => uint256)) public allowance;
 
   /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
@@ -138,14 +140,27 @@ contract ERC20View {
     return hub.balanceOf(account, tokenId);
   }
 
+  /// @notice Returns the allowance amount for a spender
+  /// @param owner The owner address
+  /// @param spender The spender address
+  /// @return The allowance amount
+  function allowance(
+    address owner,
+    address spender
+  ) public view returns (uint256) {
+    return hub.allowance(owner, spender, tokenId);
+  }
+
   /// @notice Approves a spender to spend tokens
   /// @param spender The spender address
   /// @param value The amount to approve
   /// @return True if successful
   function approve(address spender, uint256 value) public returns (bool) {
-    allowance[msg.sender][spender] = value;
-    emit Approval(msg.sender, spender, value);
-    return true;
+    bool success = hub.approveFor(msg.sender, spender, tokenId, value);
+    if (success) {
+      emit Approval(msg.sender, spender, value);
+    }
+    return success;
   }
 
   /// @notice Transfers tokens to another address
@@ -170,48 +185,12 @@ contract ERC20View {
     address to,
     uint256 value
   ) public returns (bool) {
-    // Check allowance unless the spender is the owner
-    if (msg.sender != from) {
-      uint256 currentAllowance = allowance[from][msg.sender];
-      if (currentAllowance < type(uint256).max) {
-        if (currentAllowance < value) {
-          revert ERC20ViewInsufficientAllowance(
-            msg.sender,
-            currentAllowance,
-            value
-          );
-        }
-        unchecked {
-          _approve(from, msg.sender, currentAllowance - value, false);
-        }
-      }
-    }
-
-    // Execute the transfer on the Hub
+    // Execute the transfer on the Hub (Hub will handle allowance checks and updates)
     bool success = hub.transferFrom(from, to, tokenId, value);
-    if (!success) {
-      revert ERC20ViewTransferFailed(from, to, tokenId, value);
+    if (success) {
+      emit Transfer(from, to, value);
     }
-
-    emit Transfer(from, to, value);
     return success;
-  }
-
-  /// @notice Internal function to set allowance
-  /// @param owner The owner address
-  /// @param spender The spender address
-  /// @param value The allowance amount
-  /// @param emitEvent Whether to emit the Approval event
-  function _approve(
-    address owner,
-    address spender,
-    uint256 value,
-    bool emitEvent
-  ) internal {
-    allowance[owner][spender] = value;
-    if (emitEvent) {
-      emit Approval(owner, spender, value);
-    }
   }
 
   /*//////////////////////////////////////////////////////////////
@@ -225,6 +204,20 @@ contract ERC20View {
   function emitTransferEvent(address from, address to, uint256 value) external {
     if (msg.sender == address(hub)) {
       emit Transfer(from, to, value);
+    }
+  }
+
+  /// @notice Emits an approval event (only callable by the hub)
+  /// @param owner The owner address
+  /// @param spender The spender address
+  /// @param value The approved amount
+  function emitApprovalEvent(
+    address owner,
+    address spender,
+    uint256 value
+  ) external {
+    if (msg.sender == address(hub)) {
+      emit Approval(owner, spender, value);
     }
   }
 }

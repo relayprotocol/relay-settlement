@@ -11,7 +11,7 @@ describe('ERC20View Transfer', function () {
     const publicClient = await hre.viem.getPublicClient()
 
     // Add operator role to operatorUser
-    const OPERATOR_ROLE = keccak256('OPERATOR_ROLE')
+    const OPERATOR_ROLE = keccak256('OPERATOR_ROLE' as `0x${string}`)
     const addOperatorHash = await hub.write.grantRole(
       [OPERATOR_ROLE, operatorUser.account.address as Address],
       { account: admin.account }
@@ -100,7 +100,7 @@ describe('ERC20View Transfer', function () {
     // Try to transfer more than balance
     const excessAmount = currentBalance + 1n
 
-    // Expect transaction to revert
+    // Expect transaction to revert with arithmetic overflow (panic code 0x11)
     await expect(
       erc20View.write.transfer([anotherUser.account.address, excessAmount], {
         account: regularUser.account,
@@ -133,10 +133,10 @@ describe('ERC20View Transfer', function () {
 
     expect(events.length).to.equal(1)
     const transferEvent = events[0]
-    expect(transferEvent.args.from.toLowerCase()).to.equal(
+    expect(transferEvent.args.from?.toLowerCase()).to.equal(
       regularUser.account.address.toLowerCase()
     )
-    expect(transferEvent.args.to.toLowerCase()).to.equal(
+    expect(transferEvent.args.to?.toLowerCase()).to.equal(
       anotherUser.account.address.toLowerCase()
     )
     expect(transferEvent.args.value).to.equal(transferAmount)
