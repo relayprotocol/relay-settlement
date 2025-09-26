@@ -105,27 +105,18 @@ task('bitcoin:send', 'Send Bitcoin to an address').setAction(
     const tx = buildBitcoinTransactionFromPayload(transaction)
 
     // Sign all the hashes!
-    // This will happen in the Allocator contract...
     const signedHashes: { r: string; s: string; v: number }[] = []
     transaction.inputs.forEach((input, i) => {
       // Verify that the hashes match what bitcoinjs would generate
       const hashToSign = Buffer.from(hashes[i].slice(2), 'hex')
-
-      // Verify that the hashToSign matches what bitcoinjs would generate (sighash)
       const sighash = tx.hashForSignature(
         i,
         Buffer.from(input.script.slice(2), 'hex'),
         bitcoin.Transaction.SIGHASH_ALL
       )
-      if (sighash.toString('hex') !== hashToSign.toString('hex')) {
-        console.error(`❌ Hash mismatch for input ${i}!`)
-        console.error(`Expected: ${sighash.toString('hex')}`)
-        console.error(`Got: ${hashToSign.toString('hex')}`)
-        process.exit(1)
-      } else {
-        console.log(
-          `✅ Hash matches for input ${i}: ${sighash.toString('hex')}`
-        )
+
+      if (!sighash.equals(hashToSign)) {
+        throw new Error(`Hash mismatch for input ${i}`)
       }
 
       // actually sign!
@@ -138,7 +129,7 @@ task('bitcoin:send', 'Send Bitcoin to an address').setAction(
     })
 
     // Add signed inputs to the transaction
-    await addSignedInputsToTransaction(tx, hashes, signedHashes)
+    await addSignedInputsToTransaction(tx, hashes, signedHashes, transaction)
     await broadcastTransaction(tx)
   }
 )

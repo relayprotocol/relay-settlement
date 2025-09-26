@@ -1,3 +1,4 @@
+import { base58 } from '@scure/base'
 import { task } from 'hardhat/config'
 import * as bitcoin from 'bitcoinjs-lib'
 
@@ -18,7 +19,9 @@ import {
   fetchUtxo,
   getBalance,
   txidToBytes32,
+  verifySighashMatches,
 } from '../../../lib/bitcoin'
+import { getAllocatorPublicKey } from '../../../lib/signer'
 import { extractNearSignature } from '../../../lib/near'
 import { wait } from '../../../lib/wait'
 import { networks } from '@relay-protocol/networks'
@@ -77,10 +80,15 @@ task(
         zeroAddress, // No depository contract for Bitcoin
       ])
 
-      const publicKey = await run('allocator:signer-address', {
-        allocator: allocatorAddress,
-        family: 'bitcoin-vm',
-      })
+      // Get the RAW public key, not the derived address
+      const rawPublicKey = await getAllocatorPublicKey(
+        publicClient,
+        allocatorAddress,
+        'bitcoin-vm'
+      )
+
+      // Convert to hex format for the PayloadBuilder
+      const publicKeyHex = `0x04${Buffer.from(base58.decode(rawPublicKey)).toString('hex')}`
 
       if (bitcoinPayloadBuilderAddress === zeroAddress) {
         console.log('Bitcoin PayloadBuilder not set, deploying a new one...')
@@ -88,7 +96,7 @@ task(
         bitcoinPayloadBuilderAddress = await run(
           'deploy:bitcoin-payload-builder',
           {
-            allocatorPublicKey: publicKey,
+            allocatorPublicKey: publicKeyHex,
           }
         )
 
@@ -102,8 +110,8 @@ task(
         })
       }
 
-      // Let's now submit a withdraw request to the Bitcoin PayloadBuilder
-      const depositoryAddress = bitcoinAddressfromHexPublicKey(publicKey)
+      // Generate the correct Bitcoin address from the raw public key
+      const depositoryAddress = bitcoinAddressfromHexPublicKey(publicKeyHex)
 
       const btcBalance = await getBalance(depositoryAddress)
       console.log(
@@ -118,13 +126,24 @@ task(
           `No UTXOs found for address ${depositoryAddress}. Please fund the address with some BTC first!`
         )
       }
+      // Select the smallest number of UTXOs to cover the amount + estimated fee
+      let totalInput = 0n
+      const targetAmount = BigInt(amount) + BigInt(1000 * feeRate) // rough estimate of fee
+      const selectedUtxos = []
+      for (const utxo of utxos) {
+        selectedUtxos.push(utxo)
+        totalInput += BigInt(utxo.value)
+        if (totalInput >= targetAmount) {
+          break
+        }
+      }
 
       const payloadData = encodeAbiParameters(
         [BITCOIN_TRANSACTION_PARAMS_ABI],
         [
           {
             feeRate,
-            utxos: utxos.map((utxo) => ({
+            utxos: selectedUtxos.map((utxo) => ({
               index: utxo.vout,
               scriptPubKey: `0x${utxo.scriptPubKey}`,
               txid: txidToBytes32(utxo.txid),
@@ -220,38 +239,15 @@ task(
       )
       const tx = buildBitcoinTransactionFromPayload(transaction)
 
-      await addSignedInputsToTransaction(tx, payloadHashes, signedHashes)
+      // Verify SIGHASH generation matches bitcoinjs-lib before signing
+      await verifySighashMatches(tx, transaction, payloadHashes)
 
-      // Debug your transaction outputs before broadcasting
-      console.log('\n🔍 Transaction outputs:')
-      tx.outs.forEach((output, index) => {
-        console.log(`Output ${index}:`)
-        console.log('  Value:', output.value, 'satoshis')
-        console.log('  Script (hex):', output.script.toString('hex'))
-
-        // Try to decode the script
-        try {
-          const address = bitcoin.address.fromOutputScript(
-            output.script,
-            bitcoin.networks.bitcoin
-          )
-          console.log('  Address:', address)
-        } catch {
-          console.log(
-            '  Address: Unable to decode - possibly OP_RETURN or non-standard'
-          )
-          // Check if it's OP_RETURN
-          if (output.script[0] === 0x6a) {
-            console.log('  Type: OP_RETURN (data output)')
-          }
-        }
-      })
-
-      // Calculate total "burned" amount
-      const burnAmount = tx.outs
-        .filter((out) => out.script[0] === 0x6a)
-        .reduce((sum, out) => sum + out.value, 0)
-      console.log('\nTotal unspendable amount:', burnAmount, 'satoshis')
+      await addSignedInputsToTransaction(
+        tx,
+        payloadHashes,
+        signedHashes,
+        transaction
+      )
 
       await broadcastTransaction(tx)
     }

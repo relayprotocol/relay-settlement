@@ -52,7 +52,7 @@ export const BITCOIN_TRANSACTION_ABI = [
   },
 ]
 
-export async function fetchRawTx(txid: string): Promise<Buffer> {
+async function fetchRawTx(txid: string): Promise<Buffer> {
   const res = await fetch(`https://mempool.space/testnet/api/tx/${txid}/hex`)
   const rawHex = await res.text()
   return Buffer.from(rawHex, 'hex')
@@ -66,7 +66,7 @@ export async function fetchUtxo(allocatorAddress: string) {
     throw new Error(`Failed to fetch UTXO: ${utxoRes.statusText}`)
   }
   const utxos = await utxoRes.json()
-  return Promise.all(
+  const fullUtxos = await Promise.all(
     utxos.map(async (u) => {
       const raw = await fetchRawTx(u.txid)
 
@@ -84,9 +84,10 @@ export async function fetchUtxo(allocatorAddress: string) {
       }
     })
   )
+  return fullUtxos.sort((a, b) => a.value - b.value) // Sort by value ascending
 }
 
-export async function broadcastTx(txHex: string): Promise<string> {
+async function broadcastTx(txHex: string): Promise<string> {
   const res = await fetch('https://mempool.space/testnet/api/tx', {
     body: txHex,
     headers: { 'Content-Type': 'text/plain' },
@@ -177,125 +178,149 @@ export function buildBitcoinTransactionFromPayload(transaction) {
     tx.addOutput(script, value)
   })
 
-  // Calculate total input and output values
-  const totalInput = transaction.inputs.reduce((sum, input) => {
-    const valueBytes = Buffer.from(input.value.slice(2), 'hex')
-    const value = valueBytes.readBigUInt64LE(0)
-    return sum + value
-  }, 0n)
-
-  const totalOutput = transaction.outputs.reduce((sum, output) => {
-    const valueBytes = Buffer.from(output.value.slice(2), 'hex')
-    const value = valueBytes.readBigUInt64LE(0)
-    return sum + value
-  }, 0n)
-
-  const totalFees = totalInput - totalOutput
-  console.log('\n📦 Transaction Summary:')
-  console.log(`   Total Input: ${totalInput} sats`)
-  console.log(`   Total Output: ${totalOutput} sats`)
-  console.log(`   Total Fees: ${totalFees} sats`)
-
   return tx
 }
 
-export async function addSignedInputsToTransaction(tx, hashes, signedHashes) {
+export async function verifySighashMatches(tx, transaction, hashes) {
+  for (let i = 0; i < transaction.inputs.length; i++) {
+    const scriptPubKey = Buffer.from(
+      transaction.inputs[i].script.slice(2),
+      'hex'
+    )
+    const bitcoinjsSighash = tx.hashForSignature(
+      i,
+      scriptPubKey,
+      bitcoin.Transaction.SIGHASH_ALL
+    )
+    const ourHash = Buffer.from(hashes[i].slice(2), 'hex')
+
+    if (!bitcoinjsSighash.equals(ourHash)) {
+      throw new Error(
+        `SIGHASH mismatch for input ${i}: expected ${bitcoinjsSighash.toString('hex')}, got ${ourHash.toString('hex')}`
+      )
+    }
+  }
+}
+
+export async function addSignedInputsToTransaction(
+  tx,
+  hashes,
+  signedHashes,
+  transaction = null
+) {
   for (let i = 0; i < hashes.length; i++) {
-    // 1) Reassemble the 64-byte compact signature (= r‖s):
     const { r, s, v } = signedHashes[i]
 
-    // Convert hex strings to Uint8Arrays
+    // Convert hex strings to Uint8Arrays and create signature
     const rBytes = new Uint8Array(
       r.match(/.{1,2}/g).map((byte) => parseInt(byte, 16))
     )
     const sBytes = new Uint8Array(
       s.match(/.{1,2}/g).map((byte) => parseInt(byte, 16))
     )
-
-    // Reassemble the compact signature (r‖s)
     const compact = new Uint8Array(64)
     compact.set(rBytes, 0)
     compact.set(sBytes, 32)
 
-    // 2) Create a Signature object (this automatically enforces "low-S"):
     const sigObj = secp256k1.Signature.fromCompact(compact)
-
-    // 3) Pull out canonical DER bytes:
-    const derBytes = sigObj.toDERRawBytes() // Uint8Array
-
-    // 4) Append the SIGHASH-ALL byte (0x01):
+    const derBytes = sigObj.toDERRawBytes()
     const derPlusHashType = new Uint8Array(derBytes.length + 1)
     derPlusHashType.set(derBytes, 0)
-    derPlusHashType[derBytes.length] = bitcoin.Transaction.SIGHASH_ALL // = 0x01
+    derPlusHashType[derBytes.length] = bitcoin.Transaction.SIGHASH_ALL
 
-    // 5) Recover the compressed pubKey (33 bytes) from (hash, compact, v):
-    // Convert hash from hex string to Uint8Array
-    let hashBytes
-    if (typeof hashes[i] === 'string') {
-      // Remove '0x' prefix if present
-      const hexHash = hashes[i].startsWith('0x')
-        ? hashes[i].slice(2)
-        : hashes[i]
-      // Convert hex string to Uint8Array
-      hashBytes = new Uint8Array(
-        hexHash.match(/.{1,2}/g).map((byte) => parseInt(byte, 16))
+    // Convert hash to Uint8Array
+    const hashBytes =
+      typeof hashes[i] === 'string'
+        ? new Uint8Array(
+            (hashes[i].startsWith('0x') ? hashes[i].slice(2) : hashes[i])
+              .match(/.{1,2}/g)
+              .map((byte) => parseInt(byte, 16))
+          )
+        : new Uint8Array(hashes[i])
+
+    // Get expected address from scriptPubKey if available
+    let expectedAddress = null
+    if (transaction?.inputs?.[i]) {
+      expectedAddress = bitcoin.address.fromOutputScript(
+        Buffer.from(transaction.inputs[i].script.slice(2), 'hex'),
+        bitcoin.networks.testnet
       )
-    } else {
-      // If it's already a Uint8Array or Buffer, use as is
-      hashBytes = new Uint8Array(hashes[i])
     }
 
-    // Normalize recovery parameter
-    let recoveryParam = v
-    if (v >= 27) {
-      recoveryParam = v - 27
+    // Find the recovery parameter that produces the expected address
+    let recoveredPubKey = null
+    for (
+      let testRecoveryParam = 0;
+      testRecoveryParam < 4;
+      testRecoveryParam++
+    ) {
+      const signature = sigObj.addRecoveryBit(testRecoveryParam)
+      const testPubKey = signature.recoverPublicKey(hashBytes)
+      const isValid = secp256k1.verify(
+        sigObj,
+        hashBytes,
+        testPubKey.toRawBytes(true)
+      )
+
+      if (isValid) {
+        if (expectedAddress) {
+          const recoveredAddress = bitcoin.payments.p2pkh({
+            network: bitcoin.networks.testnet,
+            pubkey: Buffer.from(testPubKey.toRawBytes(true)),
+          }).address
+
+          if (recoveredAddress === expectedAddress) {
+            recoveredPubKey = testPubKey
+            break
+          }
+        } else if (!recoveredPubKey) {
+          recoveredPubKey = testPubKey
+        }
+      }
     }
-    if (recoveryParam >= 2) {
-      recoveryParam = recoveryParam % 2
+
+    if (!recoveredPubKey) {
+      // Fallback to original v-based recovery
+      let recoveryParam = v >= 27 ? v - 27 : v
+      if (recoveryParam >= 2) recoveryParam = recoveryParam % 2
+
+      const signature = sigObj.addRecoveryBit(recoveryParam)
+      recoveredPubKey = signature.recoverPublicKey(hashBytes)
     }
 
-    // Create signature object with recovery parameter
-    const signature = sigObj.addRecoveryBit(recoveryParam)
-
-    // Recover the public key from the message hash and signature
-    const recoveredPubKey = signature.recoverPublicKey(hashBytes)
-
-    // Get the compressed public key bytes (33 bytes)
-    const publicKeyCompressed = recoveredPubKey.toRawBytes(true) // true = compressed
-
-    // 6) Build the P2PKH scriptSig: push <DER∥0x01> then <pubKeyCompressed>.
+    // Build scriptSig
+    const publicKeyCompressed = recoveredPubKey.toRawBytes(true)
     tx.ins[i].script = bitcoin.script.compile([
-      Buffer.from(derPlusHashType), // DER‐encoded (r,s) ∥ SIGHASH_ALL
-      Buffer.from(publicKeyCompressed), // recovered public key
+      Buffer.from(derPlusHashType),
+      Buffer.from(publicKeyCompressed),
     ])
   }
-
-  console.log('\n📝 Allocator transaction signed successfully!')
 }
 
 export async function broadcastTransaction(tx) {
-  // Build the final transaction hex
   const txHex = tx.toHex()
-  console.log(`\n📄 Transaction Hex: ${txHex}`)
-  console.log(`   Transaction ID: ${tx.getId()}`)
-  console.log(`   Transaction Size: ${tx.virtualSize()} vbytes`)
 
-  // Optionally verify the transaction is valid
+  // Validate transaction format
   try {
     bitcoin.Transaction.fromHex(txHex)
-    console.log('\n✅ Transaction is valid!')
   } catch (e) {
-    console.error('\n❌ Transaction validation failed:', e)
-    process.exit(1)
+    throw new Error(`Invalid transaction: ${e.message}`)
   }
 
   // Broadcast the transaction
-  console.log('\n📡 Broadcasting transaction...')
-  const txid = await broadcastTx(txHex)
-  console.log('\n🎉 Transaction broadcast successfully!')
-  console.log(`   Transaction ID: ${txid}`)
-  console.log(`   View on explorer: https://mempool.space/testnet/tx/${txid}`)
-  return txid
+  try {
+    const txid = await broadcastTx(txHex)
+    console.log(`🎉 Transaction broadcast: ${txid}`)
+    console.log(`   Explorer: https://mempool.space/testnet/tx/${txid}`)
+    return txid
+  } catch (error) {
+    if (error.message.includes('mandatory-script-verify-flag-failed')) {
+      throw new Error(
+        'Script verification failed - signature/public key mismatch'
+      )
+    }
+    throw error
+  }
 }
 
 export function bitcoinAddressfromHexPublicKey(hexPublicKey: string): string {
