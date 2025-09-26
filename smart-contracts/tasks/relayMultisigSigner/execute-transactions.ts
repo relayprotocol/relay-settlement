@@ -102,7 +102,7 @@ task(
             signature: hexSignature,
           })
           console.log(transaction.from)
-          if (signer !== transaction.from) {
+          if (signer.toLowerCase() !== transaction.from.toLowerCase()) {
             throw new Error(
               `❌ Signer does not match transaction sender... Got ${signer}`
             )
