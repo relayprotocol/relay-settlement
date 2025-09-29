@@ -97,17 +97,16 @@ contract EVMPayloadBuilder is IPayloadBuilder {
   /// @param depository Depository contract address
   /// @param payload Encoded CallRequest
   /// @return Array with single EIP-712 hash
-  function hashesToSign(
+  function hashToSign(
     uint256 chainId,
     string calldata depository,
-    bytes calldata payload
-  ) external pure returns (bytes32[] memory) {
-    bytes32[] memory hashes = new bytes32[](1);
+    bytes calldata payload,
+    uint32 /* hashIndex */
+  ) external pure returns (bytes32) {
     CallRequest memory request = abi.decode(payload, (CallRequest));
     bytes32 domainSeparator = buildDomainSeparator(chainId, depository);
     (, bytes32 eip712Hash) = hashCallRequest(request, domainSeparator);
-    hashes[0] = eip712Hash;
-    return hashes;
+    return eip712Hash;
   }
 
   /// @notice Builds EIP-712 domain separator for depository

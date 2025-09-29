@@ -17,7 +17,7 @@ const gasSettings = {
   signGas: 20000000000000n,
 }
 
-describe('Allocator signWithdrawPayload', function () {
+describe('Allocator signWithdrawPayloadHash', function () {
   async function deployAllocatorWithSetup() {
     const { allocator, owner, otherAccounts, publicClient, wNEAR, utils } =
       await deployAllocator()
@@ -121,8 +121,8 @@ describe('Allocator signWithdrawPayload', function () {
       // wait for the delay
       await time.increase(await allocator.read.delay())
 
-      const signHash = await allocator.write.signWithdrawPayload(
-        [requestParams, '0x', gasSettings],
+      const signHash = await allocator.write.signWithdrawPayloadHash(
+        [requestParams, '0x', gasSettings, 0],
         {
           account: solver.account,
         }
@@ -158,8 +158,8 @@ describe('Allocator signWithdrawPayload', function () {
       })
 
       await expect(
-        allocator.write.signWithdrawPayload(
-          [requestParams, '0x', gasSettings],
+        allocator.write.signWithdrawPayloadHash(
+          [requestParams, '0x', gasSettings, 0],
           {
             account: solver.account,
           }
@@ -348,8 +348,8 @@ describe('Allocator signWithdrawPayload', function () {
         account: user.account,
       })
 
-      await allocator.write.signWithdrawPayload(
-        [requestParams, '0x', gasSettings],
+      await allocator.write.signWithdrawPayloadHash(
+        [requestParams, '0x', gasSettings, 0],
         {
           account: user.account,
         }
@@ -383,8 +383,8 @@ describe('Allocator signWithdrawPayload', function () {
       })
 
       await expect(
-        allocator.write.signWithdrawPayload(
-          [requestParams, '0x', gasSettings],
+        allocator.write.signWithdrawPayloadHash(
+          [requestParams, '0x', gasSettings, 0],
           {
             account: user.account,
           }
@@ -423,8 +423,8 @@ describe('Allocator signWithdrawPayload', function () {
       )
 
       await expect(
-        allocator.write.signWithdrawPayload(
-          [requestParams, '0x', gasSettings],
+        allocator.write.signWithdrawPayloadHash(
+          [requestParams, '0x', gasSettings, 0],
           {
             account: user.account,
           }
@@ -479,8 +479,8 @@ describe('Allocator signWithdrawPayload', function () {
       // wait for the delay
       await time.increase(await allocator.read.delay())
 
-      await allocator.write.signWithdrawPayload(
-        [newRequestParams, '0x', gasSettings],
+      await allocator.write.signWithdrawPayloadHash(
+        [newRequestParams, '0x', gasSettings, 0],
         {
           account: user.account,
         }
@@ -544,8 +544,8 @@ describe('Allocator signWithdrawPayload', function () {
         await time.increase(await allocator.read.delay())
 
         await expect(
-          allocator.write.signWithdrawPayload(
-            [newRequestParams, '0x', gasSettings],
+          allocator.write.signWithdrawPayloadHash(
+            [newRequestParams, '0x', gasSettings, 0],
             {
               account: user.account,
             }
@@ -632,8 +632,8 @@ describe('Allocator signWithdrawPayload', function () {
         })
 
         await expect(
-          allocator.write.signWithdrawPayload(
-            [newRequestParams, signature, gasSettings],
+          allocator.write.signWithdrawPayloadHash(
+            [newRequestParams, signature, gasSettings, 0],
             {
               account: user.account,
             }
@@ -737,8 +737,8 @@ describe('Allocator signWithdrawPayload', function () {
           },
         })
 
-        await allocator.write.signWithdrawPayload(
-          [newRequestParams, signature, gasSettings],
+        await allocator.write.signWithdrawPayloadHash(
+          [newRequestParams, signature, gasSettings, 0],
           {
             account: user.account,
           }
@@ -849,8 +849,8 @@ describe('Allocator signWithdrawPayload', function () {
         await time.increase(await allocator.read.delay())
 
         // First signature should work
-        await allocator.write.signWithdrawPayload(
-          [requestParams, signature, gasSettings],
+        await allocator.write.signWithdrawPayloadHash(
+          [requestParams, signature, gasSettings, 0],
           {
             account: user.account,
           }
@@ -875,8 +875,8 @@ describe('Allocator signWithdrawPayload', function () {
 
         // Trying to reuse the same signature should fail (nonce mismatch)
         await expect(
-          allocator.write.signWithdrawPayload(
-            [newRequestParams, signature, gasSettings],
+          allocator.write.signWithdrawPayloadHash(
+            [newRequestParams, signature, gasSettings, 0],
             {
               account: user.account,
             }

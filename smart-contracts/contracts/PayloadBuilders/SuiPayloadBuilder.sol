@@ -56,14 +56,13 @@ contract SuiPayloadBuilder is IPayloadBuilder {
   /// @notice Returns message hash to sign for Sui transaction
   /// @param payload BCS-encoded transaction payload
   /// @return hashes Array with single SHA256 hash
-  function hashesToSign(
+  function hashToSign(
     uint256 /* chainId */,
     string calldata /* depository */,
-    bytes calldata payload
-  ) external pure override returns (bytes32[] memory hashes) {
-    hashes = new bytes32[](1);
-    hashes[0] = sha256(payload);
-    return hashes;
+    bytes calldata payload,
+    uint32 /* hashIndex */
+  ) external pure override returns (bytes32) {
+    return sha256(payload);
   }
 
   /// @notice Returns cryptographic curve for Sui signing

@@ -5,14 +5,7 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {
-  AuroraSdk,
-  NEAR,
-  PromiseCreateArgs,
-  PromiseResult,
-  PromiseResultStatus,
-  PromiseWithCallback
-} from "./aurora-xcc/AuroraSdk.sol";
+import {AuroraSdk, NEAR, PromiseCreateArgs, PromiseResult, PromiseResultStatus, PromiseWithCallback} from "./aurora-xcc/AuroraSdk.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Hub} from "./Hub.sol";
@@ -67,11 +60,12 @@ interface IPayloadBuilder {
   /// @param depository The depository address
   /// @param payload The payload to sign
   /// @return Array of hashes to sign
-  function hashesToSign(
+  function hashToSign(
     uint256 chainId,
     string calldata depository,
-    bytes calldata payload
-  ) external view returns (bytes32[] memory);
+    bytes calldata payload,
+    uint32 hashIndex
+  ) external view returns (bytes32);
 
   /// @notice Returns the curve used for signing
   /// @return The curve name
@@ -349,7 +343,7 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     emit PayloadBuilderSet(chainId, depository, builder);
   }
 
-  /// @notice submits a withdraw request to the payload builder, store the returned payload, and trigger its signature immediately
+  /// @notice submits a withdraw request to the payload builder, stores the returned payload, and triggers its signature immediately. This will only work for payloads that require a single signature (including Bitcoin, which is now supported via the hashIndex parameter).
   /// @param params The withdraw request parameters
   /// @param signature The signature of the withdraw request, if sent on behalf of a recipient
   function submitAndSignWithdrawRequest(
@@ -358,7 +352,7 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     GasSettings memory gasSettings
   ) public {
     _submitWithdrawRequest(params);
-    signWithdrawPayload(params, signature, gasSettings);
+    signWithdrawPayloadHash(params, signature, gasSettings, 0);
   }
 
   /// @notice submits a withdraw request to the payload builder, store the returned payload
@@ -420,15 +414,17 @@ contract Allocator is AccessControl, Ownable, EIP712 {
   /// @param params The withdraw request parameters (must match the stored hash)
   /// @param signature The signature of the withdraw request, if sent on behalf of a recipient
   /// @param gasSettings struct containing gas settings for NEAR operations
+  /// @param hashIndex index of the hash to sign for this request
   /// @dev This function is called by the NEAR signer account to sign the payload.
   /// It checks if the payload is ready to be signed (i.e. the delay has passed) and
   /// if the payload has not already been signed. If the payload is ready, it calls
   /// the NEAR signer account to sign the payload and then calls the signWithdrawCallback
   /// function to handle the result of the signing.
-  function signWithdrawPayload(
+  function signWithdrawPayloadHash(
     SubmitWithdrawRequest calldata params,
     bytes memory signature,
-    GasSettings memory gasSettings
+    GasSettings memory gasSettings,
+    uint32 hashIndex
   ) public {
     if (signatureFee > 0) {
       // We capture the fee for ourselves first
@@ -454,20 +450,20 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     // verify the withdrawal can be achieved
     verifyWithdrawal(params, payloadBuilder, signature);
 
-    bytes32[] memory hashesToSign = payloadBuilder.hashesToSign(
+    // get the hash to sign
+    bytes32 hashToSign = payloadBuilder.hashToSign(
       params.chainId,
       params.depository,
-      payload
+      payload,
+      hashIndex
     );
 
-    for (uint256 i = 0; i < hashesToSign.length; i++) {
-      _signUsingChainSignatures(
-        withdrawRequestHash,
-        hashesToSign[i],
-        payloadBuilder,
-        gasSettings
-      );
-    }
+    _signUsingChainSignatures(
+      withdrawRequestHash,
+      hashToSign,
+      payloadBuilder,
+      gasSettings
+    );
   }
 
   /// @notice withdraws the wNEAR balance of this contract

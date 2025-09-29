@@ -110,7 +110,7 @@ describe('Allocator SolanaPayloadBuilder', function () {
     })
   })
 
-  describe('hashesToSign()', function () {
+  describe('hashToSign()', function () {
     it('should hash a payload correctly using SHA-256', async () => {
       const { payloadBuilder, depository } = await loadFixture(deployAllocator)
 
@@ -118,16 +118,17 @@ describe('Allocator SolanaPayloadBuilder', function () {
       const payload =
         '0x1fa427265aebc381e466efb16f55b95fc3d44af745a3c52f6c599d3a7ec6b19a0000e1f505000000002c7e3a3e970100004916416800000000'
 
-      const hash = await payloadBuilder.read.hashesToSign([
+      const hash = await payloadBuilder.read.hashToSign([
         1n, // chainId (unused)
         depository.account.address, // depository (unused)
         payload,
+        0, // Solana only requires a single hash
       ])
 
       // Expected hash from new test data
       const expectedHash =
         '0x853751cf9b1d747bbcf62a293a707cc322e95c606908bb857bdddb318f7ab292'
-      expect(hash[0]).to.equal(expectedHash)
+      expect(hash).to.equal(expectedHash)
     })
   })
 

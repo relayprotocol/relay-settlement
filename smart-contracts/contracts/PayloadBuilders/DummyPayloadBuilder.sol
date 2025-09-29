@@ -22,14 +22,13 @@ contract DummyPayloadBuilder is IPayloadBuilder {
   /// @notice Returns single hash for dummy payload
   /// @param payload Payload to hash
   /// @return hashes Array with single keccak256 hash
-  function hashesToSign(
+  function hashToSign(
     uint256 /** chainId */,
     string calldata /* depository */,
-    bytes calldata payload
-  ) external pure override returns (bytes32[] memory hashes) {
-    hashes = new bytes32[](1);
-    hashes[0] = keccak256(payload);
-    return hashes;
+    bytes calldata payload,
+    uint32 /* hashIndex */
+  ) external pure override returns (bytes32) {
+    return keccak256(payload);
   }
 
   /// @notice Returns dummy curve name

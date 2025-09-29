@@ -102,7 +102,7 @@ describe('Allocator SuiPayloadBuilder', function () {
     })
   })
 
-  describe('hashesToSign()', function () {
+  describe('hashToSign()', function () {
     it('should hash a payload correctly using SHA-256', async () => {
       const { payloadBuilder, depository } = await loadFixture(deployAllocator)
 
@@ -120,13 +120,14 @@ describe('Allocator SuiPayloadBuilder', function () {
 
       const { bytes, hash: expectedHash } = hashRequest(transferRequest)
 
-      const hash = await payloadBuilder.read.hashesToSign([
+      const hash = await payloadBuilder.read.hashToSign([
         1n, // chainId (unused)
         depository.account.address, // depository (unused)
         bytes as Hex,
+        0, // Sui only requires a single hash to be signed
       ])
 
-      expect(hash[0]).to.equal(expectedHash)
+      expect(hash).to.equal(expectedHash)
     })
   })
 

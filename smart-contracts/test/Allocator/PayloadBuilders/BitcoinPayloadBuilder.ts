@@ -303,7 +303,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
     })
   })
 
-  describe('hashesToSign()', function () {
+  describe('hashToSign()', function () {
     it('should return the correct hashes to sign', async () => {
       const {
         payloadBuilder,
@@ -333,12 +333,6 @@ describe('Allocator BitcoinPayloadBuilder', function () {
             },
           ]
         ),
-      ])
-
-      const contractHashes = await payloadBuilder.read.hashesToSign([
-        1n,
-        zeroAddress,
-        payload,
       ])
 
       // Build a raw transaction with bitcoinjs-lib (not PSBT)
@@ -374,24 +368,23 @@ describe('Allocator BitcoinPayloadBuilder', function () {
       }
 
       // Get sighashes from bitcoinjs for each input
-      const bitcoinjsHashes = []
       for (let i = 0; i < utxos.length; i++) {
         const sighash = tx.hashForSignature(
           i,
           Buffer.from(scriptPubKey.slice(2), 'hex'),
           bitcoin.Transaction.SIGHASH_ALL
         )
-        bitcoinjsHashes.push('0x' + sighash.toString('hex'))
-      }
+        const contractHash = await payloadBuilder.read.hashToSign([
+          1n,
+          zeroAddress,
+          payload,
+          i, // first (and only) hash
+        ])
 
-      // Compare the results
-      expect(contractHashes.length).to.equal(bitcoinjsHashes.length)
-
-      contractHashes.forEach((contractHash, i) => {
         expect(contractHash.toLowerCase()).to.equal(
-          bitcoinjsHashes[i].toLowerCase()
+          '0x' + sighash.toString('hex').toLowerCase()
         )
-      })
+      }
     })
   })
 })

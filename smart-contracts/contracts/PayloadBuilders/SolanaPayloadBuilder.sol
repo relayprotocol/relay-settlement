@@ -8,6 +8,7 @@ import {Utils} from "../Utils.sol";
 /// @notice Builds Borsh-encoded payloads for Solana chain withdrawals
 contract SolanaPayloadBuilder is IPayloadBuilder {
   error InvalidExpiration();
+
   /// @notice Builds Borsh-encoded payload for Solana withdrawal
   /// @param currency SPL token address (empty for SOL)
   /// @param amount Amount to withdraw
@@ -60,14 +61,13 @@ contract SolanaPayloadBuilder is IPayloadBuilder {
   /// @notice Returns message hash to sign for Solana transaction
   /// @param payload Borsh-encoded transaction payload
   /// @return hashes Array with single SHA256 hash
-  function hashesToSign(
+  function hashToSign(
     uint256 /* chainId */,
     string calldata /* depository */,
-    bytes calldata payload
-  ) external pure override returns (bytes32[] memory hashes) {
-    hashes = new bytes32[](1);
-    hashes[0] = sha256(payload);
-    return hashes;
+    bytes calldata payload,
+    uint32 /* hashIndex */
+  ) external pure override returns (bytes32) {
+    return sha256(payload);
   }
 
   /// @notice Returns cryptographic curve for Solana signing

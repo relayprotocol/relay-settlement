@@ -140,7 +140,7 @@ describe('Allocator EVMPayloadBuilder', function () {
     })
   })
 
-  describe('hashesToSign()', function () {
+  describe('hashToSign()', function () {
     it('should hash a payload correctly using EIP712', async () => {
       const { payloadBuilder, depository, receiver } =
         await loadFixture(deployAllocator)
@@ -157,13 +157,12 @@ describe('Allocator EVMPayloadBuilder', function () {
       ])
 
       // Let's now check that the hash corresponds to what the EVM would generate when asking the user to sign the payload.
-      const hashes = await payloadBuilder.read.hashesToSign([
+      const hash = await payloadBuilder.read.hashToSign([
         chainId, // chainId
         depository.account.address, // depository
         payload,
+        0, // EVM only requires a single hash to be signed
       ])
-      expect(hashes).to.be.a('array')
-      expect(hashes.length).to.equal(1)
 
       const [message] = decodeAbiParameters(
         [
@@ -213,7 +212,7 @@ describe('Allocator EVMPayloadBuilder', function () {
         },
       })
 
-      expect(hashes[0]).to.equal(reconstructedHash)
+      expect(hash).to.equal(reconstructedHash)
     })
   })
 })

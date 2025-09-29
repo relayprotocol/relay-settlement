@@ -253,30 +253,20 @@ contract BitcoinPayloadBuilder is IPayloadBuilder {
 
   /// @notice Returns message hashes to sign for Bitcoin transaction
   /// @param payload Encoded BitcoinTransactionData
-  /// @return Array of double-SHA256 hashes to sign
-  function hashesToSign(
+  /// @return double-SHA256 hash to sign for the specified input
+  function hashToSign(
     uint256, // chainId (ignored)
     string memory, // depository (ignored)
-    bytes calldata payload
-  ) external pure override returns (bytes32[] memory) {
-    // 1) Decode the struct you packed in buildPayload(...)
+    bytes calldata payload,
+    uint32 hashIndex // index of the input to sign
+  ) external pure override returns (bytes32) {
     BitcoinTransactionData memory txData = abi.decode(
       payload,
       (BitcoinTransactionData)
     );
 
-    uint256 n = txData.inputs.length;
-    bytes32[] memory digests = new bytes32[](n);
-
-    // 2) For each input, build its legacy preimage and double-SHA256 it
-    for (uint256 i = 0; i < n; i++) {
-      bytes memory pre = buildPreImageForInput(txData, i);
-      // double SHA-256:
-      bytes32 h2 = sha256(abi.encodePacked(sha256(pre)));
-      digests[i] = h2;
-    }
-
-    return digests;
+    bytes memory pre = buildPreImageForInput(txData, hashIndex);
+    return sha256(abi.encodePacked(sha256(pre)));
   }
 
   /// @notice Returns cryptographic curve for Bitcoin signing
