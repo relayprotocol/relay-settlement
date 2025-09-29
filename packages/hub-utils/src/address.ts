@@ -1,5 +1,6 @@
 import { VirtualAddress, VirtualAddressComponents } from '@relay-protocol/types'
 import { ethers } from 'ethers'
+
 import { getCheckSummedAddress } from './utils'
 
 /**

@@ -1,13 +1,13 @@
 import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
 import { expect } from 'chai'
-import { ethers } from 'ethers'
+import { getAddress } from 'viem'
 import { DEFAULT_DELAY, deployAllocator } from '../helpers/deployAllocator'
 
 describe('Allocator owner', function () {
   describe('Constructor', function () {
     it('should set the correct owner', async function () {
       const { owner, allocator } = await loadFixture(deployAllocator)
-      expect(ethers.getAddress(owner.account.address)).to.equal(
+      expect(getAddress(owner.account.address)).to.equal(
         await allocator.read.owner()
       )
     })
@@ -21,7 +21,7 @@ describe('Allocator owner', function () {
       )
       // Check new owner
       expect(await allocator.read.owner()).to.equal(
-        ethers.getAddress(otherAccounts[3].account.address)
+        getAddress(otherAccounts[3].account.address)
       )
     })
 

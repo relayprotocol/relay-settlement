@@ -20,7 +20,6 @@ describe('Token ID Generation', () => {
           input.chainId,
           input.address,
         ])
-        expect(tokenId).to.equal(solidityTokenId)
         expect(tokenId).to.equal(expectedValue)
         expect(solidityTokenId).to.equal(expectedValue)
       })

@@ -50,6 +50,7 @@
     "@relay-protocol/fixtures": "workspace:*",
     "@relay-protocol/hub-utils": "workspace:*",
     "@relay-protocol/networks": "workspace:*",
+    "@reservoir0x/relay-protocol-sdk": "0.0.39",
     "@safe-global/sdk-starter-kit": "3.0.1",
     "@solana/web3.js": "1.98.2",
     "base58-solidity": "1.0.2",
