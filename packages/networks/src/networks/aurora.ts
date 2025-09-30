@@ -5,17 +5,6 @@ export const aurora: NetworkConfig = {
     wNEAR: '0xC42C30aC6Cc15faC9bD938618BcaA1a1FaE8501d',
   },
   chainId: 1313161554n,
-  etherscan: {
-    apiKey: 'T',
-    config: {
-      chainId: 1313161554n,
-      network: 'aurora',
-      urls: {
-        apiURL: 'https://explorer.mainnet.aurora.dev/api',
-        browserURL: 'http://explorer.mainnet.aurora.dev',
-      },
-    },
-  },
   family: 'ethereum-vm',
   isTestnet: false,
   name: 'Aurora Mainnet (Near)',
