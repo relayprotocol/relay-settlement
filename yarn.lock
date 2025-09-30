@@ -1480,22 +1480,22 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nomicfoundation/hardhat-verify@npm:2.0.1":
-  version: 2.0.1
-  resolution: "@nomicfoundation/hardhat-verify@npm:2.0.1"
+"@nomicfoundation/hardhat-verify@npm:2.1.0":
+  version: 2.1.0
+  resolution: "@nomicfoundation/hardhat-verify@npm:2.1.0"
   dependencies:
     "@ethersproject/abi": "npm:^5.1.2"
     "@ethersproject/address": "npm:^5.0.2"
     cbor: "npm:^8.1.0"
-    chalk: "npm:^2.4.2"
     debug: "npm:^4.1.1"
     lodash.clonedeep: "npm:^4.5.0"
+    picocolors: "npm:^1.1.0"
     semver: "npm:^6.3.0"
     table: "npm:^6.8.0"
     undici: "npm:^5.14.0"
   peerDependencies:
-    hardhat: ^2.0.4
-  checksum: 10c0/4cd8b341504caee4dc8af9e2d29b70e845c78791ad717590eadcccc992d71893dd6ce4b843583f923bcea424e59abf34433234d12dd0d1d0b28f40de9c7d7147
+    hardhat: ^2.26.0
+  checksum: 10c0/666b41f195b42ab0f4dc34cb874f834fae9263ae407e04c4654962fed684a44f785813962f09a381fe9410933bf1657f6bc669bdf4626a3f9d74deda4b5b36b0
   languageName: node
   linkType: hard
 
@@ -1826,7 +1826,7 @@ __metadata:
     "@nomicfoundation/hardhat-ignition-viem": "npm:0.15.11"
     "@nomicfoundation/hardhat-network-helpers": "npm:1.0.0"
     "@nomicfoundation/hardhat-toolbox-viem": "npm:3.0.0"
-    "@nomicfoundation/hardhat-verify": "npm:2.0.1"
+    "@nomicfoundation/hardhat-verify": "npm:2.1.0"
     "@nomicfoundation/hardhat-viem": "npm:2.0.6"
     "@nomiclabs/hardhat-solhint": "npm:4.0.1"
     "@openzeppelin/contracts": "npm:5.3.0"

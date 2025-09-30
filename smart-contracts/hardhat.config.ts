@@ -27,6 +27,7 @@ import './tasks/allocator/PayloadBuilders/sendBitcoinTx'
 // deployments
 import './tasks/deployments/allocator'
 import './tasks/deployments/hub'
+import './tasks/deployments/oracle'
 import './tasks/deployments/relayMultisigSigner'
 
 // helpers
@@ -72,15 +73,11 @@ const networks = {
 }
 
 const etherscan = {
-  apiKey: {
-    arbitrumSepolia: 'W5XNFPZS8D6JZ5AXVWD4XCG8B5ZH5JCD4Y',
-    auroraTestnet: 'T',
-  },
-  customChains: [],
+  apiKey: 'C1KDFD2PHN7FXXXT1AW5PG27I5JB23J41D',
 }
 
 Object.keys(nets).forEach((id) => {
-  const { slug, rpc, etherscan: networkEtherscan } = nets[id]
+  const { slug, rpc } = nets[id]
   let accounts
   const network = {
     chainId: Number(id),
@@ -93,12 +90,9 @@ Object.keys(nets).forEach((id) => {
     ...network,
     accounts,
   }
-  if (networkEtherscan) {
-    etherscan.apiKey[slug] = networkEtherscan.apiKey
-    etherscan.customChains.push(networkEtherscan.config)
-  }
 })
 
+console.log(networks)
 // parse fork URL for tests
 const forkUrl = process.env.RPC_URL
 if (forkUrl) {
