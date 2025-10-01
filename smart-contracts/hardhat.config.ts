@@ -92,7 +92,6 @@ Object.keys(nets).forEach((id) => {
   }
 })
 
-console.log(networks)
 // parse fork URL for tests
 const forkUrl = process.env.RPC_URL
 if (forkUrl) {
