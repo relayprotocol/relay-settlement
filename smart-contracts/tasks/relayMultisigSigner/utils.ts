@@ -54,7 +54,7 @@ const EthereumTxSchema = z.object({
 
 const EmptyTxSchema = z
   .object({
-    family: z.union([z.literal('bitcoin-vm'), z.literal('solana-vm')]),
+    family: z.enum(['bitcoin-vm', 'solana-vm']),
   })
   .strict() // disallow any other fields
 

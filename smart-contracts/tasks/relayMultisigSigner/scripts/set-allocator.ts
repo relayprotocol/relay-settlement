@@ -28,7 +28,7 @@ const main = async () => {
         amount: '0',
         calldata: encodeFunctionData({
           abi: parseAbi(['function setAllocator(address)']),
-          args: ['0x4DbF3EFa5397cceeba2B83ee0255233Fc93D6a88'],
+          args: ['0xe40EcC02e4Ec499393876a31E4af97fa9C069814'],
           functionName: 'setAllocator',
         }),
         from: '0x16c4dEEB433bde1804d8f17cd1Ba3D29a30f9671',
@@ -45,8 +45,8 @@ const main = async () => {
       return {
         family: 'ethereum-vm',
         gas: gas.toString(),
-        maxFeePerGas: fees.maxFeePerGas.toString(),
-        maxPriorityFeePerGas: fees.maxPriorityFeePerGas.toString(),
+        maxFeePerGas: fees!.maxFeePerGas!.toString(),
+        maxPriorityFeePerGas: fees!.maxPriorityFeePerGas!.toString(),
         nonce: await rpc.getTransactionCount({ address: txData.from }),
         rpc: rpcUrl,
         ...txData,
