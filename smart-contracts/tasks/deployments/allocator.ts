@@ -46,12 +46,16 @@ task('deploy:allocator', 'Deploy the Allocator contract')
         signer,
         wNEAR,
       }
-
       const { allocator } = await ignition.deploy(AllocatorModule, {
         parameters: {
           Allocator: params,
         },
       })
+
+      await run(
+        { scope: 'ignition', task: 'verify' },
+        { deploymentId: `chain-${chainId}` }
+      )
 
       console.log(`Allocator deployed to: ${allocator.address}`)
 
@@ -67,23 +71,35 @@ task('deploy:allocator', 'Deploy the Allocator contract')
 
 task('deploy:payload-builder', 'Deploys a PayloadBuilder contract')
   .addParam('payloadBuilder', 'The name of the payload builder contract')
-  .setAction(async ({ payloadBuilder }, { viem }) => {
+  .setAction(async ({ payloadBuilder }, { viem, run }) => {
     // Let's now deploy the payload builder contract
     const payloadBuilderContract = await viem.deployContract(payloadBuilder)
     console.log(
       `${payloadBuilder} deployed to: ${payloadBuilderContract.address}`
     )
+
+    await run('verify:verify', {
+      address: payloadBuilderContract.address,
+      constructorArguments: [],
+    })
     return payloadBuilderContract.address
   })
 
 task(
   'deploy:evm-payload-builder',
   'Deploys an EVM Payload Builder contract'
-).setAction(async (_, { ignition }) => {
+).setAction(async (_, { ignition, network, run }) => {
+  const { chainId } = network.config as { chainId: bigint }
+
   // Let's now deploy the payload builder contract
   const { evmPayloadBuilder } = await ignition.deploy(EVMPayloadBuilderModule, {
     parameters: {},
   })
+
+  await run(
+    { scope: 'ignition', task: 'verify' },
+    { deploymentId: `chain-${chainId}` }
+  )
 
   console.log(`EvmPayloadBuilder deployed to: ${evmPayloadBuilder.address}`)
   return evmPayloadBuilder.address
@@ -91,20 +107,30 @@ task(
 
 task('deploy:bitcoin-payload-builder', 'Deploys a PayloadBuilder contract')
   .addParam('allocatorPublicKey', 'The ethereum public key of the allocator')
-  .setAction(async ({ allocatorPublicKey }, { viem }) => {
+  .addParam(
+    'bitcoinNetwork',
+    'The bitcoin network for which to deploy (bitcoin addresses are network specific)',
+    'bitcoin'
+  )
+  .setAction(async ({ allocatorPublicKey, bitcoinNetwork }, { viem, run }) => {
     const bitcoinAddress = bitcoinAddressfromHexPublicKey(allocatorPublicKey)
     console.log('Allocator Bitcoin address:', bitcoinAddress)
 
-    const changeScript = bitcoin.address.toOutputScript(
-      bitcoinAddress,
-      bitcoin.networks.testnet
-    )
+    const changeScript = bitcoin.address
+      .toOutputScript(bitcoinAddress, bitcoin.networks[bitcoinNetwork])
+      .toString('base64')
 
     // Let's now deploy the BitcoinPayloadBuilder contract
     const payloadBuilder = await viem.deployContract('BitcoinPayloadBuilder', [
-      changeScript.toString('base64'),
+      changeScript,
     ])
 
     console.log(`PayloadBuilder deployed to: ${payloadBuilder.address}`)
+
+    await run('verify:verify', {
+      address: payloadBuilder.address,
+      constructorArguments: [changeScript],
+    })
+
     return payloadBuilder.address
   })

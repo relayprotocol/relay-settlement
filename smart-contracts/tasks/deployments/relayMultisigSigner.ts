@@ -51,6 +51,11 @@ task('deploy:relay-multisigs-signer', 'Deploy the RelayMultisigSigner contract')
       `Relay multisig signer deployed at ${relayMultisigSigner.address}.`
     )
 
+    await run(
+      { scope: 'ignition', task: 'verify' },
+      { deploymentId: `chain-${chainId}` }
+    )
+
     // Approve 2 wNEAR for the allocator if necessary
     const allowance = parseUnits('2', 24)
     await checkAndApproveWNEAR(

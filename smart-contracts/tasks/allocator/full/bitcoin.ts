@@ -97,6 +97,7 @@ task(
           'deploy:bitcoin-payload-builder',
           {
             allocatorPublicKey: publicKeyHex,
+            bitcoinNetwork: 'testnet',
           }
         )
 
