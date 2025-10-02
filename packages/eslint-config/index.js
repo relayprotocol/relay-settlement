@@ -1,13 +1,20 @@
 const globals = require('globals')
 const prettierConfig = require('eslint-config-prettier')
 const eslint = require('@eslint/js')
-const prettierPlugin = require('eslint-plugin-prettier')
-const mochaPlugin = require('eslint-plugin-mocha')
+const loadPlugin = (moduleName) => {
+  const plugin = require(moduleName)
+  return plugin && typeof plugin === 'object' && 'default' in plugin
+    ? plugin.default
+    : plugin
+}
+
+const prettierPlugin = loadPlugin('eslint-plugin-prettier')
+const mochaPlugin = loadPlugin('eslint-plugin-mocha')
 const typescriptEslint = require('typescript-eslint')
-const evmAddressPlugin = require('eslint-plugin-evm-address-to-checksummed')
-const jsonPlugin = require('eslint-plugin-json')
-const sortKeysFix = require('eslint-plugin-sort-keys-fix')
-const noOnlyTestsPlugin = require('eslint-plugin-no-only-tests')
+const evmAddressPlugin = loadPlugin('eslint-plugin-evm-address-to-checksummed')
+const jsonPlugin = loadPlugin('eslint-plugin-json')
+const sortKeysFix = loadPlugin('eslint-plugin-sort-keys-fix')
+const noOnlyTestsPlugin = loadPlugin('eslint-plugin-no-only-tests')
 
 /**
  * @type {ESLintConfig}

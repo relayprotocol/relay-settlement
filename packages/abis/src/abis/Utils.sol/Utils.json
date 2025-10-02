@@ -26,7 +26,7 @@
     "outputs": [
       {
         "internalType": "address",
-        "name": "",
+        "name": "virtualAddress",
         "type": "address"
       }
     ],
@@ -55,8 +55,27 @@
     "outputs": [
       {
         "internalType": "uint256",
-        "name": "",
+        "name": "tokenId",
         "type": "uint256"
+      }
+    ],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "s",
+        "type": "string"
+      }
+    ],
+    "name": "toAddress",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
       }
     ],
     "stateMutability": "pure",

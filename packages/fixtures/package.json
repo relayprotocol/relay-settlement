@@ -6,12 +6,14 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
-    "lint": "eslint"
+    "lint": "eslint",
+    "lint:fix": "yarn lint --fix"
   },
   "devDependencies": {
+    "@relay-protocol/eslint-config": "workspace:*",
     "@relay-protocol/tsconfig": "workspace:*",
     "@relay-protocol/types": "workspace:*",
-    "eslint": "9.25.1",
-    "typescript": "5.8.3"
+    "eslint": "9.36.0",
+    "typescript": "5.9.3"
   }
 }

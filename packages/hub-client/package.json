@@ -14,8 +14,7 @@
   "dependencies": {
     "@relay-protocol/abis": "workspace:*",
     "@relay-protocol/hub-utils": "workspace:*",
-    "ethers": "6.13.5",
-    "vitest": "3.1.3"
+    "ethers": "6.15.0"
   },
   "scripts": {
     "start": "tsc --watch",
@@ -23,11 +22,15 @@
     "lint:fix": "yarn lint --fix",
     "lint": "eslint",
     "build": "tsup src/index.ts --dts --format esm,cjs",
-    "test": "vitest"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
-    "eslint": "9.25.1",
-    "tsup": "8.4.0",
-    "typescript": "5.8.3"
+    "@relay-protocol/eslint-config": "workspace:*",
+    "@relay-protocol/tsconfig": "workspace:*",
+    "eslint": "9.36.0",
+    "tsup": "8.5.0",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
   }
 }

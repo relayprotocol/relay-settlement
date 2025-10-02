@@ -36,10 +36,10 @@ export const createIndexFile = async (
   srcFolder: string,
   destFolder: string
 ) => {
-  const fileContent = ['/* eslint-disable */']
+  const fileContent = []
   fileContent.push("// This file is generated, please don't edit directly")
   fileContent.push(
-    "// Refer to 'yarn build:index' in smart-contracts folder for more\n"
+    "// Refer to 'yarn run export:abis' in smart-contracts folder for more\n"
   )
 
   const abiFiles = await parseExports(srcFolder, destFolder)

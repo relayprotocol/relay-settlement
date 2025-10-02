@@ -16,12 +16,12 @@ export function createHubClient(params: { chainId: bigint; address: string }) {
 
   // Directly attach methods to the instance
   return Object.assign(client, {
-    burn: (burnParams: BurnParams) => burn(burnParams, client),
-    mint: (mintParams: MintParams) => mint(mintParams, client),
+    burn: (burnParams: BurnParams) => burn(burnParams),
+    mint: (mintParams: MintParams) => mint(mintParams),
     setOperatorFor: (setOperatorForParams: SetOperatorForParams) =>
-      setOperatorFor(setOperatorForParams, client),
+      setOperatorFor(setOperatorForParams),
     transferFrom: (transferFromParams: TransferFromParams) =>
-      transferFrom(transferFromParams, client),
+      transferFrom(transferFromParams),
   })
 }
 

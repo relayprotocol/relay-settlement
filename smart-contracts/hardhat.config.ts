@@ -22,7 +22,6 @@ import './tasks/allocator/full/bitcoin'
 import './tasks/allocator/full/evm'
 import './tasks/allocator/full/solana'
 import './tasks/allocator/full/sui'
-import './tasks/allocator/PayloadBuilders/sendBitcoinTx'
 
 // deployments
 import './tasks/deployments/allocator'

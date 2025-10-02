@@ -11,22 +11,23 @@
     "build": "yarn packages:clean && yarn packages:build",
     "packages:clean": "yarn packages --parallel run clean",
     "packages:build": "yarn packages --topological-dev run build",
-    "lint": "yarn packages --parallel run lint",
-    "packages": "yarn workspaces foreach --recursive --from '{@relay-protocol/eslint-config,@relay-protocol/tslint-config,@relay-protocol/types,@relay-protocol/fixtures,@relay-protocol/abis,@relay-protocol/networks,@relay-protocol/hub-utils}'",
+    "lint": "yarn workspaces foreach --all run lint",
+    "test": "yarn workspaces foreach --all run test",
+    "packages": "yarn workspaces foreach --recursive --from '{@relay-protocol/eslint-config,@relay-protocol/tsconfig,@relay-protocol/types,@relay-protocol/fixtures,@relay-protocol/abis,@relay-protocol/networks,@relay-protocol/hub-utils,@relay-protocol/hub-client,@relay-protocol/smart-contracts}'",
     "format": "prettier --write \"src/**/*.{ts,tsx}\""
   },
   "devDependencies": {
-    "@types/node": "22.15.3",
-    "eslint": "9.25.1",
+    "@types/node": "24.6.1",
+    "eslint": "9.36.0",
     "husky": "9.1.7",
-    "lint-staged": "15.4.3",
-    "prettier": "3.5.3",
+    "lint-staged": "16.2.3",
+    "prettier": "3.6.2",
     "ts-node": "10.9.2",
-    "typescript": "5.7.2"
+    "typescript": "5.9.3"
   },
   "packageManager": "yarn@4.9.1",
   "dependencies": {
-    "typescript-eslint": "8.31.0"
+    "typescript-eslint": "8.45.0"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

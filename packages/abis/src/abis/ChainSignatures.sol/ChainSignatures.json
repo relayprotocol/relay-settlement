@@ -1,0 +1,55 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "payloadHashToSign",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "string",
+        "name": "curve",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "signerPath",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "domainId",
+        "type": "string"
+      }
+    ],
+    "name": "encodeJSONRequest",
+    "outputs": [
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "hexBytes",
+        "type": "bytes32"
+      }
+    ],
+    "name": "stringifyBytes",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "pure",
+    "type": "function"
+  }
+]
