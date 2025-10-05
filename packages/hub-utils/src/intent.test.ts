@@ -1,10 +1,10 @@
-import { describe, expect, test } from 'vitest'
-import { intentTestCases } from '@relay-protocol/fixtures'
-import { generateIntentAddress } from './intent'
-import { ethers } from 'ethers'
+import { describe, expect, test } from "vitest"
+import { intentTestCases } from "@relay-protocol/fixtures"
+import { generateIntentAddress } from "./intent"
+import { ethers } from "ethers"
 
-describe('Intent Ids', () => {
-  test.each(intentTestCases)('$name', ({ id, expectedAddress }) => {
+describe("Intent Ids", () => {
+  test.each(intentTestCases)("$name", ({ id, expectedAddress }) => {
     const address = generateIntentAddress(id)
     expect(address).toBe(expectedAddress)
     // address with correct checksum

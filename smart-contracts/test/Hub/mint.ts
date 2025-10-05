@@ -1,17 +1,17 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect } from 'chai'
-import hre from 'hardhat'
-import { keccak256 } from 'viem'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect } from "chai"
+import hre from "hardhat"
+import { keccak256 } from "viem"
 
-describe('mint', function () {
+describe("mint", function () {
   async function deployHub() {
     const [admin, operatorUser, regularUser] = await hre.viem.getWalletClients()
-    const hub = await hre.viem.deployContract('Hub', [admin.account.address])
+    const hub = await hre.viem.deployContract("Hub", [admin.account.address])
     const publicClient = await hre.viem.getPublicClient()
 
     // Add operator role to operatorUser
     const addOperatorHash = await hub.write.grantRole(
-      [keccak256('OPERATOR_ROLE'), operatorUser.account.address],
+      [keccak256("OPERATOR_ROLE"), operatorUser.account.address],
       {
         account: admin.account,
       }
@@ -26,7 +26,7 @@ describe('mint', function () {
       regularUser,
     }
   }
-  it('allows operator to mint tokens to any address', async function () {
+  it("allows operator to mint tokens to any address", async function () {
     const { hub, operatorUser, regularUser, publicClient } =
       await loadFixture(deployHub)
     const tokenId = 1n
@@ -49,7 +49,7 @@ describe('mint', function () {
     expect(balance).to.equal(amount)
   })
 
-  it('reverts when non-oracle tries to mint tokens', async function () {
+  it("reverts when non-oracle tries to mint tokens", async function () {
     const { hub, regularUser } = await loadFixture(deployHub)
     const tokenId = 1n
     const amount = 100n
@@ -59,10 +59,10 @@ describe('mint', function () {
       hub.write.mint([regularUser.account.address, tokenId, amount], {
         account: regularUser.account,
       })
-    ).to.be.rejectedWith('AccessControlUnauthorizedAccount')
+    ).to.be.rejectedWith("AccessControlUnauthorizedAccount")
   })
 
-  it('emits Transfer event with correct parameters', async function () {
+  it("emits Transfer event with correct parameters", async function () {
     const { hub, operatorUser, regularUser, publicClient } =
       await loadFixture(deployHub)
     const tokenId = 1n
@@ -81,7 +81,7 @@ describe('mint', function () {
     const logs = await publicClient.getContractEvents({
       abi: hub.abi,
       address: hub.address,
-      eventName: 'Transfer',
+      eventName: "Transfer",
     })
 
     // Find the Transfer event for this mint
@@ -101,7 +101,7 @@ describe('mint', function () {
       operatorUser.account.address.toLowerCase()
     )
     expect(args.from.toLowerCase()).to.equal(
-      '0x0000000000000000000000000000000000000000'.toLowerCase()
+      "0x0000000000000000000000000000000000000000".toLowerCase()
     ) // zero address
     expect(args.to.toLowerCase()).to.equal(
       regularUser.account.address.toLowerCase()
@@ -110,7 +110,7 @@ describe('mint', function () {
     expect(args.amount).to.equal(amount)
   })
 
-  it('allows minting multiple tokens with different IDs', async function () {
+  it("allows minting multiple tokens with different IDs", async function () {
     const { hub, operatorUser, regularUser, publicClient } =
       await loadFixture(deployHub)
     const tokenId1 = 1n

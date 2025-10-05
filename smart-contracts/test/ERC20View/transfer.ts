@@ -1,17 +1,17 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect } from 'chai'
-import hre from 'hardhat'
-import { Address, keccak256 } from 'viem'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect } from "chai"
+import hre from "hardhat"
+import { Address, keccak256 } from "viem"
 
-describe('ERC20View Transfer', function () {
+describe("ERC20View Transfer", function () {
   async function deployHubWithERC20View() {
     const [admin, operatorUser, regularUser, anotherUser] =
       await hre.viem.getWalletClients()
-    const hub = await hre.viem.deployContract('Hub', [admin.account.address])
+    const hub = await hre.viem.deployContract("Hub", [admin.account.address])
     const publicClient = await hre.viem.getPublicClient()
 
     // Add operator role to operatorUser
-    const OPERATOR_ROLE = keccak256('OPERATOR_ROLE' as `0x${string}`)
+    const OPERATOR_ROLE = keccak256("OPERATOR_ROLE" as `0x${string}`)
     const addOperatorHash = await hub.write.grantRole(
       [OPERATOR_ROLE, operatorUser.account.address as Address],
       { account: admin.account }
@@ -33,7 +33,7 @@ describe('ERC20View Transfer', function () {
 
     // Get ERC20View contract
     const erc20View = await hre.viem.getContractAt(
-      'ERC20View',
+      "ERC20View",
       erc20ViewAddress
     )
 
@@ -49,7 +49,7 @@ describe('ERC20View Transfer', function () {
     }
   }
 
-  it('transfers tokens correctly via ERC20View', async function () {
+  it("transfers tokens correctly via ERC20View", async function () {
     const { erc20View, hub, publicClient, regularUser, anotherUser, tokenId } =
       await loadFixture(deployHubWithERC20View)
 
@@ -86,7 +86,7 @@ describe('ERC20View Transfer', function () {
     expect(finalToBalance).to.equal(initialToBalance + transferAmount)
   })
 
-  it('reverts when trying to transfer more than balance', async function () {
+  it("reverts when trying to transfer more than balance", async function () {
     const { erc20View, hub, regularUser, anotherUser } = await loadFixture(
       deployHubWithERC20View
     )
@@ -108,7 +108,7 @@ describe('ERC20View Transfer', function () {
     ).to.be.rejected
   })
 
-  it('emits Transfer event with correct parameters', async function () {
+  it("emits Transfer event with correct parameters", async function () {
     const { erc20View, publicClient, regularUser, anotherUser } =
       await loadFixture(deployHubWithERC20View)
 
@@ -126,7 +126,7 @@ describe('ERC20View Transfer', function () {
     const events = await publicClient.getContractEvents({
       abi: erc20View.abi,
       address: erc20View.address,
-      eventName: 'Transfer',
+      eventName: "Transfer",
       fromBlock: transferReceipt.blockNumber,
       toBlock: transferReceipt.blockNumber,
     })
@@ -142,7 +142,7 @@ describe('ERC20View Transfer', function () {
     expect(transferEvent.args.value).to.equal(transferAmount)
   })
 
-  it('allows transfer to zero address (burn)', async function () {
+  it("allows transfer to zero address (burn)", async function () {
     const { erc20View, hub, publicClient, regularUser, tokenId } =
       await loadFixture(deployHubWithERC20View)
 
@@ -154,7 +154,7 @@ describe('ERC20View Transfer', function () {
 
     // Transfer tokens to zero address (burn)
     const burnAmount = 10n
-    const zeroAddress = '0x0000000000000000000000000000000000000000'
+    const zeroAddress = "0x0000000000000000000000000000000000000000"
     const transferTx = await erc20View.write.transfer(
       [zeroAddress, burnAmount],
       { account: regularUser.account }

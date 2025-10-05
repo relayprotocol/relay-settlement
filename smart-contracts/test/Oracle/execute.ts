@@ -1,16 +1,16 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { generateTokenId, generateAddress } from '@relay-protocol/hub-utils'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { generateTokenId, generateAddress } from "@relay-protocol/hub-utils"
 import {
   ActionType,
   encodeAction,
   VmType,
-} from '@reservoir0x/relay-protocol-sdk'
-import { expect } from 'chai'
-import { randomBytes } from 'crypto'
-import hre from 'hardhat'
-import { Hex } from 'viem'
+} from "@reservoir0x/relay-protocol-sdk"
+import { expect } from "chai"
+import { randomBytes } from "crypto"
+import hre from "hardhat"
+import { Hex } from "viem"
 
-import { deployOracle } from '../helpers/deployOracle'
+import { deployOracle } from "../helpers/deployOracle"
 
 interface MintActionData {
   currencyVmType: VmType
@@ -45,7 +45,7 @@ interface TransferActionData {
   amount: string
 }
 
-describe('execute', function () {
+describe("execute", function () {
   const setup = async () => {
     const { admin, hub, oracle, utils } = await loadFixture(deployOracle)
 
@@ -59,24 +59,24 @@ describe('execute', function () {
       oracleWallet.signTypedData({
         domain: {
           chainId: await oracleWallet.getChainId(),
-          name: 'RelayOracle',
+          name: "RelayOracle",
           verifyingContract: oracle.address,
-          version: '1',
+          version: "1",
         },
         message: {
           actions,
           idempotencyKey,
         },
-        primaryType: 'Execution',
+        primaryType: "Execution",
         types: {
           Execution: [
             {
-              name: 'idempotencyKey',
-              type: 'bytes32',
+              name: "idempotencyKey",
+              type: "bytes32",
             },
             {
-              name: 'actions',
-              type: 'bytes[]',
+              name: "actions",
+              type: "bytes[]",
             },
           ],
         },
@@ -84,7 +84,7 @@ describe('execute', function () {
 
     const mint = async (data: MintActionData) => {
       // Create action
-      const idempotencyKey = `0x${randomBytes(32).toString('hex')}` as Hex
+      const idempotencyKey = `0x${randomBytes(32).toString("hex")}` as Hex
       const action = createAction(ActionType.MINT, data)
 
       // Sign
@@ -98,7 +98,7 @@ describe('execute', function () {
     }
     const burn = async (data: BurnActionData) => {
       // Create action
-      const idempotencyKey = `0x${randomBytes(32).toString('hex')}` as Hex
+      const idempotencyKey = `0x${randomBytes(32).toString("hex")}` as Hex
       const action = createAction(ActionType.BURN, data)
 
       // Sign
@@ -112,7 +112,7 @@ describe('execute', function () {
     }
     const transfer = async (data: TransferActionData) => {
       // Create action
-      const idempotencyKey = `0x${randomBytes(32).toString('hex')}` as Hex
+      const idempotencyKey = `0x${randomBytes(32).toString("hex")}` as Hex
       const action = createAction(ActionType.TRANSFER, data)
 
       // Sign
@@ -135,14 +135,14 @@ describe('execute', function () {
       const defaultData = {
         amount: String(10n ** 18n),
         currency: otherWallets[0].account.address,
-        currencyChainId: '1',
-        currencyVmType: 'ethereum-vm' as VmType,
+        currencyChainId: "1",
+        currencyVmType: "ethereum-vm" as VmType,
         from: otherWallets[1].account.address,
-        fromChainId: '1',
-        fromVmType: 'ethereum-vm' as VmType,
+        fromChainId: "1",
+        fromVmType: "ethereum-vm" as VmType,
         to: otherWallets[1].account.address,
-        toChainId: '1',
-        toVmType: 'ethereum-vm' as VmType,
+        toChainId: "1",
+        toVmType: "ethereum-vm" as VmType,
         ...overrides,
       }
 
@@ -169,7 +169,7 @@ describe('execute', function () {
     }
   }
 
-  it('should execute a single mint action', async () => {
+  it("should execute a single mint action", async () => {
     const { hub, mint, oracle, oracleWallet, otherWallets, publicClient } =
       await loadFixture(setup)
 
@@ -180,11 +180,11 @@ describe('execute', function () {
     const data = {
       amount,
       currency,
-      currencyChainId: '1',
-      currencyVmType: 'ethereum-vm',
+      currencyChainId: "1",
+      currencyVmType: "ethereum-vm",
       to,
-      toChainId: '1',
-      toVmType: 'ethereum-vm',
+      toChainId: "1",
+      toVmType: "ethereum-vm",
     } as const
     const { idempotencyKey, action, signature } = await mint(data)
 
@@ -223,7 +223,7 @@ describe('execute', function () {
       args: {
         idempotencyKey,
       },
-      eventName: 'Executed',
+      eventName: "Executed",
     })
     expect(
       Boolean(logs.find((l) => l.transactionHash === executeTxHash))
@@ -233,7 +233,7 @@ describe('execute', function () {
     expect(hubBalanceAfter - hubBalanceBefore).to.equal(BigInt(amount))
   })
 
-  it('should execute a single burn action', async () => {
+  it("should execute a single burn action", async () => {
     const {
       burn,
       hub,
@@ -253,11 +253,11 @@ describe('execute', function () {
       const data = {
         amount,
         currency,
-        currencyChainId: '1',
-        currencyVmType: 'ethereum-vm',
+        currencyChainId: "1",
+        currencyVmType: "ethereum-vm",
         to: from,
-        toChainId: '1',
-        toVmType: 'ethereum-vm',
+        toChainId: "1",
+        toVmType: "ethereum-vm",
       } as const
       const { idempotencyKey, action, signature } = await mint(data)
 
@@ -274,11 +274,11 @@ describe('execute', function () {
     const data = {
       amount,
       currency,
-      currencyChainId: '1',
-      currencyVmType: 'ethereum-vm',
+      currencyChainId: "1",
+      currencyVmType: "ethereum-vm",
       from,
-      fromChainId: '1',
-      fromVmType: 'ethereum-vm',
+      fromChainId: "1",
+      fromVmType: "ethereum-vm",
     } as const
     const { idempotencyKey, action, signature } = await burn(data)
 
@@ -320,7 +320,7 @@ describe('execute', function () {
       args: {
         idempotencyKey,
       },
-      eventName: 'Executed',
+      eventName: "Executed",
     })
     expect(
       Boolean(logs.find((l) => l.transactionHash === executeTxHash))
@@ -330,7 +330,7 @@ describe('execute', function () {
     expect(hubBalanceBefore - hubBalanceAfter).to.equal(BigInt(amount))
   })
 
-  it('should execute a single transfer action', async () => {
+  it("should execute a single transfer action", async () => {
     const {
       hub,
       mint,
@@ -351,11 +351,11 @@ describe('execute', function () {
       const data = {
         amount,
         currency,
-        currencyChainId: '1',
-        currencyVmType: 'ethereum-vm',
+        currencyChainId: "1",
+        currencyVmType: "ethereum-vm",
         to: from,
-        toChainId: '1',
-        toVmType: 'ethereum-vm',
+        toChainId: "1",
+        toVmType: "ethereum-vm",
       } as const
       const { idempotencyKey, action, signature } = await mint(data)
 
@@ -372,14 +372,14 @@ describe('execute', function () {
     const data = {
       amount,
       currency,
-      currencyChainId: '1',
-      currencyVmType: 'ethereum-vm',
+      currencyChainId: "1",
+      currencyVmType: "ethereum-vm",
       from,
-      fromChainId: '1',
-      fromVmType: 'ethereum-vm',
+      fromChainId: "1",
+      fromVmType: "ethereum-vm",
       to,
-      toChainId: '1',
-      toVmType: 'ethereum-vm',
+      toChainId: "1",
+      toVmType: "ethereum-vm",
     } as const
     const { idempotencyKey, action, signature } = await transfer(data)
 
@@ -434,7 +434,7 @@ describe('execute', function () {
       args: {
         idempotencyKey,
       },
-      eventName: 'Executed',
+      eventName: "Executed",
     })
     expect(
       Boolean(logs.find((l) => l.transactionHash === executeTxHash))
@@ -445,7 +445,7 @@ describe('execute', function () {
     expect(hubToBalanceAfter - hubToBalanceBefore).to.equal(BigInt(amount))
   })
 
-  it('should execute multiple actions in one call', async () => {
+  it("should execute multiple actions in one call", async () => {
     const {
       hub,
       createAction,
@@ -476,7 +476,7 @@ describe('execute', function () {
     ]
 
     // Create single idempotency key and signature for all actions
-    const idempotencyKey = `0x${randomBytes(32).toString('hex')}` as Hex
+    const idempotencyKey = `0x${randomBytes(32).toString("hex")}` as Hex
     const signature = await signExecution(idempotencyKey, actions)
 
     // Get hub addresses for balance tracking
@@ -484,28 +484,28 @@ describe('execute', function () {
     const amount = String(10n ** 18n)
     const hubTokenId = generateTokenId({
       address: currency,
-      chainId: '1',
-      family: 'ethereum-vm',
+      chainId: "1",
+      family: "ethereum-vm",
     })
     const hubMintTo1Address = generateAddress({
       address: mintTo1,
-      chainId: '1',
-      family: 'ethereum-vm',
+      chainId: "1",
+      family: "ethereum-vm",
     })
     const hubMintTo2Address = generateAddress({
       address: mintTo2,
-      chainId: '1',
-      family: 'ethereum-vm',
+      chainId: "1",
+      family: "ethereum-vm",
     })
     const hubMintTo3Address = generateAddress({
       address: mintTo3,
-      chainId: '1',
-      family: 'ethereum-vm',
+      chainId: "1",
+      family: "ethereum-vm",
     })
     const hubTransferToAddress = generateAddress({
       address: transferTo,
-      chainId: '1',
-      family: 'ethereum-vm',
+      chainId: "1",
+      family: "ethereum-vm",
     })
 
     // Get balances before execution
@@ -561,7 +561,7 @@ describe('execute', function () {
       args: {
         idempotencyKey,
       },
-      eventName: 'Executed',
+      eventName: "Executed",
     })
     expect(
       Boolean(logs.find((l) => l.transactionHash === executeTxHash))
@@ -581,7 +581,7 @@ describe('execute', function () {
     expect(transferToBalanceAfter - transferToBalanceBefore).to.equal(0n)
   })
 
-  it('should fail to execute the same idempotency key multiple times', async () => {
+  it("should fail to execute the same idempotency key multiple times", async () => {
     const { mint, oracle, oracleWallet, otherWallets } =
       await loadFixture(setup)
 
@@ -592,11 +592,11 @@ describe('execute', function () {
     const data = {
       amount,
       currency,
-      currencyChainId: '1',
-      currencyVmType: 'ethereum-vm',
+      currencyChainId: "1",
+      currencyVmType: "ethereum-vm",
       to: from,
-      toChainId: '1',
-      toVmType: 'ethereum-vm',
+      toChainId: "1",
+      toVmType: "ethereum-vm",
     } as const
     const { idempotencyKey, action, signature } = await mint(data)
 
@@ -618,10 +618,10 @@ describe('execute', function () {
         oracleWallet.account.address,
         signature,
       ])
-    ).to.be.rejectedWith('AlreadyExecuted')
+    ).to.be.rejectedWith("AlreadyExecuted")
   })
 
-  it('should fail to execute if the signature is invalid', async () => {
+  it("should fail to execute if the signature is invalid", async () => {
     const { mint, oracle, oracleWallet, otherWallets } =
       await loadFixture(setup)
 
@@ -632,11 +632,11 @@ describe('execute', function () {
     const data = {
       amount,
       currency,
-      currencyChainId: '1',
-      currencyVmType: 'ethereum-vm',
+      currencyChainId: "1",
+      currencyVmType: "ethereum-vm",
       to: from,
-      toChainId: '1',
-      toVmType: 'ethereum-vm',
+      toChainId: "1",
+      toVmType: "ethereum-vm",
     } as const
     const { idempotencyKey, action } = await mint(data)
 
@@ -647,8 +647,8 @@ describe('execute', function () {
           idempotencyKey,
         },
         oracleWallet.account.address,
-        `0x${randomBytes(65).toString('hex')}`,
+        `0x${randomBytes(65).toString("hex")}`,
       ])
-    ).to.be.rejectedWith('InvalidSignature')
+    ).to.be.rejectedWith("InvalidSignature")
   })
 })

@@ -1,10 +1,10 @@
-import { describe, expect, test } from 'vitest'
-import { generateAddress } from './address'
-import { addressesTestCases } from '@relay-protocol/fixtures'
-import { ethers } from 'ethers'
+import { describe, expect, test } from "vitest"
+import { generateAddress } from "./address"
+import { addressesTestCases } from "@relay-protocol/fixtures"
+import { ethers } from "ethers"
 
-describe('Virtual Addresses', () => {
-  test.each(addressesTestCases)('$name', ({ input, expectedAddress }) => {
+describe("Virtual Addresses", () => {
+  test.each(addressesTestCases)("$name", ({ input, expectedAddress }) => {
     const address = generateAddress(input)
 
     const differentInput = {

@@ -1,9 +1,9 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect } from 'chai'
-import hre from 'hardhat'
-import { keccak256, toHex, zeroAddress } from 'viem'
-import { deployAllocator } from '../helpers/deployAllocator'
-import { extractEvent } from '../helpers/extractEvent'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect } from "chai"
+import hre from "hardhat"
+import { keccak256, toHex, zeroAddress } from "viem"
+import { deployAllocator } from "../helpers/deployAllocator"
+import { extractEvent } from "../helpers/extractEvent"
 
 const chainId = 1n
 
@@ -12,12 +12,12 @@ const gasSettings = {
   signGas: 20000000000000n,
 }
 
-describe('Allocator submitAndSignWithdrawRequest', function () {
+describe("Allocator submitAndSignWithdrawRequest", function () {
   async function deployAllocatorWithSetup() {
     const { allocator, owner, otherAccounts, ...rest } = await deployAllocator()
     const [hub, depository] = otherAccounts
 
-    const payloadBuilder = await hre.viem.deployContract('DummyPayloadBuilder')
+    const payloadBuilder = await hre.viem.deployContract("DummyPayloadBuilder")
 
     await allocator.write.setDelay([0], {
       account: owner.account,
@@ -32,7 +32,7 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
 
     await allocator.write.grantRole(
       [
-        keccak256('APPROVED_WITHDRAWER_ROLE' as `0x${string}`),
+        keccak256("APPROVED_WITHDRAWER_ROLE" as `0x${string}`),
         hub.account.address,
       ],
       {
@@ -49,7 +49,7 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
     }
   }
 
-  it('should fail if no payload builder exists', async () => {
+  it("should fail if no payload builder exists", async () => {
     const { allocator, hub, owner, depository } = await loadFixture(
       deployAllocatorWithSetup
     )
@@ -61,13 +61,13 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
             amount: 1n,
             chainId: 2n,
             currency: zeroAddress,
-            data: '0x' as `0x${string}`,
+            data: "0x" as `0x${string}`,
             depository: depository.account.address,
-            nonce: keccak256('0xnonce'),
+            nonce: keccak256("0xnonce"),
             receiver: owner.account.address,
             spender: owner.account.address,
           },
-          '0x',
+          "0x",
           gasSettings,
         ],
         {
@@ -77,7 +77,7 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
     ).to.be.rejectedWith(`NoPayloadBuilder(2, "${depository.account.address}")`)
   })
 
-  it('should fail if there is a delay', async () => {
+  it("should fail if there is a delay", async () => {
     const { allocator, hub, owner, depository, wNEAR } = await loadFixture(
       deployAllocatorWithSetup
     )
@@ -100,16 +100,16 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
           amount: 1n,
           chainId,
           currency: zeroAddress,
-          data: '0x' as `0x${string}`,
+          data: "0x" as `0x${string}`,
           depository: depository.account.address,
-          nonce: keccak256('0xnonce'),
+          nonce: keccak256("0xnonce"),
           receiver: hub.account.address,
           spender: owner.account.address,
         },
-        '0x',
+        "0x",
         gasSettings,
       ])
-    ).to.be.rejectedWith('PayloadNotReady')
+    ).to.be.rejectedWith("PayloadNotReady")
     await allocator.write.setDepositoryDelay([
       chainId,
       depository.account.address,
@@ -117,14 +117,14 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
     ])
   })
 
-  describe('when successful', () => {
+  describe("when successful", () => {
     async function deployAllocatorWithSetupForSuccess() {
       const { allocator, wNEAR, owner, ...rest } =
         await deployAllocatorWithSetup()
 
       await allocator.write.grantRole(
         [
-          keccak256('APPROVED_WITHDRAWER_ROLE' as `0x${string}`),
+          keccak256("APPROVED_WITHDRAWER_ROLE" as `0x${string}`),
           owner.account.address,
         ],
         {
@@ -149,7 +149,7 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
         ...rest,
       }
     }
-    it('should emit an event with the payload hash', async () => {
+    it("should emit an event with the payload hash", async () => {
       const { allocator, owner, depository, publicClient } = await loadFixture(
         deployAllocatorWithSetupForSuccess
       )
@@ -160,13 +160,13 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
             amount: 1n,
             chainId,
             currency: zeroAddress,
-            data: '0x' as `0x${string}`,
+            data: "0x" as `0x${string}`,
             depository: depository.account.address,
-            nonce: keccak256('0xnonce'),
+            nonce: keccak256("0xnonce"),
             receiver: owner.account.address,
             spender: owner.account.address,
           },
-          '0x',
+          "0x",
           gasSettings,
         ],
         {
@@ -178,7 +178,7 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
       })
       const payloadBuiltEvent = await extractEvent(
         receipt,
-        'PayloadBuilt',
+        "PayloadBuilt",
         allocator.abi
       )
       const [block, defaultDelay, [initialDelay, initialIsSet]] =
@@ -189,13 +189,13 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
         ])
       expect(payloadBuiltEvent).to.not.equal(undefined)
       expect(payloadBuiltEvent.args.withdrawRequestHash).to.not.equal(undefined)
-      expect(payloadBuiltEvent.args.payload).to.equal(toHex('dummy payload'))
+      expect(payloadBuiltEvent.args.payload).to.equal(toHex("dummy payload"))
       expect(payloadBuiltEvent.args.timestamp).to.equal(
         block.timestamp + (initialIsSet ? initialDelay : defaultDelay)
       )
     })
 
-    it('should store the unsigned payload', async () => {
+    it("should store the unsigned payload", async () => {
       const { allocator, owner, depository, publicClient } = await loadFixture(
         deployAllocatorWithSetupForSuccess
       )
@@ -206,13 +206,13 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
             amount: 1n,
             chainId,
             currency: zeroAddress,
-            data: '0x' as `0x${string}`,
+            data: "0x" as `0x${string}`,
             depository: depository.account.address,
-            nonce: keccak256('0xnonce'),
+            nonce: keccak256("0xnonce"),
             receiver: owner.account.address,
             spender: owner.account.address,
           },
-          '0x',
+          "0x",
           gasSettings,
         ],
         {
@@ -224,7 +224,7 @@ describe('Allocator submitAndSignWithdrawRequest', function () {
       })
       const payloadBuiltEvent = await extractEvent(
         receipt,
-        'PayloadBuilt',
+        "PayloadBuilt",
         allocator.abi
       )
       const withdrawRequestHash = payloadBuiltEvent.args.withdrawRequestHash

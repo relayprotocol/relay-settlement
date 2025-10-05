@@ -1,14 +1,14 @@
 import {
   loadFixture,
   time,
-} from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { generateAddress } from '@relay-protocol/hub-utils'
-import { expect } from 'chai'
-import hre from 'hardhat'
-import { decodeEventLog, getAddress, keccak256, zeroAddress } from 'viem'
-import { deployAllocator } from '../helpers/deployAllocator'
-import { deployHub } from '../helpers/deployHub'
-import { extractEvent } from '../helpers/extractEvent'
+} from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { generateAddress } from "@relay-protocol/hub-utils"
+import { expect } from "chai"
+import hre from "hardhat"
+import { decodeEventLog, getAddress, keccak256, zeroAddress } from "viem"
+import { deployAllocator } from "../helpers/deployAllocator"
+import { deployHub } from "../helpers/deployHub"
+import { extractEvent } from "../helpers/extractEvent"
 
 const chainId = 1n
 
@@ -17,13 +17,13 @@ const gasSettings = {
   signGas: 20000000000000n,
 }
 
-describe('Allocator signWithdrawPayloadHash', function () {
+describe("Allocator signWithdrawPayloadHash", function () {
   async function deployAllocatorWithSetup() {
     const { allocator, owner, otherAccounts, publicClient, wNEAR, utils } =
       await deployAllocator()
     const [depository, user, solver] = otherAccounts
 
-    const payloadBuilder = await hre.viem.deployContract('DummyPayloadBuilder')
+    const payloadBuilder = await hre.viem.deployContract("DummyPayloadBuilder")
 
     await allocator.write.setPayloadBuilder(
       [chainId, depository.account.address, payloadBuilder.address],
@@ -34,7 +34,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
 
     await allocator.write.grantRole(
       [
-        keccak256('APPROVED_WITHDRAWER_ROLE' as `0x${string}`),
+        keccak256("APPROVED_WITHDRAWER_ROLE" as `0x${string}`),
         solver.account.address,
       ],
       {
@@ -57,9 +57,9 @@ describe('Allocator signWithdrawPayloadHash', function () {
       amount: 1n,
       chainId,
       currency: zeroAddress,
-      data: '0x' as `0x${string}`,
+      data: "0x" as `0x${string}`,
       depository: depository.account.address,
-      nonce: keccak256('0xnonce'),
+      nonce: keccak256("0xnonce"),
       receiver: solver.account.address,
       spender: user.account.address,
     }
@@ -76,7 +76,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
 
     const payloadBuiltEvent = await extractEvent(
       receipt,
-      'PayloadBuilt',
+      "PayloadBuilt",
       allocator.abi
     )
 
@@ -95,8 +95,8 @@ describe('Allocator signWithdrawPayloadHash', function () {
     }
   }
 
-  describe('with an approved signer', () => {
-    it('should successfully sign a payload with custom gas settings', async function () {
+  describe("with an approved signer", () => {
+    it("should successfully sign a payload with custom gas settings", async function () {
       const { allocator, solver, owner, publicClient, wNEAR, requestParams } =
         await loadFixture(deployAllocatorWithSetup)
 
@@ -122,7 +122,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
       await time.increase(await allocator.read.delay())
 
       const signHash = await allocator.write.signWithdrawPayloadHash(
-        [requestParams, '0x', gasSettings, 0],
+        [requestParams, "0x", gasSettings, 0],
         {
           account: solver.account,
         }
@@ -146,7 +146,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
       // can't test transferArgs.to as we dont have access to currentAccountId() from Aurora SDK
     })
 
-    it('should revert when trying to sign a payload that is not ready', async function () {
+    it("should revert when trying to sign a payload that is not ready", async function () {
       const { allocator, solver, requestParams, wNEAR } = await loadFixture(
         deployAllocatorWithSetup
       )
@@ -159,16 +159,16 @@ describe('Allocator signWithdrawPayloadHash', function () {
 
       await expect(
         allocator.write.signWithdrawPayloadHash(
-          [requestParams, '0x', gasSettings, 0],
+          [requestParams, "0x", gasSettings, 0],
           {
             account: solver.account,
           }
         )
-      ).to.be.rejectedWith('PayloadNotReady')
+      ).to.be.rejectedWith("PayloadNotReady")
     })
   })
 
-  describe('if the signer is not an approved signer', () => {
+  describe("if the signer is not an approved signer", () => {
     async function deployAllocatorAndSetHub() {
       const {
         allocator,
@@ -182,7 +182,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
       const [depository, user, solver] = otherAccounts
 
       const payloadBuilder = await hre.viem.deployContract(
-        'DummyPayloadBuilder'
+        "DummyPayloadBuilder"
       )
 
       await allocator.write.setPayloadBuilder(
@@ -215,7 +215,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
 
       // Set the owner as operator so it can mint tokens
       await hub.write.grantRole(
-        [keccak256('OPERATOR_ROLE' as `0x${string}`), owner.account.address],
+        [keccak256("OPERATOR_ROLE" as `0x${string}`), owner.account.address],
         {
           account: owner.account,
         }
@@ -223,7 +223,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
 
       // Set the Allocator as an operator for the user on the hub
       await hub.write.grantRole(
-        [keccak256('OPERATOR_ROLE' as `0x${string}`), allocator.address],
+        [keccak256("OPERATOR_ROLE" as `0x${string}`), allocator.address],
         {
           account: owner.account,
         }
@@ -260,9 +260,9 @@ describe('Allocator signWithdrawPayloadHash', function () {
         amount,
         chainId,
         currency: zeroAddress,
-        data: '0x' as `0x${string}`,
+        data: "0x" as `0x${string}`,
         depository: depository.account.address,
-        nonce: keccak256('0xnonce'),
+        nonce: keccak256("0xnonce"),
         receiver: user.account.address,
         spender: userHubAddress,
       }
@@ -279,7 +279,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
 
       const payloadBuiltEvent = await extractEvent(
         receipt,
-        'PayloadBuilt',
+        "PayloadBuilt",
         allocator.abi
       )
 
@@ -301,7 +301,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
       }
     }
 
-    it('should work for an alias address and transfer its tokens to the allocator', async () => {
+    it("should work for an alias address and transfer its tokens to the allocator", async () => {
       const {
         allocator,
         amount,
@@ -349,7 +349,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
       })
 
       await allocator.write.signWithdrawPayloadHash(
-        [requestParams, '0x', gasSettings, 0],
+        [requestParams, "0x", gasSettings, 0],
         {
           account: user.account,
         }
@@ -368,7 +368,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
       expect(allocatorBalanceAfter).to.be.equal(allocatorBalanceBefore + amount)
     })
 
-    it('should fail if the caller is not an operator for the recipient', async () => {
+    it("should fail if the caller is not an operator for the recipient", async () => {
       const { allocator, requestParams, otherAccounts, wNEAR } =
         await loadFixture(deployAllocatorAndSetHub)
       const [user] = otherAccounts
@@ -384,15 +384,15 @@ describe('Allocator signWithdrawPayloadHash', function () {
 
       await expect(
         allocator.write.signWithdrawPayloadHash(
-          [requestParams, '0x', gasSettings, 0],
+          [requestParams, "0x", gasSettings, 0],
           {
             account: user.account,
           }
         )
-      ).to.be.rejectedWith('CallerIsNotApproved')
+      ).to.be.rejectedWith("CallerIsNotApproved")
     })
 
-    it('should fail if the tokens from the allocator contract could not be transfered', async () => {
+    it("should fail if the tokens from the allocator contract could not be transfered", async () => {
       const {
         allocator,
         amount,
@@ -424,7 +424,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
 
       await expect(
         allocator.write.signWithdrawPayloadHash(
-          [requestParams, '0x', gasSettings, 0],
+          [requestParams, "0x", gasSettings, 0],
           {
             account: user.account,
           }
@@ -432,7 +432,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
       ).to.be.rejected
     })
 
-    it('should work for an EOA and transfer its tokens to the allocator', async () => {
+    it("should work for an EOA and transfer its tokens to the allocator", async () => {
       const { allocator, amount, otherAccounts, hub, wNEAR, tokenId } =
         await loadFixture(deployAllocatorAndSetHub)
       const [depository, user] = otherAccounts
@@ -442,9 +442,9 @@ describe('Allocator signWithdrawPayloadHash', function () {
         amount,
         chainId,
         currency: zeroAddress,
-        data: '0x' as `0x${string}`,
+        data: "0x" as `0x${string}`,
         depository: depository.account.address,
-        nonce: keccak256('0xnonce'),
+        nonce: keccak256("0xnonce"),
         receiver: user.account.address,
         spender: user.account.address,
       }
@@ -480,7 +480,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
       await time.increase(await allocator.read.delay())
 
       await allocator.write.signWithdrawPayloadHash(
-        [newRequestParams, '0x', gasSettings, 0],
+        [newRequestParams, "0x", gasSettings, 0],
         {
           account: user.account,
         }
@@ -499,8 +499,8 @@ describe('Allocator signWithdrawPayloadHash', function () {
       expect(allocatorBalanceAfter).to.be.equal(allocatorBalanceBefore + amount)
     })
 
-    describe('when using signatures to withdraw', () => {
-      it('should fail if the spender is an alias of the receiver but no signature is provided', async () => {
+    describe("when using signatures to withdraw", () => {
+      it("should fail if the spender is an alias of the receiver but no signature is provided", async () => {
         const { allocator, amount, otherAccounts, wNEAR } = await loadFixture(
           deployAllocatorAndSetHub
         )
@@ -509,7 +509,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
         const spender = generateAddress({
           address: user.account.address,
           chainId,
-          family: 'dummy-vm',
+          family: "dummy-vm",
         })
 
         // Submit a new withdraw request
@@ -517,9 +517,9 @@ describe('Allocator signWithdrawPayloadHash', function () {
           amount,
           chainId,
           currency: zeroAddress,
-          data: '0x' as `0x${string}`,
+          data: "0x" as `0x${string}`,
           depository: depository.account.address,
-          nonce: keccak256('0xnonce'),
+          nonce: keccak256("0xnonce"),
           receiver: user.account.address,
           spender,
         }
@@ -545,15 +545,15 @@ describe('Allocator signWithdrawPayloadHash', function () {
 
         await expect(
           allocator.write.signWithdrawPayloadHash(
-            [newRequestParams, '0x', gasSettings, 0],
+            [newRequestParams, "0x", gasSettings, 0],
             {
               account: user.account,
             }
           )
-        ).to.be.rejectedWith('CallerIsNotApproved')
+        ).to.be.rejectedWith("CallerIsNotApproved")
       })
 
-      it('should fail if the spender is an alias of the receiver and the signature is for a different address', async () => {
+      it("should fail if the spender is an alias of the receiver and the signature is for a different address", async () => {
         const { allocator, amount, otherAccounts, wNEAR, publicClient } =
           await loadFixture(deployAllocatorAndSetHub)
         const [depository, user, anotherUser] = otherAccounts
@@ -561,7 +561,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
         const spender = generateAddress({
           address: user.account.address,
           chainId,
-          family: 'dummy-vm',
+          family: "dummy-vm",
         })
 
         // Submit a new withdraw request
@@ -569,9 +569,9 @@ describe('Allocator signWithdrawPayloadHash', function () {
           amount,
           chainId,
           currency: zeroAddress,
-          data: '0x' as `0x${string}`,
+          data: "0x" as `0x${string}`,
           depository: depository.account.address,
-          nonce: keccak256('0xnonce'),
+          nonce: keccak256("0xnonce"),
           receiver: user.account.address,
           spender,
         }
@@ -596,37 +596,37 @@ describe('Allocator signWithdrawPayloadHash', function () {
         await time.increase(await allocator.read.delay())
 
         // Use a unique nonce for this test
-        const nonce = keccak256('0xnonce')
+        const nonce = keccak256("0xnonce")
 
         const signature = await user.signTypedData({
           account: anotherUser.account,
           domain: {
             chainId: await publicClient.getChainId(),
-            name: 'Allocator',
+            name: "Allocator",
             verifyingContract: allocator.address,
-            version: '1',
+            version: "1",
           },
           message: {
             amount,
             chainId,
             currency: zeroAddress,
-            data: '0x' as `0x${string}`,
+            data: "0x" as `0x${string}`,
             depository: depository.account.address,
             nonce,
             receiver: user.account.address,
             spender,
           },
-          primaryType: 'SubmitWithdrawRequest',
+          primaryType: "SubmitWithdrawRequest",
           types: {
             SubmitWithdrawRequest: [
-              { name: 'chainId', type: 'uint256' },
-              { name: 'depository', type: 'string' },
-              { name: 'currency', type: 'string' },
-              { name: 'amount', type: 'uint256' },
-              { name: 'spender', type: 'address' },
-              { name: 'receiver', type: 'string' },
-              { name: 'data', type: 'bytes' },
-              { name: 'nonce', type: 'bytes32' },
+              { name: "chainId", type: "uint256" },
+              { name: "depository", type: "string" },
+              { name: "currency", type: "string" },
+              { name: "amount", type: "uint256" },
+              { name: "spender", type: "address" },
+              { name: "receiver", type: "string" },
+              { name: "data", type: "bytes" },
+              { name: "nonce", type: "bytes32" },
             ],
           },
         })
@@ -638,10 +638,10 @@ describe('Allocator signWithdrawPayloadHash', function () {
               account: user.account,
             }
           )
-        ).to.be.rejectedWith('CallerIsNotApproved')
+        ).to.be.rejectedWith("CallerIsNotApproved")
       })
 
-      it('should work if the spender is an alias of the receiver and a valid signature for the receiver is provided', async () => {
+      it("should work if the spender is an alias of the receiver and a valid signature for the receiver is provided", async () => {
         const {
           allocator,
           amount,
@@ -656,18 +656,18 @@ describe('Allocator signWithdrawPayloadHash', function () {
         const spender = generateAddress({
           address: user.account.address,
           chainId,
-          family: 'dummy-vm',
+          family: "dummy-vm",
         })
 
         // Generate a unique nonce for this request
-        const nonce = keccak256('0xnonce')
+        const nonce = keccak256("0xnonce")
 
         // Submit a new withdraw request
         const newRequestParams = {
           amount,
           chainId,
           currency: zeroAddress,
-          data: '0x' as `0x${string}`,
+          data: "0x" as `0x${string}`,
           depository: depository.account.address,
           nonce,
           receiver: user.account.address,
@@ -708,31 +708,31 @@ describe('Allocator signWithdrawPayloadHash', function () {
           account: user.account,
           domain: {
             chainId: await publicClient.getChainId(),
-            name: 'Allocator',
+            name: "Allocator",
             verifyingContract: allocator.address,
-            version: '1',
+            version: "1",
           },
           message: {
             amount,
             chainId,
             currency: zeroAddress,
-            data: '0x' as `0x${string}`,
+            data: "0x" as `0x${string}`,
             depository: depository.account.address,
             nonce,
             receiver: user.account.address,
             spender,
           },
-          primaryType: 'SubmitWithdrawRequest',
+          primaryType: "SubmitWithdrawRequest",
           types: {
             SubmitWithdrawRequest: [
-              { name: 'chainId', type: 'uint256' },
-              { name: 'depository', type: 'string' },
-              { name: 'currency', type: 'string' },
-              { name: 'amount', type: 'uint256' },
-              { name: 'spender', type: 'address' },
-              { name: 'receiver', type: 'string' },
-              { name: 'data', type: 'bytes' },
-              { name: 'nonce', type: 'bytes32' },
+              { name: "chainId", type: "uint256" },
+              { name: "depository", type: "string" },
+              { name: "currency", type: "string" },
+              { name: "amount", type: "uint256" },
+              { name: "spender", type: "address" },
+              { name: "receiver", type: "string" },
+              { name: "data", type: "bytes" },
+              { name: "nonce", type: "bytes32" },
             ],
           },
         })
@@ -756,7 +756,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
         )
       })
 
-      it('should prevent replay attacks with same signature', async () => {
+      it("should prevent replay attacks with same signature", async () => {
         const {
           allocator,
           amount,
@@ -771,7 +771,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
         const spender = generateAddress({
           address: user.account.address,
           chainId,
-          family: 'dummy-vm',
+          family: "dummy-vm",
         })
 
         // Mint more tokens so we can try the attack twice
@@ -780,13 +780,13 @@ describe('Allocator signWithdrawPayloadHash', function () {
         })
 
         // Generate unique nonces for the replay attack test
-        const nonce1 = keccak256('replay_test_1')
+        const nonce1 = keccak256("replay_test_1")
 
         const requestParams = {
           amount,
           chainId,
           currency: zeroAddress,
-          data: '0x' as `0x${string}`,
+          data: "0x" as `0x${string}`,
           depository: depository.account.address,
           nonce: nonce1,
           receiver: user.account.address,
@@ -804,31 +804,31 @@ describe('Allocator signWithdrawPayloadHash', function () {
           account: user.account,
           domain: {
             chainId: await publicClient.getChainId(),
-            name: 'Allocator',
+            name: "Allocator",
             verifyingContract: allocator.address,
-            version: '1',
+            version: "1",
           },
           message: {
             amount,
             chainId,
             currency: zeroAddress,
-            data: '0x' as `0x${string}`,
+            data: "0x" as `0x${string}`,
             depository: depository.account.address,
             nonce,
             receiver: user.account.address,
             spender,
           },
-          primaryType: 'SubmitWithdrawRequest',
+          primaryType: "SubmitWithdrawRequest",
           types: {
             SubmitWithdrawRequest: [
-              { name: 'chainId', type: 'uint256' },
-              { name: 'depository', type: 'string' },
-              { name: 'currency', type: 'string' },
-              { name: 'amount', type: 'uint256' },
-              { name: 'spender', type: 'address' },
-              { name: 'receiver', type: 'string' },
-              { name: 'data', type: 'bytes' },
-              { name: 'nonce', type: 'bytes32' },
+              { name: "chainId", type: "uint256" },
+              { name: "depository", type: "string" },
+              { name: "currency", type: "string" },
+              { name: "amount", type: "uint256" },
+              { name: "spender", type: "address" },
+              { name: "receiver", type: "string" },
+              { name: "data", type: "bytes" },
+              { name: "nonce", type: "bytes32" },
             ],
           },
         })
@@ -859,7 +859,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
         // Now submit a second request with the same signature structure but incremented nonce
         const newRequestParams = {
           ...requestParams,
-          nonce: keccak256('0xnonce'),
+          nonce: keccak256("0xnonce"),
         }
         await allocator.write.submitWithdrawRequest([newRequestParams], {
           account: user.account,
@@ -881,7 +881,7 @@ describe('Allocator signWithdrawPayloadHash', function () {
               account: user.account,
             }
           )
-        ).to.be.rejectedWith('CallerIsNotApproved')
+        ).to.be.rejectedWith("CallerIsNotApproved")
       })
     })
   })

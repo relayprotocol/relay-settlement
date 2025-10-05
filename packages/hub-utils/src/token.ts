@@ -1,6 +1,6 @@
-import { ethers } from 'ethers'
-import { TokenIdComponents, TokenId } from '@relay-protocol/types'
-import { getCheckSummedAddress } from './utils'
+import { ethers } from "ethers"
+import { TokenIdComponents, TokenId } from "@relay-protocol/types"
+import { getCheckSummedAddress } from "./utils"
 
 /**
  * Generates a token ID based on the chain type, chain ID, and address
@@ -10,7 +10,7 @@ import { getCheckSummedAddress } from './utils'
 export function generateTokenId(components: TokenIdComponents): TokenId {
   const { family, chainId, address } = components
   const packedData = ethers.solidityPacked(
-    ['string', 'uint256', family === 'ethereum-vm' ? 'address' : 'string'],
+    ["string", "uint256", family === "ethereum-vm" ? "address" : "string"],
     [family, chainId, getCheckSummedAddress(family, address)]
   )
   return BigInt(ethers.keccak256(packedData))

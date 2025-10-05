@@ -1,9 +1,9 @@
-import { JsonRpcProvider } from '@near-js/providers'
-import { networks } from '@relay-protocol/networks'
-import { fromHex } from 'viem'
+import { JsonRpcProvider } from "@near-js/providers"
+import { networks } from "@relay-protocol/networks"
+import { fromHex } from "viem"
 
 // default values are Aurora testnet
-const { near: nearNetwork } = networks['1313161555']
+const { near: nearNetwork } = networks["1313161555"]
 
 export async function derivePublicKey(
   path: string,
@@ -23,18 +23,18 @@ export async function derivePublicKey(
     predecessor,
   }
 
-  const args_base64 = Buffer.from(JSON.stringify(args)).toString('base64')
+  const args_base64 = Buffer.from(JSON.stringify(args)).toString("base64")
   const result = await provider.query({
     account_id: signerContractId,
     args_base64,
-    finality: 'optimistic',
-    method_name: 'derived_public_key',
-    request_type: 'call_function',
+    finality: "optimistic",
+    method_name: "derived_public_key",
+    request_type: "call_function",
   })
 
   const response = Buffer.from(result.result)
   const res = JSON.parse(Buffer.from(response).toString())
-  const [curve, publicKey] = res.split(':')
+  const [curve, publicKey] = res.split(":")
   return { curve, publicKey }
 }
 
@@ -42,7 +42,7 @@ export async function derivePublicKey(
 export const extractNearSignature = (
   signature: string
 ): { r: string; s: string; v: number } => {
-  const jsonSignature = JSON.parse(fromHex(signature, 'string'))
+  const jsonSignature = JSON.parse(fromHex(signature, "string"))
 
   const {
     big_r: { affine_point },

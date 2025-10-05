@@ -1,8 +1,8 @@
-import type { NetworkConfigs } from '@relay-protocol/types'
+import type { NetworkConfigs } from "@relay-protocol/types"
 
-import * as supportedNetworks from './networks'
+import * as supportedNetworks from "./networks"
 
-export * from './networks'
+export * from "./networks"
 
 export const networks: NetworkConfigs = {}
 

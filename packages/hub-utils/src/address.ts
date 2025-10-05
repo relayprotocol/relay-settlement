@@ -1,7 +1,7 @@
-import { VirtualAddress, VirtualAddressComponents } from '@relay-protocol/types'
-import { ethers } from 'ethers'
+import { VirtualAddress, VirtualAddressComponents } from "@relay-protocol/types"
+import { ethers } from "ethers"
 
-import { getCheckSummedAddress } from './utils'
+import { getCheckSummedAddress } from "./utils"
 
 /**
  * Generates a virtual Ethereum address from token components
@@ -18,10 +18,10 @@ export function generateAddress(
   const { chainId, address, family } = components
   const addressHash = ethers.keccak256(
     ethers.solidityPacked(
-      ['string', 'uint256', family === 'ethereum-vm' ? 'address' : 'string'],
+      ["string", "uint256", family === "ethereum-vm" ? "address" : "string"],
       [family, chainId, getCheckSummedAddress(family, address)]
     )
   )
   const addressBytes = addressHash.slice(2).slice(-40)
-  return ethers.getAddress('0x' + addressBytes) as `0x${string}`
+  return ethers.getAddress("0x" + addressBytes) as `0x${string}`
 }

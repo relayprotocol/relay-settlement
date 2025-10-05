@@ -1,4 +1,4 @@
-import { ChainType } from '@relay-protocol/types'
+import { ChainType } from "@relay-protocol/types"
 
 export interface MintParams {
   family: ChainType

@@ -1,7 +1,7 @@
 /**
  * Type definitions for the Relay Protocol Hub utilities
  */
-import { ChainType } from './networks'
+import { ChainType } from "./networks"
 
 export interface TokenIdComponents {
   family: ChainType

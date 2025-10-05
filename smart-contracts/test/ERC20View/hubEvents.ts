@@ -1,17 +1,17 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect } from 'chai'
-import hre from 'hardhat'
-import { Address, keccak256 } from 'viem'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect } from "chai"
+import hre from "hardhat"
+import { Address, keccak256 } from "viem"
 
-describe('ERC20View Hub Events', function () {
+describe("ERC20View Hub Events", function () {
   async function deployHubWithERC20View() {
     const [admin, operatorUser, regularUser, anotherUser] =
       await hre.viem.getWalletClients()
-    const hub = await hre.viem.deployContract('Hub', [admin.account.address])
+    const hub = await hre.viem.deployContract("Hub", [admin.account.address])
     const publicClient = await hre.viem.getPublicClient()
 
     // Add operator role to operatorUser
-    const OPERATOR_ROLE = keccak256('OPERATOR_ROLE')
+    const OPERATOR_ROLE = keccak256("OPERATOR_ROLE")
     const addOperatorHash = await hub.write.grantRole(
       [OPERATOR_ROLE, operatorUser.account.address as Address],
       { account: admin.account }
@@ -33,7 +33,7 @@ describe('ERC20View Hub Events', function () {
 
     // Get ERC20View contract
     const erc20View = await hre.viem.getContractAt(
-      'ERC20View',
+      "ERC20View",
       erc20ViewAddress
     )
 
@@ -51,7 +51,7 @@ describe('ERC20View Hub Events', function () {
     }
   }
 
-  it('emits Transfer event on Hub transfer', async function () {
+  it("emits Transfer event on Hub transfer", async function () {
     const { hub, erc20View, publicClient, regularUser, anotherUser, tokenId } =
       await loadFixture(deployHubWithERC20View)
 
@@ -69,7 +69,7 @@ describe('ERC20View Hub Events', function () {
     const events = await publicClient.getContractEvents({
       abi: erc20View.abi,
       address: erc20View.address,
-      eventName: 'Transfer',
+      eventName: "Transfer",
       fromBlock: transferReceipt.blockNumber,
       toBlock: transferReceipt.blockNumber,
     })
@@ -85,7 +85,7 @@ describe('ERC20View Hub Events', function () {
     expect(transferEvent.args.value).to.equal(transferAmount)
   })
 
-  it('emits Transfer event on Hub transferFrom', async function () {
+  it("emits Transfer event on Hub transferFrom", async function () {
     const { hub, erc20View, publicClient, regularUser, anotherUser, tokenId } =
       await loadFixture(deployHubWithERC20View)
 
@@ -116,7 +116,7 @@ describe('ERC20View Hub Events', function () {
     const events = await publicClient.getContractEvents({
       abi: erc20View.abi,
       address: erc20View.address,
-      eventName: 'Transfer',
+      eventName: "Transfer",
       fromBlock: transferFromReceipt.blockNumber,
       toBlock: transferFromReceipt.blockNumber,
     })
@@ -132,7 +132,7 @@ describe('ERC20View Hub Events', function () {
     expect(transferEvent.args.value).to.equal(transferAmount)
   })
 
-  it('emits Transfer event on Hub mint', async function () {
+  it("emits Transfer event on Hub mint", async function () {
     const { hub, erc20View, publicClient, regularUser, operatorUser, tokenId } =
       await loadFixture(deployHubWithERC20View)
 
@@ -150,7 +150,7 @@ describe('ERC20View Hub Events', function () {
     const events = await publicClient.getContractEvents({
       abi: erc20View.abi,
       address: erc20View.address,
-      eventName: 'Transfer',
+      eventName: "Transfer",
       fromBlock: mintReceipt.blockNumber,
       toBlock: mintReceipt.blockNumber,
     })
@@ -158,7 +158,7 @@ describe('ERC20View Hub Events', function () {
     expect(events.length).to.equal(1)
     const transferEvent = events[0]
     expect(transferEvent.args.from.toLowerCase()).to.equal(
-      '0x0000000000000000000000000000000000000000'
+      "0x0000000000000000000000000000000000000000"
     )
     expect(transferEvent.args.to.toLowerCase()).to.equal(
       regularUser.account.address.toLowerCase()
@@ -166,7 +166,7 @@ describe('ERC20View Hub Events', function () {
     expect(transferEvent.args.value).to.equal(mintAmount)
   })
 
-  it('emits Transfer event on Hub burn', async function () {
+  it("emits Transfer event on Hub burn", async function () {
     const { hub, erc20View, publicClient, regularUser, operatorUser, tokenId } =
       await loadFixture(deployHubWithERC20View)
 
@@ -184,7 +184,7 @@ describe('ERC20View Hub Events', function () {
     const events = await publicClient.getContractEvents({
       abi: erc20View.abi,
       address: erc20View.address,
-      eventName: 'Transfer',
+      eventName: "Transfer",
       fromBlock: burnReceipt.blockNumber,
       toBlock: burnReceipt.blockNumber,
     })
@@ -195,12 +195,12 @@ describe('ERC20View Hub Events', function () {
       regularUser.account.address.toLowerCase()
     )
     expect(transferEvent.args.to.toLowerCase()).to.equal(
-      '0x0000000000000000000000000000000000000000'
+      "0x0000000000000000000000000000000000000000"
     )
     expect(transferEvent.args.value).to.equal(burnAmount)
   })
 
-  it('emits multiple Transfer events for multiple Hub transfers', async function () {
+  it("emits multiple Transfer events for multiple Hub transfers", async function () {
     const { hub, erc20View, publicClient, regularUser, anotherUser, tokenId } =
       await loadFixture(deployHubWithERC20View)
 
@@ -226,7 +226,7 @@ describe('ERC20View Hub Events', function () {
     const allEvents = await publicClient.getContractEvents({
       abi: erc20View.abi,
       address: erc20View.address,
-      eventName: 'Transfer',
+      eventName: "Transfer",
       fromBlock: 0n,
       toBlock: secondTransferReceipt.blockNumber,
     })
@@ -256,7 +256,7 @@ describe('ERC20View Hub Events', function () {
     expect(lastTwoEvents[1].args.value).to.equal(secondTransferAmount)
   })
 
-  it('does not emit duplicate events when msg.sender is the ERC20View itself', async function () {
+  it("does not emit duplicate events when msg.sender is the ERC20View itself", async function () {
     const { erc20View, publicClient, regularUser, anotherUser } =
       await loadFixture(deployHubWithERC20View)
 
@@ -274,7 +274,7 @@ describe('ERC20View Hub Events', function () {
     const erc20ViewTransferEvents = await publicClient.getContractEvents({
       abi: erc20View.abi,
       address: erc20View.address,
-      eventName: 'Transfer',
+      eventName: "Transfer",
       fromBlock: transferReceipt.blockNumber,
       toBlock: transferReceipt.blockNumber,
     })

@@ -1,36 +1,36 @@
-import { BorshCoder } from '@coral-xyz/anchor'
-import bs58 from 'bs58'
-import { sha256 } from 'js-sha256'
+import { BorshCoder } from "@coral-xyz/anchor"
+import bs58 from "bs58"
+import { sha256 } from "js-sha256"
 
 export type RelayDepository = {
-  version: '0.1.0'
-  name: 'relay_depository'
+  version: "0.1.0"
+  name: "relay_depository"
   instructions: [
     {
-      name: 'initialize'
+      name: "initialize"
       accounts: [
         {
-          name: 'relayDepository'
+          name: "relayDepository"
           isMut: true
           isSigner: false
         },
         {
-          name: 'vault'
+          name: "vault"
           isMut: true
           isSigner: false
         },
         {
-          name: 'owner'
+          name: "owner"
           isMut: true
           isSigner: true
         },
         {
-          name: 'allocator'
+          name: "allocator"
           isMut: false
           isSigner: false
         },
         {
-          name: 'systemProgram'
+          name: "systemProgram"
           isMut: false
           isSigner: false
         },
@@ -38,207 +38,207 @@ export type RelayDepository = {
       args: []
     },
     {
-      name: 'setAllocator'
+      name: "setAllocator"
       accounts: [
         {
-          name: 'relayDepository'
+          name: "relayDepository"
           isMut: true
           isSigner: false
         },
         {
-          name: 'owner'
+          name: "owner"
           isMut: false
           isSigner: true
         },
       ]
       args: [
         {
-          name: 'newAllocator'
-          type: 'publicKey'
+          name: "newAllocator"
+          type: "publicKey"
         },
       ]
     },
     {
-      name: 'depositNative'
+      name: "depositNative"
       accounts: [
         {
-          name: 'relayDepository'
+          name: "relayDepository"
           isMut: false
           isSigner: false
         },
         {
-          name: 'sender'
+          name: "sender"
           isMut: true
           isSigner: true
         },
         {
-          name: 'depositor'
+          name: "depositor"
           isMut: false
           isSigner: false
         },
         {
-          name: 'vault'
+          name: "vault"
           isMut: true
           isSigner: false
         },
         {
-          name: 'systemProgram'
+          name: "systemProgram"
           isMut: false
           isSigner: false
         },
       ]
       args: [
         {
-          name: 'amount'
-          type: 'u64'
+          name: "amount"
+          type: "u64"
         },
         {
-          name: 'id'
+          name: "id"
           type: {
-            array: ['u8', 32]
+            array: ["u8", 32]
           }
         },
       ]
     },
     {
-      name: 'depositToken'
+      name: "depositToken"
       accounts: [
         {
-          name: 'relayDepository'
+          name: "relayDepository"
           isMut: false
           isSigner: false
         },
         {
-          name: 'mint'
+          name: "mint"
           isMut: false
           isSigner: false
         },
         {
-          name: 'sender'
+          name: "sender"
           isMut: true
           isSigner: true
         },
         {
-          name: 'senderTokenAccount'
+          name: "senderTokenAccount"
           isMut: true
           isSigner: false
         },
         {
-          name: 'depositor'
+          name: "depositor"
           isMut: false
           isSigner: false
         },
         {
-          name: 'vaultTokenAccount'
+          name: "vaultTokenAccount"
           isMut: true
           isSigner: false
         },
         {
-          name: 'vault'
+          name: "vault"
           isMut: false
           isSigner: false
         },
         {
-          name: 'tokenProgram'
+          name: "tokenProgram"
           isMut: false
           isSigner: false
         },
         {
-          name: 'associatedTokenProgram'
+          name: "associatedTokenProgram"
           isMut: false
           isSigner: false
         },
         {
-          name: 'systemProgram'
+          name: "systemProgram"
           isMut: false
           isSigner: false
         },
       ]
       args: [
         {
-          name: 'amount'
-          type: 'u64'
+          name: "amount"
+          type: "u64"
         },
         {
-          name: 'id'
+          name: "id"
           type: {
-            array: ['u8', 32]
+            array: ["u8", 32]
           }
         },
       ]
     },
     {
-      name: 'executeTransfer'
+      name: "executeTransfer"
       accounts: [
         {
-          name: 'relayDepository'
+          name: "relayDepository"
           isMut: false
           isSigner: false
         },
         {
-          name: 'executor'
+          name: "executor"
           isMut: true
           isSigner: true
         },
         {
-          name: 'recipient'
+          name: "recipient"
           isMut: true
           isSigner: false
         },
         {
-          name: 'vault'
+          name: "vault"
           isMut: true
           isSigner: false
         },
         {
-          name: 'mint'
+          name: "mint"
           isMut: false
           isSigner: false
           isOptional: true
         },
         {
-          name: 'vaultTokenAccount'
+          name: "vaultTokenAccount"
           isMut: true
           isSigner: false
           isOptional: true
         },
         {
-          name: 'recipientTokenAccount'
+          name: "recipientTokenAccount"
           isMut: true
           isSigner: false
           isOptional: true
         },
         {
-          name: 'usedRequest'
+          name: "usedRequest"
           isMut: true
           isSigner: false
         },
         {
-          name: 'tokenProgram'
+          name: "tokenProgram"
           isMut: false
           isSigner: false
         },
         {
-          name: 'associatedTokenProgram'
+          name: "associatedTokenProgram"
           isMut: false
           isSigner: false
         },
         {
-          name: 'systemProgram'
+          name: "systemProgram"
           isMut: false
           isSigner: false
         },
         {
-          name: 'ixSysvar'
+          name: "ixSysvar"
           isMut: false
           isSigner: false
         },
       ]
       args: [
         {
-          name: 'request'
+          name: "request"
           type: {
-            defined: 'TransferRequest'
+            defined: "TransferRequest"
           }
         },
       ]
@@ -246,33 +246,33 @@ export type RelayDepository = {
   ]
   accounts: [
     {
-      name: 'relayDepository'
+      name: "relayDepository"
       type: {
-        kind: 'struct'
+        kind: "struct"
         fields: [
           {
-            name: 'owner'
-            type: 'publicKey'
+            name: "owner"
+            type: "publicKey"
           },
           {
-            name: 'allocator'
-            type: 'publicKey'
+            name: "allocator"
+            type: "publicKey"
           },
           {
-            name: 'vaultBump'
-            type: 'u8'
+            name: "vaultBump"
+            type: "u8"
           },
         ]
       }
     },
     {
-      name: 'usedRequest'
+      name: "usedRequest"
       type: {
-        kind: 'struct'
+        kind: "struct"
         fields: [
           {
-            name: 'isUsed'
-            type: 'bool'
+            name: "isUsed"
+            type: "bool"
           },
         ]
       }
@@ -280,31 +280,31 @@ export type RelayDepository = {
   ]
   types: [
     {
-      name: 'TransferRequest'
+      name: "TransferRequest"
       type: {
-        kind: 'struct'
+        kind: "struct"
         fields: [
           {
-            name: 'recipient'
-            type: 'publicKey'
+            name: "recipient"
+            type: "publicKey"
           },
           {
-            name: 'token'
+            name: "token"
             type: {
-              option: 'publicKey'
+              option: "publicKey"
             }
           },
           {
-            name: 'amount'
-            type: 'u64'
+            name: "amount"
+            type: "u64"
           },
           {
-            name: 'nonce'
-            type: 'u64'
+            name: "nonce"
+            type: "u64"
           },
           {
-            name: 'expiration'
-            type: 'i64'
+            name: "expiration"
+            type: "i64"
           },
         ]
       }
@@ -312,51 +312,51 @@ export type RelayDepository = {
   ]
   events: [
     {
-      name: 'TransferExecutedEvent'
+      name: "TransferExecutedEvent"
       fields: [
         {
-          name: 'request'
+          name: "request"
           type: {
-            defined: 'TransferRequest'
+            defined: "TransferRequest"
           }
           index: false
         },
         {
-          name: 'executor'
-          type: 'publicKey'
+          name: "executor"
+          type: "publicKey"
           index: false
         },
         {
-          name: 'id'
-          type: 'publicKey'
+          name: "id"
+          type: "publicKey"
           index: false
         },
       ]
     },
     {
-      name: 'DepositEvent'
+      name: "DepositEvent"
       fields: [
         {
-          name: 'depositor'
-          type: 'publicKey'
+          name: "depositor"
+          type: "publicKey"
           index: false
         },
         {
-          name: 'token'
+          name: "token"
           type: {
-            option: 'publicKey'
+            option: "publicKey"
           }
           index: false
         },
         {
-          name: 'amount'
-          type: 'u64'
+          name: "amount"
+          type: "u64"
           index: false
         },
         {
-          name: 'id'
+          name: "id"
           type: {
-            array: ['u8', 32]
+            array: ["u8", 32]
           }
           index: false
         },
@@ -366,43 +366,43 @@ export type RelayDepository = {
   errors: [
     {
       code: 6000
-      name: 'TransferRequestAlreadyUsed'
-      msg: 'Transfer request has already been executed'
+      name: "TransferRequestAlreadyUsed"
+      msg: "Transfer request has already been executed"
     },
     {
       code: 6001
-      name: 'InvalidMint'
-      msg: 'Invalid mint'
+      name: "InvalidMint"
+      msg: "Invalid mint"
     },
     {
       code: 6002
-      name: 'Unauthorized'
-      msg: 'Unauthorized'
+      name: "Unauthorized"
+      msg: "Unauthorized"
     },
     {
       code: 6003
-      name: 'AllocatorSignerMismatch'
-      msg: 'Allocator signer mismatch'
+      name: "AllocatorSignerMismatch"
+      msg: "Allocator signer mismatch"
     },
     {
       code: 6004
-      name: 'MessageMismatch'
-      msg: 'Message mismatch'
+      name: "MessageMismatch"
+      msg: "Message mismatch"
     },
     {
       code: 6005
-      name: 'MalformedEd25519Data'
-      msg: 'Malformed Ed25519 data'
+      name: "MalformedEd25519Data"
+      msg: "Malformed Ed25519 data"
     },
     {
       code: 6006
-      name: 'MissingSignature'
-      msg: 'Missing signature'
+      name: "MissingSignature"
+      msg: "Missing signature"
     },
     {
       code: 6007
-      name: 'SignatureExpired'
-      msg: 'Signature expired'
+      name: "SignatureExpired"
+      msg: "Signature expired"
     },
   ]
 }
@@ -410,78 +410,78 @@ export type RelayDepository = {
 export const IDL: RelayDepository = {
   accounts: [
     {
-      name: 'relayDepository',
+      name: "relayDepository",
       type: {
         fields: [
           {
-            name: 'owner',
-            type: 'publicKey',
+            name: "owner",
+            type: "publicKey",
           },
           {
-            name: 'allocator',
-            type: 'publicKey',
+            name: "allocator",
+            type: "publicKey",
           },
           {
-            name: 'vaultBump',
-            type: 'u8',
+            name: "vaultBump",
+            type: "u8",
           },
         ],
-        kind: 'struct',
+        kind: "struct",
       },
     },
     {
-      name: 'usedRequest',
+      name: "usedRequest",
       type: {
         fields: [
           {
-            name: 'isUsed',
-            type: 'bool',
+            name: "isUsed",
+            type: "bool",
           },
         ],
-        kind: 'struct',
+        kind: "struct",
       },
     },
   ],
   errors: [
     {
       code: 6000,
-      msg: 'Transfer request has already been executed',
-      name: 'TransferRequestAlreadyUsed',
+      msg: "Transfer request has already been executed",
+      name: "TransferRequestAlreadyUsed",
     },
     {
       code: 6001,
-      msg: 'Invalid mint',
-      name: 'InvalidMint',
+      msg: "Invalid mint",
+      name: "InvalidMint",
     },
     {
       code: 6002,
-      msg: 'Unauthorized',
-      name: 'Unauthorized',
+      msg: "Unauthorized",
+      name: "Unauthorized",
     },
     {
       code: 6003,
-      msg: 'Allocator signer mismatch',
-      name: 'AllocatorSignerMismatch',
+      msg: "Allocator signer mismatch",
+      name: "AllocatorSignerMismatch",
     },
     {
       code: 6004,
-      msg: 'Message mismatch',
-      name: 'MessageMismatch',
+      msg: "Message mismatch",
+      name: "MessageMismatch",
     },
     {
       code: 6005,
-      msg: 'Malformed Ed25519 data',
-      name: 'MalformedEd25519Data',
+      msg: "Malformed Ed25519 data",
+      name: "MalformedEd25519Data",
     },
     {
       code: 6006,
-      msg: 'Missing signature',
-      name: 'MissingSignature',
+      msg: "Missing signature",
+      name: "MissingSignature",
     },
     {
       code: 6007,
-      msg: 'Signature expired',
-      name: 'SignatureExpired',
+      msg: "Signature expired",
+      name: "SignatureExpired",
     },
   ],
   events: [
@@ -489,52 +489,52 @@ export const IDL: RelayDepository = {
       fields: [
         {
           index: false,
-          name: 'request',
+          name: "request",
           type: {
-            defined: 'TransferRequest',
+            defined: "TransferRequest",
           },
         },
         {
           index: false,
-          name: 'executor',
-          type: 'publicKey',
+          name: "executor",
+          type: "publicKey",
         },
         {
           index: false,
-          name: 'id',
-          type: 'publicKey',
+          name: "id",
+          type: "publicKey",
         },
       ],
-      name: 'TransferExecutedEvent',
+      name: "TransferExecutedEvent",
     },
     {
       fields: [
         {
           index: false,
-          name: 'depositor',
-          type: 'publicKey',
+          name: "depositor",
+          type: "publicKey",
         },
         {
           index: false,
-          name: 'token',
+          name: "token",
           type: {
-            option: 'publicKey',
+            option: "publicKey",
           },
         },
         {
           index: false,
-          name: 'amount',
-          type: 'u64',
+          name: "amount",
+          type: "u64",
         },
         {
           index: false,
-          name: 'id',
+          name: "id",
           type: {
-            array: ['u8', 32],
+            array: ["u8", 32],
           },
         },
       ],
-      name: 'DepositEvent',
+      name: "DepositEvent",
     },
   ],
   instructions: [
@@ -543,293 +543,293 @@ export const IDL: RelayDepository = {
         {
           isMut: true,
           isSigner: false,
-          name: 'relayDepository',
+          name: "relayDepository",
         },
         {
           isMut: true,
           isSigner: false,
-          name: 'vault',
+          name: "vault",
         },
         {
           isMut: true,
           isSigner: true,
-          name: 'owner',
+          name: "owner",
         },
         {
           isMut: false,
           isSigner: false,
-          name: 'allocator',
+          name: "allocator",
         },
         {
           isMut: false,
           isSigner: false,
-          name: 'systemProgram',
+          name: "systemProgram",
         },
       ],
       args: [],
-      name: 'initialize',
+      name: "initialize",
     },
     {
       accounts: [
         {
           isMut: true,
           isSigner: false,
-          name: 'relayDepository',
+          name: "relayDepository",
         },
         {
           isMut: false,
           isSigner: true,
-          name: 'owner',
+          name: "owner",
         },
       ],
       args: [
         {
-          name: 'newAllocator',
-          type: 'publicKey',
+          name: "newAllocator",
+          type: "publicKey",
         },
       ],
-      name: 'setAllocator',
+      name: "setAllocator",
     },
     {
       accounts: [
         {
           isMut: false,
           isSigner: false,
-          name: 'relayDepository',
+          name: "relayDepository",
         },
         {
           isMut: true,
           isSigner: true,
-          name: 'sender',
+          name: "sender",
         },
         {
           isMut: false,
           isSigner: false,
-          name: 'depositor',
+          name: "depositor",
         },
         {
           isMut: true,
           isSigner: false,
-          name: 'vault',
+          name: "vault",
         },
         {
           isMut: false,
           isSigner: false,
-          name: 'systemProgram',
+          name: "systemProgram",
         },
       ],
       args: [
         {
-          name: 'amount',
-          type: 'u64',
+          name: "amount",
+          type: "u64",
         },
         {
-          name: 'id',
+          name: "id",
           type: {
-            array: ['u8', 32],
+            array: ["u8", 32],
           },
         },
       ],
-      name: 'depositNative',
+      name: "depositNative",
     },
     {
       accounts: [
         {
           isMut: false,
           isSigner: false,
-          name: 'relayDepository',
+          name: "relayDepository",
         },
         {
           isMut: false,
           isSigner: false,
-          name: 'mint',
+          name: "mint",
         },
         {
           isMut: true,
           isSigner: true,
-          name: 'sender',
+          name: "sender",
         },
         {
           isMut: true,
           isSigner: false,
-          name: 'senderTokenAccount',
+          name: "senderTokenAccount",
         },
         {
           isMut: false,
           isSigner: false,
-          name: 'depositor',
+          name: "depositor",
         },
         {
           isMut: true,
           isSigner: false,
-          name: 'vaultTokenAccount',
+          name: "vaultTokenAccount",
         },
         {
           isMut: false,
           isSigner: false,
-          name: 'vault',
+          name: "vault",
         },
         {
           isMut: false,
           isSigner: false,
-          name: 'tokenProgram',
+          name: "tokenProgram",
         },
         {
           isMut: false,
           isSigner: false,
-          name: 'associatedTokenProgram',
+          name: "associatedTokenProgram",
         },
         {
           isMut: false,
           isSigner: false,
-          name: 'systemProgram',
+          name: "systemProgram",
         },
       ],
       args: [
         {
-          name: 'amount',
-          type: 'u64',
+          name: "amount",
+          type: "u64",
         },
         {
-          name: 'id',
+          name: "id",
           type: {
-            array: ['u8', 32],
+            array: ["u8", 32],
           },
         },
       ],
-      name: 'depositToken',
+      name: "depositToken",
     },
     {
       accounts: [
         {
           isMut: false,
           isSigner: false,
-          name: 'relayDepository',
+          name: "relayDepository",
         },
         {
           isMut: true,
           isSigner: true,
-          name: 'executor',
+          name: "executor",
         },
         {
           isMut: true,
           isSigner: false,
-          name: 'recipient',
+          name: "recipient",
         },
         {
           isMut: true,
           isSigner: false,
-          name: 'vault',
+          name: "vault",
         },
         {
           isMut: false,
           isOptional: true,
           isSigner: false,
-          name: 'mint',
+          name: "mint",
         },
         {
           isMut: true,
           isOptional: true,
           isSigner: false,
-          name: 'vaultTokenAccount',
+          name: "vaultTokenAccount",
         },
         {
           isMut: true,
           isOptional: true,
           isSigner: false,
-          name: 'recipientTokenAccount',
+          name: "recipientTokenAccount",
         },
         {
           isMut: true,
           isSigner: false,
-          name: 'usedRequest',
+          name: "usedRequest",
         },
         {
           isMut: false,
           isSigner: false,
-          name: 'tokenProgram',
+          name: "tokenProgram",
         },
         {
           isMut: false,
           isSigner: false,
-          name: 'associatedTokenProgram',
+          name: "associatedTokenProgram",
         },
         {
           isMut: false,
           isSigner: false,
-          name: 'systemProgram',
+          name: "systemProgram",
         },
         {
           isMut: false,
           isSigner: false,
-          name: 'ixSysvar',
+          name: "ixSysvar",
         },
       ],
       args: [
         {
-          name: 'request',
+          name: "request",
           type: {
-            defined: 'TransferRequest',
+            defined: "TransferRequest",
           },
         },
       ],
-      name: 'executeTransfer',
+      name: "executeTransfer",
     },
   ],
-  name: 'relay_depository',
+  name: "relay_depository",
   types: [
     {
-      name: 'TransferRequest',
+      name: "TransferRequest",
       type: {
         fields: [
           {
-            name: 'recipient',
-            type: 'publicKey',
+            name: "recipient",
+            type: "publicKey",
           },
           {
-            name: 'token',
+            name: "token",
             type: {
-              option: 'publicKey',
+              option: "publicKey",
             },
           },
           {
-            name: 'amount',
-            type: 'u64',
+            name: "amount",
+            type: "u64",
           },
           {
-            name: 'nonce',
-            type: 'u64',
+            name: "nonce",
+            type: "u64",
           },
           {
-            name: 'expiration',
-            type: 'i64',
+            name: "expiration",
+            type: "i64",
           },
         ],
-        kind: 'struct',
+        kind: "struct",
       },
     },
   ],
-  version: '0.1.0',
+  version: "0.1.0",
 }
 
 export const hashRequest = (request: any) => {
   const coder = new BorshCoder(IDL)
-  const message = coder.types.encode('TransferRequest', request)
+  const message = coder.types.encode("TransferRequest", request)
   const hashData = sha256.create()
   hashData.update(message)
   return {
-    bytes: '0x' + message.toString('hex'),
-    hash: '0x' + Buffer.from(hashData.array()).toString('hex'),
+    bytes: "0x" + message.toString("hex"),
+    hash: "0x" + Buffer.from(hashData.array()).toString("hex"),
   }
 }
 
 export const decodeDepositoryRequest = (payload: string) => {
-  if (payload.startsWith('0x')) {
+  if (payload.startsWith("0x")) {
     payload = payload.substring(2)
   }
-  const encoded = Buffer.from(payload, 'hex')
+  const encoded = Buffer.from(payload, "hex")
   const coder = new BorshCoder(IDL)
-  const message = coder.types.decode('TransferRequest', encoded)
+  const message = coder.types.decode("TransferRequest", encoded)
   return message
 }
 
@@ -840,12 +840,12 @@ export const base58ToBytes32 = (b58: string): string => {
   const padded = Buffer.alloc(32, 0)
   // Copy the decoded bytes into the padded buffer
   padded.set(decoded, padded.length - decoded.length)
-  return '0x' + padded.toString('hex')
+  return "0x" + padded.toString("hex")
 }
 
 export const bytes32ToBase58 = (hex: string): string => {
-  const cleanHex = hex.startsWith('0x') ? hex.slice(2) : hex
-  const buffer = Buffer.from(cleanHex, 'hex')
+  const cleanHex = hex.startsWith("0x") ? hex.slice(2) : hex
+  const buffer = Buffer.from(cleanHex, "hex")
 
   // Convert to base58
   return bs58.encode(buffer)

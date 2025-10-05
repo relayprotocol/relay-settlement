@@ -1,17 +1,17 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect } from 'chai'
-import hre from 'hardhat'
-import { Address, keccak256 } from 'viem'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect } from "chai"
+import hre from "hardhat"
+import { Address, keccak256 } from "viem"
 
-describe('ERC20View Direct Events', function () {
+describe("ERC20View Direct Events", function () {
   async function deployHubWithERC20View() {
     const [admin, operatorUser, regularUser, anotherUser] =
       await hre.viem.getWalletClients()
-    const hub = await hre.viem.deployContract('Hub', [admin.account.address])
+    const hub = await hre.viem.deployContract("Hub", [admin.account.address])
     const publicClient = await hre.viem.getPublicClient()
 
     // Add operator role to operatorUser
-    const OPERATOR_ROLE = keccak256('OPERATOR_ROLE')
+    const OPERATOR_ROLE = keccak256("OPERATOR_ROLE")
     const addOperatorHash = await hub.write.grantRole(
       [OPERATOR_ROLE, operatorUser.account.address as Address],
       { account: admin.account }
@@ -33,7 +33,7 @@ describe('ERC20View Direct Events', function () {
 
     // Get ERC20View contract
     const erc20View = await hre.viem.getContractAt(
-      'ERC20View',
+      "ERC20View",
       erc20ViewAddress
     )
 
@@ -50,7 +50,7 @@ describe('ERC20View Direct Events', function () {
     }
   }
 
-  it('emits Approval event on ERC20View approve', async function () {
+  it("emits Approval event on ERC20View approve", async function () {
     const { erc20View, publicClient, regularUser, anotherUser } =
       await loadFixture(deployHubWithERC20View)
 
@@ -68,7 +68,7 @@ describe('ERC20View Direct Events', function () {
     const events = await publicClient.getContractEvents({
       abi: erc20View.abi,
       address: erc20View.address,
-      eventName: 'Approval',
+      eventName: "Approval",
       fromBlock: approveReceipt.blockNumber,
       toBlock: approveReceipt.blockNumber,
     })
@@ -84,7 +84,7 @@ describe('ERC20View Direct Events', function () {
     expect(approvalEvent.args.value).to.equal(approvalAmount)
   })
 
-  it('emits Transfer event on ERC20View transfer', async function () {
+  it("emits Transfer event on ERC20View transfer", async function () {
     const { erc20View, publicClient, regularUser, anotherUser } =
       await loadFixture(deployHubWithERC20View)
 
@@ -102,7 +102,7 @@ describe('ERC20View Direct Events', function () {
     const events = await publicClient.getContractEvents({
       abi: erc20View.abi,
       address: erc20View.address,
-      eventName: 'Transfer',
+      eventName: "Transfer",
       fromBlock: transferReceipt.blockNumber,
       toBlock: transferReceipt.blockNumber,
     })
@@ -118,7 +118,7 @@ describe('ERC20View Direct Events', function () {
     expect(transferEvent.args.value).to.equal(transferAmount)
   })
 
-  it('emits Transfer event on ERC20View transferFrom', async function () {
+  it("emits Transfer event on ERC20View transferFrom", async function () {
     const { erc20View, publicClient, regularUser, anotherUser, admin } =
       await loadFixture(deployHubWithERC20View)
 
@@ -148,7 +148,7 @@ describe('ERC20View Direct Events', function () {
     const events = await publicClient.getContractEvents({
       abi: erc20View.abi,
       address: erc20View.address,
-      eventName: 'Transfer',
+      eventName: "Transfer",
       fromBlock: transferFromReceipt.blockNumber,
       toBlock: transferFromReceipt.blockNumber,
     })

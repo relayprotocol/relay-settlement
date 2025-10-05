@@ -1,11 +1,11 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect } from 'chai'
-import { deployAllocator } from '../helpers/deployAllocator'
-import { getAddress, zeroAddress } from 'viem'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect } from "chai"
+import { deployAllocator } from "../helpers/deployAllocator"
+import { getAddress, zeroAddress } from "viem"
 
-describe('Allocator setHub', function () {
-  describe('setHub()', function () {
-    it('should revert when an attacker tries to set the hub', async function () {
+describe("Allocator setHub", function () {
+  describe("setHub()", function () {
+    it("should revert when an attacker tries to set the hub", async function () {
       const { allocator, otherAccounts } = await loadFixture(deployAllocator)
       const [attacker, hub] = otherAccounts
 
@@ -13,9 +13,9 @@ describe('Allocator setHub', function () {
         allocator.write.setHub([hub.account.address], {
           account: attacker.account,
         })
-      ).to.be.rejectedWith('OwnableUnauthorizedAccount')
+      ).to.be.rejectedWith("OwnableUnauthorizedAccount")
     })
-    it('should let the owner set the hub', async function () {
+    it("should let the owner set the hub", async function () {
       const { allocator, owner, otherAccounts, publicClient } =
         await loadFixture(deployAllocator)
       const [hub] = otherAccounts

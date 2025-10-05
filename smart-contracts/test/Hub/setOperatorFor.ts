@@ -1,13 +1,13 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect } from 'chai'
-import hre from 'hardhat'
-import { Address, keccak256 } from 'viem'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect } from "chai"
+import hre from "hardhat"
+import { Address, keccak256 } from "viem"
 
-describe('setOperatorFor', function () {
+describe("setOperatorFor", function () {
   async function deployHub() {
     const [admin, operatorUser, regularUser, operator] =
       await hre.viem.getWalletClients()
-    const hub = await hre.viem.deployContract('Hub', [admin.account.address])
+    const hub = await hre.viem.deployContract("Hub", [admin.account.address])
     const publicClient = await hre.viem.getPublicClient()
 
     return {
@@ -33,7 +33,7 @@ describe('setOperatorFor', function () {
 
     // Add operator role to operatorUser
     const addOperatorHash = await hub.write.grantRole(
-      [keccak256('OPERATOR_ROLE'), operatorUser.account.address as Address],
+      [keccak256("OPERATOR_ROLE"), operatorUser.account.address as Address],
       {
         account: admin.account,
       }
@@ -41,7 +41,7 @@ describe('setOperatorFor', function () {
     await publicClient.waitForTransactionReceipt({ hash: addOperatorHash })
   })
 
-  it('allows operator to set operator for any address', async function () {
+  it("allows operator to set operator for any address", async function () {
     // Set operator from operator user's perspective
     const setOperatorForHash = await hub.write.setOperatorFor(
       [
@@ -63,7 +63,7 @@ describe('setOperatorFor', function () {
     expect(isOperator).to.equal(true)
   })
 
-  it('reverts when non-oracle tries to set operator', async function () {
+  it("reverts when non-oracle tries to set operator", async function () {
     // Attempt to set operator from regular user's perspective
     await expect(
       hub.write.setOperatorFor(
@@ -76,10 +76,10 @@ describe('setOperatorFor', function () {
           account: regularUser.account,
         }
       )
-    ).to.be.rejectedWith('AccessControlUnauthorizedAccount')
+    ).to.be.rejectedWith("AccessControlUnauthorizedAccount")
   })
 
-  it('allows oracle to unset operator by passing false flag', async function () {
+  it("allows oracle to unset operator by passing false flag", async function () {
     // First set the operator
     const setOperatorForHash = await hub.write.setOperatorFor(
       [

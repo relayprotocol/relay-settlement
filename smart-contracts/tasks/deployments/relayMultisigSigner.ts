@@ -1,19 +1,19 @@
-import networks from '@relay-protocol/networks'
-import { task } from 'hardhat/config'
-import RelayMultisigSignerModule from '../../ignition/modules/RelayMultisigSignerModule'
-import { parseUnits } from 'viem'
-import { checkAndApproveWNEAR } from '../../lib/aurora'
-import { derivePublicKey } from '../../lib/near'
-import { publicKeyToAddress } from 'viem/accounts'
-import { base58 } from '@scure/base'
+import networks from "@relay-protocol/networks"
+import { task } from "hardhat/config"
+import RelayMultisigSignerModule from "../../ignition/modules/RelayMultisigSignerModule"
+import { parseUnits } from "viem"
+import { checkAndApproveWNEAR } from "../../lib/aurora"
+import { derivePublicKey } from "../../lib/near"
+import { publicKeyToAddress } from "viem/accounts"
+import { base58 } from "@scure/base"
 
-task('deploy:relay-multisigs-signer', 'Deploy the RelayMultisigSigner contract')
-  .addOptionalParam('signer', 'The address of the signer')
-  .addOptionalParam('multisig', 'The address of the multisig wallet')
-  .addOptionalParam('wnear', 'The address of the wNEAR token')
+task("deploy:relay-multisigs-signer", "Deploy the RelayMultisigSigner contract")
+  .addOptionalParam("signer", "The address of the signer")
+  .addOptionalParam("multisig", "The address of the multisig wallet")
+  .addOptionalParam("wnear", "The address of the wNEAR token")
   .setAction(async ({ signer, wnear: wNEARAddress, multisig }, hre) => {
     const { ignition, network, viem, run } = hre
-    await run('compile')
+    await run("compile")
 
     const { chainId } = network.config as { chainId: bigint }
     const [owner] = await viem.getWalletClients()
@@ -28,7 +28,7 @@ task('deploy:relay-multisigs-signer', 'Deploy the RelayMultisigSigner contract')
       }
     }
     if (!signer) {
-      signer = networkConfig.isTestnet ? 'v1.signer-prod.testnet' : 'v1.signer'
+      signer = networkConfig.isTestnet ? "v1.signer-prod.testnet" : "v1.signer"
     }
     if (!multisig) {
       multisig = owner.account.address
@@ -52,12 +52,12 @@ task('deploy:relay-multisigs-signer', 'Deploy the RelayMultisigSigner contract')
     )
 
     await run(
-      { scope: 'ignition', task: 'verify' },
+      { scope: "ignition", task: "verify" },
       { deploymentId: `chain-${chainId}` }
     )
 
     // Approve 2 wNEAR for the allocator if necessary
-    const allowance = parseUnits('2', 24)
+    const allowance = parseUnits("2", 24)
     await checkAndApproveWNEAR(
       hre,
       owner.account.address,
@@ -66,7 +66,7 @@ task('deploy:relay-multisigs-signer', 'Deploy the RelayMultisigSigner contract')
     )
 
     // check wNEAR balance
-    const wNEAR = await viem.getContractAt('MyToken', wNEARAddress)
+    const wNEAR = await viem.getContractAt("MyToken", wNEARAddress)
     const balance = await wNEAR.read.balanceOf([owner.account.address])
     console.log(`Current wNEAR balance: ${balance} wei`)
 
@@ -74,10 +74,10 @@ task('deploy:relay-multisigs-signer', 'Deploy the RelayMultisigSigner contract')
       throw Error(`Insufficient balance ${balance}`)
     }
 
-    console.log('ready to initialize!')
+    console.log("ready to initialize!")
     await relayMultisigSigner.write.init()
 
-    console.log('Relay multisig signer initialized successfully')
+    console.log("Relay multisig signer initialized successfully")
 
     // Lets get the signature
     const derivationPath = relayMultisigSigner.address.toLowerCase()
@@ -93,7 +93,7 @@ task('deploy:relay-multisigs-signer', 'Deploy the RelayMultisigSigner contract')
     )
 
     // NajPublicKey to UncompressedPubKeySEC1
-    const allocatorPublicKey = `0x04${Buffer.from(base58.decode(allocatorPublicKeyRaw)).toString('hex')}`
+    const allocatorPublicKey = `0x04${Buffer.from(base58.decode(allocatorPublicKeyRaw)).toString("hex")}`
 
     // UncompressedPubKeySEC1 to Address
     const signerAddress = publicKeyToAddress(

@@ -1,9 +1,9 @@
-import { expect } from 'chai'
-import hre from 'hardhat'
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import HubModule from '../../ignition/modules/Hub'
+import { expect } from "chai"
+import hre from "hardhat"
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import HubModule from "../../ignition/modules/Hub"
 
-describe('Hub Deployment', function () {
+describe("Hub Deployment", function () {
   async function deployHub() {
     const [admin] = await hre.viem.getWalletClients()
     const publicClient = await hre.viem.getPublicClient()
@@ -23,7 +23,7 @@ describe('Hub Deployment', function () {
     }
   }
 
-  it('should deploy Hub contract with correct operator admin', async function () {
+  it("should deploy Hub contract with correct operator admin", async function () {
     const { admin, hub } = await loadFixture(deployHub)
 
     // Get the ADMIN_ROLE

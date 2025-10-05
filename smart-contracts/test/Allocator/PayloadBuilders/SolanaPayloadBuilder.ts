@@ -1,21 +1,21 @@
-import { BN } from '@coral-xyz/anchor'
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { PublicKey } from '@solana/web3.js'
-import { expect } from 'chai'
-import hre from 'hardhat'
+import { BN } from "@coral-xyz/anchor"
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { PublicKey } from "@solana/web3.js"
+import { expect } from "chai"
+import hre from "hardhat"
 
-import { encodeAbiParameters } from 'viem'
+import { encodeAbiParameters } from "viem"
 import {
   base58ToBytes32,
   decodeDepositoryRequest,
   hashRequest,
-} from '../../../lib/solana'
+} from "../../../lib/solana"
 
-describe('Allocator SolanaPayloadBuilder', function () {
+describe("Allocator SolanaPayloadBuilder", function () {
   async function deployAllocator() {
     const [depository, receiver] = await hre.viem.getWalletClients()
     const publicClient = await hre.viem.getPublicClient()
-    const payloadBuilder = await hre.viem.deployContract('SolanaPayloadBuilder')
+    const payloadBuilder = await hre.viem.deployContract("SolanaPayloadBuilder")
 
     return {
       depository,
@@ -25,15 +25,15 @@ describe('Allocator SolanaPayloadBuilder', function () {
     }
   }
 
-  describe('buildPayload()', function () {
-    it('should build a payload when using SOL (native currency)', async () => {
+  describe("buildPayload()", function () {
+    it("should build a payload when using SOL (native currency)", async () => {
       const { payloadBuilder, depository } = await loadFixture(deployAllocator)
       const transferRequest = {
         amount: new BN(100000000),
         expiration: new BN(1749096009),
         nonce: new BN(1749095710252),
         recipient: new PublicKey(
-          '38WpM5VeBuUM1GLTF8aWAYs4p4JDVPjrFxh1YRxzFpLH'
+          "38WpM5VeBuUM1GLTF8aWAYs4p4JDVPjrFxh1YRxzFpLH"
         ),
         token: null,
       }
@@ -42,7 +42,7 @@ describe('Allocator SolanaPayloadBuilder', function () {
 
       // Test data from the new example
       const amount = 100000000n
-      const receiverBase58 = '38WpM5VeBuUM1GLTF8aWAYs4p4JDVPjrFxh1YRxzFpLH'
+      const receiverBase58 = "38WpM5VeBuUM1GLTF8aWAYs4p4JDVPjrFxh1YRxzFpLH"
       // Convert base58 to bytes32
       const receiverHex = base58ToBytes32(receiverBase58)
 
@@ -50,14 +50,14 @@ describe('Allocator SolanaPayloadBuilder', function () {
       const nonce = 1749095710252n // From test data
       const expiration = 1749096009n // From test data
       const data = encodeAbiParameters(
-        [{ type: 'uint64' }, { type: 'int64' }],
+        [{ type: "uint64" }, { type: "int64" }],
         [nonce, expiration]
       )
 
       const payload = await payloadBuilder.read.buildPayload([
         1n, // chainId (unused)
         depository.account.address, // depository (unused)
-        '', // currency (empty string for SOL)
+        "", // currency (empty string for SOL)
         amount,
         receiverHex,
         data,
@@ -66,22 +66,22 @@ describe('Allocator SolanaPayloadBuilder', function () {
       expect(payload).to.equal(bytes)
     })
 
-    it('should build a payload when using an SPL token', async () => {
+    it("should build a payload when using an SPL token", async () => {
       const { payloadBuilder, depository } = await loadFixture(deployAllocator)
       const transferRequest = {
         amount: new BN(100000000),
         expiration: new BN(1749096049),
         nonce: new BN(1749095749158),
         recipient: new PublicKey(
-          'FDx39MbXSupLUaxmN3SQ9x3G6mtTjemZVcWgz7jkcvTD'
+          "FDx39MbXSupLUaxmN3SQ9x3G6mtTjemZVcWgz7jkcvTD"
         ),
-        token: new PublicKey('5nUXHYLUrYv9PmeN4RKZ1iwUFBGWmoqMTajEiKNsXRdE'),
+        token: new PublicKey("5nUXHYLUrYv9PmeN4RKZ1iwUFBGWmoqMTajEiKNsXRdE"),
       }
 
       const { bytes } = hashRequest(transferRequest)
       const amount = 100000000n
-      const receiverBase58 = 'FDx39MbXSupLUaxmN3SQ9x3G6mtTjemZVcWgz7jkcvTD'
-      const tokenBase58 = '5nUXHYLUrYv9PmeN4RKZ1iwUFBGWmoqMTajEiKNsXRdE'
+      const receiverBase58 = "FDx39MbXSupLUaxmN3SQ9x3G6mtTjemZVcWgz7jkcvTD"
+      const tokenBase58 = "5nUXHYLUrYv9PmeN4RKZ1iwUFBGWmoqMTajEiKNsXRdE"
 
       const receiverHex = base58ToBytes32(receiverBase58)
       const tokenHex = base58ToBytes32(tokenBase58)
@@ -90,7 +90,7 @@ describe('Allocator SolanaPayloadBuilder', function () {
       const nonce = 1749095749158n
       const expiration = 1749096049n
       const data = encodeAbiParameters(
-        [{ type: 'uint64' }, { type: 'int64' }],
+        [{ type: "uint64" }, { type: "int64" }],
         [nonce, expiration]
       )
 
@@ -103,20 +103,20 @@ describe('Allocator SolanaPayloadBuilder', function () {
         data,
       ])
 
-      expect(payload).to.be.a('string')
-      expect(payload.startsWith('0x')).to.equal(true)
+      expect(payload).to.be.a("string")
+      expect(payload.startsWith("0x")).to.equal(true)
       expect(payload.length).to.be.greaterThan(2)
       expect(payload).to.equal(bytes)
     })
   })
 
-  describe('hashToSign()', function () {
-    it('should hash a payload correctly using SHA-256', async () => {
+  describe("hashToSign()", function () {
+    it("should hash a payload correctly using SHA-256", async () => {
       const { payloadBuilder, depository } = await loadFixture(deployAllocator)
 
       // Use the new test data payload
       const payload =
-        '0x1fa427265aebc381e466efb16f55b95fc3d44af745a3c52f6c599d3a7ec6b19a0000e1f505000000002c7e3a3e970100004916416800000000'
+        "0x1fa427265aebc381e466efb16f55b95fc3d44af745a3c52f6c599d3a7ec6b19a0000e1f505000000002c7e3a3e970100004916416800000000"
 
       const hash = await payloadBuilder.read.hashToSign([
         1n, // chainId (unused)
@@ -127,22 +127,22 @@ describe('Allocator SolanaPayloadBuilder', function () {
 
       // Expected hash from new test data
       const expectedHash =
-        '0x853751cf9b1d747bbcf62a293a707cc322e95c606908bb857bdddb318f7ab292'
+        "0x853751cf9b1d747bbcf62a293a707cc322e95c606908bb857bdddb318f7ab292"
       expect(hash).to.equal(expectedHash)
     })
   })
 
-  describe('decodeDepositoryRequest', function () {
+  describe("decodeDepositoryRequest", function () {
     const amount = 1n
     const expiration = 1749096009n
     const nonce = 1749095710252n
-    const recipient = 'ETZgVwqLnzZFQfK2YB1rDLratt4cCGwNHcV8jJokrxmm'
+    const recipient = "ETZgVwqLnzZFQfK2YB1rDLratt4cCGwNHcV8jJokrxmm"
 
     async function deployAllocator() {
       const [depository, receiver] = await hre.viem.getWalletClients()
       const publicClient = await hre.viem.getPublicClient()
       const payloadBuilder = await hre.viem.deployContract(
-        'SolanaPayloadBuilder'
+        "SolanaPayloadBuilder"
       )
 
       return {
@@ -153,7 +153,7 @@ describe('Allocator SolanaPayloadBuilder', function () {
       }
     }
 
-    it('should correctly decode a native SOL transfer request', async () => {
+    it("should correctly decode a native SOL transfer request", async () => {
       const { payloadBuilder, depository } = await loadFixture(deployAllocator)
 
       // Create a test transfer request
@@ -169,11 +169,11 @@ describe('Allocator SolanaPayloadBuilder', function () {
       const payload = await payloadBuilder.read.buildPayload([
         1n, // chainId (unused)
         depository.account.address, // depository (unused)
-        '', // currency (empty string for SOL)
+        "", // currency (empty string for SOL)
         amount, // amount
         base58ToBytes32(recipient), // receiver
         encodeAbiParameters(
-          [{ type: 'uint64' }, { type: 'int64' }],
+          [{ type: "uint64" }, { type: "int64" }],
           [nonce, expiration]
         ), // data (nonce and expiration)
       ])
@@ -197,10 +197,10 @@ describe('Allocator SolanaPayloadBuilder', function () {
       )
     })
 
-    it('should correctly decode an SPL token transfer request', async () => {
+    it("should correctly decode an SPL token transfer request", async () => {
       const { payloadBuilder, depository } = await loadFixture(deployAllocator)
 
-      const token = '5nUXHYLUrYv9PmeN4RKZ1iwUFBGWmoqMTajEiKNsXRdE'
+      const token = "5nUXHYLUrYv9PmeN4RKZ1iwUFBGWmoqMTajEiKNsXRdE"
       // Create a test transfer request with an SPL token
       const transferRequest = {
         amount: new BN(amount.toString()),
@@ -218,7 +218,7 @@ describe('Allocator SolanaPayloadBuilder', function () {
         amount, // amount
         base58ToBytes32(recipient), // receiver
         encodeAbiParameters(
-          [{ type: 'uint64' }, { type: 'int64' }],
+          [{ type: "uint64" }, { type: "int64" }],
           [nonce, expiration]
         ), // data (nonce and expiration)
       ])
@@ -243,9 +243,9 @@ describe('Allocator SolanaPayloadBuilder', function () {
     })
   })
 
-  describe('hexStringToBytes32()', function () {
-    it('should parse correctly string into corresponding bytes32', async () => {
-      const recipient = 'ETZgVwqLnzZFQfK2YB1rDLratt4cCGwNHcV8jJokrxmm'
+  describe("hexStringToBytes32()", function () {
+    it("should parse correctly string into corresponding bytes32", async () => {
+      const recipient = "ETZgVwqLnzZFQfK2YB1rDLratt4cCGwNHcV8jJokrxmm"
       const { payloadBuilder } = await loadFixture(deployAllocator)
       // make sure bytes32 helper in sol contract is consistent
       const encoded = base58ToBytes32(recipient)

@@ -1,4 +1,4 @@
-import { readFileSync } from 'fs'
+import { readFileSync } from "fs"
 import {
   checksumAddress,
   createPublicClient,
@@ -8,13 +8,13 @@ import {
   keccak256,
   parseEther,
   serializeTransaction,
-} from 'viem'
-import { z } from 'zod'
-import { RelayMultisigSigner$Type } from '../../artifacts/contracts/RelayMultisigSigner.sol/RelayMultisigSigner'
+} from "viem"
+import { z } from "zod"
+import { RelayMultisigSigner$Type } from "../../artifacts/contracts/RelayMultisigSigner.sol/RelayMultisigSigner"
 
 const ethereumAddress = z
   .string()
-  .regex(/^0x[a-fA-F0-9]{40}$/, 'Must be a valid hex Ethereum address')
+  .regex(/^0x[a-fA-F0-9]{40}$/, "Must be a valid hex Ethereum address")
   .superRefine((val, ctx) => {
     try {
       // getAddress throws if checksum is invalid
@@ -22,27 +22,27 @@ const ethereumAddress = z
     } catch {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Invalid Ethereum checksum address',
+        message: "Invalid Ethereum checksum address",
       })
     }
   })
 
 const hex0x = z
   .string()
-  .regex(/^0x[0-9a-fA-F]*$/, 'Must be a 0x-prefixed hex string')
+  .regex(/^0x[0-9a-fA-F]*$/, "Must be a 0x-prefixed hex string")
 
 const integerString = z
   .string()
-  .regex(/^[0-9]+$/, 'Must be a non-negative integer string')
+  .regex(/^[0-9]+$/, "Must be a non-negative integer string")
 
 const decimalString = z
   .string()
-  .regex(/^[0-9]+(\.[0-9]+)?$/, 'Must be a decimal number string')
+  .regex(/^[0-9]+(\.[0-9]+)?$/, "Must be a decimal number string")
 
 const EthereumTxSchema = z.object({
   amount: decimalString,
   calldata: hex0x,
-  family: z.literal('ethereum-vm'),
+  family: z.literal("ethereum-vm"),
   from: ethereumAddress,
   gas: integerString,
   maxFeePerGas: integerString,
@@ -54,11 +54,11 @@ const EthereumTxSchema = z.object({
 
 const EmptyTxSchema = z
   .object({
-    family: z.enum(['bitcoin-vm', 'solana-vm']),
+    family: z.enum(["bitcoin-vm", "solana-vm"]),
   })
   .strict() // disallow any other fields
 
-export const TransactionSchema = z.discriminatedUnion('family', [
+export const TransactionSchema = z.discriminatedUnion("family", [
   EthereumTxSchema,
   EmptyTxSchema,
 ])
@@ -98,7 +98,7 @@ export const buildEvmTransaction = async (
     gas: BigInt(tx.gas),
     nonce: tx.nonce,
     to: tx.to,
-    type: 'eip1559',
+    type: "eip1559",
     value: parseEther(tx.amount),
   }
 
@@ -109,7 +109,7 @@ export const buildEvmTransaction = async (
       ...raw,
     })
   } catch (error: any) {
-    console.error('❌ Ethereum transaction failed:', tx, error.message)
+    console.error("❌ Ethereum transaction failed:", tx, error.message)
     return null
   }
 
@@ -125,7 +125,7 @@ export const buildEvmTransaction = async (
 }
 
 export function loadTransactions(path: string) {
-  const raw = readFileSync(path, 'utf8')
+  const raw = readFileSync(path, "utf8")
   const data: unknown = JSON.parse(raw)
 
   // Force validation
@@ -144,14 +144,14 @@ export const createTransactionBundle = async (
     console.log(`🏗️  Building transaction #${i}`)
     const tx = transactions[i]
     let rawUnsigned
-    let curve: 'Ecdsa' | 'Eddsa'
-    if (tx.family === 'ethereum-vm') {
+    let curve: "Ecdsa" | "Eddsa"
+    if (tx.family === "ethereum-vm") {
       const transaction = await buildEvmTransaction(tx)
       if (!transaction) {
-        throw new Error('Failed to build EVM transaction')
+        throw new Error("Failed to build EVM transaction")
       }
       rawUnsigned = serializeTransaction(transaction) // EVM
-      curve = 'Ecdsa'
+      curve = "Ecdsa"
     } else {
       throw new Error(
         `Unsupported transaction family: ${tx.family}. Please add support!`
@@ -170,7 +170,7 @@ export const createTransactionBundle = async (
 
 const encodeSignatureCall = (
   rawUnsigned: `0x${string}`,
-  curve: 'Ecdsa' | 'Eddsa',
+  curve: "Ecdsa" | "Eddsa",
   relayMultisigSigner: RelayMultisigSigner$Type
 ) => {
   const hashToSign = keccak256(rawUnsigned)
@@ -178,12 +178,12 @@ const encodeSignatureCall = (
   const data = encodeFunctionData({
     abi: relayMultisigSigner.abi,
     args: [hashToSign, curve],
-    functionName: 'approveSignature',
+    functionName: "approveSignature",
   })
 
   return {
     data,
     to: checksumAddress(relayMultisigSigner.address),
-    value: '0',
+    value: "0",
   }
 }

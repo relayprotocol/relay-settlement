@@ -1,2 +1,2 @@
-export * from './types/networks'
-export * from './types/utils'
+export * from "./types/networks"
+export * from "./types/utils"

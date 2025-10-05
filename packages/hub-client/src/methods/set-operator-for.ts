@@ -1,7 +1,7 @@
-import { Hub } from '@relay-protocol/abis'
-import { generateAddress } from '@relay-protocol/hub-utils'
-import { ethers } from 'ethers'
-import { SetOperatorForParams, SubmitTxParams } from '../client'
+import { Hub } from "@relay-protocol/abis"
+import { generateAddress } from "@relay-protocol/hub-utils"
+import { ethers } from "ethers"
+import { SetOperatorForParams, SubmitTxParams } from "../client"
 
 export const setOperatorFor = async (
   params: SetOperatorForParams
@@ -20,7 +20,7 @@ export const setOperatorFor = async (
   })
 
   const hubIface = new ethers.Interface(Hub)
-  const data = hubIface.encodeFunctionData('setOperatorFor', [
+  const data = hubIface.encodeFunctionData("setOperatorFor", [
     owner,
     operator,
     params.approved,

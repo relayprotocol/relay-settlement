@@ -1,39 +1,39 @@
-import * as bitcoin from 'bitcoinjs-lib'
+import * as bitcoin from "bitcoinjs-lib"
 
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect } from 'chai'
-import hre from 'hardhat'
-import { decodeAbiParameters, encodeAbiParameters, zeroAddress } from 'viem'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect } from "chai"
+import hre from "hardhat"
+import { decodeAbiParameters, encodeAbiParameters, zeroAddress } from "viem"
 import {
   BITCOIN_TRANSACTION_ABI,
   txidToBytes32,
   BITCOIN_TRANSACTION_PARAMS_ABI,
   decodeUint64LE,
-} from '../../../lib/bitcoin'
+} from "../../../lib/bitcoin"
 
 // https://blockstream.info/api/address/1Cw8ACW5MK1kRbeCKdp5wTAAG4t3c7pUfA/utxo
 const utxos = [
   {
     status: {
       block_hash:
-        '0000000000000000000119286b2465c278323eba0fd50a4fcc35266ecd0d4ad0',
+        "0000000000000000000119286b2465c278323eba0fd50a4fcc35266ecd0d4ad0",
       block_height: 897275,
       block_time: 1747583102,
       confirmed: true,
     },
-    txid: 'ec37cafc98e406a048e2b2592a23be7eb2c0f1e0754b0710bb2ea4efb3a9371d',
+    txid: "ec37cafc98e406a048e2b2592a23be7eb2c0f1e0754b0710bb2ea4efb3a9371d",
     value: 33638,
     vout: 0,
   },
   {
     status: {
       block_hash:
-        '00000000000000000000fb9cc316eccb18fc65e171a436ded408477283b9c1dc',
+        "00000000000000000000fb9cc316eccb18fc65e171a436ded408477283b9c1dc",
       block_height: 898648,
       block_time: 1748380664,
       confirmed: true,
     },
-    txid: '529a486bd7c230b4ab3ef70f48a577a2057aa4dc06414da75d7c7861d6730bcb',
+    txid: "529a486bd7c230b4ab3ef70f48a577a2057aa4dc06414da75d7c7861d6730bcb",
     value: 79687,
     vout: 0,
   },
@@ -41,26 +41,26 @@ const utxos = [
 
 // get scriptpubkey
 // https://blockstream.info/api/tx/ec37cafc98e406a048e2b2592a23be7eb2c0f1e0754b0710bb2ea4efb3a9371d
-const scriptPubKey = '0x76a914632a250a7f721ae8583ad911950eeeb82c00e54788ac'
+const scriptPubKey = "0x76a914632a250a7f721ae8583ad911950eeeb82c00e54788ac"
 
-describe('Allocator BitcoinPayloadBuilder', function () {
+describe("Allocator BitcoinPayloadBuilder", function () {
   async function deployPayloadBuilder() {
     const [depository] = await hre.viem.getWalletClients()
 
     const publicClient = await hre.viem.getPublicClient()
 
-    const bitcoinAllocatorAddress = '1BoatSLRHtKNngkdXEeobR76b53LETtpyT' // example
+    const bitcoinAllocatorAddress = "1BoatSLRHtKNngkdXEeobR76b53LETtpyT" // example
     const changeScript = bitcoin.address.toOutputScript(
       bitcoinAllocatorAddress,
       bitcoin.networks.bitcoin
     )
 
     const payloadBuilder = await hre.viem.deployContract(
-      'BitcoinPayloadBuilder',
-      [changeScript.toString('base64')]
+      "BitcoinPayloadBuilder",
+      [changeScript.toString("base64")]
     )
 
-    const bitcoinRecipientAddress = '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa' // example
+    const bitcoinRecipientAddress = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa" // example
     const receiverScript = bitcoin.address.toOutputScript(
       bitcoinRecipientAddress,
       bitcoin.networks.bitcoin
@@ -72,12 +72,12 @@ describe('Allocator BitcoinPayloadBuilder', function () {
       depository,
       payloadBuilder,
       publicClient,
-      receiverScript: receiverScript.toString('base64'),
+      receiverScript: receiverScript.toString("base64"),
     }
   }
 
-  describe('buildPayload()', function () {
-    it('should fail if no utxos are submitted', async () => {
+  describe("buildPayload()", function () {
+    it("should fail if no utxos are submitted", async () => {
       const { payloadBuilder, receiverScript } =
         await loadFixture(deployPayloadBuilder)
 
@@ -102,7 +102,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
       ).to.be.rejectedWith(`InsufficientUTXOValue(0, ${amount})`)
     })
 
-    it('should fail if the utxos total value is insufficient', async () => {
+    it("should fail if the utxos total value is insufficient", async () => {
       const { payloadBuilder, receiverScript } =
         await loadFixture(deployPayloadBuilder)
 
@@ -141,7 +141,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
       )
     })
 
-    it('should build a payload without change if the amount is sufficient', async () => {
+    it("should build a payload without change if the amount is sufficient", async () => {
       const { payloadBuilder, receiverScript } =
         await loadFixture(deployPayloadBuilder)
 
@@ -153,7 +153,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
       const payload = await payloadBuilder.read.buildPayload([
         1n, // chainId
         zeroAddress, // depository
-        '', // currency
+        "", // currency
         utxosTotalValue, // amount
         receiverScript, // receiver
         encodeAbiParameters(
@@ -184,7 +184,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
       )
     })
 
-    it('should build a payload with change if the amount is less than the total value of utxos', async () => {
+    it("should build a payload with change if the amount is less than the total value of utxos", async () => {
       const { payloadBuilder, receiverScript } =
         await loadFixture(deployPayloadBuilder)
 
@@ -196,7 +196,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
       const payload = await payloadBuilder.read.buildPayload([
         1n, // chainId
         zeroAddress, // depository
-        '', // currency
+        "", // currency
         (utxosTotalValue * 2n) / 3n, // amount
         receiverScript, // receiver
         encodeAbiParameters(
@@ -223,7 +223,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
       expect(transaction.outputs.length).to.equal(2) // There should be change!
     })
 
-    it('should take fees into account when building the payload', async () => {
+    it("should take fees into account when building the payload", async () => {
       const { payloadBuilder, receiverScript } =
         await loadFixture(deployPayloadBuilder)
 
@@ -235,7 +235,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
       const payload = await payloadBuilder.read.buildPayload([
         1n, // chainId
         zeroAddress, // depository
-        '', // currency
+        "", // currency
         utxosTotalValue, // amount
         receiverScript, // receiver
         encodeAbiParameters(
@@ -266,7 +266,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
       )
     })
 
-    it('should fail if the fees are not sufficient', async () => {
+    it("should fail if the fees are not sufficient", async () => {
       const { payloadBuilder, receiverScript } =
         await loadFixture(deployPayloadBuilder)
 
@@ -281,7 +281,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
         payloadBuilder.read.buildPayload([
           1n, // chainId
           zeroAddress, // depository
-          '', // currency
+          "", // currency
           utxosTotalValue, // amount
           receiverScript, // receiver
           encodeAbiParameters(
@@ -303,8 +303,8 @@ describe('Allocator BitcoinPayloadBuilder', function () {
     })
   })
 
-  describe('hashToSign()', function () {
-    it('should return the correct hashes to sign', async () => {
+  describe("hashToSign()", function () {
+    it("should return the correct hashes to sign", async () => {
       const {
         payloadBuilder,
         receiverScript,
@@ -316,7 +316,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
       const payload = await payloadBuilder.read.buildPayload([
         1n,
         zeroAddress,
-        '',
+        "",
         amount,
         receiverScript,
         encodeAbiParameters(
@@ -342,7 +342,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
       // Add inputs in the same order as the contract
       utxos.forEach((utxo) => {
         tx.addInput(
-          Buffer.from(utxo.txid, 'hex').reverse(), // reverse for little-endian
+          Buffer.from(utxo.txid, "hex").reverse(), // reverse for little-endian
           utxo.vout,
           0xffffffff // sequence
         )
@@ -371,7 +371,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
       for (let i = 0; i < utxos.length; i++) {
         const sighash = tx.hashForSignature(
           i,
-          Buffer.from(scriptPubKey.slice(2), 'hex'),
+          Buffer.from(scriptPubKey.slice(2), "hex"),
           bitcoin.Transaction.SIGHASH_ALL
         )
         const contractHash = await payloadBuilder.read.hashToSign([
@@ -382,7 +382,7 @@ describe('Allocator BitcoinPayloadBuilder', function () {
         ])
 
         expect(contractHash.toLowerCase()).to.equal(
-          '0x' + sighash.toString('hex').toLowerCase()
+          "0x" + sighash.toString("hex").toLowerCase()
         )
       }
     })

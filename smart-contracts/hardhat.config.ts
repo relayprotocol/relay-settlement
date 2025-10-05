@@ -1,54 +1,54 @@
-import '@nomicfoundation/hardhat-ignition'
-import '@nomicfoundation/hardhat-toolbox-viem'
-import '@nomiclabs/hardhat-solhint'
-import { networks as nets } from '@relay-protocol/networks'
-import 'hardhat-gas-reporter'
-import type { HardhatUserConfig } from 'hardhat/config'
-import 'solidity-coverage'
+import "@nomicfoundation/hardhat-ignition"
+import "@nomicfoundation/hardhat-toolbox-viem"
+import "@nomiclabs/hardhat-solhint"
+import { networks as nets } from "@relay-protocol/networks"
+import "hardhat-gas-reporter"
+import type { HardhatUserConfig } from "hardhat/config"
+import "solidity-coverage"
 
-import { parseEther } from 'viem'
+import { parseEther } from "viem"
 
 // allocator actions
-import './tasks/allocator/addWithdrawer'
-import './tasks/allocator/init'
-import './tasks/allocator/setPayloadBuilder'
-import './tasks/allocator/signPayload'
-import './tasks/allocator/submitWithdrawRequest'
-import './tasks/allocator/withdrawToNear'
-import './tasks/depository/withdraw'
+import "./tasks/allocator/addWithdrawer"
+import "./tasks/allocator/init"
+import "./tasks/allocator/setPayloadBuilder"
+import "./tasks/allocator/signPayload"
+import "./tasks/allocator/submitWithdrawRequest"
+import "./tasks/allocator/withdrawToNear"
+import "./tasks/depository/withdraw"
 
 // allocator test suite
-import './tasks/allocator/full/bitcoin'
-import './tasks/allocator/full/evm'
-import './tasks/allocator/full/solana'
-import './tasks/allocator/full/sui'
+import "./tasks/allocator/full/bitcoin"
+import "./tasks/allocator/full/evm"
+import "./tasks/allocator/full/solana"
+import "./tasks/allocator/full/sui"
 
 // deployments
-import './tasks/deployments/allocator'
-import './tasks/deployments/hub'
-import './tasks/deployments/oracle'
-import './tasks/deployments/relayMultisigSigner'
+import "./tasks/deployments/allocator"
+import "./tasks/deployments/hub"
+import "./tasks/deployments/oracle"
+import "./tasks/deployments/relayMultisigSigner"
 
 // helpers
-import './tasks/allocator/getSignerAddress'
-import './tasks/computeSignatures'
-import './tasks/exportAbis'
+import "./tasks/allocator/getSignerAddress"
+import "./tasks/computeSignatures"
+import "./tasks/exportAbis"
 
 // Relay Multisig signer
-import './tasks/relayMultisigSigner/check-hashes'
-import './tasks/relayMultisigSigner/execute-transactions'
-import './tasks/relayMultisigSigner/simulate'
-import './tasks/relayMultisigSigner/submit'
+import "./tasks/relayMultisigSigner/check-hashes"
+import "./tasks/relayMultisigSigner/execute-transactions"
+import "./tasks/relayMultisigSigner/simulate"
+import "./tasks/relayMultisigSigner/submit"
 
 // get pk from shell
 const { DEPLOYER_PRIVATE_KEY } = process.env
 if (!DEPLOYER_PRIVATE_KEY) {
   console.error(
-    '⚠️ Missing DEPLOYER_PRIVATE_KEY environment variable. Please set one. In the meantime, we will use default settings'
+    "⚠️ Missing DEPLOYER_PRIVATE_KEY environment variable. Please set one. In the meantime, we will use default settings"
   )
 } else {
   console.error(
-    '⚠️ Using account from DEPLOYER_PRIVATE_KEY environment variable.'
+    "⚠️ Using account from DEPLOYER_PRIVATE_KEY environment variable."
   )
 }
 
@@ -60,11 +60,11 @@ if (DEPLOYER_PRIVATE_KEY) {
 
 // parse networks from file
 const networks = {
-  'arbitrum-sepolia': {
+  "arbitrum-sepolia": {
     accounts,
     chainId: 421614,
-    name: 'Arbitrum Sepolia',
-    url: 'https://sepolia-rollup.arbitrum.io/rpc',
+    name: "Arbitrum Sepolia",
+    url: "https://sepolia-rollup.arbitrum.io/rpc",
   },
   hardhat: {
     allowUnlimitedContractSize: true,
@@ -72,7 +72,7 @@ const networks = {
 }
 
 const etherscan = {
-  apiKey: 'C1KDFD2PHN7FXXXT1AW5PG27I5JB23J41D',
+  apiKey: "C1KDFD2PHN7FXXXT1AW5PG27I5JB23J41D",
 }
 
 Object.keys(nets).forEach((id) => {
@@ -98,7 +98,7 @@ if (forkUrl) {
   if (DEPLOYER_PRIVATE_KEY) {
     accounts = [
       {
-        balance: parseEther('10000').toString(),
+        balance: parseEther("10000").toString(),
         privateKey: DEPLOYER_PRIVATE_KEY,
       },
     ]
@@ -124,7 +124,7 @@ const config: HardhatUserConfig = {
         runs: 200,
       },
     },
-    version: '0.8.28',
+    version: "0.8.28",
   },
   sourcify: {
     enabled: true,

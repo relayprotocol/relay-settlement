@@ -22,6 +22,7 @@
       {
         "ignoreConstructors": true
       }
-    ]
+    ],
+    "quotes": ["error", "double"]
   }
 }

@@ -1,10 +1,10 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect } from 'chai'
-import { DEFAULT_DELAY, deployAllocator } from '../helpers/deployAllocator'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect } from "chai"
+import { DEFAULT_DELAY, deployAllocator } from "../helpers/deployAllocator"
 
-describe('Allocator setDelay', function () {
-  describe('setDelay()', function () {
-    it('should revert when an attacker tries to set the delay', async function () {
+describe("Allocator setDelay", function () {
+  describe("setDelay()", function () {
+    it("should revert when an attacker tries to set the delay", async function () {
       const { allocator, otherAccounts } = await loadFixture(deployAllocator)
       const attacker = otherAccounts[0]
 
@@ -12,9 +12,9 @@ describe('Allocator setDelay', function () {
         allocator.write.setDelay([1000n], {
           account: attacker.account,
         })
-      ).to.be.rejectedWith('OwnableUnauthorizedAccount')
+      ).to.be.rejectedWith("OwnableUnauthorizedAccount")
     })
-    it('should let the owner set the delay', async function () {
+    it("should let the owner set the delay", async function () {
       const { allocator, owner, publicClient } =
         await loadFixture(deployAllocator)
 
@@ -29,13 +29,13 @@ describe('Allocator setDelay', function () {
     })
   })
 
-  describe('setDepositoryDelay()', function () {
-    it('should let the admin set the depository delay', async function () {
+  describe("setDepositoryDelay()", function () {
+    it("should let the admin set the depository delay", async function () {
       const { allocator, owner, publicClient } =
         await loadFixture(deployAllocator)
 
       const chainId = 1n
-      const depository = 'depository1'
+      const depository = "depository1"
       const newDelay = 1000n
 
       // Initially, the depository delay should not be set
@@ -64,12 +64,12 @@ describe('Allocator setDelay', function () {
       expect(isSet).to.equal(true)
     })
 
-    it('should emit DepositoryDelayChanged event when setting depository delay', async function () {
+    it("should emit DepositoryDelayChanged event when setting depository delay", async function () {
       const { allocator, owner, publicClient } =
         await loadFixture(deployAllocator)
 
       const chainId = 1n
-      const depository = 'depository1'
+      const depository = "depository1"
       const newDelay = 1000n
 
       // Direct call from owner (who has ADMIN_ROLE)
@@ -95,12 +95,12 @@ describe('Allocator setDelay', function () {
       expect(events[0].args.delay).to.equal(newDelay)
     })
 
-    it('should allow updating an existing depository delay', async function () {
+    it("should allow updating an existing depository delay", async function () {
       const { allocator, owner, publicClient } =
         await loadFixture(deployAllocator)
 
       const chainId = 1n
-      const depository = 'depository1'
+      const depository = "depository1"
       const initialDelay = 1000n
       const updatedDelay = 2000n
 
@@ -139,12 +139,12 @@ describe('Allocator setDelay', function () {
       expect(updatedIsSet).to.equal(true)
     })
 
-    it('should allow setting depository delay to 0', async function () {
+    it("should allow setting depository delay to 0", async function () {
       const { allocator, owner, publicClient } =
         await loadFixture(deployAllocator)
 
       const chainId = 1n
-      const depository = 'depository1'
+      const depository = "depository1"
       const zeroDelay = 0n
 
       // Set delay to 0
@@ -167,18 +167,18 @@ describe('Allocator setDelay', function () {
       expect(isSet).to.equal(true)
     })
 
-    it('should revert when an attacker tries to set the delay', async function () {
+    it("should revert when an attacker tries to set the delay", async function () {
       const { allocator, otherAccounts } = await loadFixture(deployAllocator)
       const attacker = otherAccounts[0]
       const chainId = 1n
-      const depository = 'depository1'
+      const depository = "depository1"
       const zeroDelay = 0n
 
       await expect(
         allocator.write.setDepositoryDelay([chainId, depository, zeroDelay], {
           account: attacker.account,
         })
-      ).to.be.rejectedWith('OwnableUnauthorizedAccount')
+      ).to.be.rejectedWith("OwnableUnauthorizedAccount")
     })
   })
 })

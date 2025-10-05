@@ -1,13 +1,13 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect } from 'chai'
-import hre from 'hardhat'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect } from "chai"
+import hre from "hardhat"
 import {
   decodeAbiParameters,
   getAddress,
   hashTypedData,
   parseUnits,
   zeroAddress,
-} from 'viem'
+} from "viem"
 
 const ONE_WEEK_SECONDS = 60 * 60 * 24 * 7
 const CALL_REQUEST_ABI = [
@@ -15,30 +15,30 @@ const CALL_REQUEST_ABI = [
     components: [
       {
         components: [
-          { name: 'to', type: 'address' },
-          { name: 'data', type: 'bytes' },
-          { name: 'value', type: 'uint256' },
-          { name: 'allowFailure', type: 'bool' },
+          { name: "to", type: "address" },
+          { name: "data", type: "bytes" },
+          { name: "value", type: "uint256" },
+          { name: "allowFailure", type: "bool" },
         ],
-        name: 'calls',
-        type: 'tuple[]',
+        name: "calls",
+        type: "tuple[]",
       },
-      { name: 'nonce', type: 'uint256' },
-      { name: 'expiration', type: 'uint256' },
+      { name: "nonce", type: "uint256" },
+      { name: "expiration", type: "uint256" },
     ],
-    type: 'tuple',
+    type: "tuple",
   },
 ]
 
-describe('Allocator EVMPayloadBuilder', function () {
+describe("Allocator EVMPayloadBuilder", function () {
   async function deployAllocator() {
     const [depository, receiver] = await hre.viem.getWalletClients()
 
     const publicClient = await hre.viem.getPublicClient()
 
-    const utils = await hre.viem.deployContract('Utils', [])
+    const utils = await hre.viem.deployContract("Utils", [])
     const payloadBuilder = await hre.viem.deployContract(
-      'EVMPayloadBuilder',
+      "EVMPayloadBuilder",
       [],
       {
         libraries: {
@@ -46,7 +46,7 @@ describe('Allocator EVMPayloadBuilder', function () {
         },
       }
     )
-    const myToken = await hre.viem.deployContract('MyToken', [])
+    const myToken = await hre.viem.deployContract("MyToken", [])
 
     return {
       depository,
@@ -57,19 +57,19 @@ describe('Allocator EVMPayloadBuilder', function () {
     }
   }
 
-  describe('buildPayload()', function () {
-    it('should build a payload when using the native currency', async () => {
+  describe("buildPayload()", function () {
+    it("should build a payload when using the native currency", async () => {
       const { payloadBuilder, depository, receiver, publicClient } =
         await loadFixture(deployAllocator)
 
-      const amount = parseUnits('0.1', 18)
+      const amount = parseUnits("0.1", 18)
       const payload = await payloadBuilder.read.buildPayload([
         1n, // chainId
         depository.account.address, // depository
         zeroAddress, // currency
         amount, // amount
         receiver.account.address, // receiver
-        '0x', // data
+        "0x", // data
       ])
       const balanceBefore = await publicClient.getBalance({
         address: receiver.account.address,
@@ -98,18 +98,18 @@ describe('Allocator EVMPayloadBuilder', function () {
       expect(balanceAfter).to.equal(balanceBefore + amount)
     })
 
-    it('should build a payload when using an ERC20 token', async () => {
+    it("should build a payload when using an ERC20 token", async () => {
       const { payloadBuilder, depository, receiver, myToken } =
         await loadFixture(deployAllocator)
 
-      const amount = parseUnits('1337', 18)
+      const amount = parseUnits("1337", 18)
       const payload = await payloadBuilder.read.buildPayload([
         1n, // chainId
         depository.account.address, // depository
         myToken.address, // currency
         amount, // amount
         receiver.account.address, // receiver
-        '0x', // data
+        "0x", // data
       ])
       const balanceBefore = await myToken.read.balanceOf([
         receiver.account.address,
@@ -140,12 +140,12 @@ describe('Allocator EVMPayloadBuilder', function () {
     })
   })
 
-  describe('hashToSign()', function () {
-    it('should hash a payload correctly using EIP712', async () => {
+  describe("hashToSign()", function () {
+    it("should hash a payload correctly using EIP712", async () => {
       const { payloadBuilder, depository, receiver } =
         await loadFixture(deployAllocator)
 
-      const amount = parseUnits('0.1', 18)
+      const amount = parseUnits("0.1", 18)
       const chainId = 1n // Mainnet chain ID
       const payload = await payloadBuilder.read.buildPayload([
         chainId, // chainId
@@ -153,7 +153,7 @@ describe('Allocator EVMPayloadBuilder', function () {
         zeroAddress, // currency
         amount, // amount
         receiver.account.address, // receiver
-        '0x', // data
+        "0x", // data
       ])
 
       // Let's now check that the hash corresponds to what the EVM would generate when asking the user to sign the payload.
@@ -170,19 +170,19 @@ describe('Allocator EVMPayloadBuilder', function () {
             components: [
               {
                 components: [
-                  { name: 'to', type: 'address' },
-                  { name: 'data', type: 'bytes' },
-                  { name: 'value', type: 'uint256' },
-                  { name: 'allowFailure', type: 'bool' },
+                  { name: "to", type: "address" },
+                  { name: "data", type: "bytes" },
+                  { name: "value", type: "uint256" },
+                  { name: "allowFailure", type: "bool" },
                 ],
-                name: 'calls',
-                type: 'tuple[]',
+                name: "calls",
+                type: "tuple[]",
               },
-              { name: 'nonce', type: 'uint256' },
-              { name: 'expiration', type: 'uint256' },
+              { name: "nonce", type: "uint256" },
+              { name: "expiration", type: "uint256" },
             ],
-            name: 'callRequest',
-            type: 'tuple',
+            name: "callRequest",
+            type: "tuple",
           },
         ],
         payload
@@ -191,23 +191,23 @@ describe('Allocator EVMPayloadBuilder', function () {
       const reconstructedHash = hashTypedData({
         domain: {
           chainId: Number(chainId), // Cast to number for hashTypedData
-          name: 'RelayDepository',
+          name: "RelayDepository",
           verifyingContract: depository.account.address,
-          version: '1',
+          version: "1",
         },
         message,
-        primaryType: 'CallRequest',
+        primaryType: "CallRequest",
         types: {
           Call: [
-            { name: 'to', type: 'address' },
-            { name: 'data', type: 'bytes' },
-            { name: 'value', type: 'uint256' },
-            { name: 'allowFailure', type: 'bool' },
+            { name: "to", type: "address" },
+            { name: "data", type: "bytes" },
+            { name: "value", type: "uint256" },
+            { name: "allowFailure", type: "bool" },
           ],
           CallRequest: [
-            { name: 'calls', type: 'Call[]' },
-            { name: 'nonce', type: 'uint256' },
-            { name: 'expiration', type: 'uint256' },
+            { name: "calls", type: "Call[]" },
+            { name: "nonce", type: "uint256" },
+            { name: "expiration", type: "uint256" },
           ],
         },
       })

@@ -1,4 +1,2 @@
-const sharedConfig = require('@relay-protocol/eslint-config')
-module.exports = [
-  ...sharedConfig,
-]
+const sharedConfig = require("@relay-protocol/eslint-config")
+module.exports = [...sharedConfig]

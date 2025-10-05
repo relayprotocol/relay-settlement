@@ -1,17 +1,17 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect } from 'chai'
-import hre from 'hardhat'
-import { Address, keccak256 } from 'viem'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect } from "chai"
+import hre from "hardhat"
+import { Address, keccak256 } from "viem"
 
-describe('ERC20View Approve', function () {
+describe("ERC20View Approve", function () {
   async function deployHubWithERC20View() {
     const [admin, operatorUser, regularUser, anotherUser] =
       await hre.viem.getWalletClients()
-    const hub = await hre.viem.deployContract('Hub', [admin.account.address])
+    const hub = await hre.viem.deployContract("Hub", [admin.account.address])
     const publicClient = await hre.viem.getPublicClient()
 
     // Add operator role to operatorUser
-    const OPERATOR_ROLE = keccak256('OPERATOR_ROLE' as `0x${string}`)
+    const OPERATOR_ROLE = keccak256("OPERATOR_ROLE" as `0x${string}`)
     const addOperatorHash = await hub.write.grantRole(
       [OPERATOR_ROLE, operatorUser.account.address as Address],
       { account: admin.account }
@@ -33,7 +33,7 @@ describe('ERC20View Approve', function () {
 
     // Get ERC20View contract
     const erc20View = await hre.viem.getContractAt(
-      'ERC20View',
+      "ERC20View",
       erc20ViewAddress
     )
 
@@ -50,7 +50,7 @@ describe('ERC20View Approve', function () {
     }
   }
 
-  it('approves spender correctly', async function () {
+  it("approves spender correctly", async function () {
     const { erc20View, publicClient, regularUser, operatorUser } =
       await loadFixture(deployHubWithERC20View)
 
@@ -71,7 +71,7 @@ describe('ERC20View Approve', function () {
     expect(allowance).to.equal(approvalAmount)
   })
 
-  it('updates allowance when approve is called again', async function () {
+  it("updates allowance when approve is called again", async function () {
     const { erc20View, publicClient, regularUser, operatorUser } =
       await loadFixture(deployHubWithERC20View)
 
@@ -106,7 +106,7 @@ describe('ERC20View Approve', function () {
     expect(updatedAllowance).to.equal(secondApprovalAmount)
   })
 
-  it('emits Approval event with correct parameters', async function () {
+  it("emits Approval event with correct parameters", async function () {
     const { erc20View, publicClient, regularUser, operatorUser } =
       await loadFixture(deployHubWithERC20View)
 
@@ -124,7 +124,7 @@ describe('ERC20View Approve', function () {
     const events = await publicClient.getContractEvents({
       abi: erc20View.abi,
       address: erc20View.address,
-      eventName: 'Approval',
+      eventName: "Approval",
       fromBlock: approveReceipt.blockNumber,
       toBlock: approveReceipt.blockNumber,
     })
@@ -140,14 +140,14 @@ describe('ERC20View Approve', function () {
     expect(approvalEvent.args.value).to.equal(approvalAmount)
   })
 
-  it('allows approval to zero address', async function () {
+  it("allows approval to zero address", async function () {
     const { erc20View, publicClient, regularUser } = await loadFixture(
       deployHubWithERC20View
     )
 
     // Approve zero address
     const approvalAmount = 50n
-    const zeroAddress = '0x0000000000000000000000000000000000000000'
+    const zeroAddress = "0x0000000000000000000000000000000000000000"
     const approveTx = await erc20View.write.approve(
       [zeroAddress, approvalAmount],
       { account: regularUser.account }
@@ -163,7 +163,7 @@ describe('ERC20View Approve', function () {
     expect(allowance).to.equal(approvalAmount)
   })
 
-  it('stores allowance in Hub and ERC20View reads from Hub', async function () {
+  it("stores allowance in Hub and ERC20View reads from Hub", async function () {
     const { erc20View, hub, publicClient, regularUser, operatorUser, tokenId } =
       await loadFixture(deployHubWithERC20View)
 
@@ -192,7 +192,7 @@ describe('ERC20View Approve', function () {
     expect(erc20ViewAllowance).to.equal(hubAllowance)
   })
 
-  it('Hub.approve triggers ERC20View Approval event', async function () {
+  it("Hub.approve triggers ERC20View Approval event", async function () {
     const { erc20View, hub, publicClient, regularUser, operatorUser, tokenId } =
       await loadFixture(deployHubWithERC20View)
 
@@ -210,7 +210,7 @@ describe('ERC20View Approve', function () {
     const hubEvents = await publicClient.getContractEvents({
       abi: hub.abi,
       address: hub.address,
-      eventName: 'Approval',
+      eventName: "Approval",
       fromBlock: approveReceipt.blockNumber,
       toBlock: approveReceipt.blockNumber,
     })
@@ -228,7 +228,7 @@ describe('ERC20View Approve', function () {
     const erc20ViewEvents = await publicClient.getContractEvents({
       abi: erc20View.abi,
       address: erc20View.address,
-      eventName: 'Approval',
+      eventName: "Approval",
       fromBlock: approveReceipt.blockNumber,
       toBlock: approveReceipt.blockNumber,
     })
@@ -249,7 +249,7 @@ describe('ERC20View Approve', function () {
     expect(allowance).to.equal(approvalAmount)
   })
 
-  it('ERC20View.approve triggers both Hub and ERC20View events', async function () {
+  it("ERC20View.approve triggers both Hub and ERC20View events", async function () {
     const { erc20View, hub, publicClient, regularUser, operatorUser, tokenId } =
       await loadFixture(deployHubWithERC20View)
 
@@ -267,7 +267,7 @@ describe('ERC20View Approve', function () {
     const hubEvents = await publicClient.getContractEvents({
       abi: hub.abi,
       address: hub.address,
-      eventName: 'Approval',
+      eventName: "Approval",
       fromBlock: approveReceipt.blockNumber,
       toBlock: approveReceipt.blockNumber,
     })
@@ -285,7 +285,7 @@ describe('ERC20View Approve', function () {
     const erc20ViewEvents = await publicClient.getContractEvents({
       abi: erc20View.abi,
       address: erc20View.address,
-      eventName: 'Approval',
+      eventName: "Approval",
       fromBlock: approveReceipt.blockNumber,
       toBlock: approveReceipt.blockNumber,
     })
@@ -299,7 +299,7 @@ describe('ERC20View Approve', function () {
     expect(erc20ViewEvents[0].args.value).to.equal(approvalAmount)
   })
 
-  it('allowance consistency across multiple operations', async function () {
+  it("allowance consistency across multiple operations", async function () {
     const { erc20View, hub, regularUser, operatorUser, tokenId } =
       await loadFixture(deployHubWithERC20View)
 
@@ -362,7 +362,7 @@ describe('ERC20View Approve', function () {
     expect(erc20ViewAllowance).to.equal(0n)
   })
 
-  it('prevents unauthorized calls to Hub.approveFor', async function () {
+  it("prevents unauthorized calls to Hub.approveFor", async function () {
     const { hub, regularUser, operatorUser, anotherUser, tokenId } =
       await loadFixture(deployHubWithERC20View)
 
@@ -377,10 +377,10 @@ describe('ERC20View Approve', function () {
         ],
         { account: anotherUser.account }
       )
-    ).to.be.rejectedWith('OnlyERC20ViewCanCallApproveFor')
+    ).to.be.rejectedWith("OnlyERC20ViewCanCallApproveFor")
   })
 
-  it('prevents non-owner from setting allowance via ERC20View', async function () {
+  it("prevents non-owner from setting allowance via ERC20View", async function () {
     const { erc20View, operatorUser, anotherUser } = await loadFixture(
       deployHubWithERC20View
     )
@@ -402,13 +402,13 @@ describe('ERC20View Approve', function () {
     expect(allowance).to.equal(100n)
   })
 
-  it('handles maximum allowance correctly', async function () {
+  it("handles maximum allowance correctly", async function () {
     const { erc20View, publicClient, regularUser, operatorUser } =
       await loadFixture(deployHubWithERC20View)
 
     // Set maximum allowance
     const maxAllowance = BigInt(
-      '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+      "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
     )
     const approveTx = await erc20View.write.approve(
       [operatorUser.account.address, maxAllowance],
@@ -425,7 +425,7 @@ describe('ERC20View Approve', function () {
     expect(allowance).to.equal(maxAllowance)
   })
 
-  it('handles zero allowance correctly', async function () {
+  it("handles zero allowance correctly", async function () {
     const { erc20View, hub, publicClient, regularUser, operatorUser, tokenId } =
       await loadFixture(deployHubWithERC20View)
 
@@ -456,7 +456,7 @@ describe('ERC20View Approve', function () {
     expect(erc20ViewAllowance).to.equal(0n)
   })
 
-  it('preserves allowance data integrity across different token IDs', async function () {
+  it("preserves allowance data integrity across different token IDs", async function () {
     const { erc20View, hub, operatorUser, regularUser, tokenId } =
       await loadFixture(deployHubWithERC20View)
 

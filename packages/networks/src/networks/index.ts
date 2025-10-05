@@ -1,2 +1,2 @@
-export * from './aurora'
-export * from './testnets/aurora-testnet'
+export * from "./aurora"
+export * from "./testnets/aurora-testnet"

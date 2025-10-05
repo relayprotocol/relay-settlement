@@ -1,5 +1,5 @@
-import fs from 'fs-extra'
-import path from 'path'
+import fs from "fs-extra"
+import path from "path"
 
 const walk = async (dirPath: string) =>
   Promise.all(
@@ -12,15 +12,13 @@ const walk = async (dirPath: string) =>
   )
 
 export const parseExports = async (folderName: string, destFolder: string) => {
-  const files = await walk(path.resolve('src', folderName))
+  const files = await walk(path.resolve("src", folderName))
 
   const exportsList = files!
     .flat(Infinity)
-    .filter((f: string) => f.includes('.json'))
+    .filter((f: string) => f.includes(".json"))
     .map((f: string) => {
-      // make sure all path exists
       fs.pathExistsSync(path.resolve(f))
-      // get contractName
       const contractName = path.parse(f).name
 
       const exportPath = `./${path.relative(destFolder, f)}`
@@ -36,7 +34,7 @@ export const createIndexFile = async (
   srcFolder: string,
   destFolder: string
 ) => {
-  const fileContent = []
+  const fileContent: string[] = []
   fileContent.push("// This file is generated, please don't edit directly")
   fileContent.push(
     "// Refer to 'yarn run export:abis' in smart-contracts folder for more\n"
@@ -47,14 +45,14 @@ export const createIndexFile = async (
   abiFiles.forEach(({ contractName, exportPath }) =>
     fileContent.push(`import ${contractName} from '${exportPath}'`)
   )
-  fileContent.push('\n// exports')
+  fileContent.push("\n// exports")
 
   abiFiles.forEach(({ contractName }) =>
     fileContent.push(`export { ${contractName} }`)
   )
 
   await fs.outputFile(
-    path.resolve(destFolder, 'index.ts'),
-    fileContent.join('\n')
+    path.resolve(destFolder, "index.ts"),
+    fileContent.join("\n")
   )
 }

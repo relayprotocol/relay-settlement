@@ -1,9 +1,9 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect } from 'chai'
-import { getAddress, zeroAddress } from 'viem'
-import { deployAllocator } from '../helpers/deployAllocator'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect } from "chai"
+import { getAddress, zeroAddress } from "viem"
+import { deployAllocator } from "../helpers/deployAllocator"
 
-describe('Allocator - setPayloadBuilder', function () {
+describe("Allocator - setPayloadBuilder", function () {
   async function deployAllocatorWithSetup() {
     const { allocator, owner, otherAccounts, publicClient } =
       await deployAllocator()
@@ -19,7 +19,7 @@ describe('Allocator - setPayloadBuilder', function () {
     }
   }
 
-  it('should not have a payload builder if none is set for that depository and chainId', async function () {
+  it("should not have a payload builder if none is set for that depository and chainId", async function () {
     const { allocator, depository } = await loadFixture(
       deployAllocatorWithSetup
     )
@@ -32,7 +32,7 @@ describe('Allocator - setPayloadBuilder', function () {
     expect(getAddress(builder)).to.equal(zeroAddress)
   })
 
-  it('should allow owner to set payload builder', async function () {
+  it("should allow owner to set payload builder", async function () {
     const { allocator, owner, depository, payloadBuilder, publicClient } =
       await loadFixture(deployAllocatorWithSetup)
     const chainId = 1n
@@ -78,7 +78,7 @@ describe('Allocator - setPayloadBuilder', function () {
     const [log] = await publicClient.getContractEvents({
       abi: allocator.abi,
       address: allocator.address,
-      eventName: 'PayloadBuilderUpdated',
+      eventName: "PayloadBuilderUpdated",
     })
     expect(log.args.chainId).to.equal(chainId)
     expect(getAddress(log.args.builder!)).to.equal(
@@ -86,7 +86,7 @@ describe('Allocator - setPayloadBuilder', function () {
     )
   })
 
-  it('should allow owner to update existing payload builder', async function () {
+  it("should allow owner to update existing payload builder", async function () {
     const {
       allocator,
       owner,
@@ -127,7 +127,7 @@ describe('Allocator - setPayloadBuilder', function () {
     expect(getAddress(builder)).to.equal(getAddress(nonOwner.account.address))
   })
 
-  it('should not allow non-owner to set payload builder', async function () {
+  it("should not allow non-owner to set payload builder", async function () {
     const { allocator, nonOwner, depository, payloadBuilder } =
       await loadFixture(deployAllocatorWithSetup)
     const chainId = 1n
@@ -139,6 +139,6 @@ describe('Allocator - setPayloadBuilder', function () {
           account: nonOwner.account,
         }
       )
-    ).to.be.rejectedWith('OwnableUnauthorizedAccount')
+    ).to.be.rejectedWith("OwnableUnauthorizedAccount")
   })
 })

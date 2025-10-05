@@ -1,11 +1,11 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect } from 'chai'
-import hre from 'hardhat'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect } from "chai"
+import hre from "hardhat"
 
-import { deployOracle } from '../helpers/deployOracle'
+import { deployOracle } from "../helpers/deployOracle"
 
-describe('addAndRemoveOracles', function () {
-  it('admin and only admin should have the rights to add and remove oracles', async () => {
+describe("addAndRemoveOracles", function () {
+  it("admin and only admin should have the rights to add and remove oracles", async () => {
     const { oracle } = await loadFixture(deployOracle)
 
     const [, nonAdmin, oracleWallet] = await hre.viem.getWalletClients()
@@ -22,7 +22,7 @@ describe('addAndRemoveOracles', function () {
       oracle.write.grantRole([ORACLE_ROLE, oracleWallet.account.address], {
         account: nonAdmin.account,
       })
-    ).to.be.rejectedWith('AccessControlUnauthorizedAccount')
+    ).to.be.rejectedWith("AccessControlUnauthorizedAccount")
 
     // Grant role
     await oracle.write.grantRole([ORACLE_ROLE, oracleWallet.account.address])
@@ -37,7 +37,7 @@ describe('addAndRemoveOracles', function () {
       oracle.write.revokeRole([ORACLE_ROLE, oracleWallet.account.address], {
         account: nonAdmin.account,
       })
-    ).to.be.rejectedWith('AccessControlUnauthorizedAccount')
+    ).to.be.rejectedWith("AccessControlUnauthorizedAccount")
 
     // Revoke role
     await oracle.write.revokeRole([ORACLE_ROLE, oracleWallet.account.address])

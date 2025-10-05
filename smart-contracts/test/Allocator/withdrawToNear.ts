@@ -1,9 +1,9 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect } from 'chai'
-import { decodeEventLog } from 'viem'
-import { deployAllocator } from '../helpers/deployAllocator'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect } from "chai"
+import { decodeEventLog } from "viem"
+import { deployAllocator } from "../helpers/deployAllocator"
 
-describe('Allocator withdrawToNear', function () {
+describe("Allocator withdrawToNear", function () {
   async function deployAllocatorWithSetup() {
     const { allocator, owner, wNEAR, publicClient, otherAccounts } =
       await deployAllocator()
@@ -24,7 +24,7 @@ describe('Allocator withdrawToNear', function () {
     }
   }
 
-  it('should withdraw wNEAR to NEAR and emit WithdrawToNear event', async () => {
+  it("should withdraw wNEAR to NEAR and emit WithdrawToNear event", async () => {
     const { owner, otherAccounts, amount, allocator, wNEAR, publicClient } =
       await loadFixture(deployAllocatorWithSetup)
 

@@ -1,6 +1,6 @@
-import hre from 'hardhat'
+import hre from "hardhat"
 
-import { deployHub } from './deployHub'
+import { deployHub } from "./deployHub"
 
 export async function deployOracle() {
   // We first need to deploy the Hub
@@ -9,11 +9,11 @@ export async function deployOracle() {
   const [admin] = await hre.viem.getWalletClients()
 
   // Deploy required libraries
-  const utils = await hre.viem.deployContract('Utils', [])
+  const utils = await hre.viem.deployContract("Utils", [])
 
   // Deploy the Oracle
   const oracle = await hre.viem.deployContract(
-    'Oracle',
+    "Oracle",
     [admin.account.address, hub.address],
     {
       libraries: {

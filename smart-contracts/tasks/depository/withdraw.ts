@@ -1,4 +1,4 @@
-import { task } from 'hardhat/config'
+import { task } from "hardhat/config"
 import {
   createPublicClient,
   createWalletClient,
@@ -7,19 +7,19 @@ import {
   http,
   recoverTypedDataAddress,
   zeroAddress,
-} from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
-import * as chains from 'viem/chains'
-import { decodeCallRequest, IRelayDespository } from '../../lib/evm'
-import { extractNearSignature } from '../../lib/near'
+} from "viem"
+import { privateKeyToAccount } from "viem/accounts"
+import * as chains from "viem/chains"
+import { decodeCallRequest, IRelayDespository } from "../../lib/evm"
+import { extractNearSignature } from "../../lib/near"
 
-task('depository:withdraw', 'Withdraw from depository')
-  .addParam('allocator', 'The address of the allocator contract')
-  .addParam('withdrawRequestHash', 'The withdrawRequestHash to use')
+task("depository:withdraw", "Withdraw from depository")
+  .addParam("allocator", "The address of the allocator contract")
+  .addParam("withdrawRequestHash", "The withdrawRequestHash to use")
   .addOptionalParam(
-    'payloadBuilderType',
-    'The type of the payload builder. (EVMPayloadBuilder, ...)',
-    'EVMPayloadBuilder'
+    "payloadBuilderType",
+    "The type of the payload builder. (EVMPayloadBuilder, ...)",
+    "EVMPayloadBuilder"
   )
 
   .setAction(
@@ -29,7 +29,7 @@ task('depository:withdraw', 'Withdraw from depository')
     ) => {
       const { viem } = hre
 
-      const allocator = await viem.getContractAt('Allocator', allocatorAddress)
+      const allocator = await viem.getContractAt("Allocator", allocatorAddress)
       const [withdrawParams, rawPayload] = await allocator.read.payloads([
         withdrawRequestHash,
       ])
@@ -63,11 +63,11 @@ task('depository:withdraw', 'Withdraw from depository')
         signedPayloads[hash] = extractNearSignature(signature)
       }
 
-      if (payloadBuilderType === 'EVMPayloadBuilder') {
+      if (payloadBuilderType === "EVMPayloadBuilder") {
         // On EVM, we have a single hash and a single signature
         const { r, s, v } = signedPayloads[payloadHashes[0]]
         const signature =
-          `0x${r}${s}${v.toString(16).padStart(2, '0')}` as `0x${string}`
+          `0x${r}${s}${v.toString(16).padStart(2, "0")}` as `0x${string}`
 
         // EIP-712 verification
         const request = decodeCallRequest(rawPayload)
@@ -80,19 +80,19 @@ task('depository:withdraw', 'Withdraw from depository')
             version: (await payloadBuilder.read.SIGNATURE_VERSION()) as string,
           },
           message: request,
-          primaryType: 'CallRequest',
+          primaryType: "CallRequest",
           signature: signature,
           types: {
             Call: [
-              { name: 'to', type: 'address' },
-              { name: 'data', type: 'bytes' },
-              { name: 'value', type: 'uint256' },
-              { name: 'allowFailure', type: 'bool' },
+              { name: "to", type: "address" },
+              { name: "data", type: "bytes" },
+              { name: "value", type: "uint256" },
+              { name: "allowFailure", type: "bool" },
             ],
             CallRequest: [
-              { name: 'calls', type: 'Call[]' },
-              { name: 'nonce', type: 'uint256' },
-              { name: 'expiration', type: 'uint256' },
+              { name: "calls", type: "Call[]" },
+              { name: "nonce", type: "uint256" },
+              { name: "expiration", type: "uint256" },
             ],
           },
         })
@@ -129,7 +129,7 @@ task('depository:withdraw', 'Withdraw from depository')
           (await depositoryContract.read.allocator()) !== recoveredFromTypedData
         ) {
           throw new Error(
-            'Allocator address in depository contract does not match the recovered allocator address'
+            "Allocator address in depository contract does not match the recovered allocator address"
           )
         }
 
@@ -146,10 +146,10 @@ task('depository:withdraw', 'Withdraw from depository')
             abi: [
               {
                 constant: true,
-                inputs: [{ name: 'account', type: 'address' }],
-                name: 'balanceOf',
-                outputs: [{ name: '', type: 'uint256' }],
-                type: 'function',
+                inputs: [{ name: "account", type: "address" }],
+                name: "balanceOf",
+                outputs: [{ name: "", type: "uint256" }],
+                type: "function",
               },
             ],
             address: withdrawParams.currency as `0x${string}`,
@@ -162,7 +162,7 @@ task('depository:withdraw', 'Withdraw from depository')
         }
 
         if (!balanceIsEnough) {
-          throw new Error('Insufficient balance in depository')
+          throw new Error("Insufficient balance in depository")
         }
 
         // Check that the allocator is correct!
@@ -170,13 +170,13 @@ task('depository:withdraw', 'Withdraw from depository')
           (await depositoryContract.read.allocator()) !== recoveredFromTypedData
         ) {
           throw new Error(
-            'Allocator address in depository contract does not match the recovered allocator address'
+            "Allocator address in depository contract does not match the recovered allocator address"
           )
         }
 
         // send withdraw request to the depository
         const tx = await depositoryContract.write.execute([request, signature])
-        console.log('Withdrawal tx hash:', tx)
+        console.log("Withdrawal tx hash:", tx)
       } else {
         console.log(`Withdrawal not supported for ${payloadBuilderType} yet!`)
         console.log({ rawPayload, signedPayloads })

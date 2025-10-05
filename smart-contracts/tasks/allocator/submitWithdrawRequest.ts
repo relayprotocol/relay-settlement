@@ -1,18 +1,18 @@
-import { task } from 'hardhat/config'
-import { decodeEventLog, keccak256, zeroAddress } from 'viem'
+import { task } from "hardhat/config"
+import { decodeEventLog, keccak256, zeroAddress } from "viem"
 
-task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
-  .addParam('allocator', 'The address of the allocator contract')
-  .addParam('chainId', 'The chain id of the destination address')
-  .addParam('depository', 'The depository contract on destination chain')
-  .addOptionalParam('currency', 'default to zero', zeroAddress)
-  .addOptionalParam('amount', 'Amount to withdraw', '1')
-  .addOptionalParam('receiver', 'account to receive tokens (default to signer)')
-  .addOptionalParam('data', 'additional data', '0x')
-  .addOptionalParam('nonce', 'a unique nonce for this request', '0x')
+task("allocator:submit-withdraw", "Submit withdraw request to allocator")
+  .addParam("allocator", "The address of the allocator contract")
+  .addParam("chainId", "The chain id of the destination address")
+  .addParam("depository", "The depository contract on destination chain")
+  .addOptionalParam("currency", "default to zero", zeroAddress)
+  .addOptionalParam("amount", "Amount to withdraw", "1")
+  .addOptionalParam("receiver", "account to receive tokens (default to signer)")
+  .addOptionalParam("data", "additional data", "0x")
+  .addOptionalParam("nonce", "a unique nonce for this request", "0x")
   .addOptionalParam(
-    'spender',
-    'the address that spends tokens on the hub',
+    "spender",
+    "the address that spends tokens on the hub",
     zeroAddress
   )
   .setAction(
@@ -33,7 +33,7 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
       const [signer] = await viem.getWalletClients()
       const publicClient = await viem.getPublicClient()
 
-      const allocator = await viem.getContractAt('Allocator', allocatorAddress)
+      const allocator = await viem.getContractAt("Allocator", allocatorAddress)
 
       if (!nonce) {
         nonce = keccak256(`0x${new Date().getTime().toString()}`)
@@ -51,7 +51,7 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
       }
 
       console.log(
-        'Submitting withdraw request with params',
+        "Submitting withdraw request with params",
         submitWithdrawRequestParams
       )
       const txHash = await allocator.write.submitWithdrawRequest(
@@ -60,7 +60,7 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
           account: signer.account,
         }
       )
-      console.log('Withdraw Request Transaction:', txHash)
+      console.log("Withdraw Request Transaction:", txHash)
 
       const receipt = await publicClient.waitForTransactionReceipt({
         hash: txHash,
@@ -71,7 +71,7 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
             return decodeEventLog({
               abi: allocator.abi,
               data: log.data,
-              eventName: 'PayloadBuilt',
+              eventName: "PayloadBuilt",
               topics: log.topics,
             })
           } catch {
@@ -81,7 +81,7 @@ task('allocator:submit-withdraw', 'Submit withdraw request to allocator')
         .filter((e) => e !== null)
 
       if (!payloadBuiltEvent) {
-        console.log('PayloadBuilt event not found in transaction logs.')
+        console.log("PayloadBuilt event not found in transaction logs.")
         return // Exit or handle the missing event scenario
       }
 

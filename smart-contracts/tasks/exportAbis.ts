@@ -1,13 +1,13 @@
-import fs from 'fs-extra'
-import path from 'path'
-import { task } from 'hardhat/config'
-import { createIndexFile } from './helpers/package'
+import fs from "fs-extra"
+import path from "path"
+import { task } from "hardhat/config"
+import { createIndexFile } from "./helpers/package"
 
-const packageFolder = path.resolve('../packages/abis')
+const packageFolder = path.resolve("../packages/abis")
 
-const ignored = ['hardhat/console.sol:console', '@openzeppelin/contracts']
+const ignored = ["hardhat/console.sol:console", "@openzeppelin/contracts"]
 
-task('export:abis', 'Export ABIs to a node package').setAction(
+task("export:abis", "Export ABIs to a node package").setAction(
   async (_, { artifacts }) => {
     // get only relevant files
     const allContracts = await artifacts.getAllFullyQualifiedNames()
@@ -31,9 +31,9 @@ task('export:abis', 'Export ABIs to a node package').setAction(
 
         const abiFileName = path.resolve(
           packageFolder,
-          'src',
-          'abis',
-          sourceName.replace('contracts/', ''),
+          "src",
+          "abis",
+          sourceName.replace("contracts/", ""),
           `${contractName}.json`
         )
 
@@ -43,8 +43,8 @@ task('export:abis', 'Export ABIs to a node package').setAction(
 
     // create repo files
     await createIndexFile(
-      path.resolve(packageFolder, 'src', 'abis'),
-      path.resolve(packageFolder, 'src')
+      path.resolve(packageFolder, "src", "abis"),
+      path.resolve(packageFolder, "src")
     )
   }
 )

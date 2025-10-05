@@ -1,10 +1,10 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect } from 'chai'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect } from "chai"
 
-import { deployOracle } from '../helpers/deployOracle'
+import { deployOracle } from "../helpers/deployOracle"
 
-describe('deploy', function () {
-  it('should deploy Oracle contract with correct admin and Hub', async function () {
+describe("deploy", function () {
+  it("should deploy Oracle contract with correct admin and Hub", async function () {
     const { admin, hub, oracle } = await loadFixture(deployOracle)
 
     // Check if admin was correctly configured

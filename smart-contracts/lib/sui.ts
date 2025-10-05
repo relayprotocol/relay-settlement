@@ -1,13 +1,13 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix */
 
-import { sha256 } from 'js-sha256'
-import { bcs } from '@mysten/sui/bcs'
+import { sha256 } from "js-sha256"
+import { bcs } from "@mysten/sui/bcs"
 
 // Define BCS struct for Sui TransferRequest matching the Sui contract
-const TransferRequestStruct = bcs.struct('TransferRequest', {
+const TransferRequestStruct = bcs.struct("TransferRequest", {
   recipient: bcs.Address,
   amount: bcs.u64(),
-  coin_type: bcs.struct('TypeName', {
+  coin_type: bcs.struct("TypeName", {
     name: bcs.string(),
   }),
   nonce: bcs.u64(),
@@ -33,8 +33,8 @@ export function hashRequest(request) {
   hash.update(serialized)
 
   return {
-    bytes: '0x' + Buffer.from(serialized).toString('hex'),
-    hash: '0x' + hash.hex(),
+    bytes: "0x" + Buffer.from(serialized).toString("hex"),
+    hash: "0x" + hash.hex(),
   }
 }
 
@@ -42,8 +42,8 @@ export function hashRequest(request) {
 export function decodeDepositoryRequest(payload) {
   try {
     // Remove 0x prefix if present
-    const hex = payload.startsWith('0x') ? payload.substring(2) : payload
-    const bytes = Buffer.from(hex, 'hex')
+    const hex = payload.startsWith("0x") ? payload.substring(2) : payload
+    const bytes = Buffer.from(hex, "hex")
 
     // Deserialize using BCS
     const deserialized = TransferRequestStruct.parse(new Uint8Array(bytes))
@@ -58,25 +58,25 @@ export function decodeDepositoryRequest(payload) {
       recipient: deserialized.recipient,
     }
   } catch (error) {
-    console.error('Error decoding request:', error)
+    console.error("Error decoding request:", error)
     throw error
   }
 }
 
 // Helper for normalizing Sui type format (mirrors the Sui test function)
 export function normalizeType(type) {
-  const parts = type.split('::')
+  const parts = type.split("::")
   if (parts.length < 2) {
-    throw new Error('Invalid type format')
+    throw new Error("Invalid type format")
   }
 
-  let address = parts[0].toLowerCase().replace('0x', '')
+  let address = parts[0].toLowerCase().replace("0x", "")
   if (address.length < 64) {
-    address = address.padStart(64, '0')
+    address = address.padStart(64, "0")
   } else if (address.length > 64) {
-    throw new Error('Invalid address length')
+    throw new Error("Invalid address length")
   }
 
   parts[0] = address
-  return parts.join('::')
+  return parts.join("::")
 }

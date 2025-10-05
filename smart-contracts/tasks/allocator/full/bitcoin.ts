@@ -1,13 +1,13 @@
-import { base58 } from '@scure/base'
-import { task } from 'hardhat/config'
-import * as bitcoin from 'bitcoinjs-lib'
+import { base58 } from "@scure/base"
+import { task } from "hardhat/config"
+import * as bitcoin from "bitcoinjs-lib"
 
 import {
   decodeAbiParameters,
   encodeAbiParameters,
   keccak256,
   zeroAddress,
-} from 'viem'
+} from "viem"
 import {
   addSignedInputsToTransaction,
   BITCOIN_TRANSACTION_ABI,
@@ -20,32 +20,32 @@ import {
   getBalance,
   txidToBytes32,
   verifySighashMatches,
-} from '../../../lib/bitcoin'
-import { getAllocatorPublicKey } from '../../../lib/signer'
-import { extractNearSignature } from '../../../lib/near'
-import { wait } from '../../../lib/wait'
-import { networks } from '@relay-protocol/networks'
+} from "../../../lib/bitcoin"
+import { getAllocatorPublicKey } from "../../../lib/signer"
+import { extractNearSignature } from "../../../lib/near"
+import { wait } from "../../../lib/wait"
+import { networks } from "@relay-protocol/networks"
 
 task(
-  'full:bitcoin',
-  'Deploy the Allocator contract, initializes it, sets a payload builder, submits a withdraw request, triggers a signature, and verifies the payload'
+  "full:bitcoin",
+  "Deploy the Allocator contract, initializes it, sets a payload builder, submits a withdraw request, triggers a signature, and verifies the payload"
 )
-  .addOptionalParam('owner', 'The address of the owner')
-  .addOptionalParam('depository', 'The address of the depository EOA')
-  .addOptionalParam('signer', 'The address of the signer')
-  .addOptionalParam('wnear', 'The address of the wNEAR token, used to pay fees')
+  .addOptionalParam("owner", "The address of the owner")
+  .addOptionalParam("depository", "The address of the depository EOA")
+  .addOptionalParam("signer", "The address of the signer")
+  .addOptionalParam("wnear", "The address of the wNEAR token, used to pay fees")
   .addOptionalParam(
-    'amount',
-    'The amount to withdraw from the depository',
-    '1000'
+    "amount",
+    "The amount to withdraw from the depository",
+    "1000"
   )
-  .addParam('recipient', 'The Bitcoin address to send the funds to')
+  .addParam("recipient", "The Bitcoin address to send the funds to")
   .setAction(
     async ({ owner, signer, wnear, amount, recipient }, { viem, run }) => {
       // recompile contracts
       const publicClient = await viem.getPublicClient()
 
-      await run('compile')
+      await run("compile")
 
       const { near: nearNetwork } = networks[await publicClient.getChainId()]
       const [admin] = await viem.getWalletClients()
@@ -61,16 +61,16 @@ task(
       // A fake chainId for Bitcoin, since we don't have a real one in the testnet
       const bitcoinChainId = 817781938n
 
-      const allocatorAddress = await run('deploy:allocator', {
+      const allocatorAddress = await run("deploy:allocator", {
         owner,
         signer,
         wnear,
       })
 
-      const allocator = await viem.getContractAt('Allocator', allocatorAddress)
+      const allocator = await viem.getContractAt("Allocator", allocatorAddress)
       const delay = await allocator.read.delay()
 
-      await run('allocator:add-withdrawer', {
+      await run("allocator:add-withdrawer", {
         account: owner,
         allocator: allocatorAddress,
       })
@@ -84,20 +84,20 @@ task(
       const rawPublicKey = await getAllocatorPublicKey(
         publicClient,
         allocatorAddress,
-        'bitcoin-vm'
+        "bitcoin-vm"
       )
 
       // Convert to hex format for the PayloadBuilder
-      const publicKeyHex = `0x04${Buffer.from(base58.decode(rawPublicKey)).toString('hex')}`
+      const publicKeyHex = `0x04${Buffer.from(base58.decode(rawPublicKey)).toString("hex")}`
 
       if (bitcoinPayloadBuilderAddress === zeroAddress) {
-        console.log('Bitcoin PayloadBuilder not set, deploying a new one...')
+        console.log("Bitcoin PayloadBuilder not set, deploying a new one...")
 
         bitcoinPayloadBuilderAddress = await run(
-          'deploy:bitcoin-payload-builder',
+          "deploy:bitcoin-payload-builder",
           {
             allocatorPublicKey: publicKeyHex,
-            bitcoinNetwork: 'testnet',
+            bitcoinNetwork: "testnet",
           }
         )
 
@@ -156,19 +156,19 @@ task(
 
       const receiverScript = bitcoin.address
         .toOutputScript(recipient, bitcoin.networks.testnet) // TODO: handle prod?
-        .toString('base64')
+        .toString("base64")
 
       const nonce = keccak256(`0x${new Date().getTime().toString()}`)
 
       const hasRole = await allocator.read.hasRole([
-        keccak256('APPROVED_WITHDRAWER_ROLE'),
+        keccak256("APPROVED_WITHDRAWER_ROLE"),
         owner!,
       ])
       if (!hasRole) {
         throw new Error(`${owner} is not a withdrawer`)
       }
 
-      const withdrawRequestHash = await run('allocator:submit-withdraw', {
+      const withdrawRequestHash = await run("allocator:submit-withdraw", {
         allocator: allocatorAddress,
         amount,
         chainId: bitcoinChainId.toString(),
@@ -192,7 +192,7 @@ task(
         await wait(1)
       }
 
-      await run('allocator:sign-payload', {
+      await run("allocator:sign-payload", {
         allocator: allocatorAddress,
         amount,
         chainId: bitcoinChainId.toString(),
@@ -206,7 +206,7 @@ task(
 
       // ok so now we have a payload (request) and we need to get all the signatures for each hash.
       const payloadBuilder = await viem.getContractAt(
-        'BitcoinPayloadBuilder',
+        "BitcoinPayloadBuilder",
         bitcoinPayloadBuilderAddress
       )
       const payloadHashes = await payloadBuilder.read.hashesToSign([
@@ -223,8 +223,8 @@ task(
           withdrawRequestHash,
           hash,
         ])
-        while (signature === '0x') {
-          console.log('Waiting for signed payload...')
+        while (signature === "0x") {
+          console.log("Waiting for signed payload...")
           await wait(1)
           signature = await allocator.read.signedPayloads([
             withdrawRequestHash,

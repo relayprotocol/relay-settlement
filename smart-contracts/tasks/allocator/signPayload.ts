@@ -1,20 +1,20 @@
-import { task } from 'hardhat/config'
-import { parseUnits, zeroAddress } from 'viem'
-import { checkAndApproveWNEAR, getWNEARAddress } from '../../lib/aurora'
+import { task } from "hardhat/config"
+import { parseUnits, zeroAddress } from "viem"
+import { checkAndApproveWNEAR, getWNEARAddress } from "../../lib/aurora"
 
-task('allocator:sign-payload', 'Sign payload on allocator')
-  .addParam('allocator', 'The address of the allocator contract')
-  .addParam('chainId', 'The chain id of the destination address')
-  .addParam('depository', 'The depository contract on destination chain')
-  .addParam('nonce', 'The nonce for the request submitted earlier')
-  .addOptionalParam('currency', 'default to zero', zeroAddress)
-  .addOptionalParam('amount', 'Amount to withdraw', '1')
-  .addOptionalParam('receiver', 'account to receive tokens (default to signer)')
-  .addOptionalParam('data', 'additional data', '0x')
-  .addOptionalParam('wnear', 'The address of the wNEAR contract')
+task("allocator:sign-payload", "Sign payload on allocator")
+  .addParam("allocator", "The address of the allocator contract")
+  .addParam("chainId", "The chain id of the destination address")
+  .addParam("depository", "The depository contract on destination chain")
+  .addParam("nonce", "The nonce for the request submitted earlier")
+  .addOptionalParam("currency", "default to zero", zeroAddress)
+  .addOptionalParam("amount", "Amount to withdraw", "1")
+  .addOptionalParam("receiver", "account to receive tokens (default to signer)")
+  .addOptionalParam("data", "additional data", "0x")
+  .addOptionalParam("wnear", "The address of the wNEAR contract")
   .addOptionalParam(
-    'spender',
-    'the address that spends tokens on the hub',
+    "spender",
+    "the address that spends tokens on the hub",
     zeroAddress
   )
   .setAction(
@@ -37,14 +37,14 @@ task('allocator:sign-payload', 'Sign payload on allocator')
       const [signer] = await viem.getWalletClients()
       const publicClient = await viem.getPublicClient()
 
-      const allocator = await viem.getContractAt('Allocator', allocatorAddress)
+      const allocator = await viem.getContractAt("Allocator", allocatorAddress)
 
       if (!wNEARAddress) {
         wNEARAddress = await getWNEARAddress(network.config.chainId!)
       }
 
       // check wNEAR approval amount
-      const allowance = parseUnits('1', 24)
+      const allowance = parseUnits("1", 24)
       await checkAndApproveWNEAR(
         hre,
         signer.account.address,
@@ -75,14 +75,14 @@ task('allocator:sign-payload', 'Sign payload on allocator')
         )
       }
 
-      console.log('Signing payload', submitWithdrawRequestParams)
+      console.log("Signing payload", submitWithdrawRequestParams)
 
-      const wNEAR = await hre.viem.getContractAt('MyToken', wNEARAddress)
+      const wNEAR = await hre.viem.getContractAt("MyToken", wNEARAddress)
       // Funding a bit more for the signatures!
       const balance = await wNEAR.read.balanceOf([allocatorAddress])
       if (balance === 0n) {
         console.log(
-          'Funding allocator with 1 1yoctoNear for the signature calls'
+          "Funding allocator with 1 1yoctoNear for the signature calls"
         )
         const fundTx = await wNEAR.write.transfer([allocatorAddress, 1n])
         await publicClient.waitForTransactionReceipt({
@@ -93,7 +93,7 @@ task('allocator:sign-payload', 'Sign payload on allocator')
       const txHash = await allocator.write.signWithdrawPayload(
         [
           submitWithdrawRequestParams,
-          '0x',
+          "0x",
           {
             callbackGas: 50_000_000_000_000n,
             signGas: 10_000_000_000_000n,
@@ -108,6 +108,6 @@ task('allocator:sign-payload', 'Sign payload on allocator')
       const receipt = await publicClient.waitForTransactionReceipt({
         hash: txHash,
       })
-      console.log('Signing Transaction:', receipt.transactionHash)
+      console.log("Signing Transaction:", receipt.transactionHash)
     }
   )

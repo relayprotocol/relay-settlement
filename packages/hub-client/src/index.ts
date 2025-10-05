@@ -4,11 +4,11 @@ import {
   MintParams,
   SetOperatorForParams,
   TransferFromParams,
-} from './client'
-import { burn } from './methods/burn'
-import { mint } from './methods/mint'
-import { setOperatorFor } from './methods/set-operator-for'
-import { transferFrom } from './methods/transfer-from'
+} from "./client"
+import { burn } from "./methods/burn"
+import { mint } from "./methods/mint"
+import { setOperatorFor } from "./methods/set-operator-for"
+import { transferFrom } from "./methods/transfer-from"
 
 // Use function expressions to maintain 'this' context
 export function createHubClient(params: { chainId: bigint; address: string }) {

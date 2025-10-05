@@ -1,22 +1,22 @@
-import { task } from 'hardhat/config'
-import { keccak256 } from 'viem'
+import { task } from "hardhat/config"
+import { keccak256 } from "viem"
 
-task('allocator:add-withdrawer', 'Grant APPROVED_WITHDRAWER_ROLE to an address')
-  .addParam('allocator', 'The address of the Allocator contract')
+task("allocator:add-withdrawer", "Grant APPROVED_WITHDRAWER_ROLE to an address")
+  .addParam("allocator", "The address of the Allocator contract")
   .addOptionalParam(
-    'account',
-    'The address to grant the APPROVED_WITHDRAWER_ROLE to'
+    "account",
+    "The address to grant the APPROVED_WITHDRAWER_ROLE to"
   )
   .setAction(async ({ allocator: allocatorAddress, account }, { viem }) => {
     const [admin] = await viem.getWalletClients()
     const publicClient = await viem.getPublicClient()
 
-    const allocator = await viem.getContractAt('Allocator', allocatorAddress)
+    const allocator = await viem.getContractAt("Allocator", allocatorAddress)
     if (!account) {
       account = admin.account.address
     }
     const APPROVED_WITHDRAWER_ROLE = keccak256(
-      'APPROVED_WITHDRAWER_ROLE' as `0x${string}`
+      "APPROVED_WITHDRAWER_ROLE" as `0x${string}`
     )
 
     const hasRole = await allocator.read.hasRole([

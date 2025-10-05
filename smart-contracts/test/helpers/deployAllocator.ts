@@ -1,4 +1,4 @@
-import hre from 'hardhat'
+import hre from "hardhat"
 export const DEFAULT_DELAY = 600n
 
 export async function deployAllocator(options?: {
@@ -9,28 +9,28 @@ export async function deployAllocator(options?: {
   const publicClient = await hre.viem.getPublicClient()
 
   // deploy wNear
-  const wNEAR = await hre.viem.deployContract('MockWNEAR')
+  const wNEAR = await hre.viem.deployContract("MockWNEAR")
 
   //depoloy libs
-  const auroraXccUtils = await hre.viem.deployContract('AuroraXccUtils')
-  const codec = await hre.viem.deployContract('Codec')
-  const auroraSdk = await hre.viem.deployContract('AuroraSdk', [], {
+  const auroraXccUtils = await hre.viem.deployContract("AuroraXccUtils")
+  const codec = await hre.viem.deployContract("Codec")
+  const auroraSdk = await hre.viem.deployContract("AuroraSdk", [], {
     libraries: {
       AuroraXccUtils: auroraXccUtils.address,
       Codec: codec.address,
     },
   })
-  const utils = await hre.viem.deployContract('Utils', [])
-  const chainSignatures = await hre.viem.deployContract('ChainSignatures', [])
+  const utils = await hre.viem.deployContract("Utils", [])
+  const chainSignatures = await hre.viem.deployContract("ChainSignatures", [])
   const allocatorParams = [
     options?.owner ?? owner.account.address, // owner
     options?.delay ?? DEFAULT_DELAY, // delay
-    'v1.signer.test', // signer
+    "v1.signer.test", // signer
     wNEAR.address,
   ]
 
   const allocator = await hre.viem.deployContract(
-    'Allocator',
+    "Allocator",
     allocatorParams,
     {
       libraries: {

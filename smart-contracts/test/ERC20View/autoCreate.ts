@@ -1,16 +1,16 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect } from 'chai'
-import hre from 'hardhat'
-import { Address, keccak256 } from 'viem'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect } from "chai"
+import hre from "hardhat"
+import { Address, keccak256 } from "viem"
 
-describe('ERC20View Auto Creation', function () {
+describe("ERC20View Auto Creation", function () {
   async function deployHub() {
     const [admin, operatorUser, regularUser] = await hre.viem.getWalletClients()
-    const hub = await hre.viem.deployContract('Hub', [admin.account.address])
+    const hub = await hre.viem.deployContract("Hub", [admin.account.address])
     const publicClient = await hre.viem.getPublicClient()
 
     // Add operator role to operatorUser
-    const OPERATOR_ROLE = keccak256('OPERATOR_ROLE')
+    const OPERATOR_ROLE = keccak256("OPERATOR_ROLE")
     const addOracleHash = await hub.write.grantRole(
       [OPERATOR_ROLE, operatorUser.account.address as Address],
       { account: admin.account }
@@ -20,7 +20,7 @@ describe('ERC20View Auto Creation', function () {
     return { admin, hub, operatorUser, publicClient, regularUser }
   }
 
-  it('automatically creates ERC20View on first token operation', async function () {
+  it("automatically creates ERC20View on first token operation", async function () {
     const { hub, operatorUser, regularUser, publicClient } =
       await loadFixture(deployHub)
 
@@ -28,7 +28,7 @@ describe('ERC20View Auto Creation', function () {
 
     // Verify ERC20View doesn't exist yet
     const beforeAddress = await hub.read.erc20Views([tokenId])
-    expect(beforeAddress).to.equal('0x0000000000000000000000000000000000000000')
+    expect(beforeAddress).to.equal("0x0000000000000000000000000000000000000000")
 
     // Mint tokens to trigger ERC20View creation
     const mintTx = await hub.write.mint(
@@ -40,16 +40,16 @@ describe('ERC20View Auto Creation', function () {
     // Verify ERC20View was created
     const afterAddress = await hub.read.erc20Views([tokenId])
     expect(afterAddress).to.not.equal(
-      '0x0000000000000000000000000000000000000000'
+      "0x0000000000000000000000000000000000000000"
     )
 
     // Verify ERC20ViewCreated event was emitted
     const events = await publicClient.getContractEvents({
       abi: hub.abi,
       address: hub.address,
-      eventName: 'ERC20ViewCreated',
-      fromBlock: 'earliest',
-      toBlock: 'latest',
+      eventName: "ERC20ViewCreated",
+      fromBlock: "earliest",
+      toBlock: "latest",
     })
 
     const event = events.find((e) => e.args.tokenId === tokenId)
@@ -57,7 +57,7 @@ describe('ERC20View Auto Creation', function () {
     expect(event!.args.erc20View).to.equal(afterAddress)
   })
 
-  it('creates ERC20View for different token IDs', async function () {
+  it("creates ERC20View for different token IDs", async function () {
     const { hub, operatorUser, regularUser, publicClient } =
       await loadFixture(deployHub)
 
@@ -83,8 +83,8 @@ describe('ERC20View Auto Creation', function () {
     const address2 = await hub.read.erc20Views([tokenId2])
 
     // Verify both were created and are different
-    expect(address1).to.not.equal('0x0000000000000000000000000000000000000000')
-    expect(address2).to.not.equal('0x0000000000000000000000000000000000000000')
+    expect(address1).to.not.equal("0x0000000000000000000000000000000000000000")
+    expect(address2).to.not.equal("0x0000000000000000000000000000000000000000")
     expect(address1).to.not.equal(address2)
   })
 })

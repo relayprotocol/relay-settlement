@@ -1,19 +1,19 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect } from 'chai'
-import hre from 'hardhat'
-import { encodeFunctionData, keccak256 } from 'viem'
-import { deployAllocator } from '../helpers/deployAllocator'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect } from "chai"
+import hre from "hardhat"
+import { encodeFunctionData, keccak256 } from "viem"
+import { deployAllocator } from "../helpers/deployAllocator"
 
 const APPROVED_WITHDRAWER_ROLE = keccak256(
-  'APPROVED_WITHDRAWER_ROLE'
+  "APPROVED_WITHDRAWER_ROLE"
 ) as `0x${string}`
 
-describe('Allocator suspend', function () {
+describe("Allocator suspend", function () {
   async function deployAllocatorWithSafe() {
     const [owner, admin, attacker, solver] = await hre.viem.getWalletClients()
     const publicClient = await hre.viem.getPublicClient()
 
-    const mockSafe = await hre.viem.deployContract('MockSafe', [])
+    const mockSafe = await hre.viem.deployContract("MockSafe", [])
 
     await mockSafe.write.addOwner([owner.account.address])
     await mockSafe.write.addOwner([admin.account.address])
@@ -26,7 +26,7 @@ describe('Allocator suspend', function () {
     const data = encodeFunctionData({
       abi: allocator.abi,
       args: [APPROVED_WITHDRAWER_ROLE, solver.account.address],
-      functionName: 'grantRole',
+      functionName: "grantRole",
     })
 
     const enableHash = await mockSafe.write.execute(
@@ -49,8 +49,8 @@ describe('Allocator suspend', function () {
     }
   }
 
-  describe('suspend()', function () {
-    it('should allow any multisig owner to suspend the contract', async function () {
+  describe("suspend()", function () {
+    it("should allow any multisig owner to suspend the contract", async function () {
       const { allocator, admin, publicClient, solver } = await loadFixture(
         deployAllocatorWithSafe
       )
@@ -78,7 +78,7 @@ describe('Allocator suspend', function () {
       ).to.equal(false)
     })
 
-    it('should revert when non-admin tries to disable the contract', async function () {
+    it("should revert when non-admin tries to disable the contract", async function () {
       const { allocator, attacker } = await loadFixture(deployAllocatorWithSafe)
 
       await expect(
@@ -89,8 +89,8 @@ describe('Allocator suspend', function () {
     })
   })
 
-  describe('re-add role after being suspended', function () {
-    it('should require multisig signature to add a new WITHDRAWER', async function () {
+  describe("re-add role after being suspended", function () {
+    it("should require multisig signature to add a new WITHDRAWER", async function () {
       const { allocator, owner, admin, publicClient, mockSafe, solver } =
         await loadFixture(deployAllocatorWithSafe)
 
@@ -112,7 +112,7 @@ describe('Allocator suspend', function () {
       const data = encodeFunctionData({
         abi: allocator.abi,
         args: [APPROVED_WITHDRAWER_ROLE, solver.account.address],
-        functionName: 'grantRole',
+        functionName: "grantRole",
       })
 
       const enableHash = await mockSafe.write.execute(
@@ -131,7 +131,7 @@ describe('Allocator suspend', function () {
       ).to.equal(true)
     })
 
-    it('should revert when non-owner tries to add a new WITHDRAWER', async function () {
+    it("should revert when non-owner tries to add a new WITHDRAWER", async function () {
       const { allocator, admin, attacker, publicClient, solver } =
         await loadFixture(deployAllocatorWithSafe)
 
@@ -156,7 +156,7 @@ describe('Allocator suspend', function () {
             account: attacker.account,
           }
         )
-      ).to.be.rejectedWith('OwnableUnauthorizedAccount')
+      ).to.be.rejectedWith("OwnableUnauthorizedAccount")
     })
   })
 })

@@ -1,17 +1,17 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect, assert } from 'chai'
-import hre from 'hardhat'
-import { keccak256 } from 'viem'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect, assert } from "chai"
+import hre from "hardhat"
+import { keccak256 } from "viem"
 
-describe('burn', function () {
+describe("burn", function () {
   async function deployHub() {
     const [admin, operatorUser, regularUser] = await hre.viem.getWalletClients()
-    const hub = await hre.viem.deployContract('Hub', [admin.account.address])
+    const hub = await hre.viem.deployContract("Hub", [admin.account.address])
     const publicClient = await hre.viem.getPublicClient()
 
     // Add operator role to operatorUser
     const addOperatorHash = await hub.write.grantRole(
-      [keccak256('OPERATOR_ROLE'), operatorUser.account.address],
+      [keccak256("OPERATOR_ROLE"), operatorUser.account.address],
       {
         account: admin.account,
       }
@@ -27,7 +27,7 @@ describe('burn', function () {
     }
   }
 
-  it('allows an operator to burn tokens from any address', async function () {
+  it("allows an operator to burn tokens from any address", async function () {
     const { hub, operatorUser, regularUser, publicClient } =
       await loadFixture(deployHub)
     const tokenId = 1n
@@ -59,7 +59,7 @@ describe('burn', function () {
     expect(balance).to.equal(0n)
   })
 
-  it('reverts when non-operator tries to burn tokens', async function () {
+  it("reverts when non-operator tries to burn tokens", async function () {
     const { hub, operatorUser, regularUser, publicClient } =
       await loadFixture(deployHub)
     const tokenId = 1n
@@ -79,10 +79,10 @@ describe('burn', function () {
       hub.write.burn([regularUser.account.address, tokenId, amount], {
         account: regularUser.account,
       })
-    ).to.be.rejectedWith('AccessControlUnauthorizedAccount')
+    ).to.be.rejectedWith("AccessControlUnauthorizedAccount")
   })
 
-  it('emits Transfer event with correct parameters', async function () {
+  it("emits Transfer event with correct parameters", async function () {
     const { hub, operatorUser, regularUser, publicClient } =
       await loadFixture(deployHub)
     const tokenId = 1n
@@ -110,7 +110,7 @@ describe('burn', function () {
     const logs = await publicClient.getContractEvents({
       abi: hub.abi,
       address: hub.address,
-      eventName: 'Transfer',
+      eventName: "Transfer",
     })
 
     // Find the Transfer event for this burn
@@ -118,10 +118,10 @@ describe('burn', function () {
       (log) =>
         log.args.id === tokenId &&
         log.args.amount === amount &&
-        log.args.to === '0x0000000000000000000000000000000000000000'
+        log.args.to === "0x0000000000000000000000000000000000000000"
     )
 
-    assert(transferEvent !== undefined, 'Transfer event not found')
+    assert(transferEvent !== undefined, "Transfer event not found")
     const event = transferEvent as NonNullable<typeof transferEvent>
     const args = event.args as {
       caller: `0x${string}`
@@ -137,13 +137,13 @@ describe('burn', function () {
       regularUser.account.address.toLowerCase()
     )
     expect(args.to.toLowerCase()).to.equal(
-      '0x0000000000000000000000000000000000000000'.toLowerCase()
+      "0x0000000000000000000000000000000000000000".toLowerCase()
     ) // zero address
     expect(args.id).to.equal(tokenId)
     expect(args.amount).to.equal(amount)
   })
 
-  it('reverts when trying to burn more tokens than available', async function () {
+  it("reverts when trying to burn more tokens than available", async function () {
     const { hub, operatorUser, regularUser, publicClient } =
       await loadFixture(deployHub)
     const tokenId = 1n
@@ -164,6 +164,6 @@ describe('burn', function () {
       hub.write.burn([regularUser.account.address, tokenId, burnAmount], {
         account: operatorUser.account,
       })
-    ).to.be.rejectedWith('reverted with panic code 0x11')
+    ).to.be.rejectedWith("reverted with panic code 0x11")
   })
 })

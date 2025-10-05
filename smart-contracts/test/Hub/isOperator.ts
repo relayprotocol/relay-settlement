@@ -1,18 +1,18 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect } from 'chai'
-import hre from 'hardhat'
-import { keccak256 } from 'viem'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect } from "chai"
+import hre from "hardhat"
+import { keccak256 } from "viem"
 
-describe('isOperator', function () {
+describe("isOperator", function () {
   async function deployHub() {
     const [admin, regularUser, operatorUser, anotherUserToBeOperator] =
       await hre.viem.getWalletClients()
-    const hub = await hre.viem.deployContract('Hub', [admin.account.address])
+    const hub = await hre.viem.deployContract("Hub", [admin.account.address])
     const publicClient = await hre.viem.getPublicClient()
 
     // Add operator role to operatorUser
     const addOperatorHash = await hub.write.grantRole(
-      [keccak256('OPERATOR_ROLE'), operatorUser.account.address],
+      [keccak256("OPERATOR_ROLE"), operatorUser.account.address],
       {
         account: admin.account,
       }
@@ -28,8 +28,8 @@ describe('isOperator', function () {
       regularUser,
     }
   }
-  describe('returns true', () => {
-    it('when operator has operator role', async function () {
+  describe("returns true", () => {
+    it("when operator has operator role", async function () {
       const { operatorUser, regularUser, hub } = await loadFixture(deployHub)
 
       // Check isOperator from operator user's perspective
@@ -41,7 +41,7 @@ describe('isOperator', function () {
       expect(isOperator).to.equal(true)
     })
 
-    it('when operator is set', async function () {
+    it("when operator is set", async function () {
       const { regularUser, operatorUser, hub, publicClient } =
         await loadFixture(deployHub)
 
@@ -66,7 +66,7 @@ describe('isOperator', function () {
     })
 
     // by default, an account is NOT operator of its own address
-    it('when operator is self', async function () {
+    it("when operator is self", async function () {
       const { regularUser, hub } = await loadFixture(deployHub)
       const isOperator = await hub.read.isOperator([
         regularUser.account.address,
@@ -75,8 +75,8 @@ describe('isOperator', function () {
       expect(isOperator).to.equal(false)
     })
   })
-  describe('returns false', () => {
-    it('when operator is not set', async function () {
+  describe("returns false", () => {
+    it("when operator is not set", async function () {
       const { regularUser, anotherUserToBeOperator, hub } =
         await loadFixture(deployHub)
       const isOperator = await hub.read.isOperator([
@@ -86,7 +86,7 @@ describe('isOperator', function () {
 
       expect(isOperator).to.equal(false)
     })
-    it('when operator is unset', async function () {
+    it("when operator is unset", async function () {
       const {
         regularUser,
         anotherUserToBeOperator,

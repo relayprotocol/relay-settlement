@@ -1,29 +1,29 @@
-import { createHash } from 'crypto'
-import bs58check from 'bs58check'
+import { createHash } from "crypto"
+import bs58check from "bs58check"
 
-import { secp256k1 } from '@noble/curves/secp256k1'
+import { secp256k1 } from "@noble/curves/secp256k1"
 
-import * as bitcoin from 'bitcoinjs-lib'
+import * as bitcoin from "bitcoinjs-lib"
 
 export function txidToBytes32(txid: string): `0x${string}` {
-  return `0x${Buffer.from(txid, 'hex').reverse().toString('hex')}`
+  return `0x${Buffer.from(txid, "hex").reverse().toString("hex")}`
 }
 
 export const BITCOIN_TRANSACTION_PARAMS_ABI = {
   components: [
     {
       components: [
-        { name: 'txid', type: 'bytes32' },
-        { name: 'index', type: 'uint32' },
-        { name: 'value', type: 'uint64' },
-        { name: 'scriptPubKey', type: 'bytes' },
+        { name: "txid", type: "bytes32" },
+        { name: "index", type: "uint32" },
+        { name: "value", type: "uint64" },
+        { name: "scriptPubKey", type: "bytes" },
       ],
-      name: 'utxos',
-      type: 'tuple[]',
+      name: "utxos",
+      type: "tuple[]",
     },
-    { name: 'feeRate', type: 'uint256' },
+    { name: "feeRate", type: "uint256" },
   ],
-  type: 'tuple',
+  type: "tuple",
 }
 
 export const BITCOIN_TRANSACTION_ABI = [
@@ -31,31 +31,31 @@ export const BITCOIN_TRANSACTION_ABI = [
     components: [
       {
         components: [
-          { name: 'txid', type: 'bytes' },
-          { name: 'index', type: 'bytes' },
-          { name: 'script', type: 'bytes' },
-          { name: 'value', type: 'bytes' },
+          { name: "txid", type: "bytes" },
+          { name: "index", type: "bytes" },
+          { name: "script", type: "bytes" },
+          { name: "value", type: "bytes" },
         ],
-        name: 'inputs',
-        type: 'tuple[]',
+        name: "inputs",
+        type: "tuple[]",
       },
       {
         components: [
-          { name: 'value', type: 'bytes' },
-          { name: 'script', type: 'bytes' },
+          { name: "value", type: "bytes" },
+          { name: "script", type: "bytes" },
         ],
-        name: 'outputs',
-        type: 'tuple[]',
+        name: "outputs",
+        type: "tuple[]",
       },
     ],
-    type: 'tuple',
+    type: "tuple",
   },
 ]
 
 async function fetchRawTx(txid: string): Promise<Buffer> {
   const res = await fetch(`https://mempool.space/testnet/api/tx/${txid}/hex`)
   const rawHex = await res.text()
-  return Buffer.from(rawHex, 'hex')
+  return Buffer.from(rawHex, "hex")
 }
 
 export async function fetchUtxo(allocatorAddress: string) {
@@ -73,7 +73,7 @@ export async function fetchUtxo(allocatorAddress: string) {
       // Parse the transaction to get the scriptPubKey
       const tx = bitcoin.Transaction.fromBuffer(raw)
       const output = tx.outs[u.vout]
-      const scriptPubKey = output.script.toString('hex')
+      const scriptPubKey = output.script.toString("hex")
 
       return {
         nonWitnessUtxo: raw,
@@ -88,10 +88,10 @@ export async function fetchUtxo(allocatorAddress: string) {
 }
 
 async function broadcastTx(txHex: string): Promise<string> {
-  const res = await fetch('https://mempool.space/testnet/api/tx', {
+  const res = await fetch("https://mempool.space/testnet/api/tx", {
     body: txHex,
-    headers: { 'Content-Type': 'text/plain' },
-    method: 'POST',
+    headers: { "Content-Type": "text/plain" },
+    method: "POST",
   })
 
   if (!res.ok) {
@@ -124,7 +124,7 @@ export async function getBalance(address: string) {
       satoshis: totalSats,
     }
   } catch (err) {
-    console.error('Error fetching UTXOs:', err.response?.data || err.message)
+    console.error("Error fetching UTXOs:", err.response?.data || err.message)
     throw err
   }
 }
@@ -132,7 +132,7 @@ export async function getBalance(address: string) {
 export async function estimateFeeRate(): Promise<number> {
   try {
     const res = await fetch(
-      'https://mempool.space/testnet/api/v1/fees/recommended'
+      "https://mempool.space/testnet/api/v1/fees/recommended"
     )
     const fees = await res.json()
     return fees.fastestFee || 2 // sats/vbyte
@@ -143,13 +143,13 @@ export async function estimateFeeRate(): Promise<number> {
 
 export function decodeUint64LE(leHex: string): bigint {
   // 1) Strip “0x” if present
-  const hex = leHex.startsWith('0x') ? leHex.slice(2) : leHex
+  const hex = leHex.startsWith("0x") ? leHex.slice(2) : leHex
   if (hex.length !== 16) {
     throw new Error(`Expected 8 bytes (16 hex chars), got ${hex.length} chars`)
   }
 
   // 2) Create a Buffer from the hex, then read as little-endian BigUInt64
-  const buf = Buffer.from(hex, 'hex')
+  const buf = Buffer.from(hex, "hex")
   return buf.readBigUInt64LE(0)
 }
 
@@ -161,8 +161,8 @@ export function buildBitcoinTransactionFromPayload(transaction) {
 
   // Add inputs (txid is already in little-endian in transaction.inputs)
   transaction.inputs.forEach((input) => {
-    const txidBytes = Buffer.from(input.txid.slice(2), 'hex')
-    const indexBytes = Buffer.from(input.index.slice(2), 'hex')
+    const txidBytes = Buffer.from(input.txid.slice(2), "hex")
+    const indexBytes = Buffer.from(input.index.slice(2), "hex")
     const vout = indexBytes.readUInt32LE(0)
 
     // Add input with the already-reversed txid
@@ -171,9 +171,9 @@ export function buildBitcoinTransactionFromPayload(transaction) {
 
   // Add outputs
   transaction.outputs.forEach((output) => {
-    const valueBytes = Buffer.from(output.value.slice(2), 'hex')
+    const valueBytes = Buffer.from(output.value.slice(2), "hex")
     const value = Number(valueBytes.readBigUInt64LE(0))
-    const script = Buffer.from(output.script.slice(2), 'hex')
+    const script = Buffer.from(output.script.slice(2), "hex")
 
     tx.addOutput(script, value)
   })
@@ -185,18 +185,18 @@ export async function verifySighashMatches(tx, transaction, hashes) {
   for (let i = 0; i < transaction.inputs.length; i++) {
     const scriptPubKey = Buffer.from(
       transaction.inputs[i].script.slice(2),
-      'hex'
+      "hex"
     )
     const bitcoinjsSighash = tx.hashForSignature(
       i,
       scriptPubKey,
       bitcoin.Transaction.SIGHASH_ALL
     )
-    const ourHash = Buffer.from(hashes[i].slice(2), 'hex')
+    const ourHash = Buffer.from(hashes[i].slice(2), "hex")
 
     if (!bitcoinjsSighash.equals(ourHash)) {
       throw new Error(
-        `SIGHASH mismatch for input ${i}: expected ${bitcoinjsSighash.toString('hex')}, got ${ourHash.toString('hex')}`
+        `SIGHASH mismatch for input ${i}: expected ${bitcoinjsSighash.toString("hex")}, got ${ourHash.toString("hex")}`
       )
     }
   }
@@ -230,9 +230,9 @@ export async function addSignedInputsToTransaction(
 
     // Convert hash to Uint8Array
     const hashBytes =
-      typeof hashes[i] === 'string'
+      typeof hashes[i] === "string"
         ? new Uint8Array(
-            (hashes[i].startsWith('0x') ? hashes[i].slice(2) : hashes[i])
+            (hashes[i].startsWith("0x") ? hashes[i].slice(2) : hashes[i])
               .match(/.{1,2}/g)
               .map((byte) => parseInt(byte, 16))
           )
@@ -242,7 +242,7 @@ export async function addSignedInputsToTransaction(
     let expectedAddress = null
     if (transaction?.inputs?.[i]) {
       expectedAddress = bitcoin.address.fromOutputScript(
-        Buffer.from(transaction.inputs[i].script.slice(2), 'hex'),
+        Buffer.from(transaction.inputs[i].script.slice(2), "hex"),
         bitcoin.networks.testnet
       )
     }
@@ -314,9 +314,9 @@ export async function broadcastTransaction(tx) {
     console.log(`   Explorer: https://mempool.space/testnet/tx/${txid}`)
     return txid
   } catch (error) {
-    if (error.message.includes('mandatory-script-verify-flag-failed')) {
+    if (error.message.includes("mandatory-script-verify-flag-failed")) {
       throw new Error(
-        'Script verification failed - signature/public key mismatch'
+        "Script verification failed - signature/public key mismatch"
       )
     }
     throw error
@@ -324,7 +324,7 @@ export async function broadcastTransaction(tx) {
 }
 
 export function bitcoinAddressfromHexPublicKey(hexPublicKey: string): string {
-  const raw = Buffer.from(hexPublicKey.slice(2), 'hex')
+  const raw = Buffer.from(hexPublicKey.slice(2), "hex")
   const x = raw.slice(1, 33)
   const y = raw.slice(33, 65)
   const prefix = y[y.length - 1] % 2 === 0 ? 0x02 : 0x03
@@ -332,8 +332,8 @@ export function bitcoinAddressfromHexPublicKey(hexPublicKey: string): string {
   const pubkeyCompressed = Buffer.concat([Buffer.from([prefix]), x]) // <Buffer 02… or 03…>
 
   // 5. Build a P2PKH address from that compressed key:
-  const sha256 = createHash('sha256').update(pubkeyCompressed).digest()
-  const ripe160 = createHash('ripemd160').update(sha256).digest()
+  const sha256 = createHash("sha256").update(pubkeyCompressed).digest()
+  const ripe160 = createHash("ripemd160").update(sha256).digest()
   const versioned = Buffer.concat([Buffer.from([0x6f]), ripe160]) // 0x6f = testnet, 0x00 = mainnet
   return bs58check.encode(versioned)
 }

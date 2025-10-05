@@ -1,4 +1,4 @@
-import { task } from 'hardhat/config'
+import { task } from "hardhat/config"
 import {
   createPublicClient,
   Hex,
@@ -7,21 +7,21 @@ import {
   keccak256,
   recoverAddress,
   serializeTransaction,
-} from 'viem'
-import { wait } from '../../lib/wait'
-import { checkAndApproveWNEAR } from '../../lib/aurora'
-import { extractNearSignature } from '../../lib/near'
-import { buildEvmTransaction, loadTransactions } from './utils'
+} from "viem"
+import { wait } from "../../lib/wait"
+import { checkAndApproveWNEAR } from "../../lib/aurora"
+import { extractNearSignature } from "../../lib/near"
+import { buildEvmTransaction, loadTransactions } from "./utils"
 
 const signGas = 50_000_000_000_000n
 const callbackGas = 30_000_000_000_000n
 
 task(
-  'relay-multisig-signer:execute-transactions',
-  'Checks transaction hashes from a transactions manifest file against a Gnosis Safe. They must match the transactions from the manifest.'
+  "relay-multisig-signer:execute-transactions",
+  "Checks transaction hashes from a transactions manifest file against a Gnosis Safe. They must match the transactions from the manifest."
 )
-  .addParam('transactions', 'The path to the transactions manifest file')
-  .addParam('relayMultisigSigner', 'address of the relay multisig signer')
+  .addParam("transactions", "The path to the transactions manifest file")
+  .addParam("relayMultisigSigner", "address of the relay multisig signer")
   .setAction(
     async ({ transactions: transactionsPath, relayMultisigSigner }, hre) => {
       const [user] = await hre.viem.getWalletClients()
@@ -29,7 +29,7 @@ task(
       const transactions = loadTransactions(transactionsPath)
 
       const multisigSigner = await hre.viem.getContractAt(
-        'RelayMultisigSigner',
+        "RelayMultisigSigner",
         relayMultisigSigner
       )
 
@@ -45,14 +45,14 @@ task(
         console.log(`🏗️  Building transaction #${i}`)
         const tx = transactions[i]
         let rawUnsigned
-        let curve: 'Ecdsa' | 'Eddsa'
-        if (tx.family === 'ethereum-vm') {
+        let curve: "Ecdsa" | "Eddsa"
+        if (tx.family === "ethereum-vm") {
           const transaction = await buildEvmTransaction(tx)
           if (!transaction) {
-            throw new Error('Failed to build EVM transaction')
+            throw new Error("Failed to build EVM transaction")
           }
           rawUnsigned = serializeTransaction(transaction) // EVM
-          curve = 'Ecdsa'
+          curve = "Ecdsa"
           const hashToSign = keccak256(rawUnsigned)
 
           let nearSignature = await multisigSigner.read.signatures([
@@ -60,17 +60,17 @@ task(
             curve,
           ])
 
-          if (nearSignature === '0x') {
+          if (nearSignature === "0x") {
             // Check if the signature was approved
             const approved = await multisigSigner.read.approvedSignatures([
               hashToSign,
               curve,
             ])
             if (!approved) {
-              throw new Error('❌ Signature not approved...')
+              throw new Error("❌ Signature not approved...")
             }
 
-            console.log('📝 Requesting signature...', { curve, hashToSign })
+            console.log("📝 Requesting signature...", { curve, hashToSign })
 
             const txHash = await multisigSigner.write.sign([
               hashToSign,
@@ -84,8 +84,8 @@ task(
               hash: txHash,
             })
           }
-          while (nearSignature === '0x') {
-            console.log('Waiting for signed hash...')
+          while (nearSignature === "0x") {
+            console.log("Waiting for signed hash...")
             await wait(1)
             nearSignature = await multisigSigner.read.signatures([
               hashToSign,
@@ -96,7 +96,7 @@ task(
           // Ok so now we have the signature AND the payload! We can submit!
           const { r, s, v } = extractNearSignature(nearSignature)
           const hexSignature =
-            `0x${r}${s}${v.toString(16).padStart(2, '0')}` as `0x${string}`
+            `0x${r}${s}${v.toString(16).padStart(2, "0")}` as `0x${string}`
           const signer = await recoverAddress({
             hash: hashToSign,
             signature: hexSignature,

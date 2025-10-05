@@ -1,23 +1,23 @@
-import { loadFixture } from '@nomicfoundation/hardhat-toolbox-viem/network-helpers'
-import { expect } from 'chai'
-import hre from 'hardhat'
-import { Address, keccak256 } from 'viem'
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
+import { expect } from "chai"
+import hre from "hardhat"
+import { Address, keccak256 } from "viem"
 
-describe('ERC20View Properties', function () {
+describe("ERC20View Properties", function () {
   async function deployHubWithERC20View() {
     const [admin, operatorUser, regularUser] = await hre.viem.getWalletClients()
-    const hub = await hre.viem.deployContract('Hub', [admin.account.address])
+    const hub = await hre.viem.deployContract("Hub", [admin.account.address])
     const publicClient = await hre.viem.getPublicClient()
 
     // Add operator role to operatorUser
-    const OPERATOR_ROLE = keccak256('OPERATOR_ROLE')
+    const OPERATOR_ROLE = keccak256("OPERATOR_ROLE")
     const addOperatorHash = await hub.write.grantRole(
       [OPERATOR_ROLE, operatorUser.account.address as Address],
       { account: admin.account }
     )
     await publicClient.waitForTransactionReceipt({ hash: addOperatorHash })
 
-    const EDITOR_ROLE = keccak256('EDITOR_ROLE')
+    const EDITOR_ROLE = keccak256("EDITOR_ROLE")
     const addEditorHash = await hub.write.grantRole(
       [EDITOR_ROLE, admin.account.address as Address],
       { account: admin.account }
@@ -27,7 +27,7 @@ describe('ERC20View Properties', function () {
     return { admin, hub, operatorUser, publicClient, regularUser }
   }
 
-  it('creates ERC20View with correct default name, symbol and decimals', async function () {
+  it("creates ERC20View with correct default name, symbol and decimals", async function () {
     const { hub, operatorUser, regularUser, publicClient, admin } =
       await loadFixture(deployHubWithERC20View)
 
@@ -62,7 +62,7 @@ describe('ERC20View Properties', function () {
 
     // Get the ERC20View contract
     const erc20View = await hre.viem.getContractAt(
-      'ERC20View',
+      "ERC20View",
       erc20ViewAddress
     )
 

@@ -1,14 +1,14 @@
-import { task } from 'hardhat/config'
-import { checksumAddress } from 'viem'
-import { createSafeClient } from '@safe-global/sdk-starter-kit'
-import { createTransactionBundle } from './utils'
+import { task } from "hardhat/config"
+import { checksumAddress } from "viem"
+import { createSafeClient } from "@safe-global/sdk-starter-kit"
+import { createTransactionBundle } from "./utils"
 
 task(
-  'relay-multisig-signer:submit',
-  'Submits transactions from a transactions manifest file to a Gnosis Safe.'
+  "relay-multisig-signer:submit",
+  "Submits transactions from a transactions manifest file to a Gnosis Safe."
 )
-  .addParam('transactions', 'The path to the transactions manifest file')
-  .addParam('relayMultisigSigner', 'address of the relay multisig signer')
+  .addParam("transactions", "The path to the transactions manifest file")
+  .addParam("relayMultisigSigner", "address of the relay multisig signer")
   .setAction(
     async (
       {
@@ -20,7 +20,7 @@ task(
       const [user] = await hre.viem.getWalletClients()
 
       const relayMultisigSigner = await hre.viem.getContractAt(
-        'RelayMultisigSigner',
+        "RelayMultisigSigner",
         relayMultisigSignerAddress
       )
 
@@ -51,7 +51,7 @@ task(
       }
 
       const nonce = await safe.getNonce()
-      console.log('📦 Submitting hashes to be signed')
+      console.log("📦 Submitting hashes to be signed")
 
       // Create a Safe transaction
       const safeTransaction = await safe.protocolKit.createTransaction({

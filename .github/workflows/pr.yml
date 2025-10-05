@@ -4,75 +4,36 @@ on:
   pull_request:
 
 jobs:
-  run-tests:
-    name: 'Run the tests'
+  lint-build-test:
+    name: Lint, build & test
     runs-on: ubuntu-24.04
-    strategy:
-      matrix:
-        folders:
-          ['smart-contracts', 'packages/hub-client', 'packages/hub-utils']
     env:
-      all_tests: ${{ contains(github.event.pull_request.labels.*.name, 'run-all-tests')}}
-
+      CI: true
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Get changed files
-        id: changed-files
-        uses: tj-actions/changed-files@v45
-        with:
-          files: |
-            ${{ matrix.folders }}/**
-
-      - name: Should it run
-        id: should-it-run
-        run: echo "should_run=$([ '${{ steps.changed-files.outputs.any_modified }}' = 'true' ] || [ '${{ env.all_tests }}' = 'true' ] && echo true || echo false)" >> $GITHUB_OUTPUT
-
-      - uses: actions/setup-node@v4
-        if: steps.should-it-run.outputs.should_run == 'true'
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: yarn
 
-      - run: yarn
-        if: steps.should-it-run.outputs.should_run == 'true'
-        shell: bash
+      - name: Enable Corepack
+        run: corepack enable
 
-      - run: 'yarn build'
-        if: steps.should-it-run.outputs.should_run == 'true'
-        shell: bash
+      - name: Install dependencies
+        run: yarn install --immutable
 
-      - name: Set workspace name
-        id: workspace-name
-        if: steps.should-it-run.outputs.should_run == 'true'
+      - name: Build packages
         run: |
-          if [[ "${{ matrix.folders }}" == packages/* ]]; then
-            echo "WORKSPACE_NAME=$(echo ${{ matrix.folders }} | sed 's|packages/||')" >> $GITHUB_OUTPUT
-          else
-            echo "WORKSPACE_NAME=${{ matrix.folders }}" >> $GITHUB_OUTPUT
-          fi
-        shell: bash
+          yarn build
+          yarn workspace @relay-protocol/smart-contracts build
 
-      - name: 'run lint'
-        run: yarn workspace @relay-protocol/${{ steps.workspace-name.outputs.WORKSPACE_NAME }} lint
-        if: steps.should-it-run.outputs.should_run == 'true'
-        shell: bash
+      - name: Run linters for all workspaces
+        run: yarn workspaces foreach --all --topological-dev --exclude @relay-protocol/hub-monorepo run lint
 
-      - name: 'run tests'
-        run: yarn workspace @relay-protocol/${{ steps.workspace-name.outputs.WORKSPACE_NAME }} run test
-        if: steps.should-it-run.outputs.should_run == 'true'
-        shell: bash
-
-      - name: 'run coverage'
-        run: yarn workspace @relay-protocol/${{matrix.folders}} run coverage
-        if: steps.should-it-run.outputs.should_run == 'true' && matrix.folders == 'smart-contracts'
-        shell: bash
-
-      - name: 'Upload coverage report'
-        uses: actions/upload-artifact@v4
-        if: steps.should-it-run.outputs.should_run == 'true' && matrix.folders == 'smart-contracts'
-        with:
-          name: coverage-report
-          path: ${{ matrix.folders }}/coverage/
-          retention-days: 7
+      - name: Run workspace tests
+        run: yarn workspaces foreach --all --topological-dev --exclude @relay-protocol/hub-monorepo run test
