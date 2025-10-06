@@ -67,7 +67,10 @@ task(
         wnear,
       })
 
-      const allocator = await viem.getContractAt("Allocator", allocatorAddress)
+      const allocator = await viem.getContractAt(
+        "RelayAllocator",
+        allocatorAddress
+      )
       const delay = await allocator.read.delay()
 
       await run("allocator:add-withdrawer", {

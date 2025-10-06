@@ -8,7 +8,9 @@ const EDITOR_ROLE = keccak256("EDITOR_ROLE")
 describe("extensions", function () {
   async function deployHub() {
     const [admin, editor, attacker] = await hre.viem.getWalletClients()
-    const hub = await hre.viem.deployContract("Hub", [admin.account.address])
+    const hub = await hre.viem.deployContract("RelayHub", [
+      admin.account.address,
+    ])
     const publicClient = await hre.viem.getPublicClient()
 
     return {

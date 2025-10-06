@@ -11,7 +11,10 @@ task("allocator:withdraw-to-near", "Withdraw balance to NEAR")
     const publicClient = await viem.getPublicClient()
     const wNEARAddress = await getWNEARAddress(network.config.chainId!)
 
-    const allocator = await viem.getContractAt("Allocator", allocatorAddress)
+    const allocator = await viem.getContractAt(
+      "RelayAllocator",
+      allocatorAddress
+    )
 
     const wNEAR = await viem.getContractAt("MyToken", wNEARAddress)
 

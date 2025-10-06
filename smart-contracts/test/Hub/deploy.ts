@@ -1,7 +1,7 @@
 import { expect } from "chai"
 import hre from "hardhat"
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
-import HubModule from "../../ignition/modules/Hub"
+import HubModule from "../../ignition/modules/RelayHub"
 
 describe("Hub Deployment", function () {
   async function deployHub() {
@@ -10,7 +10,7 @@ describe("Hub Deployment", function () {
 
     const { hub } = await hre.ignition.deploy(HubModule, {
       parameters: {
-        Hub: {
+        RelayHub: {
           admin: admin.account.address,
         },
       },

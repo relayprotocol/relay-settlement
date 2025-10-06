@@ -7,7 +7,9 @@ describe("ERC20View Hub Events", function () {
   async function deployHubWithERC20View() {
     const [admin, operatorUser, regularUser, anotherUser] =
       await hre.viem.getWalletClients()
-    const hub = await hre.viem.deployContract("Hub", [admin.account.address])
+    const hub = await hre.viem.deployContract("RelayHub", [
+      admin.account.address,
+    ])
     const publicClient = await hre.viem.getPublicClient()
 
     // Add operator role to operatorUser

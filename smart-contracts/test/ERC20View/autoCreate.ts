@@ -6,7 +6,9 @@ import { Address, keccak256 } from "viem"
 describe("ERC20View Auto Creation", function () {
   async function deployHub() {
     const [admin, operatorUser, regularUser] = await hre.viem.getWalletClients()
-    const hub = await hre.viem.deployContract("Hub", [admin.account.address])
+    const hub = await hre.viem.deployContract("RelayHub", [
+      admin.account.address,
+    ])
     const publicClient = await hre.viem.getPublicClient()
 
     // Add operator role to operatorUser

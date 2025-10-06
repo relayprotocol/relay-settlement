@@ -16,7 +16,10 @@ task(
       const [signer] = await viem.getWalletClients()
       const publicClient = await viem.getPublicClient()
 
-      const allocator = await viem.getContractAt("Allocator", allocatorAddress)
+      const allocator = await viem.getContractAt(
+        "RelayAllocator",
+        allocatorAddress
+      )
 
       console.log("Setting payload builder...")
       console.log(`Chain ID: ${chainId}`)

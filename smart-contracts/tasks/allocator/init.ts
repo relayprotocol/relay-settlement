@@ -15,7 +15,10 @@ task("allocator:init", "Initialize the Allocator contract")
         wNEARAddress = await getWNEARAddress(network.config.chainId!)
       }
 
-      const allocator = await viem.getContractAt("Allocator", allocatorAddress)
+      const allocator = await viem.getContractAt(
+        "RelayAllocator",
+        allocatorAddress
+      )
 
       // Approve 2 wNEAR for the allocator if necessary
       const allowance = parseUnits("2", 24)

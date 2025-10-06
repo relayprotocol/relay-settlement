@@ -216,7 +216,7 @@ describe("execute", function () {
 
     const hubBalanceAfter = await hub.read.balanceOf([hubToAddress, hubTokenId])
 
-    // Ensure an "Executed" event was emitted with the correct idempotency key
+    // Ensure an 'Executed' event was emitted with the correct idempotency key
     const logs = await publicClient.getContractEvents({
       abi: oracle.abi,
       address: oracle.address,
@@ -313,7 +313,7 @@ describe("execute", function () {
       hubTokenId,
     ])
 
-    // Ensure an "Executed" event was emitted with the correct idempotency key
+    // Ensure an 'Executed' event was emitted with the correct idempotency key
     const logs = await publicClient.getContractEvents({
       abi: oracle.abi,
       address: oracle.address,
@@ -427,7 +427,7 @@ describe("execute", function () {
       hubTokenId,
     ])
 
-    // Ensure an "Executed" event was emitted with the correct idempotency key
+    // Ensure an 'Executed' event was emitted with the correct idempotency key
     const logs = await publicClient.getContractEvents({
       abi: oracle.abi,
       address: oracle.address,
@@ -554,7 +554,7 @@ describe("execute", function () {
       hubTokenId,
     ])
 
-    // Ensure an "Executed" event was emitted with the correct idempotency key
+    // Ensure an 'Executed' event was emitted with the correct idempotency key
     const logs = await publicClient.getContractEvents({
       abi: oracle.abi,
       address: oracle.address,

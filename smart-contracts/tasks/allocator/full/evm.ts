@@ -55,7 +55,10 @@ task(
         })
       }
 
-      const allocator = await viem.getContractAt("Allocator", allocatorAddress)
+      const allocator = await viem.getContractAt(
+        "RelayAllocator",
+        allocatorAddress
+      )
       const delay = await allocator.read.delay()
 
       let payloadBuilderAddress = await allocator.read.payloadBuilders([

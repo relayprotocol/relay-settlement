@@ -602,7 +602,7 @@ describe("Allocator signWithdrawPayloadHash", function () {
           account: anotherUser.account,
           domain: {
             chainId: await publicClient.getChainId(),
-            name: "Allocator",
+            name: "RelayAllocator",
             verifyingContract: allocator.address,
             version: "1",
           },
@@ -708,7 +708,7 @@ describe("Allocator signWithdrawPayloadHash", function () {
           account: user.account,
           domain: {
             chainId: await publicClient.getChainId(),
-            name: "Allocator",
+            name: "RelayAllocator",
             verifyingContract: allocator.address,
             version: "1",
           },
@@ -804,7 +804,7 @@ describe("Allocator signWithdrawPayloadHash", function () {
           account: user.account,
           domain: {
             chainId: await publicClient.getChainId(),
-            name: "Allocator",
+            name: "RelayAllocator",
             verifyingContract: allocator.address,
             version: "1",
           },

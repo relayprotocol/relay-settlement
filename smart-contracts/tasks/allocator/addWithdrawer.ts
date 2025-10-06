@@ -11,7 +11,10 @@ task("allocator:add-withdrawer", "Grant APPROVED_WITHDRAWER_ROLE to an address")
     const [admin] = await viem.getWalletClients()
     const publicClient = await viem.getPublicClient()
 
-    const allocator = await viem.getContractAt("Allocator", allocatorAddress)
+    const allocator = await viem.getContractAt(
+      "RelayAllocator",
+      allocatorAddress
+    )
     if (!account) {
       account = admin.account.address
     }

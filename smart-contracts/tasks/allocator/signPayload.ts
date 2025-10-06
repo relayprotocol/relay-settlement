@@ -37,7 +37,10 @@ task("allocator:sign-payload", "Sign payload on allocator")
       const [signer] = await viem.getWalletClients()
       const publicClient = await viem.getPublicClient()
 
-      const allocator = await viem.getContractAt("Allocator", allocatorAddress)
+      const allocator = await viem.getContractAt(
+        "RelayAllocator",
+        allocatorAddress
+      )
 
       if (!wNEARAddress) {
         wNEARAddress = await getWNEARAddress(network.config.chainId!)

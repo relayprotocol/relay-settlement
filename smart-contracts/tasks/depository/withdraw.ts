@@ -29,7 +29,10 @@ task("depository:withdraw", "Withdraw from depository")
     ) => {
       const { viem } = hre
 
-      const allocator = await viem.getContractAt("Allocator", allocatorAddress)
+      const allocator = await viem.getContractAt(
+        "RelayAllocator",
+        allocatorAddress
+      )
       const [withdrawParams, rawPayload] = await allocator.read.payloads([
         withdrawRequestHash,
       ])

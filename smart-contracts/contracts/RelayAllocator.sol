@@ -15,7 +15,7 @@ import {
 } from "./aurora-xcc/AuroraSdk.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import {Hub} from "./Hub.sol";
+import {RelayHub} from "./RelayHub.sol";
 import {Utils} from "./Utils.sol";
 import {ChainSignatures} from "./ChainSignatures.sol";
 
@@ -92,7 +92,7 @@ struct GasSettings {
 /// @title Allocator
 /// @author Relay Protocol
 /// @notice Manages cross-chain withdrawal requests and payload signing using NEAR MPC signer
-contract Allocator is AccessControl, Ownable, EIP712 {
+contract RelayAllocator is AccessControl, Ownable, EIP712 {
   using AuroraSdk for NEAR;
   using AuroraSdk for PromiseCreateArgs;
   using AuroraSdk for PromiseWithCallback;
@@ -115,7 +115,7 @@ contract Allocator is AccessControl, Ownable, EIP712 {
 
   // EIP712
   /// @notice The signing domain for EIP712
-  string public constant SIGNING_DOMAIN = "Allocator";
+  string public constant SIGNING_DOMAIN = "RelayAllocator";
   /// @notice The signature version for EIP712
   string public constant SIGNATURE_VERSION = "1";
   /// @notice The type hash for SubmitWithdrawRequest
@@ -220,7 +220,7 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     bytes32 nonce; // Nonce for replay protection
   }
 
-  /// @notice Constructor for Allocator contract
+  /// @notice Constructor for RelayAllocator contract
   /// @param _owner The owner of the contract
   /// @param _delay The global delay for withdrawal requests
   /// @param _signer The NEAR signer account
@@ -608,7 +608,7 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     // Only an operator for the spender can trigger withdrawals or a valid signature by the recipient must be provided.
     if (
       !(params.spender == msg.sender ||
-        Hub(hub).isOperator(params.spender, msg.sender) ||
+        RelayHub(hub).isOperator(params.spender, msg.sender) ||
         (spenderAlias == params.spender &&
           signatureMatchesReceiver(params, signature)))
     ) {
@@ -616,7 +616,7 @@ contract Allocator is AccessControl, Ownable, EIP712 {
     }
 
     // Actually perform the transfer
-    Hub(hub).transferFrom(
+    RelayHub(hub).transferFrom(
       params.spender,
       address(this),
       tokenId,

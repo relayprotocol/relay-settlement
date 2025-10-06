@@ -58,7 +58,10 @@ task(
         wnear,
       })
 
-      const allocator = await viem.getContractAt("Allocator", allocatorAddress)
+      const allocator = await viem.getContractAt(
+        "RelayAllocator",
+        allocatorAddress
+      )
       let payloadBuilderAddress = await allocator.read.payloadBuilders([
         chainId,
         depositoryAddress,
@@ -196,7 +199,10 @@ task("sui:recover", "")
     const domainId = 1
 
     // Get allocator contract instance
-    const allocatorContract = await viem.getContractAt("Allocator", allocator)
+    const allocatorContract = await viem.getContractAt(
+      "RelayAllocator",
+      allocator
+    )
 
     // Get transaction receipt
     const receipt = await publicClient.getTransactionReceipt({ hash: txHash })

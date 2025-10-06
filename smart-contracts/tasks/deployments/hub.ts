@@ -1,5 +1,5 @@
 import { task } from "hardhat/config"
-import HubModule from "../../ignition/modules/Hub"
+import HubModule from "../../ignition/modules/RelayHub"
 
 task("deploy:hub", "Deploy the Hub contract")
   .addOptionalParam("admin", "The address of the Hub admin")
@@ -11,7 +11,7 @@ task("deploy:hub", "Deploy the Hub contract")
     }
     const { hub } = await ignition.deploy(HubModule, {
       parameters: {
-        Hub: {
+        RelayHub: {
           admin,
         },
       },

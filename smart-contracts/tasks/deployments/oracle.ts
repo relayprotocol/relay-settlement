@@ -1,5 +1,5 @@
 import { task } from "hardhat/config"
-import OracleModule from "../../ignition/modules/Oracle"
+import OracleModule from "../../ignition/modules/RelayOracle"
 
 task("deploy:oracle", "Deploy the Oracle contract")
   .addOptionalParam("hub", "The address of the Hub contract")
@@ -13,7 +13,7 @@ task("deploy:oracle", "Deploy the Oracle contract")
     }
     const { oracle } = await ignition.deploy(OracleModule, {
       parameters: {
-        Oracle: {
+        RelayOracle: {
           admin,
           hub,
         },

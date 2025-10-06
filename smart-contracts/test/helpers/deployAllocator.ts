@@ -30,7 +30,7 @@ export async function deployAllocator(options?: {
   ]
 
   const allocator = await hre.viem.deployContract(
-    "Allocator",
+    "RelayAllocator",
     allocatorParams,
     {
       libraries: {

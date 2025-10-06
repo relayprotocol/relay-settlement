@@ -13,7 +13,7 @@ export async function deployOracle() {
 
   // Deploy the Oracle
   const oracle = await hre.viem.deployContract(
-    "Oracle",
+    "RelayOracle",
     [admin.account.address, hub.address],
     {
       libraries: {

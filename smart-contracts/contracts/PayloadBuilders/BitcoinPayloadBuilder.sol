@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
-import {IPayloadBuilder} from "../Allocator.sol";
+import {IPayloadBuilder} from "../RelayAllocator.sol";
 import {Base64} from "solady/src/utils/Base64.sol";
 import "../Utils.sol";
 

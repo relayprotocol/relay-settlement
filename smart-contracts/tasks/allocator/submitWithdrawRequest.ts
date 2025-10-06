@@ -33,7 +33,10 @@ task("allocator:submit-withdraw", "Submit withdraw request to allocator")
       const [signer] = await viem.getWalletClients()
       const publicClient = await viem.getPublicClient()
 
-      const allocator = await viem.getContractAt("Allocator", allocatorAddress)
+      const allocator = await viem.getContractAt(
+        "RelayAllocator",
+        allocatorAddress
+      )
 
       if (!nonce) {
         nonce = keccak256(`0x${new Date().getTime().toString()}`)

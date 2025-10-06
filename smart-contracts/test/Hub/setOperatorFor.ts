@@ -7,7 +7,9 @@ describe("setOperatorFor", function () {
   async function deployHub() {
     const [admin, operatorUser, regularUser, operator] =
       await hre.viem.getWalletClients()
-    const hub = await hre.viem.deployContract("Hub", [admin.account.address])
+    const hub = await hre.viem.deployContract("RelayHub", [
+      admin.account.address,
+    ])
     const publicClient = await hre.viem.getPublicClient()
 
     return {

@@ -5,13 +5,13 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 
-import {Hub} from "./Hub.sol";
+import {RelayHub} from "./RelayHub.sol";
 import {Utils} from "./Utils.sol";
 
-/// @title Oracle
+/// @title RelayOracle
 /// @author Relay Protocol
 /// @notice Oracle contract
-contract Oracle is AccessControl, EIP712 {
+contract RelayOracle is AccessControl, EIP712 {
   using SignatureChecker for address;
 
   // Structs
@@ -49,7 +49,7 @@ contract Oracle is AccessControl, EIP712 {
   // Constants
 
   /// @notice Hub contract
-  Hub public immutable HUB;
+  RelayHub public immutable HUB;
 
   bytes32 private constant _EXECUTION_TYPEHASH =
     keccak256("Execution(bytes32 idempotencyKey,bytes[] actions)");
@@ -68,7 +68,7 @@ contract Oracle is AccessControl, EIP712 {
     _setRoleAdmin(ORACLE_ROLE, ADMIN_ROLE);
     _grantRole(ADMIN_ROLE, admin);
 
-    HUB = Hub(hub);
+    HUB = RelayHub(hub);
   }
 
   // Public methods

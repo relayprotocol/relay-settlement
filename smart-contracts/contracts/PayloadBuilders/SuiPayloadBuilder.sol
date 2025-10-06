@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
-import {IPayloadBuilder} from "../Allocator.sol";
+import {IPayloadBuilder} from "../RelayAllocator.sol";
 import {Utils} from "../Utils.sol";
 
 /// @title SuiPayloadBuilder

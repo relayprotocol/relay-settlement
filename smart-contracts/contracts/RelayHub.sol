@@ -26,10 +26,10 @@ interface IERC20View {
   ) external;
 }
 
-/// @title Hub
+/// @title RelayHub
 /// @author Relay Protocol
 /// @notice Based on Solmate standard ERC6909 implementation. (https://github.com/transmissions11/solmate/blob/main/src/tokens/ERC6909.sol)
-contract Hub is AccessControl {
+contract RelayHub is AccessControl {
   using Strings for uint256;
 
   /*//////////////////////////////////////////////////////////////
@@ -129,7 +129,7 @@ contract Hub is AccessControl {
                              CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
 
-  /// @notice Constructor for Hub contract
+  /// @notice Constructor for RelayHub contract
   /// @param adminAddress The address to grant admin role
   constructor(address adminAddress) {
     _setRoleAdmin(OPERATOR_ROLE, ADMIN_ROLE);

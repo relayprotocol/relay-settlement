@@ -1,9 +1,9 @@
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules"
 
-const HubModule = buildModule("Hub", (m) => {
+const RelayHubModule = buildModule("RelayHub", (m) => {
   const admin = m.getParameter("admin")
-  const hub = m.contract("Hub", [admin])
+  const hub = m.contract("RelayHub", [admin])
   return { hub }
 })
 
-export default HubModule
+export default RelayHubModule
