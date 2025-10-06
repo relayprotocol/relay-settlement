@@ -45,8 +45,9 @@ const EthereumTxSchema = z.object({
   family: z.literal("ethereum-vm"),
   from: ethereumAddress,
   gas: integerString,
-  maxFeePerGas: integerString,
-  maxPriorityFeePerGas: integerString,
+  gasPrice: integerString.optional(),
+  maxFeePerGas: integerString.optional(),
+  maxPriorityFeePerGas: integerString.optional(),
   nonce: z.number().int().nonnegative(),
   rpc: z.string().url(),
   to: ethereumAddress,
@@ -98,7 +99,7 @@ export const buildEvmTransaction = async (
     gas: BigInt(tx.gas),
     nonce: tx.nonce,
     to: tx.to,
-    type: "eip1559",
+    type: tx.gasPrice ? "legacy" : "eip1559",
     value: parseEther(tx.amount),
   }
 
@@ -119,8 +120,11 @@ export const buildEvmTransaction = async (
   // Add the fees now only!
   return {
     ...raw,
-    maxFeePerGas: BigInt(tx.maxFeePerGas),
-    maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas),
+    gasPrice: tx.gasPrice ? BigInt(tx.gasPrice) : undefined,
+    maxFeePerGas: tx.maxFeePerGas ? BigInt(tx.maxFeePerGas) : undefined,
+    maxPriorityFeePerGas: tx.maxPriorityFeePerGas
+      ? BigInt(tx.maxPriorityFeePerGas)
+      : undefined,
   }
 }
 
