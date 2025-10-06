@@ -23,6 +23,9 @@ import "./tasks/allocator/full/evm"
 import "./tasks/allocator/full/solana"
 import "./tasks/allocator/full/sui"
 
+// hub tasks
+import './tasks/hub/add-operator'
+
 // deployments
 import "./tasks/deployments/allocator"
 import "./tasks/deployments/hub"
