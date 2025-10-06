@@ -1,5 +1,7 @@
 import { createPublicClient, http, parseEther } from "viem"
+
 import axios from "axios"
+
 const main = async () => {
   const chainIds = [
     146, 324, 360, 747, 1514, 1868, 2818, 5000, 33139, 55244, 57073, 80094,

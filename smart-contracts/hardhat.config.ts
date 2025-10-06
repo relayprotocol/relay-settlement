@@ -119,6 +119,11 @@ const config: HardhatUserConfig = {
   networks,
   solidity: {
     settings: {
+      metadata: {
+        appendCBOR: false,
+        bytecodeHash: "none",
+        useLiteralContent: true,
+      },
       optimizer: {
         enabled: true,
         runs: 200,
