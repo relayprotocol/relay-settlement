@@ -11,7 +11,11 @@ import {
 import { wait } from "../../lib/wait"
 import { checkAndApproveWNEAR } from "../../lib/aurora"
 import { extractNearSignature } from "../../lib/near"
-import { buildEvmTransaction, loadTransactions } from "./utils"
+import {
+  buildEvmTransaction,
+  hasEvmTransactionBeenExecuted,
+  loadTransactions,
+} from "./utils"
 
 const signGas = 50_000_000_000_000n
 const callbackGas = 30_000_000_000_000n
@@ -47,6 +51,11 @@ task(
         let rawUnsigned
         let curve: "Ecdsa" | "Eddsa"
         if (tx.family === "ethereum-vm") {
+          const alreadyExecuted = await hasEvmTransactionBeenExecuted(tx)
+          if (alreadyExecuted) {
+            console.log("✅ Transaction was already executed, skipping...")
+            continue
+          }
           const transaction = await buildEvmTransaction(tx)
           if (!transaction) {
             throw new Error("Failed to build EVM transaction")

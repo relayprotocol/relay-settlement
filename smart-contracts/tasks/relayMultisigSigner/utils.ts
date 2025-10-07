@@ -72,6 +72,21 @@ export const TransactionsSchema = z.array(TransactionSchema)
 // Keeping track of offsets if there are multiple transactions from the same address
 const nonceOffsets: Record<string, Record<number, number>> = {}
 
+export const hasEvmTransactionBeenExecuted = async (
+  tx: z.infer<typeof EthereumTxSchema>
+) => {
+  const networkClient = createPublicClient({
+    transport: http(tx.rpc),
+  })
+
+  // Check the nonces!
+  const nonce = await networkClient.getTransactionCount({
+    address: tx.from,
+  })
+
+  return nonce > tx.nonce
+}
+
 export const buildEvmTransaction = async (
   tx: z.infer<typeof EthereumTxSchema>
 ) => {
