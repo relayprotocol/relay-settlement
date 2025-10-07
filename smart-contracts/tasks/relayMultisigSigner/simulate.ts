@@ -1,6 +1,11 @@
 import { task } from "hardhat/config"
-import { keccak256, serializeTransaction } from "viem"
-import { buildEvmTransaction, loadTransactions } from "./utils"
+import {
+  BitcoinTxSchema,
+  EthereumTxSchema,
+  buildBitcoinTransaction,
+  buildEvmTransaction,
+  loadTransactions,
+} from "./utils"
 
 task(
   "relay-multisig-signer:simulate",
@@ -13,19 +18,22 @@ task(
 
     for (let i = 0; i < transactions.length; i++) {
       const tx = transactions[i]
+      let result
       if (tx.family === "ethereum-vm") {
-        const transaction = await buildEvmTransaction(tx)
-        if (transaction) {
-          const rawUnsigned = serializeTransaction(transaction) // EVM
-          console.log("✅ Successful transaction:", tx)
-          console.log(`📦 Payload: ${rawUnsigned}`)
-          const hashToSign = keccak256(rawUnsigned)
-          console.log(`📝 Hash to sign: ${hashToSign}\n`)
-        }
+        result = await buildEvmTransaction(EthereumTxSchema.parse(tx))
+      } else if (tx.family === "bitcoin-vm") {
+        result = await buildBitcoinTransaction(BitcoinTxSchema.parse(tx))
       } else {
         throw new Error(
           `Unsupported transaction family: ${tx.family}. Please add support!`
         )
       }
+      console.log("✅ Successful transaction:", tx)
+      console.log(`📦 Payload: ${result.payload}`)
+      console.log("📝 Hashes to sign:")
+      result.hashesToSign.forEach((hash, index) => {
+        console.log(`   [${index}] ${hash}`)
+      })
+      console.log("")
     }
   })

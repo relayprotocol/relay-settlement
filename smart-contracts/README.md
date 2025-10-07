@@ -74,7 +74,7 @@ We have deployed an instance of this contract on Aurora at `0x66667945C34b399993
 
 ### Example of flow:
 
-TODO: support Solana, Bitcoin, ... etc
+Pre-requisite: add a `SAFE_API_KEY` env variable!
 
 1. A transactions manifest file is created. It represents the transaction(s) to be executed on each chain. This file should be created from a script (it's format is validated when loaded by the scripts below).
 2. It is possible to simulate all the transactions using `relay-multisig-signer:simulate --transactions <manifest.json>`

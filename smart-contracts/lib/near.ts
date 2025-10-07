@@ -38,7 +38,7 @@ export async function derivePublicKey(
   return { curve, publicKey }
 }
 
-// A function that extracts the r, s, and v values from a NEAR signature
+// A function that extracts the r, s, and v values from a NEAR ECDSA signature
 export const extractNearSignature = (
   signature: string
 ): { r: string; s: string; v: number } => {

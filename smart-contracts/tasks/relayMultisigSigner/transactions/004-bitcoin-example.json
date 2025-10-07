@@ -1,0 +1,27 @@
+[
+  {
+    "family": "bitcoin-vm",
+    "network": "testnet",
+    "feeRate": 2,
+    "inputs": [
+      {
+        "txid": "2837d6b2e50b00b75ef67b5c33c81d1efa5da11950aacf5664911f9303c63524",
+        "vout": 0,
+        "value": 1000,
+        "scriptPubKey": "76a9145d1b2302080f147db128c78fd46f978d1f790bfc88ac"
+      },
+      {
+        "txid": "90aa0ea391b27b880f784a299903d5f622d9d47f0d85b5a7899c6ba5b6f0e407",
+        "vout": 0,
+        "value": 2450,
+        "scriptPubKey": "76a9145d1b2302080f147db128c78fd46f978d1f790bfc88ac"
+      }
+    ],
+    "outputs": [
+      {
+        "address": "tb1q32qd442kah5rv2y6g0cwnmej8867h8kjl4m8kg",
+        "value": 2702
+      }
+    ]
+  }
+]

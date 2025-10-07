@@ -1,9 +1,9 @@
 import { networks } from "@relay-protocol/networks"
 import { ChainType } from "@relay-protocol/types"
 import { base58 } from "@scure/base"
-import { createHash } from "crypto"
 import { publicKeyToAddress } from "viem/accounts"
 import { derivePublicKey } from "./near"
+import * as bitcoin from "bitcoinjs-lib"
 
 // EdDSA for Solana, ECDSA for EVM and Bitcoin
 export const getDomainId = (family: ChainType) =>
@@ -12,7 +12,8 @@ export const getDomainId = (family: ChainType) =>
 export const deriveAllocatorSignerAddress = async (
   publicClient: any,
   allocatorAddress: string,
-  family: ChainType
+  family: ChainType,
+  network?: string = "bitcoin"
 ): Promise<string | undefined> => {
   const allocatorPublicKey = await getAllocatorPublicKey(
     publicClient,
@@ -21,7 +22,11 @@ export const deriveAllocatorSignerAddress = async (
   )
   if (family === "ethereum-vm") return computeEvmAddress(allocatorPublicKey)
   if (family === "solana-vm") return computeSolanaAddress(allocatorPublicKey)
-  if (family === "bitcoin-vm") return computeBitcoinAddress(allocatorPublicKey)
+  if (family === "bitcoin-vm")
+    return computeBitcoinAddressForNetwork(
+      allocatorPublicKey,
+      bitcoin.networks[network]
+    )
 
   return
 }
@@ -50,7 +55,7 @@ export const getAllocatorPublicKey = async (
     functionName: "nearSigner",
   })) as string
   console.log(
-    `using Near signer on ${isTestnet ? "testnet" : "mainnet"}: ${nearSigner}`
+    `Using Near signer on ${isTestnet ? "testnet" : "mainnet"}: ${nearSigner}`
   )
   const derivationPath = allocatorAddress.toLowerCase()
   const predecessor = `${allocatorAddress.substring(2).toLowerCase()}.aurora`
@@ -81,24 +86,23 @@ const computeSolanaAddress = (allocatorPublicKeyRaw: string) => {
   return base58.encode(base58.decode(allocatorPublicKeyRaw))
 }
 
-const computeBitcoinAddress = (allocatorPublicKeyRaw: string) => {
-  // For Bitcoin, we need to convert the ECDSA public key to a Bitcoin address
-  const publicKeyBytes = Buffer.from(base58.decode(allocatorPublicKeyRaw))
+const computeBitcoinAddressForNetwork = (
+  allocatorPublicKeyRaw: string,
+  network = bitcoin.networks.bitcoin
+) => {
+  const raw = Buffer.from(base58.decode(allocatorPublicKeyRaw))
 
-  // Create P2PKH address (Legacy Bitcoin address)
-  // 1. Hash the public key with SHA256
-  const sha256Hash = createHash("sha256").update(publicKeyBytes).digest()
-  // 2. Hash the result with RIPEMD160
-  const ripemd160Hash = createHash("ripemd160").update(sha256Hash).digest()
-  // 3. Add version byte (0x00 for mainnet)
-  const versionedHash = Buffer.concat([Buffer.from([0x00]), ripemd160Hash])
-  // 4. Double SHA256 for checksum
-  const checksum = createHash("sha256")
-    .update(createHash("sha256").update(versionedHash).digest())
-    .digest()
-    .slice(0, 4)
-  // 5. Combine and encode with base58
-  const bitcoinAddress = base58.encode(Buffer.concat([versionedHash, checksum]))
+  const x = raw.subarray(0, 32)
+  const y = raw.subarray(32, 64)
+  const yIsEven = (y[31] & 1) === 0
+  const prefix = yIsEven ? 0x02 : 0x03
+  const pubKeyCompressed = Buffer.concat([
+    Buffer.from([prefix]),
+    Buffer.from(x),
+  ])
 
-  return bitcoinAddress
+  return bitcoin.payments.p2pkh({
+    network,
+    pubkey: pubKeyCompressed,
+  }).address!
 }

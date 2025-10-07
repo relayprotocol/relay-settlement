@@ -1,149 +1,174 @@
 import { task } from "hardhat/config"
+import type { HardhatRuntimeEnvironment } from "hardhat/types"
 import {
   createPublicClient,
-  Hex,
   parseSignature,
   http,
-  keccak256,
   recoverAddress,
   serializeTransaction,
 } from "viem"
-import { wait } from "../../lib/wait"
 import { checkAndApproveWNEAR } from "../../lib/aurora"
-import { extractNearSignature } from "../../lib/near"
 import {
+  BitcoinTxSchema,
+  buildBitcoinTransaction,
   buildEvmTransaction,
+  getSignatureForHash,
+  hasBitcoinTransactionBeenExecuted,
   hasEvmTransactionBeenExecuted,
   loadTransactions,
+  type Transaction,
 } from "./utils"
+import {
+  addSignedInputsToTransaction,
+  broadcastTransaction,
+  buildBitcoinTransactionFromPayload,
+} from "../../lib/bitcoin"
 
-const signGas = 50_000_000_000_000n
-const callbackGas = 30_000_000_000_000n
+async function executeEvmTransaction(
+  tx: Extract<Transaction, { family: "ethereum-vm" }>,
+  relayMultisigSigner: string,
+  hre: HardhatRuntimeEnvironment
+) {
+  const alreadyExecuted = await hasEvmTransactionBeenExecuted(tx)
+  if (alreadyExecuted) {
+    console.log("✅ Transaction was already executed, skipping...")
+    return
+  }
+
+  const {
+    transaction,
+    hashesToSign: [hashToSign],
+  } = await buildEvmTransaction(tx)
+
+  const hexSignature = await getSignatureForHash(
+    relayMultisigSigner,
+    hashToSign,
+    "Ecdsa",
+    hre
+  )
+
+  // Verify signature matches expected sender
+  const signer = await recoverAddress({
+    hash: hashToSign,
+    signature: hexSignature,
+  })
+  if (signer.toLowerCase() !== transaction.from.toLowerCase()) {
+    throw new Error(
+      `❌ Signer does not match transaction sender... Got ${signer}`
+    )
+  }
+
+  const serializedTransaction = serializeTransaction(
+    transaction,
+    parseSignature(hexSignature)
+  )
+
+  const networkClient = createPublicClient({
+    transport: http(tx.rpc),
+  })
+
+  const hash = await networkClient.sendRawTransaction({
+    serializedTransaction,
+  })
+  console.log(`🚀 Transaction sent via ${tx.rpc}: ${hash}`)
+
+  const receipt = await networkClient.waitForTransactionReceipt({ hash })
+  console.log(`✅ Transaction confirmed: ${receipt.transactionHash}`)
+}
+
+async function executeBitcoinTransaction(
+  tx: Extract<Transaction, { family: "bitcoin-vm" }>,
+  relayMultisigSigner: string,
+  hre: HardhatRuntimeEnvironment
+) {
+  const parsedTx = BitcoinTxSchema.parse(tx)
+
+  const alreadyExecuted = await hasBitcoinTransactionBeenExecuted(parsedTx)
+  if (alreadyExecuted) {
+    console.log("✅ Transaction was already executed, skipping...")
+    return
+  }
+
+  const result = await buildBitcoinTransaction(parsedTx)
+
+  // Get signatures for all input hashes
+  const signedHashes = []
+  for (let j = 0; j < result.hashesToSign.length; j++) {
+    const hashToSign = result.hashesToSign[j]
+    console.log(`🔏 Getting signature for input ${j}: ${hashToSign}`)
+
+    const hexSignature = await getSignatureForHash(
+      relayMultisigSigner,
+      hashToSign,
+      "Ecdsa",
+      hre
+    )
+
+    const { r, s, v } = parseSignature(hexSignature)
+    signedHashes.push({
+      r: r.slice(2),
+      s: s.slice(2),
+      v,
+    })
+  }
+
+  // Build and sign the transaction
+  const builtTx = buildBitcoinTransactionFromPayload(result.transaction)
+
+  await addSignedInputsToTransaction(
+    builtTx,
+    result.hashesToSign,
+    signedHashes,
+    result.transaction
+  )
+
+  // Broadcast the transaction
+  const txid = await broadcastTransaction(builtTx)
+  console.log(`✅ Bitcoin transaction confirmed: ${txid}`)
+}
+
+function countRequiredSignatures(transactions: Transaction[]): number {
+  return transactions.reduce((count, tx) => {
+    if (tx.family === "bitcoin-vm") {
+      return count + tx.inputs.length
+    }
+    return count + 1
+  }, 0)
+}
 
 task(
   "relay-multisig-signer:execute-transactions",
-  "Checks transaction hashes from a transactions manifest file against a Gnosis Safe. They must match the transactions from the manifest."
+  "Executes transactions from a manifest file, signing them via the relay multisig signer"
 )
   .addParam("transactions", "The path to the transactions manifest file")
   .addParam("relayMultisigSigner", "address of the relay multisig signer")
   .setAction(
     async ({ transactions: transactionsPath, relayMultisigSigner }, hre) => {
       const [user] = await hre.viem.getWalletClients()
-
       const transactions = loadTransactions(transactionsPath)
 
-      const multisigSigner = await hre.viem.getContractAt(
-        "RelayMultisigSigner",
-        relayMultisigSigner
-      )
-
-      // We need 1 yocto Near for each signature!
+      // We need 1 yocto Near for each signature (Bitcoin needs one per input)
+      const signatureCount = countRequiredSignatures(transactions)
       await checkAndApproveWNEAR(
         hre,
         user.account.address,
         relayMultisigSigner,
-        BigInt(transactions.length)
+        BigInt(signatureCount)
       )
 
       for (let i = 0; i < transactions.length; i++) {
         console.log(`🏗️  Building transaction #${i}`)
         const tx = transactions[i]
-        let rawUnsigned
-        let curve: "Ecdsa" | "Eddsa"
+
         if (tx.family === "ethereum-vm") {
-          const alreadyExecuted = await hasEvmTransactionBeenExecuted(tx)
-          if (alreadyExecuted) {
-            console.log("✅ Transaction was already executed, skipping...")
-            continue
-          }
-          const transaction = await buildEvmTransaction(tx)
-          if (!transaction) {
-            throw new Error("Failed to build EVM transaction")
-          }
-          rawUnsigned = serializeTransaction(transaction) // EVM
-          curve = "Ecdsa"
-          const hashToSign = keccak256(rawUnsigned)
-
-          let nearSignature = await multisigSigner.read.signatures([
-            hashToSign,
-            curve,
-          ])
-
-          if (nearSignature === "0x") {
-            // Check if the signature was approved
-            const approved = await multisigSigner.read.approvedSignatures([
-              hashToSign,
-              curve,
-            ])
-            if (!approved) {
-              throw new Error("❌ Signature not approved...")
-            }
-
-            console.log("📝 Requesting signature...", { curve, hashToSign })
-
-            const txHash = await multisigSigner.write.sign([
-              hashToSign,
-              curve,
-              signGas,
-              callbackGas,
-            ])
-
-            const publicClient = await hre.viem.getPublicClient()
-            await publicClient.waitForTransactionReceipt({
-              hash: txHash,
-            })
-          }
-          while (nearSignature === "0x") {
-            console.log("Waiting for signed hash...")
-            await wait(1)
-            nearSignature = await multisigSigner.read.signatures([
-              hashToSign,
-              curve,
-            ])
-          }
-
-          // Ok so now we have the signature AND the payload! We can submit!
-          const { r, s, v } = extractNearSignature(nearSignature)
-          const hexSignature =
-            `0x${r}${s}${v.toString(16).padStart(2, "0")}` as `0x${string}`
-          const signer = await recoverAddress({
-            hash: hashToSign,
-            signature: hexSignature,
-          })
-          console.log(transaction.from)
-          if (signer.toLowerCase() !== transaction.from.toLowerCase()) {
-            throw new Error(
-              `❌ Signer does not match transaction sender... Got ${signer}`
-            )
-          }
-
-          const serializedTransaction: Hex = serializeTransaction(
-            transaction,
-            parseSignature(hexSignature)
-          )
-
-          const networkClient = createPublicClient({
-            transport: http(tx.rpc),
-          })
-
-          const hash = await networkClient.sendRawTransaction({
-            serializedTransaction,
-          })
-          console.log(`🚀 Transaction sent via ${tx.rpc}: ${hash}`)
-          const receipt = await networkClient.waitForTransactionReceipt({
-            hash,
-          })
-          console.log(`✅ Transaction confirmed: ${receipt.transactionHash}`)
+          await executeEvmTransaction(tx, relayMultisigSigner, hre)
+        } else if (tx.family === "bitcoin-vm") {
+          await executeBitcoinTransaction(tx, relayMultisigSigner, hre)
         } else {
           throw new Error(
             `Unsupported transaction family: ${tx.family}. Please add support!`
           )
         }
       }
-
-      // For each transaction, create the hash, check that it has been approved
-      // Trigger the signature
-      // Retrieve the signature
-      // Execute the transaction!
     }
   )
