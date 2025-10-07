@@ -6,8 +6,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
-    "lint": "eslint",
-    "lint:fix": "yarn lint --fix"
+    "lint": "lint"
   },
   "devDependencies": {
     "@relay-protocol/eslint-config": "workspace:*",

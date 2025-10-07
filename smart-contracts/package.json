@@ -5,12 +5,8 @@
     "build:abis": "yarn hardhat export:abis",
     "test": "hardhat test",
     "coverage": "SOLIDITY_COVERAGE=true hardhat coverage",
-    "lint:contracts": "solhint 'contracts/**/*.sol'",
-    "lintFix": "yarn lint:contracts --fix --noPrompt && yarn lint:code --fix && yarn prettier",
-    "lint:code": "eslint .",
-    "lint": "yarn lint:contracts && yarn lint:code && yarn prettier:check",
-    "prettier": "prettier --write --plugin=prettier-plugin-solidity 'contracts/**/*.sol'",
-    "prettier:check": "prettier --debug-check --plugin=prettier-plugin-solidity 'contracts/**/*.sol'"
+    "lint:solidity": "yarn solhint 'contracts/**/*.sol'",
+    "lint": "yarn lint:solidity && lint"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ignition": "0.15.13",

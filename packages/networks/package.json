@@ -14,8 +14,7 @@
   "license": "MIT",
   "scripts": {
     "start": "tsc --watch",
-    "lint:fix": "yarn lint --fix",
-    "lint": "eslint",
+    "lint": "lint",
     "clean": "rm -rf ./dist",
     "build": "tsup src/index.ts --dts --format esm,cjs"
   },

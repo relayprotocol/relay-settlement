@@ -1707,6 +1707,8 @@ __metadata:
     typescript-eslint: "npm:8.45.0"
   peerDependencies:
     eslint: 9.36.0
+  bin:
+    lint: ./lint.js
   languageName: unknown
   linkType: soft
 
@@ -1742,6 +1744,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@relay-protocol/hub-monorepo@workspace:."
   dependencies:
+    "@relay-protocol/eslint-config": "workspace:*"
     "@types/node": "npm:24.6.1"
     eslint: "npm:9.36.0"
     husky: "npm:9.1.7"

@@ -2,6 +2,9 @@
   "name": "@relay-protocol/eslint-config",
   "version": "1.0.0",
   "main": "index.js",
+  "bin": {
+    "lint": "./lint.js"
+  },
   "dependencies": {
     "@eslint/js": "9.36.0",
     "eslint-config-prettier": "10.1.8",

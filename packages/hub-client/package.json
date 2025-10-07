@@ -19,8 +19,7 @@
   "scripts": {
     "start": "tsc --watch",
     "clean": "rm -rf dist",
-    "lint:fix": "yarn lint --fix",
-    "lint": "eslint",
+    "lint": "lint",
     "build": "tsup src/index.ts --dts --format esm,cjs",
     "test": "vitest run",
     "test:watch": "vitest"

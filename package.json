@@ -11,13 +11,12 @@
     "build": "yarn packages:clean && yarn packages:build",
     "packages:clean": "yarn packages --parallel run clean",
     "packages:build": "yarn packages --topological-dev run build",
-    "prettier:check": "prettier --check .",
-    "lint": "yarn prettier:check && yarn workspaces foreach --all --topological-dev run lint",
+    "lint": "lint",
     "test": "yarn workspaces foreach --all run test",
-    "packages": "yarn workspaces foreach --recursive --from '{@relay-protocol/eslint-config,@relay-protocol/tsconfig,@relay-protocol/types,@relay-protocol/fixtures,@relay-protocol/abis,@relay-protocol/networks,@relay-protocol/hub-utils,@relay-protocol/hub-client,@relay-protocol/smart-contracts}'",
-    "format": "prettier --write \"src/**/*.{ts,tsx}\""
+    "packages": "yarn workspaces foreach --recursive --from '{@relay-protocol/eslint-config,@relay-protocol/tsconfig,@relay-protocol/types,@relay-protocol/fixtures,@relay-protocol/abis,@relay-protocol/networks,@relay-protocol/hub-utils,@relay-protocol/hub-client,@relay-protocol/smart-contracts}'"
   },
   "devDependencies": {
+    "@relay-protocol/eslint-config": "workspace:*",
     "@types/node": "24.6.1",
     "eslint": "9.36.0",
     "husky": "9.1.7",
