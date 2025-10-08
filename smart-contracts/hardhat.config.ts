@@ -36,6 +36,7 @@ import "./tasks/deployments/relayMultisigSigner"
 import "./tasks/allocator/getSignerAddress"
 import "./tasks/computeSignatures"
 import "./tasks/exportAbis"
+import "./tasks/grantRole"
 
 // Relay Multisig signer
 import "./tasks/relayMultisigSigner/check-hashes"
