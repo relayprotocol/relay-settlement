@@ -4,11 +4,7 @@ import axios from "axios"
 import { ErrorType } from "viem/_types/errors/utils"
 
 const main = async () => {
-  const chainIds = [
-    185, 288, 466, 1088, 1329, 1424, 1625, 1923, 1996, 2911, 7560, 7897, 8333,
-    33979, 34443, 42220, 43114, 43419, 48900, 60808, 69000, 167000, 510003,
-    660279, 21000000, 666666666, 888888888,
-  ]
+  const chainIds = [10, 56, 130, 137, 2741, 999, 9745, 59144]
 
   const chains = await axios("https://api.relay.link/chains").then(
     (r) => r.data.chains
