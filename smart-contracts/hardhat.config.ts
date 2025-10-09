@@ -40,6 +40,7 @@ import "./tasks/grantRole"
 
 // Relay Multisig signer
 import "./tasks/relayMultisigSigner/check-hashes"
+import "./tasks/relayMultisigSigner/decode-multicall"
 import "./tasks/relayMultisigSigner/execute-transactions"
 import "./tasks/relayMultisigSigner/simulate"
 import "./tasks/relayMultisigSigner/submit"
