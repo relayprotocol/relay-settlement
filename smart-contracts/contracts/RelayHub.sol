@@ -4,6 +4,8 @@ pragma solidity ^0.8.24;
 import "@openzeppelin/contracts/utils/Strings.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
+import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./ERC20View.sol";
 
 /// @title IERC20View
@@ -29,7 +31,7 @@ interface IERC20View {
 /// @title RelayHub
 /// @author Relay Protocol
 /// @notice Based on Solmate standard ERC6909 implementation. (https://github.com/transmissions11/solmate/blob/main/src/tokens/ERC6909.sol)
-contract RelayHub is AccessControl {
+contract RelayHub is AccessControl, EIP712 {
   using Strings for uint256;
 
   /*//////////////////////////////////////////////////////////////
@@ -43,6 +45,15 @@ contract RelayHub is AccessControl {
     address caller,
     address expectedERC20View
   );
+
+  /// @notice Error thrown when permit deadline has expired
+  error PermitDeadlineExpired();
+
+  /// @notice Error thrown when permit signature is invalid
+  error InvalidPermitSignature();
+
+  /// @notice Error thrown when permit owner is the zero address
+  error InvalidPermitOwner();
 
   /*//////////////////////////////////////////////////////////////
                                  EVENTS
@@ -94,6 +105,9 @@ contract RelayHub is AccessControl {
   /// @notice Mapping of token ID to total supply
   mapping(uint256 => uint256) public totalSupplies;
 
+  /// @notice Mapping of owner to nonce for permit signatures
+  mapping(address => uint256) public nonces;
+
   /*//////////////////////////////////////////////////////////////
                           ERC20VIEW STORAGE
     //////////////////////////////////////////////////////////////*/
@@ -126,12 +140,22 @@ contract RelayHub is AccessControl {
   bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
   /*//////////////////////////////////////////////////////////////
+                          EIP712 CONSTANTS
+    //////////////////////////////////////////////////////////////*/
+
+  /// @notice EIP712 typehash for permit
+  bytes32 public constant PERMIT_TYPEHASH =
+    keccak256(
+      "Permit(address owner,address spender,uint256 tokenId,uint256 value,uint256 nonce,uint256 deadline)"
+    );
+
+  /*//////////////////////////////////////////////////////////////
                              CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
 
   /// @notice Constructor for RelayHub contract
   /// @param adminAddress The address to grant admin role
-  constructor(address adminAddress) {
+  constructor(address adminAddress) EIP712("RelayHub", "1") {
     _setRoleAdmin(OPERATOR_ROLE, ADMIN_ROLE);
     _setRoleAdmin(EDITOR_ROLE, ADMIN_ROLE);
     _grantRole(ADMIN_ROLE, adminAddress);
@@ -285,6 +309,63 @@ contract RelayHub is AccessControl {
     return true;
   }
 
+  /// @notice Permits a spender to spend tokens via signature (EIP712)
+  /// @param owner The owner address
+  /// @param spender The spender address
+  /// @param tokenId The token ID
+  /// @param value The allowance amount
+  /// @param deadline The deadline timestamp
+  /// @param v The recovery byte of the signature
+  /// @param r Half of the ECDSA signature pair
+  /// @param s Half of the ECDSA signature pair
+  function permit(
+    address owner,
+    address spender,
+    uint256 tokenId,
+    uint256 value,
+    uint256 deadline,
+    uint8 v,
+    bytes32 r,
+    bytes32 s
+  ) public {
+    if (owner == address(0)) {
+      revert InvalidPermitOwner();
+    }
+
+    if (block.timestamp > deadline) {
+      revert PermitDeadlineExpired();
+    }
+
+    uint256 ownerNonce = nonces[owner];
+
+    bytes32 structHash = keccak256(
+      abi.encode(
+        PERMIT_TYPEHASH,
+        owner,
+        spender,
+        tokenId,
+        value,
+        ownerNonce,
+        deadline
+      )
+    );
+
+    bytes32 hash = _hashTypedDataV4(structHash);
+
+    address signer = ECDSA.recover(hash, v, r, s);
+
+    if (signer != owner) {
+      revert InvalidPermitSignature();
+    }
+
+    nonces[owner] = ownerNonce + 1;
+
+    allowance[owner][spender][tokenId] = value;
+
+    emit Approval(owner, spender, tokenId, value);
+    _emitERC20ViewApprovalEvent(tokenId, owner, spender, value);
+  }
+
   /// @notice Mints tokens to a receiver (only callable by OPERATOR_ROLE)
   /// @param receiver The recipient address
   /// @param id The token ID
@@ -363,6 +444,12 @@ contract RelayHub is AccessControl {
   /*//////////////////////////////////////////////////////////////
                               ERC165 LOGIC
     //////////////////////////////////////////////////////////////*/
+
+  /// @notice Returns the domain separator for EIP712
+  /// @return The domain separator
+  function DOMAIN_SEPARATOR() external view returns (bytes32) {
+    return _domainSeparatorV4();
+  }
 
   /// @notice Checks if the contract supports an interface
   /// @param interfaceId The interface ID to check
