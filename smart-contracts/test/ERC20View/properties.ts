@@ -45,6 +45,9 @@ describe("ERC20View Properties", function () {
         {
           decimals: expectedDecimals,
           name: expectedName,
+          originAsset: "0x0000000000000000000000000000000000000000",
+          originChainId: 1n,
+          originFamily: "ethereum-vm",
           symbol: expectedSymbol,
         },
       ],

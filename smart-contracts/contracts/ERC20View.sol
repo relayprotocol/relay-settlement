@@ -10,6 +10,7 @@ interface IHub {
   /// @param id The token ID
   /// @return The balance amount
   function balanceOf(address owner, uint256 id) external view returns (uint256);
+
   /// @notice Transfers tokens from one address to another
   /// @param sender The sender address
   /// @param receiver The receiver address
@@ -22,26 +23,32 @@ interface IHub {
     uint256 id,
     uint256 amount
   ) external returns (bool);
+
   /// @notice Returns the total supply of a token
   /// @param id The token ID
   /// @return The total supply
-  function totalSupplies(uint256 id) external view returns (uint256);
+  function totalSupply(uint256 id) external view returns (uint256);
+
   /// @notice Returns the name of a token
   /// @param id The token ID
   /// @return The token name
   function name(uint256 id) external view returns (string memory);
+
   /// @notice Returns the symbol of a token
   /// @param id The token ID
   /// @return The token symbol
   function symbol(uint256 id) external view returns (string memory);
+
   /// @notice Returns the decimals of a token
   /// @param id The token ID
   /// @return The token decimals
   function decimals(uint256 id) external view returns (uint8);
+
   /// @notice Returns the token URI of a token
   /// @param id The token ID
   /// @return The token URI
   function tokenURI(uint256 id) external view returns (string memory);
+
   /// @notice Returns the allowance of a spender for an owner
   /// @param owner The owner address
   /// @param spender The spender address
@@ -52,6 +59,7 @@ interface IHub {
     address spender,
     uint256 id
   ) external view returns (uint256);
+
   /// @notice Approves a spender to spend tokens on behalf of owner
   /// @param owner The owner address
   /// @param spender The spender address
@@ -130,7 +138,7 @@ contract ERC20View {
   /// @notice Returns the total supply of the token
   /// @return The total supply
   function totalSupply() public view returns (uint256) {
-    return hub.totalSupplies(tokenId);
+    return hub.totalSupply(tokenId);
   }
 
   /// @notice Returns the balance of an account

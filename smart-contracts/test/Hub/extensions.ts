@@ -33,6 +33,9 @@ describe("extensions", function () {
             {
               decimals: 18,
               name: "New Token",
+              originAsset: "0x0000000000000000000000000000000000000000",
+              originChainId: 1n,
+              originFamily: "ethereum-vm",
               symbol: "NT",
             },
           ],
@@ -61,6 +64,9 @@ describe("extensions", function () {
           {
             decimals: 6,
             name: "New Token",
+            originAsset: "0x0000000000000000000000000000000000000000",
+            originChainId: 1n,
+            originFamily: "ethereum-vm",
             symbol: "NT",
           },
         ],
@@ -72,6 +78,14 @@ describe("extensions", function () {
       expect(await hub.read.name([1n])).to.equal("New Token")
       expect(await hub.read.symbol([1n])).to.equal("NT")
       expect(await hub.read.decimals([1n])).to.equal(6)
+      const [name, symbol, decimals, originFamily, originChainId, originAsset] =
+        await hub.read.tokenMetadata([1n])
+      expect(name).to.equal("New Token")
+      expect(symbol).to.equal("NT")
+      expect(decimals).to.equal(6)
+      expect(originFamily).to.equal("ethereum-vm")
+      expect(originChainId).to.equal(1n)
+      expect(originAsset).to.equal("0x0000000000000000000000000000000000000000")
     })
   })
 

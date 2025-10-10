@@ -17,6 +17,7 @@ interface IERC20View {
   /// @param to The recipient address
   /// @param value The amount transferred
   function emitTransferEvent(address from, address to, uint256 value) external;
+
   /// @notice Emits an approval event
   /// @param owner The owner address
   /// @param spender The spender address
@@ -87,6 +88,9 @@ contract RelayHub is AccessControl, EIP712 {
     string name;
     string symbol;
     uint8 decimals;
+    string originFamily;
+    uint256 originChainId;
+    string originAsset;
   }
 
   /*//////////////////////////////////////////////////////////////
@@ -103,7 +107,7 @@ contract RelayHub is AccessControl, EIP712 {
     public allowance;
 
   /// @notice Mapping of token ID to total supply
-  mapping(uint256 => uint256) public totalSupplies;
+  mapping(uint256 => uint256) public totalSupply;
 
   /// @notice Mapping of owner to nonce for permit signatures
   mapping(address => uint256) public nonces;
@@ -472,10 +476,10 @@ contract RelayHub is AccessControl, EIP712 {
   /// @param amount The amount to mint
   function _mint(address receiver, uint256 id, uint256 amount) internal {
     balanceOf[receiver][id] += amount;
-    if (totalSupplies[id] == 0) {
+    if (totalSupply[id] == 0) {
       _createERC20View(id);
     }
-    totalSupplies[id] += amount;
+    totalSupply[id] += amount;
 
     emit Transfer(msg.sender, address(0), receiver, id, amount);
     _emitERC20ViewEvent(id, address(0), receiver, amount);
@@ -487,7 +491,7 @@ contract RelayHub is AccessControl, EIP712 {
   /// @param amount The amount to burn
   function _burn(address sender, uint256 id, uint256 amount) internal {
     balanceOf[sender][id] -= amount;
-    totalSupplies[id] -= amount;
+    totalSupply[id] -= amount;
 
     emit Transfer(msg.sender, sender, address(0), id, amount);
     _emitERC20ViewEvent(id, sender, address(0), amount);
