@@ -11,6 +11,7 @@ task("deploy:oracle", "Deploy the Oracle contract")
     if (!admin) {
       admin = deployer.account.address
     }
+
     const { oracle } = await ignition.deploy(OracleModule, {
       parameters: {
         RelayOracle: {
@@ -26,4 +27,6 @@ task("deploy:oracle", "Deploy the Oracle contract")
       { scope: "ignition", task: "verify" },
       { deploymentId: `chain-${chainId}` }
     )
+
+    return oracle
   })

@@ -23,4 +23,6 @@ task("deploy:hub", "Deploy the Hub contract")
       { scope: "ignition", task: "verify" },
       { deploymentId: `chain-${chainId}` }
     )
+
+    return hub
   })

@@ -1,7 +1,10 @@
 import { task } from "hardhat/config"
 import { keccak256 } from "viem"
 
-task("grantRole", "Grant a role to an account using OpenZeppelin AccessControl")
+task(
+  "grant-role",
+  "Grant a role to an account using OpenZeppelin AccessControl"
+)
   .addParam("contract", "The address of the contract with AccessControl")
   .addParam("role", "The role to grant (e.g., ADMIN_ROLE, OPERATOR_ROLE, etc.)")
   .addParam("account", "The address to grant the role to")
