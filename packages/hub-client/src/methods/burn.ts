@@ -1,4 +1,4 @@
-import { Hub } from "@relay-protocol/abis"
+import { RelayHub } from "@relay-protocol/abis"
 import { generateAddress, generateTokenId } from "@relay-protocol/hub-utils"
 import { ethers } from "ethers"
 import { BurnParams, SubmitTxParams } from "../client"
@@ -17,7 +17,7 @@ export const burn = async (params: BurnParams): Promise<SubmitTxParams> => {
     family: params.family,
   })
 
-  const hubIface = new ethers.Interface(Hub)
+  const hubIface = new ethers.Interface(RelayHub)
   const data = hubIface.encodeFunctionData("burn", [
     owner,
     tokenId,

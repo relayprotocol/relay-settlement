@@ -32,6 +32,48 @@
     "type": "error"
   },
   {
+    "inputs": [],
+    "name": "ECDSAInvalidSignature",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "length",
+        "type": "uint256"
+      }
+    ],
+    "name": "ECDSAInvalidSignatureLength",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "s",
+        "type": "bytes32"
+      }
+    ],
+    "name": "ECDSAInvalidSignatureS",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidPermitOwner",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidPermitSignature",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidShortString",
+    "type": "error"
+  },
+  {
     "inputs": [
       {
         "internalType": "address",
@@ -45,6 +87,22 @@
       }
     ],
     "name": "OnlyERC20ViewCanCallApproveFor",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "PermitDeadlineExpired",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "str",
+        "type": "string"
+      }
+    ],
+    "name": "StringTooLong",
     "type": "error"
   },
   {
@@ -76,6 +134,12 @@
       }
     ],
     "name": "Approval",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [],
+    "name": "EIP712DomainChanged",
     "type": "event"
   },
   {
@@ -262,6 +326,19 @@
   },
   {
     "inputs": [],
+    "name": "DOMAIN_SEPARATOR",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "EDITOR_ROLE",
     "outputs": [
       {
@@ -276,6 +353,19 @@
   {
     "inputs": [],
     "name": "OPERATOR_ROLE",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "PERMIT_TYPEHASH",
     "outputs": [
       {
         "internalType": "bytes32",
@@ -464,6 +554,49 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "eip712Domain",
+    "outputs": [
+      {
+        "internalType": "bytes1",
+        "name": "fields",
+        "type": "bytes1"
+      },
+      {
+        "internalType": "string",
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "version",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "chainId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "verifyingContract",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "salt",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "extensions",
+        "type": "uint256[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "uint256",
@@ -618,6 +751,73 @@
   {
     "inputs": [
       {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "nonces",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "spender",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "tokenId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "value",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "deadline",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint8",
+        "name": "v",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "r",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "s",
+        "type": "bytes32"
+      }
+    ],
+    "name": "permit",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "bytes32",
         "name": "role",
         "type": "bytes32"
@@ -740,9 +940,24 @@
             "internalType": "uint8",
             "name": "decimals",
             "type": "uint8"
+          },
+          {
+            "internalType": "string",
+            "name": "originFamily",
+            "type": "string"
+          },
+          {
+            "internalType": "uint256",
+            "name": "originChainId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "string",
+            "name": "originAsset",
+            "type": "string"
           }
         ],
-        "internalType": "struct Hub.TokenMetadata",
+        "internalType": "struct RelayHub.TokenMetadata",
         "name": "metadata",
         "type": "tuple"
       }
@@ -814,6 +1029,21 @@
         "internalType": "uint8",
         "name": "decimals",
         "type": "uint8"
+      },
+      {
+        "internalType": "string",
+        "name": "originFamily",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "originChainId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "originAsset",
+        "type": "string"
       }
     ],
     "stateMutability": "view",
@@ -846,7 +1076,7 @@
         "type": "uint256"
       }
     ],
-    "name": "totalSupplies",
+    "name": "totalSupply",
     "outputs": [
       {
         "internalType": "uint256",

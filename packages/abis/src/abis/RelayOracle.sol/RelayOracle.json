@@ -210,7 +210,7 @@
     "name": "HUB",
     "outputs": [
       {
-        "internalType": "contract Hub",
+        "internalType": "contract RelayHub",
         "name": "",
         "type": "address"
       }
@@ -289,7 +289,7 @@
             "type": "bytes[]"
           }
         ],
-        "internalType": "struct Oracle.Execution",
+        "internalType": "struct RelayOracle.Execution",
         "name": "execution",
         "type": "tuple"
       },

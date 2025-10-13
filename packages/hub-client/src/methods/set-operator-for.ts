@@ -1,4 +1,4 @@
-import { Hub } from "@relay-protocol/abis"
+import { RelayHub } from "@relay-protocol/abis"
 import { generateAddress } from "@relay-protocol/hub-utils"
 import { ethers } from "ethers"
 import { SetOperatorForParams, SubmitTxParams } from "../client"
@@ -19,7 +19,7 @@ export const setOperatorFor = async (
     family: params.family,
   })
 
-  const hubIface = new ethers.Interface(Hub)
+  const hubIface = new ethers.Interface(RelayHub)
   const data = hubIface.encodeFunctionData("setOperatorFor", [
     owner,
     operator,

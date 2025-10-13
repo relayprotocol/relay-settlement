@@ -991,7 +991,7 @@
             "type": "bytes32"
           }
         ],
-        "internalType": "struct Allocator.SubmitWithdrawRequest",
+        "internalType": "struct RelayAllocator.SubmitWithdrawRequest",
         "name": "params",
         "type": "tuple"
       },
@@ -1123,7 +1123,7 @@
             "type": "bytes32"
           }
         ],
-        "internalType": "struct Allocator.SubmitWithdrawRequest",
+        "internalType": "struct RelayAllocator.SubmitWithdrawRequest",
         "name": "params",
         "type": "tuple"
       },
@@ -1200,7 +1200,7 @@
             "type": "bytes32"
           }
         ],
-        "internalType": "struct Allocator.SubmitWithdrawRequest",
+        "internalType": "struct RelayAllocator.SubmitWithdrawRequest",
         "name": "params",
         "type": "tuple"
       }

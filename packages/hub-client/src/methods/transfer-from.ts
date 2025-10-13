@@ -1,4 +1,4 @@
-import { Hub } from "@relay-protocol/abis"
+import { RelayHub } from "@relay-protocol/abis"
 import { generateAddress, generateTokenId } from "@relay-protocol/hub-utils"
 import { ethers } from "ethers"
 import { SubmitTxParams, TransferFromParams } from "../client"
@@ -25,7 +25,7 @@ export const transferFrom = async (
     family: params.family,
   })
 
-  const hubIface = new ethers.Interface(Hub)
+  const hubIface = new ethers.Interface(RelayHub)
   const data = hubIface.encodeFunctionData("transferFrom", [
     owner,
     recipient,
