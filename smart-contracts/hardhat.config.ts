@@ -22,6 +22,7 @@ import "./tasks/allocator/full/bitcoin"
 import "./tasks/allocator/full/evm"
 import "./tasks/allocator/full/solana"
 import "./tasks/allocator/full/sui"
+import "./tasks/allocator/full/hyperliquid"
 
 // hub tasks
 import "./tasks/hub/hub-setup"

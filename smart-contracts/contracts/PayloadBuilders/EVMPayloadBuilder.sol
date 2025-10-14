@@ -104,31 +104,14 @@ contract EVMPayloadBuilder is IPayloadBuilder {
     uint32 /* hashIndex */
   ) external pure returns (bytes32) {
     CallRequest memory request = abi.decode(payload, (CallRequest));
-    bytes32 domainSeparator = buildDomainSeparator(chainId, depository);
+    bytes32 domainSeparator = Utils.buildDomainSeparator(
+      SIGNING_DOMAIN,
+      SIGNATURE_VERSION,
+      chainId,
+      Utils.toAddress(depository)
+    );
     (, bytes32 eip712Hash) = hashCallRequest(request, domainSeparator);
     return eip712Hash;
-  }
-
-  /// @notice Builds EIP-712 domain separator for depository
-  /// @param chainId Target chain ID
-  /// @param depository Depository contract address
-  /// @return EIP-712 domain separator
-  function buildDomainSeparator(
-    uint256 chainId,
-    string calldata depository
-  ) internal pure returns (bytes32) {
-    return
-      keccak256(
-        abi.encode(
-          keccak256(
-            "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-          ),
-          keccak256(bytes(SIGNING_DOMAIN)),
-          keccak256(bytes(SIGNATURE_VERSION)),
-          chainId,
-          Utils.toAddress(depository)
-        )
-      );
   }
 
   /// @notice Hashes CallRequest and returns EIP-712 digest

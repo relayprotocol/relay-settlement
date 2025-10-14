@@ -120,4 +120,30 @@ library Utils {
     }
     return address(result);
   }
+
+  /// @notice Builds EIP-712 domain separator
+  /// @param name The domain name
+  /// @param version The domain version
+  /// @param chainId The chain ID
+  /// @param verifyingContract The verifying contract address
+  /// @return The EIP-712 domain separator
+  function buildDomainSeparator(
+    string memory name,
+    string memory version,
+    uint256 chainId,
+    address verifyingContract
+  ) internal pure returns (bytes32) {
+    return
+      keccak256(
+        abi.encode(
+          keccak256(
+            "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+          ),
+          keccak256(bytes(name)),
+          keccak256(bytes(version)),
+          chainId,
+          verifyingContract
+        )
+      );
+  }
 }

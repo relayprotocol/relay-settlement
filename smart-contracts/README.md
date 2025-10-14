@@ -48,7 +48,7 @@ yarn run hardhat full:bitcoin --network aurora-testnet --wnear 0x4861825E75ab145
 
 ### Testnet Faucet
 
-Replace `<account-name>` with a unique account name in the following commands
+Replace `<account-name>` (eg.`relayprotocol.testnet`) with a unique account name in the following commands
 
 ### Get NEAR in testnet
 

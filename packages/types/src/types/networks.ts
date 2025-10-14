@@ -1,4 +1,9 @@
-export type ChainType = "bitcoin-vm" | "ethereum-vm" | "solana-vm" | "sui-vm"
+export type ChainType =
+  | "bitcoin-vm"
+  | "ethereum-vm"
+  | "solana-vm"
+  | "sui-vm"
+  | "hyperliquid-vm"
 
 export interface NetworkConfig {
   chainId: bigint
@@ -9,6 +14,7 @@ export interface NetworkConfig {
   isTestnet: boolean
   assets?: NetworkAssets
   rpc: [string, ...string[]]
+  explorerApiUrl?: string
   near?: {
     rpc: string
     signer: string
