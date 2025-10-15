@@ -1,7 +1,7 @@
-import { ChainType } from "@relay-protocol/types"
+import { VmType } from "@reservoir0x/relay-protocol-sdk"
 
 export interface MintParams {
-  family: ChainType
+  family: VmType
   account: string
   chainId: bigint
   tokenAddress: string
@@ -9,7 +9,7 @@ export interface MintParams {
 }
 
 export interface BurnParams {
-  family: ChainType
+  family: VmType
   account: string
   chainId: bigint
   tokenAddress: string
@@ -17,7 +17,7 @@ export interface BurnParams {
 }
 
 export interface TransferFromParams {
-  family: ChainType
+  family: VmType
   account: string
   chainId: bigint
   tokenAddress: string
@@ -26,7 +26,7 @@ export interface TransferFromParams {
 }
 
 export interface SetOperatorForParams {
-  family: ChainType
+  family: VmType
   account: string
   chainId: bigint
   operatorAddress: string

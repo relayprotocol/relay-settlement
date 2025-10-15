@@ -14,6 +14,7 @@
   "dependencies": {
     "@relay-protocol/abis": "workspace:*",
     "@relay-protocol/hub-utils": "workspace:*",
+    "@reservoir0x/relay-protocol-sdk": "0.0.44",
     "ethers": "6.15.0"
   },
   "scripts": {

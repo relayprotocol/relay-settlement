@@ -1,16 +1,16 @@
 /**
  * Type definitions for the Relay Protocol Hub utilities
  */
-import { ChainType } from "./networks"
+import { VmType } from "@reservoir0x/relay-protocol-sdk"
 
 export interface TokenIdComponents {
-  family: ChainType
+  family: VmType
   chainId: bigint
   address: string
 }
 
 export interface VirtualAddressComponents {
-  family: ChainType
+  family: VmType
   chainId: bigint
   address: string
 }

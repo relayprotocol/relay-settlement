@@ -1,14 +1,9 @@
-export type ChainType =
-  | "bitcoin-vm"
-  | "ethereum-vm"
-  | "solana-vm"
-  | "sui-vm"
-  | "hyperliquid-vm"
+import { VmType } from "@reservoir0x/relay-protocol-sdk"
 
 export interface NetworkConfig {
   chainId: bigint
   name: string
-  family: ChainType
+  family: VmType
   slug: string
   earliestBlock?: number
   isTestnet: boolean
