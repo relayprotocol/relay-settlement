@@ -12,15 +12,10 @@ export async function deployOracle() {
   const utils = await hre.viem.deployContract("Utils", [])
 
   // Deploy the Oracle
-  const oracle = await hre.viem.deployContract(
-    "RelayOracle",
-    [admin.account.address, hub.address],
-    {
-      libraries: {
-        Utils: utils.address,
-      },
-    }
-  )
+  const oracle = await hre.viem.deployContract("RelayOracle", [
+    admin.account.address,
+    hub.address,
+  ])
 
   // Give the Oracle permissions on the Hub
   await hub.write.grantRole([await hub.read.OPERATOR_ROLE(), oracle.address])

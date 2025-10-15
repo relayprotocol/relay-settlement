@@ -6,7 +6,6 @@ import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 
 import {RelayHub} from "./RelayHub.sol";
-import {Utils} from "./Utils.sol";
 
 /// @title RelayOracle
 /// @author Relay Protocol
@@ -112,106 +111,24 @@ contract RelayOracle is AccessControl, EIP712 {
         uint8 actionType = abi.decode(action, (uint8));
 
         if (ActionType(actionType) == ActionType.MINT) {
-          (
-            ,
-            string memory currencyVmType,
-            uint256 currencyChainId,
-            string memory currency,
-            string memory toVmType,
-            uint256 toChainId,
-            string memory to,
-            uint256 amount
-          ) = abi.decode(
-              action,
-              (uint8, string, uint256, string, string, uint256, string, uint256)
-            );
-
-          uint256 tokenId = Utils.generateTokenId(
-            currencyVmType,
-            currencyChainId,
-            currency
-          );
-          address toAddress = Utils.generateAddress(toVmType, toChainId, to);
-
-          HUB.mint(toAddress, tokenId, amount);
+          (, address hubToAddress, uint256 hubTokenId, uint256 amount) = abi
+            .decode(action, (uint8, address, uint256, uint256));
+          HUB.mint(hubToAddress, hubTokenId, amount);
         } else if (ActionType(actionType) == ActionType.BURN) {
-          (
-            ,
-            string memory currencyVmType,
-            uint256 currencyChainId,
-            string memory currency,
-            string memory fromVmType,
-            uint256 fromChainId,
-            string memory from,
-            uint256 amount
-          ) = abi.decode(
-              action,
-              (uint8, string, uint256, string, string, uint256, string, uint256)
-            );
+          (, address hubFromAddress, uint256 hubTokenId, uint256 amount) = abi
+            .decode(action, (uint8, address, uint256, uint256));
 
-          uint256 tokenId = Utils.generateTokenId(
-            currencyVmType,
-            currencyChainId,
-            currency
-          );
-          address fromAddress = Utils.generateAddress(
-            fromVmType,
-            fromChainId,
-            from
-          );
-
-          uint256 amountToBurn = amount == type(uint256).max
-            ? HUB.balanceOf(fromAddress, tokenId)
-            : amount;
-
-          HUB.burn(fromAddress, tokenId, amountToBurn);
+          HUB.burn(hubFromAddress, hubTokenId, amount);
         } else if (ActionType(actionType) == ActionType.TRANSFER) {
           (
             ,
-            string memory currencyVmType,
-            uint256 currencyChainId,
-            string memory currency,
-            string memory fromVmType,
-            uint256 fromChainId,
-            string memory from,
-            string memory toVmType,
-            uint256 toChainId,
-            string memory to,
+            address hubFromAddress,
+            address hubToAddress,
+            uint256 hubTokenId,
             uint256 amount
-          ) = abi.decode(
-              action,
-              (
-                uint8,
-                string,
-                uint256,
-                string,
-                string,
-                uint256,
-                string,
-                string,
-                uint256,
-                string,
-                uint256
-              )
-            );
+          ) = abi.decode(action, (uint8, address, address, uint256, uint256));
 
-          uint256 tokenId = Utils.generateTokenId(
-            currencyVmType,
-            currencyChainId,
-            currency
-          );
-          address fromAddress = Utils.generateAddress(
-            fromVmType,
-            fromChainId,
-            from
-          );
-          address toAddress = Utils.generateAddress(toVmType, toChainId, to);
-
-          uint256 amountToTransfer = amount == type(uint256).max
-            ? HUB.balanceOf(fromAddress, tokenId)
-            : amount;
-
-          HUB.transferFrom(fromAddress, toAddress, tokenId, amountToTransfer);
+          HUB.transferFrom(hubFromAddress, hubToAddress, hubTokenId, amount);
         }
       }
     }

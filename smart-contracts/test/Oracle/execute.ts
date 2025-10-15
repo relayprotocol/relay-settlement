@@ -1,47 +1,29 @@
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
 import { generateTokenId, generateAddress } from "@relay-protocol/hub-utils"
-import {
-  ActionType,
-  encodeAction,
-  VmType,
-} from "@reservoir0x/relay-protocol-sdk"
+import { ActionType } from "@reservoir0x/relay-protocol-sdk"
 import { expect } from "chai"
 import { randomBytes } from "crypto"
 import hre from "hardhat"
-import { Hex } from "viem"
+import { Hex, encodeAbiParameters } from "viem"
 
 import { deployOracle } from "../helpers/deployOracle"
 
 interface MintActionData {
-  currencyVmType: VmType
-  currencyChainId: string
-  currency: string
-  toVmType: VmType
-  toChainId: string
-  to: string
+  hubToAddress: string
+  hubTokenId: string
   amount: string
 }
 
 interface BurnActionData {
-  currencyVmType: VmType
-  currencyChainId: string
-  currency: string
-  fromVmType: VmType
-  fromChainId: string
-  from: string
+  hubFromAddress: string
+  hubTokenId: string
   amount: string
 }
 
 interface TransferActionData {
-  currencyVmType: VmType
-  currencyChainId: string
-  currency: string
-  fromVmType: VmType
-  fromChainId: string
-  from: string
-  toVmType: VmType
-  toChainId: string
-  to: string
+  hubFromAddress: string
+  hubToAddress: string
+  hubTokenId: string
   amount: string
 }
 
@@ -132,24 +114,88 @@ describe("execute", function () {
         MintActionData | BurnActionData | TransferActionData
       > = {}
     ) => {
+      // Generate default hub addresses and token ID
+      const defaultCurrency = otherWallets[0].account.address
+      const defaultFrom = otherWallets[1].account.address
+      const defaultTo = otherWallets[1].account.address
+
+      const defaultHubTokenId = generateTokenId({
+        address: defaultCurrency,
+        chainId: "1",
+        family: "ethereum-vm",
+      })
+
+      const defaultHubFromAddress = generateAddress({
+        address: defaultFrom,
+        chainId: "1",
+        family: "ethereum-vm",
+      })
+
+      const defaultHubToAddress = generateAddress({
+        address: defaultTo,
+        chainId: "1",
+        family: "ethereum-vm",
+      })
+
       const defaultData = {
-        amount: String(10n ** 18n),
-        currency: otherWallets[0].account.address,
-        currencyChainId: "1",
-        currencyVmType: "ethereum-vm" as VmType,
-        from: otherWallets[1].account.address,
-        fromChainId: "1",
-        fromVmType: "ethereum-vm" as VmType,
-        to: otherWallets[1].account.address,
-        toChainId: "1",
-        toVmType: "ethereum-vm" as VmType,
+        amount: 10n ** 18n,
+        hubFromAddress: defaultHubFromAddress,
+        hubToAddress: defaultHubToAddress,
+        hubTokenId: defaultHubTokenId,
         ...overrides,
       }
 
-      return encodeAction({
-        data: defaultData,
-        type,
-      }) as Hex
+      // Manually encode the action data to match what the contract expects
+      if (type === ActionType.MINT) {
+        return encodeAbiParameters(
+          [
+            { name: "actionType", type: "uint8" },
+            { name: "hubToAddress", type: "address" },
+            { name: "hubTokenId", type: "uint256" },
+            { name: "amount", type: "uint256" },
+          ],
+          [
+            type,
+            defaultData.hubToAddress as `0x${string}`,
+            BigInt(defaultData.hubTokenId),
+            BigInt(defaultData.amount),
+          ]
+        ) as Hex
+      } else if (type === ActionType.BURN) {
+        return encodeAbiParameters(
+          [
+            { name: "actionType", type: "uint8" },
+            { name: "hubFromAddress", type: "address" },
+            { name: "hubTokenId", type: "uint256" },
+            { name: "amount", type: "uint256" },
+          ],
+          [
+            type,
+            defaultData.hubFromAddress as `0x${string}`,
+            BigInt(defaultData.hubTokenId),
+            BigInt(defaultData.amount),
+          ]
+        ) as Hex
+      } else if (type === ActionType.TRANSFER) {
+        return encodeAbiParameters(
+          [
+            { name: "actionType", type: "uint8" },
+            { name: "hubFromAddress", type: "address" },
+            { name: "hubToAddress", type: "address" },
+            { name: "hubTokenId", type: "uint256" },
+            { name: "amount", type: "uint256" },
+          ],
+          [
+            type,
+            defaultData.hubFromAddress as `0x${string}`,
+            defaultData.hubToAddress as `0x${string}`,
+            BigInt(defaultData.hubTokenId),
+            BigInt(defaultData.amount),
+          ]
+        ) as Hex
+      }
+
+      throw new Error(`Unknown action type: ${type}`)
     }
 
     const publicClient = await hre.viem.getPublicClient()
@@ -175,29 +221,25 @@ describe("execute", function () {
 
     const currency = otherWallets[0].account.address
     const to = otherWallets[1].account.address
-    const amount = String(10n ** 18n)
+    const amount = 10n ** 18n
+
+    const hubTokenId = generateTokenId({
+      address: currency,
+      chainId: "1",
+      family: "ethereum-vm",
+    })
+    const hubToAddress = generateAddress({
+      address: to,
+      chainId: "1",
+      family: "ethereum-vm",
+    })
 
     const data = {
       amount,
-      currency,
-      currencyChainId: "1",
-      currencyVmType: "ethereum-vm",
-      to,
-      toChainId: "1",
-      toVmType: "ethereum-vm",
+      hubToAddress: hubToAddress,
+      hubTokenId: hubTokenId,
     } as const
     const { idempotencyKey, action, signature } = await mint(data)
-
-    const hubTokenId = generateTokenId({
-      address: data.currency,
-      chainId: data.currencyChainId,
-      family: data.currencyVmType,
-    })
-    const hubToAddress = generateAddress({
-      address: data.to,
-      chainId: data.toChainId,
-      family: data.toVmType,
-    })
 
     const hubBalanceBefore = await hub.read.balanceOf([
       hubToAddress,
@@ -246,18 +288,25 @@ describe("execute", function () {
 
     const currency = otherWallets[0].account.address
     const from = otherWallets[1].account.address
-    const amount = String(10n ** 18n)
+    const amount = 10n ** 18n
+
+    const hubTokenId = generateTokenId({
+      address: currency,
+      chainId: "1",
+      family: "ethereum-vm",
+    })
+    const hubFromAddress = generateAddress({
+      address: from,
+      chainId: "1",
+      family: "ethereum-vm",
+    })
 
     // Need to mint before burning
     {
       const data = {
         amount,
-        currency,
-        currencyChainId: "1",
-        currencyVmType: "ethereum-vm",
-        to: from,
-        toChainId: "1",
-        toVmType: "ethereum-vm",
+        hubToAddress: hubFromAddress,
+        hubTokenId: hubTokenId,
       } as const
       const { idempotencyKey, action, signature } = await mint(data)
 
@@ -273,25 +322,10 @@ describe("execute", function () {
 
     const data = {
       amount,
-      currency,
-      currencyChainId: "1",
-      currencyVmType: "ethereum-vm",
-      from,
-      fromChainId: "1",
-      fromVmType: "ethereum-vm",
+      hubFromAddress: hubFromAddress,
+      hubTokenId: hubTokenId,
     } as const
     const { idempotencyKey, action, signature } = await burn(data)
-
-    const hubTokenId = generateTokenId({
-      address: data.currency,
-      chainId: data.currencyChainId,
-      family: data.currencyVmType,
-    })
-    const hubFromAddress = generateAddress({
-      address: data.from,
-      chainId: data.fromChainId,
-      family: data.fromVmType,
-    })
 
     const hubBalanceBefore = await hub.read.balanceOf([
       hubFromAddress,
@@ -344,18 +378,30 @@ describe("execute", function () {
     const currency = otherWallets[0].account.address
     const from = otherWallets[1].account.address
     const to = otherWallets[2].account.address
-    const amount = String(10n ** 18n)
+    const amount = 10n ** 18n
 
-    // Need to mint before burning
+    const hubTokenId = generateTokenId({
+      address: currency,
+      chainId: "1",
+      family: "ethereum-vm",
+    })
+    const hubFromAddress = generateAddress({
+      address: from,
+      chainId: "1",
+      family: "ethereum-vm",
+    })
+    const hubToAddress = generateAddress({
+      address: to,
+      chainId: "1",
+      family: "ethereum-vm",
+    })
+
+    // Need to mint before transferring
     {
       const data = {
         amount,
-        currency,
-        currencyChainId: "1",
-        currencyVmType: "ethereum-vm",
-        to: from,
-        toChainId: "1",
-        toVmType: "ethereum-vm",
+        hubToAddress: hubFromAddress,
+        hubTokenId: hubTokenId,
       } as const
       const { idempotencyKey, action, signature } = await mint(data)
 
@@ -371,33 +417,11 @@ describe("execute", function () {
 
     const data = {
       amount,
-      currency,
-      currencyChainId: "1",
-      currencyVmType: "ethereum-vm",
-      from,
-      fromChainId: "1",
-      fromVmType: "ethereum-vm",
-      to,
-      toChainId: "1",
-      toVmType: "ethereum-vm",
+      hubFromAddress: hubFromAddress,
+      hubToAddress: hubToAddress,
+      hubTokenId: hubTokenId,
     } as const
     const { idempotencyKey, action, signature } = await transfer(data)
-
-    const hubTokenId = generateTokenId({
-      address: data.currency,
-      chainId: data.currencyChainId,
-      family: data.currencyVmType,
-    })
-    const hubFromAddress = generateAddress({
-      address: data.from,
-      chainId: data.fromChainId,
-      family: data.fromVmType,
-    })
-    const hubToAddress = generateAddress({
-      address: data.to,
-      chainId: data.toChainId,
-      family: data.toVmType,
-    })
 
     const hubFromBalanceBefore = await hub.read.balanceOf([
       hubFromAddress,
@@ -461,27 +485,9 @@ describe("execute", function () {
     const mintTo3 = otherWallets[3].account.address
     const transferTo = otherWallets[4].account.address
 
-    // Create multiple actions: 3 mints, 1 transfer, 1 burn
-    const actions = [
-      // Mint 1
-      createAction(ActionType.MINT, { to: mintTo1 }),
-      // Mint 2
-      createAction(ActionType.MINT, { to: mintTo2 }),
-      // Mint 3
-      createAction(ActionType.MINT, { to: mintTo3 }),
-      // Transfer
-      createAction(ActionType.TRANSFER, { from: mintTo1, to: transferTo }),
-      // Burn
-      createAction(ActionType.BURN, { from: transferTo }),
-    ]
-
-    // Create single idempotency key and signature for all actions
-    const idempotencyKey = `0x${randomBytes(32).toString("hex")}` as Hex
-    const signature = await signExecution(idempotencyKey, actions)
-
     // Get hub addresses for balance tracking
     const currency = otherWallets[0].account.address
-    const amount = String(10n ** 18n)
+    const amount = 10n ** 18n
     const hubTokenId = generateTokenId({
       address: currency,
       chainId: "1",
@@ -507,6 +513,35 @@ describe("execute", function () {
       chainId: "1",
       family: "ethereum-vm",
     })
+
+    // Create multiple actions: 3 mints, 1 transfer, 1 burn
+    const actions = [
+      // Mint 1
+      createAction(ActionType.MINT, {
+        hubToAddress: hubMintTo1Address,
+      }),
+      // Mint 2
+      createAction(ActionType.MINT, {
+        hubToAddress: hubMintTo2Address,
+      }),
+      // Mint 3
+      createAction(ActionType.MINT, {
+        hubToAddress: hubMintTo3Address,
+      }),
+      // Transfer
+      createAction(ActionType.TRANSFER, {
+        hubFromAddress: hubMintTo1Address,
+        hubToAddress: hubTransferToAddress,
+      }),
+      // Burn
+      createAction(ActionType.BURN, {
+        hubFromAddress: hubTransferToAddress,
+      }),
+    ]
+
+    // Create single idempotency key and signature for all actions
+    const idempotencyKey = `0x${randomBytes(32).toString("hex")}` as Hex
+    const signature = await signExecution(idempotencyKey, actions)
 
     // Get balances before execution
     const mintTo1BalanceBefore = await hub.read.balanceOf([
@@ -586,17 +621,24 @@ describe("execute", function () {
       await loadFixture(setup)
 
     const currency = otherWallets[0].account.address
-    const from = otherWallets[1].account.address
-    const amount = String(10n ** 18n)
+    const to = otherWallets[1].account.address
+    const amount = 10n ** 18n
+
+    const hubTokenId = generateTokenId({
+      address: currency,
+      chainId: "1",
+      family: "ethereum-vm",
+    })
+    const hubToAddress = generateAddress({
+      address: to,
+      chainId: "1",
+      family: "ethereum-vm",
+    })
 
     const data = {
       amount,
-      currency,
-      currencyChainId: "1",
-      currencyVmType: "ethereum-vm",
-      to: from,
-      toChainId: "1",
-      toVmType: "ethereum-vm",
+      hubToAddress: hubToAddress,
+      hubTokenId: hubTokenId,
     } as const
     const { idempotencyKey, action, signature } = await mint(data)
 
@@ -626,17 +668,24 @@ describe("execute", function () {
       await loadFixture(setup)
 
     const currency = otherWallets[0].account.address
-    const from = otherWallets[1].account.address
-    const amount = String(10n ** 18n)
+    const to = otherWallets[1].account.address
+    const amount = 10n ** 18n
+
+    const hubTokenId = generateTokenId({
+      address: currency,
+      chainId: "1",
+      family: "ethereum-vm",
+    })
+    const hubToAddress = generateAddress({
+      address: to,
+      chainId: "1",
+      family: "ethereum-vm",
+    })
 
     const data = {
       amount,
-      currency,
-      currencyChainId: "1",
-      currencyVmType: "ethereum-vm",
-      to: from,
-      toChainId: "1",
-      toVmType: "ethereum-vm",
+      hubToAddress: hubToAddress,
+      hubTokenId: hubTokenId,
     } as const
     const { idempotencyKey, action } = await mint(data)
 
