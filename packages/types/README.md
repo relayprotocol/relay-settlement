@@ -1,1 +1,1 @@
-# types
+# Relay Protocol types
