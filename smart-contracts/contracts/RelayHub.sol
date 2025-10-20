@@ -162,6 +162,7 @@ contract RelayHub is AccessControl, EIP712 {
   constructor(address adminAddress) EIP712("RelayHub", "1") {
     _setRoleAdmin(OPERATOR_ROLE, ADMIN_ROLE);
     _setRoleAdmin(EDITOR_ROLE, ADMIN_ROLE);
+    _setRoleAdmin(ADMIN_ROLE, ADMIN_ROLE);
     _grantRole(ADMIN_ROLE, adminAddress);
   }
 
