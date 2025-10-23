@@ -1,7 +1,7 @@
 import { task } from "hardhat/config"
 
 task("hub:setup", "Deploy and setup Hub and Oracle contracts")
-  .addOptionalParam("admin", "The admin address fro Oracle and Hub contracts")
+  .addOptionalParam("admin", "The admin address for Oracle and Hub contracts")
   .addOptionalParam(
     "oracleSigner",
     "The address that can submit txs to the Oracle contract"
@@ -21,12 +21,13 @@ task("hub:setup", "Deploy and setup Hub and Oracle contracts")
 
       // deploy contracts
       const { address: hubAddress } = await run("deploy:hub", {
-        admmin: adminAddress,
+        admin: adminAddress,
       })
       const { address: oracleAddress } = await run("deploy:oracle", {
-        admmin: adminAddress,
+        admin: adminAddress,
         hub: hubAddress,
       })
+      await run("deploy:erc20View")
 
       // set roles
       await run("hub:add-operator", {

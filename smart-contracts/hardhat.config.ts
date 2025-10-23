@@ -33,6 +33,7 @@ import "./tasks/deployments/allocator"
 import "./tasks/deployments/hub"
 import "./tasks/deployments/oracle"
 import "./tasks/deployments/relayMultisigSigner"
+import "./tasks/deployments/erc20View"
 
 // helpers
 import "./tasks/allocator/getSignerAddress"
