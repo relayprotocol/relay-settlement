@@ -176,8 +176,8 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
   /// @notice Unsigned payloads: withdrawal request hash => payload
   mapping(bytes32 => bytes) public payloads;
 
-  /// @notice Used nonces for replay protection: nonce => whether it has been used
-  mapping(bytes32 => bool) public usedNonces;
+  /// @notice Used nonces for replay protection: sender => nonce => whether it has been used
+  mapping(address => mapping(bytes32 => bool)) public usedNonces;
 
   /// @notice Emitted when a payload builder is set for a chain and depository
   event PayloadBuilderSet(
@@ -636,8 +636,8 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
 
     address signer = Utils.toAddress(params.receiver);
 
-    // Check if nonce has been used before
-    if (usedNonces[params.nonce]) {
+    // Check if nonce has been used before for this sender
+    if (usedNonces[signer][params.nonce]) {
       return false;
     }
 
@@ -662,8 +662,8 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
       return false;
     }
 
-    // Mark nonce as used to prevent replay
-    usedNonces[params.nonce] = true;
+    // Mark nonce as used to prevent replay for this sender
+    usedNonces[signer][params.nonce] = true;
     return true;
   }
 }

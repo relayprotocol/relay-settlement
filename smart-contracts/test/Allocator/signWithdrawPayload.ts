@@ -883,6 +883,193 @@ describe("Allocator signWithdrawPayloadHash", function () {
           )
         ).to.be.rejectedWith("CallerIsNotApproved")
       })
+
+      it("should prevent nonce collision attacks between different users", async () => {
+        const {
+          allocator,
+          amount,
+          otherAccounts,
+          hub,
+          wNEAR,
+          tokenId,
+          owner,
+          publicClient,
+        } = await loadFixture(deployAllocatorAndSetHub)
+        const [depository, anotherDepository, user, attacker] = otherAccounts
+
+        allocator.write.setPayloadBuilder([anotherDepository])
+        const spender = generateAddress({
+          address: user.account.address,
+          chainId,
+          family: "dummy-vm",
+        })
+
+        const attackerSpender = generateAddress({
+          address: attacker.account.address,
+          chainId,
+          family: "dummy-vm",
+        })
+
+        // Mint tokens for both users
+        await hub.write.mint([spender, tokenId, 1n], {
+          account: owner.account,
+        })
+        await hub.write.mint([attackerSpender, tokenId, 1n], {
+          account: owner.account,
+        })
+
+        // same nonce used by both accounts
+        const sharedNonce = keccak256("shared_nonce")
+
+        // User submits request
+        const userRequestParams = {
+          amount,
+          chainId,
+          currency: zeroAddress,
+          data: "0x" as `0x${string}`,
+          depository: depository.account.address,
+          nonce: sharedNonce,
+          receiver: user.account.address,
+          spender,
+        }
+        await allocator.write.submitWithdrawRequest([userRequestParams], {
+          account: user.account,
+        })
+
+        // Attacker submits request with same nonce
+        const attackerRequestParams = {
+          amount,
+          chainId,
+          currency: zeroAddress,
+          data: "0x" as `0x${string}`,
+          depository: depository.account.address,
+          nonce: sharedNonce,
+          receiver: attacker.account.address,
+          spender: attackerSpender,
+        }
+        await allocator.write.submitWithdrawRequest([attackerRequestParams], {
+          account: attacker.account,
+        })
+
+        // Set up wNEAR for both users
+        const wNearAmount = 9000000000000000000000000n
+        await wNEAR.write.mint([wNearAmount], {
+          account: user.account,
+        })
+        await wNEAR.write.mint([wNearAmount], {
+          account: attacker.account,
+        })
+
+        const signatureFee = await allocator.read.signatureFee()
+        await wNEAR.write.approve([allocator.address, signatureFee + 4n], {
+          account: user.account,
+        })
+        await wNEAR.write.approve([allocator.address, signatureFee + 4n], {
+          account: attacker.account,
+        })
+
+        // Wait for delay
+        await time.increase(await allocator.read.delay())
+
+        // Both users are able to sign their requests (nonce collision prevented)
+        const userSignature = await user.signTypedData({
+          account: user.account,
+          domain: {
+            chainId: await publicClient.getChainId(),
+            name: "RelayAllocator",
+            verifyingContract: allocator.address,
+            version: "1",
+          },
+          message: {
+            amount,
+            chainId,
+            currency: zeroAddress,
+            data: "0x" as `0x${string}`,
+            depository: depository.account.address,
+            nonce: sharedNonce,
+            receiver: user.account.address,
+            spender,
+          },
+          primaryType: "SubmitWithdrawRequest",
+          types: {
+            SubmitWithdrawRequest: [
+              { name: "chainId", type: "uint256" },
+              { name: "depository", type: "string" },
+              { name: "currency", type: "string" },
+              { name: "amount", type: "uint256" },
+              { name: "spender", type: "address" },
+              { name: "receiver", type: "string" },
+              { name: "data", type: "bytes" },
+              { name: "nonce", type: "bytes32" },
+            ],
+          },
+        })
+
+        const txHash = await allocator.write.signWithdrawPayloadHash(
+          [userRequestParams, userSignature, gasSettings, 0],
+          {
+            account: user.account,
+          }
+        )
+
+        await publicClient.waitForTransactionReceipt({
+          hash: txHash,
+        })
+
+        const attackerSignature = await user.signTypedData({
+          account: attacker.account,
+          domain: {
+            chainId: await publicClient.getChainId(),
+            name: "RelayAllocator",
+            verifyingContract: allocator.address,
+            version: "1",
+          },
+          message: {
+            amount,
+            chainId,
+            currency: zeroAddress,
+            data: "0x" as `0x${string}`,
+            depository: depository.account.address,
+            nonce: sharedNonce,
+            receiver: attacker.account.address,
+            spender: attackerSpender,
+          },
+          primaryType: "SubmitWithdrawRequest",
+          types: {
+            SubmitWithdrawRequest: [
+              { name: "chainId", type: "uint256" },
+              { name: "depository", type: "string" },
+              { name: "currency", type: "string" },
+              { name: "amount", type: "uint256" },
+              { name: "spender", type: "address" },
+              { name: "receiver", type: "string" },
+              { name: "data", type: "bytes" },
+              { name: "nonce", type: "bytes32" },
+            ],
+          },
+        })
+
+        await allocator.write.signWithdrawPayloadHash(
+          [attackerRequestParams, attackerSignature, gasSettings, 0],
+          {
+            account: attacker.account,
+          }
+        )
+
+        // Balances are correct
+        const spenderBalanceAfter = await hub.read.balanceOf([spender, tokenId])
+        const attackerSpenderBalanceAfter = await hub.read.balanceOf([
+          attackerSpender,
+          tokenId,
+        ])
+        const allocatorBalanceAfter = await hub.read.balanceOf([
+          allocator.address,
+          tokenId,
+        ])
+        expect(spenderBalanceAfter).to.be.equal(0n)
+        expect(attackerSpenderBalanceAfter).to.be.equal(0n)
+        expect(allocatorBalanceAfter).to.be.equal(2n)
+      })
     })
   })
 })
