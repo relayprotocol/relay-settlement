@@ -519,7 +519,7 @@ describe("Allocator signWithdrawPayloadHash", function () {
           currency: zeroAddress,
           data: "0x" as `0x${string}`,
           depository: depository.account.address,
-          nonce: keccak256("0xnonce"),
+          nonce: keccak256("0xnonce-alias"),
           receiver: user.account.address,
           spender,
         }
@@ -571,7 +571,7 @@ describe("Allocator signWithdrawPayloadHash", function () {
           currency: zeroAddress,
           data: "0x" as `0x${string}`,
           depository: depository.account.address,
-          nonce: keccak256("0xnonce"),
+          nonce: keccak256("0xnonce-different-sig"),
           receiver: user.account.address,
           spender,
         }
@@ -660,7 +660,7 @@ describe("Allocator signWithdrawPayloadHash", function () {
         })
 
         // Generate a unique nonce for this request
-        const nonce = keccak256("0xnonce")
+        const nonce = keccak256("0xnonce-valid-request")
 
         // Submit a new withdraw request
         const newRequestParams = {
@@ -859,7 +859,7 @@ describe("Allocator signWithdrawPayloadHash", function () {
         // Now submit a second request with the same signature structure but incremented nonce
         const newRequestParams = {
           ...requestParams,
-          nonce: keccak256("0xnonce"),
+          nonce: keccak256("0xnonce-incremented"),
         }
         await allocator.write.submitWithdrawRequest([newRequestParams], {
           account: user.account,
@@ -882,6 +882,61 @@ describe("Allocator signWithdrawPayloadHash", function () {
             }
           )
         ).to.be.rejectedWith("CallerIsNotApproved")
+      })
+
+      it("should prevent building same payload twice", async () => {
+        const { allocator, amount, otherAccounts, hub, publicClient, tokenId } =
+          await loadFixture(deployAllocatorAndSetHub)
+        const [depository, user, attacker] = otherAccounts
+
+        const spender = generateAddress({
+          address: user.account.address,
+          chainId,
+          family: "dummy-vm",
+        })
+
+        // mint tokens for user
+        await hub.write.mint([spender, tokenId, 1n], {
+          account: (await loadFixture(deployAllocatorAndSetHub)).owner.account,
+        })
+
+        const requestParams = {
+          amount,
+          chainId,
+          currency: zeroAddress,
+          data: "0x" as `0x${string}`,
+          depository: depository.account.address,
+          nonce: keccak256("0xanother-nonce"),
+          receiver: user.account.address,
+          spender,
+        }
+
+        // User submits request
+        const txHash = await allocator.write.submitWithdrawRequest(
+          [requestParams],
+          {
+            account: user.account,
+          }
+        )
+
+        const receipt = await publicClient.waitForTransactionReceipt({
+          hash: txHash,
+        })
+
+        // Get the initial timestamp
+        const payloadBuiltEvent = await extractEvent(
+          receipt,
+          "PayloadBuilt",
+          allocator.abi
+        )
+        const { withdrawRequestHash } = payloadBuiltEvent.args
+
+        // attacker tries to manipulate ts by resubmitting the same request
+        await expect(
+          allocator.write.submitWithdrawRequest([requestParams], {
+            account: attacker.account,
+          })
+        ).to.be.rejectedWith(`PayloadAlreadyBuilt("${withdrawRequestHash}")`)
       })
 
       it("should prevent nonce collision attacks between different users", async () => {

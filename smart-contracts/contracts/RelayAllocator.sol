@@ -205,6 +205,7 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
   error CallerIsNotApproved(address account);
   error NoPayloadBuilder(uint256 chainId, string depository);
   error PayloadNotReady(bytes32 withdrawRequestHash);
+  error PayloadAlreadyBuilt(bytes32 withdrawRequestHash);
   error PayloadAlreadySigned(bytes32 withdrawRequestHash);
   error SignCallbackFailed(bytes32 withdrawRequestHash);
   error WithdrawalRequestFailed();
@@ -406,6 +407,11 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
       .isSet
       ? depositoryDelay
       : delay;
+
+    // Only set timestamp if it hasn't been set before to prevent timestamp manipulation
+    if (payloadTimestamps[withdrawRequestHash] != 0) {
+      revert PayloadAlreadyBuilt(withdrawRequestHash);
+    }
 
     payloadTimestamps[withdrawRequestHash] = block.timestamp + effectiveDelay;
 
