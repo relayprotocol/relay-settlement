@@ -4,7 +4,7 @@ import axios from "axios"
 import { ErrorType } from "viem/_types/errors/utils"
 
 const main = async () => {
-  const chainIds = [10, 56, 130, 137, 2741, 999, 9745, 59144]
+  const chainIds = [1, 8453, 42161]
 
   const chains = await axios("https://api.relay.link/chains").then(
     (r) => r.data.chains
@@ -14,8 +14,6 @@ const main = async () => {
     chainIds.map(async (chainId) => {
       try {
         const chain = chains.find((c: any) => c.id === chainId)
-        if (chainId === 480)
-          chain.httpRpcUrl = "https://worldchain-mainnet.g.alchemy.com/public"
 
         const rpc = createPublicClient({
           transport: http(chain.httpRpcUrl),
