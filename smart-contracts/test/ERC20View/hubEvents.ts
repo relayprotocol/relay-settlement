@@ -290,4 +290,76 @@ describe("ERC20View Hub Events", function () {
     )
     expect(erc20ViewTransferEvents[0].args.value).to.equal(transferAmount)
   })
+
+  it("verifies Transfer event is emitted exactly once from ERC20View.transferFrom", async function () {
+    const { erc20View, publicClient, regularUser, anotherUser, admin } =
+      await loadFixture(deployHubWithERC20View)
+
+    // Approve admin to spend tokens via ERC20View
+    const approvalAmount = 50n
+    const approveTx = await erc20View.write.approve(
+      [admin.account.address, approvalAmount],
+      { account: regularUser.account }
+    )
+    await publicClient.waitForTransactionReceipt({ hash: approveTx })
+
+    // Get initial Transfer event count to establish baseline
+    const initialEvents = await publicClient.getContractEvents({
+      abi: erc20View.abi,
+      address: erc20View.address,
+      eventName: "Transfer",
+      fromBlock: 0n,
+      toBlock: "latest",
+    })
+    const initialEventCount = initialEvents.length
+
+    // Transfer tokens using ERC20View transferFrom (which calls Hub's transferFromFor)
+    const transferAmount = 10n
+    const transferFromTx = await erc20View.write.transferFrom(
+      [
+        regularUser.account.address,
+        anotherUser.account.address,
+        transferAmount,
+      ],
+      { account: admin.account }
+    )
+    const transferFromReceipt = await publicClient.waitForTransactionReceipt({
+      hash: transferFromTx,
+    })
+
+    // Get all Transfer events after the transaction
+    const allEventsAfter = await publicClient.getContractEvents({
+      abi: erc20View.abi,
+      address: erc20View.address,
+      eventName: "Transfer",
+      fromBlock: 0n,
+      toBlock: "latest",
+    })
+
+    // Verify exactly one new Transfer event was added
+    expect(allEventsAfter.length).to.equal(initialEventCount + 1)
+
+    // Get Transfer events from this specific transaction block
+    const transferEvents = await publicClient.getContractEvents({
+      abi: erc20View.abi,
+      address: erc20View.address,
+      eventName: "Transfer",
+      fromBlock: transferFromReceipt.blockNumber,
+      toBlock: transferFromReceipt.blockNumber,
+    })
+
+    // Verify exactly one Transfer event in this transaction
+    expect(transferEvents.length).to.equal(1)
+    const transferEvent = transferEvents[0]
+    expect(transferEvent.args.from?.toLowerCase()).to.equal(
+      regularUser.account.address.toLowerCase()
+    )
+    expect(transferEvent.args.to?.toLowerCase()).to.equal(
+      anotherUser.account.address.toLowerCase()
+    )
+    expect(transferEvent.args.value).to.equal(transferAmount)
+
+    // Also verify this transaction hash matches the transferFrom transaction
+    expect(transferEvent.transactionHash).to.equal(transferFromTx)
+  })
 })

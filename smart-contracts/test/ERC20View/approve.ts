@@ -379,7 +379,7 @@ describe("ERC20View Approve", function () {
         ],
         { account: anotherUser.account }
       )
-    ).to.be.rejectedWith("OnlyERC20ViewCanCallApproveFor")
+    ).to.be.rejectedWith("OnlyERC20ViewCanCall")
   })
 
   it("prevents non-owner from setting allowance via ERC20View", async function () {

@@ -88,6 +88,16 @@ contract ERC20View {
   event Transfer(address indexed from, address indexed to, uint256 value);
 
   /*//////////////////////////////////////////////////////////////
+                            CUSTOM ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+  error ERC20ViewInsufficientAllowance(
+    address spender,
+    uint256 allowance,
+    uint256 needed
+  );
+
+  /*//////////////////////////////////////////////////////////////
                                 STORAGE
     //////////////////////////////////////////////////////////////*/
 
@@ -193,7 +203,22 @@ contract ERC20View {
     address to,
     uint256 value
   ) public returns (bool) {
-    // Execute the transfer on the Hub (Hub will handle allowance checks and updates)
+    // Check allowance unless the spender is the owner
+    if (msg.sender != from) {
+      uint256 currentAllowance = hub.allowance(from, msg.sender, tokenId);
+      if (currentAllowance < type(uint256).max) {
+        if (currentAllowance < value) {
+          revert ERC20ViewInsufficientAllowance(
+            msg.sender,
+            currentAllowance,
+            value
+          );
+        }
+        hub.approveFor(from, msg.sender, tokenId, currentAllowance - value);
+      }
+    }
+
+    // Execute the transfer on the Hub
     bool success = hub.transferFrom(from, to, tokenId, value);
     if (success) {
       emit Transfer(from, to, value);
