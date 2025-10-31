@@ -25,6 +25,8 @@ contract RelayMultisigSigner is Ownable {
   using AuroraSdk for PromiseResult;
   using Strings for uint256;
 
+  uint256 private constant PENDING_SIGNATURE_TIMEOUT = 5 minutes;
+
   /// @notice NEAR account of the Chain Signatures signer
   string public nearSigner;
 
@@ -58,6 +60,9 @@ contract RelayMultisigSigner is Ownable {
 
   /// @notice Stores signatures for hashes
   mapping(bytes32 => mapping(string => bytes)) public signatures;
+
+  /// @notice Stores pending signatures for hashes
+  mapping(bytes32 => mapping(string => uint256)) public pendingSignatures;
 
   /// @notice Constructor for the RelayMultisigSigner contract
   /// @param _multisig The address of the multisig wallet that will own this contract
@@ -118,6 +123,18 @@ contract RelayMultisigSigner is Ownable {
     if (!approvedSignatures[hashToSign][curve]) {
       revert SignatureNotApproved();
     }
+    if (signatures[hashToSign][curve].length != 0) {
+      // already signed
+      return;
+    }
+    if (
+      pendingSignatures[hashToSign][curve] >
+      block.timestamp - PENDING_SIGNATURE_TIMEOUT
+    ) {
+      // pending signature request in last 5 minutes
+      return;
+    }
+    pendingSignatures[hashToSign][curve] = block.timestamp;
 
     // Get the domainId
     string memory domainId = keccak256(abi.encodePacked(curve)) ==
