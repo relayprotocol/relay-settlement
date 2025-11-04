@@ -1,5 +1,6 @@
 import { task } from "hardhat/config"
 import { keccak256 } from "viem"
+import { getViemClients } from "../lib/viem"
 
 task(
   "grant-role",
@@ -10,8 +11,18 @@ task(
   .addParam("account", "The address to grant the role to")
   .setAction(async ({ contract: contractAddress, role, account }, hre) => {
     const { viem } = hre
-    const publicClient = await viem.getPublicClient()
-    const contract = await viem.getContractAt("AccessControl", contractAddress)
+    const { publicClient, walletClients } = await getViemClients(hre)
+    const [wallet] = walletClients
+    const contract = await viem.getContractAt(
+      "AccessControl",
+      contractAddress,
+      {
+        client: {
+          public: publicClient,
+          wallet,
+        },
+      }
+    )
 
     let roleBytes32: `0x${string}`
     if (role.startsWith("0x") && role.length === 66) {

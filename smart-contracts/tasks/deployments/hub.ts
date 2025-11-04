@@ -1,11 +1,14 @@
 import { task } from "hardhat/config"
 import HubModule from "../../ignition/modules/RelayHub"
+import { getViemClients } from "../../lib/viem"
 
 task("deploy:hub", "Deploy the Hub contract")
   .addOptionalParam("admin", "The address of the Hub admin")
-  .setAction(async ({ admin }, { viem, ignition, network, run }) => {
+  .setAction(async ({ admin }, hre) => {
+    const { ignition, network, run } = hre
     const { chainId } = network.config as { chainId: bigint }
-    const [deployer] = await viem.getWalletClients()
+    const { walletClients } = await getViemClients(hre)
+    const [deployer] = walletClients
     if (!admin) {
       admin = deployer.account.address
     }

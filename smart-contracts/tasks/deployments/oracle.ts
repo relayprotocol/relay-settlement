@@ -1,13 +1,15 @@
 import { task } from "hardhat/config"
 import OracleModule from "../../ignition/modules/RelayOracle"
+import { getViemClients } from "../../lib/viem"
 
 task("deploy:oracle", "Deploy the Oracle contract")
   .addOptionalParam("hub", "The address of the Hub contract")
   .addOptionalParam("admin", "The address of the Hub admin")
-  .setAction(async ({ admin, hub }, { viem, ignition, network, run }) => {
+  .setAction(async ({ admin, hub }, hre) => {
+    const { ignition, network, run } = hre
     const { chainId } = network.config as { chainId: bigint }
-
-    const [deployer] = await viem.getWalletClients()
+    const { walletClients } = await getViemClients(hre)
+    const [deployer] = walletClients
     if (!admin) {
       admin = deployer.account.address
     }

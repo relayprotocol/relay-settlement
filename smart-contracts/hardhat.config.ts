@@ -20,20 +20,20 @@ import "./tasks/depository/withdraw"
 // allocator test suite
 import "./tasks/allocator/full/bitcoin"
 import "./tasks/allocator/full/evm"
+import "./tasks/allocator/full/hyperliquid"
 import "./tasks/allocator/full/solana"
 import "./tasks/allocator/full/sui"
-import "./tasks/allocator/full/hyperliquid"
 
 // hub tasks
-import "./tasks/hub/hub-setup"
 import "./tasks/hub/add-operator"
+import "./tasks/hub/hub-setup"
 
 // deployments
 import "./tasks/deployments/allocator"
+import "./tasks/deployments/erc20View"
 import "./tasks/deployments/hub"
 import "./tasks/deployments/oracle"
 import "./tasks/deployments/relayMultisigSigner"
-import "./tasks/deployments/erc20View"
 
 // helpers
 import "./tasks/allocator/getSignerAddress"
@@ -79,8 +79,13 @@ const networks = {
   },
 }
 
+const customChains = Object.keys(nets)
+  .filter((id) => nets[id].blockExplorer)
+  .map((id) => nets[id].blockExplorer)
+
 const etherscan = {
   apiKey: "C1KDFD2PHN7FXXXT1AW5PG27I5JB23J41D",
+  customChains,
 }
 
 Object.keys(nets).forEach((id) => {
@@ -124,6 +129,9 @@ if (forkUrl) {
 
 const config: HardhatUserConfig = {
   etherscan,
+  ignition: {
+    requiredConfirmations: 1,
+  },
   networks,
   solidity: {
     settings: {
@@ -144,4 +152,5 @@ const config: HardhatUserConfig = {
   },
 }
 
+// console.log(JSON.stringify(config, null, 2))
 export default config

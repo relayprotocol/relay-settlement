@@ -10,6 +10,19 @@ export interface NetworkConfig {
   assets?: NetworkAssets
   rpc: [string, ...string[]]
   explorerApiUrl?: string
+  blockExplorer?: {
+    chainId: number
+    network: string
+    urls: {
+      apiURL: string
+      browserURL: string
+    }
+  }
+  nativeCurrency?: {
+    decimals: number
+    name: string
+    symbol: string
+  }
   near?: {
     rpc: string
     signer: string
