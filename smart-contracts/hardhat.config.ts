@@ -60,20 +60,8 @@ if (!DEPLOYER_PRIVATE_KEY) {
   )
 }
 
-// https://github.com/relayprotocol/relay-vaults/blob/3085d0d1c04f1928f3e4a07e48d1687985570abd/packages/networks/src/networks/testnets/arbitrum-sepolia.ts
-let accounts
-if (DEPLOYER_PRIVATE_KEY) {
-  accounts = [DEPLOYER_PRIVATE_KEY]
-}
-
 // parse networks from file
 const networks = {
-  "arbitrum-sepolia": {
-    accounts,
-    chainId: 421614,
-    name: "Arbitrum Sepolia",
-    url: "https://sepolia-rollup.arbitrum.io/rpc",
-  },
   hardhat: {
     allowUnlimitedContractSize: true,
   },
