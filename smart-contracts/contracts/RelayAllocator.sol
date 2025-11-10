@@ -522,7 +522,7 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
     }
     // Encode the JSON request for the signer
     bytes memory data = ChainSignatures.encodeJSONRequest(
-      hashToSign,
+      ChainSignatures.stringifyBytes(abi.encodePacked(hashToSign)),
       payloadBuilder.curve(),
       signerPath,
       keccak256(abi.encodePacked(payloadBuilder.curve())) == ECDSA_HASH

@@ -37,19 +37,16 @@ contract RelayMultisigSigner is Ownable {
   string public signerPath;
 
   /// @notice Emitted when a message is approved
-  /// @param hashToSign The hash of the message to sign
-  /// @param curve The curve used for signing (0=ECDSA, 1=EDDSA)
-  event Approved(bytes32 indexed hashToSign, string indexed curve);
+  /// @param dataHash The hash of the data to sign
+  /// @param curve The curve used for signing
+  /// @param data The complete data that was approved (hash or raw data)
+  event Approved(bytes32 indexed dataHash, string indexed curve, bytes data);
 
   /// @notice Emitted when a message is signed
-  /// @param hashToSign The hash of the message to sign
+  /// @param dataHash The hash of the message that was signed
   /// @param curve The curve used for signing (0=ECDSA, 1=EDDSA)
-  /// @param signature The signature of the message
-  event Signed(
-    bytes32 indexed hashToSign,
-    string indexed curve,
-    bytes signature
-  );
+  /// @param signature The signature of the data
+  event Signed(bytes32 indexed dataHash, string indexed curve, bytes signature);
 
   error AccessControlUnauthorizedAccount(address account, bytes32 role);
   error SignatureNotApproved();
@@ -98,43 +95,46 @@ contract RelayMultisigSigner is Ownable {
     initCall.transact();
   }
 
-  /// @notice Requests a signature for a given hash from the NEAR Chain Signatures signer
-  /// @param hashToSign The hash of the message to sign
+  /// @notice Approves data for signing (supports both hashes and raw data)
+  /// @param data The data to be signed (any length)
   /// @param curve The curve to use for signing (Ecdsa or Eddsa)
   function approveSignature(
-    bytes32 hashToSign,
+    bytes memory data,
     string memory curve
   ) public onlyOwner {
-    approvedSignatures[hashToSign][curve] = true;
-    emit Approved(hashToSign, curve);
+    bytes32 key = keccak256(data);
+    approvedSignatures[key][curve] = true;
+    emit Approved(key, curve, data);
   }
 
-  /// @notice Requests a signature for a given hash from the NEAR Chain Signatures signer
-  /// @param hashToSign The hash of the message to sign
+  /// @notice Requests a signature for a given message from the NEAR Chain Signatures signer
+  /// @param data The data to sign (any length)
   /// @param curve The curve to use for signing (Ecdsa or Eddsa)
   /// @param signGas The amount of NEAR gas to use for the signing request (use 30_000_000_000_000 by default)
   /// @param callbackGas The amount of NEAR gas to use for the callback (use 10_000_000_000_000 by default)
   function sign(
-    bytes32 hashToSign,
+    bytes memory data,
     string memory curve,
     uint64 signGas,
     uint64 callbackGas
   ) public {
-    if (!approvedSignatures[hashToSign][curve]) {
+    bytes32 key = keccak256(data);
+
+    if (!approvedSignatures[key][curve]) {
       revert SignatureNotApproved();
     }
-    if (signatures[hashToSign][curve].length != 0) {
+    if (signatures[key][curve].length != 0) {
       // already signed
       return;
     }
     if (
-      pendingSignatures[hashToSign][curve] >
+      pendingSignatures[key][curve] >
       block.timestamp - PENDING_SIGNATURE_TIMEOUT
     ) {
       // pending signature request in last 5 minutes
       return;
     }
-    pendingSignatures[hashToSign][curve] = block.timestamp;
+    pendingSignatures[key][curve] = block.timestamp;
 
     // Get the domainId
     string memory domainId = keccak256(abi.encodePacked(curve)) ==
@@ -144,7 +144,7 @@ contract RelayMultisigSigner is Ownable {
 
     // Encode the JSON request for the signer
     bytes memory signatureRequest = ChainSignatures.encodeJSONRequest(
-      hashToSign,
+      ChainSignatures.stringifyBytes(data),
       curve,
       signerPath,
       domainId
@@ -162,11 +162,7 @@ contract RelayMultisigSigner is Ownable {
     );
     PromiseCreateArgs memory callback = near.auroraCall(
       address(this),
-      abi.encodeWithSelector(
-        this.signatureCallback.selector,
-        curve,
-        hashToSign
-      ),
+      abi.encodeWithSelector(this.signatureCallback.selector, curve, key),
       0,
       callbackGas
     );
@@ -176,8 +172,8 @@ contract RelayMultisigSigner is Ownable {
 
   /// @notice Callback function that is called by the NEAR runtime when the signature is ready
   /// @param curve The curve used for signing
-  /// @param hashToSign The hash of the message that was signed
-  function signatureCallback(string memory curve, bytes32 hashToSign) public {
+  /// @param dataHash The hash of the data that was signed
+  function signatureCallback(string memory curve, bytes32 dataHash) public {
     if (
       msg.sender != AuroraSdk.nearRepresentitiveImplicitAddress(address(this))
     ) {
@@ -189,10 +185,10 @@ contract RelayMultisigSigner is Ownable {
     PromiseResult memory result = AuroraSdk.promiseResult(0);
 
     if (result.status != PromiseResultStatus.Successful) {
-      revert SignCallbackFailed(hashToSign);
+      revert SignCallbackFailed(dataHash);
     }
 
-    signatures[hashToSign][curve] = result.output;
-    emit Signed(hashToSign, curve, result.output);
+    signatures[dataHash][curve] = result.output;
+    emit Signed(dataHash, curve, result.output);
   }
 }

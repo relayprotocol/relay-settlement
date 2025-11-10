@@ -8,6 +8,7 @@ import {
   keccak256,
   parseEther,
   serializeTransaction,
+  encodePacked,
 } from "viem"
 import { z } from "zod"
 import * as bitcoin from "bitcoinjs-lib"
@@ -460,13 +461,15 @@ export const createTransactionBundle = async (
     }
 
     result.hashesToSign.forEach((hash, index) => {
+      const useRawData = tx.family === "solana-vm"
       console.log(
-        `🏗️  Building hash #${index} for tx #${i} (${tx.family}) : ${hash}`
+        `🏗️  Building ${useRawData ? "raw data" : "hash"} #${index} for tx #${i} (${tx.family}) : ${hash}`
       )
       const transactionForBundle = encodeSignatureCall(
         hash,
         curve,
-        relayMultisigSigner
+        relayMultisigSigner,
+        useRawData
       )
       transactionBundle.push(transactionForBundle)
     })
@@ -477,16 +480,20 @@ export const createTransactionBundle = async (
 const encodeSignatureCall = (
   hashToSign: `0x${string}`,
   curve: "Ecdsa" | "Eddsa",
-  relayMultisigSigner: RelayMultisigSigner$Type
+  relayMultisigSigner: RelayMultisigSigner$Type,
+  raw: boolean = false
 ) => {
-  const data = encodeFunctionData({
+  // Use unified approve function for both hash and raw data
+  const data = raw ? hashToSign : encodePacked(["bytes32"], [hashToSign])
+
+  const callData = encodeFunctionData({
     abi: relayMultisigSigner.abi,
-    args: [hashToSign, curve],
-    functionName: "approveSignature",
+    args: [data, curve],
+    functionName: "approve",
   })
 
   return {
-    data,
+    data: callData,
     to: checksumAddress(relayMultisigSigner.address),
     value: "0",
   }
@@ -499,29 +506,47 @@ export const getSignatureForHash = async (
   relayMultisigSigner: string,
   hashToSign: string,
   curve: string,
-  hre: HardhatRuntimeEnvironment
+  hre: HardhatRuntimeEnvironment,
+  raw: boolean = false
 ): Promise<string> => {
   const multisigSigner = await hre.viem.getContractAt(
     "RelayMultisigSigner",
     relayMultisigSigner
   )
 
-  let nearSignature = await multisigSigner.read.signatures([hashToSign, curve])
+  // Prepare data and determine the key for lookups
+  const data = raw
+    ? (hashToSign as `0x${string}`)
+    : encodePacked(["bytes32"], [hashToSign as `0x${string}`])
+
+  const signatureKey = keccak256(data)
+
+  let nearSignature = await multisigSigner.read.signatures([
+    signatureKey,
+    curve,
+  ])
 
   if (nearSignature === "0x") {
     // Check if the signature was approved
     const approved = await multisigSigner.read.approvedSignatures([
-      hashToSign,
+      signatureKey,
       curve,
     ])
     if (!approved) {
-      throw new Error("❌ Signature not approved...")
+      throw new Error(
+        `❌ ${raw ? "Raw data" : "Hash"} signature not approved...`
+      )
     }
 
-    console.log("📝 Requesting signature...", { curve, hashToSign })
+    console.log(`📝 Requesting ${raw ? "raw data" : "hash"} signature...`, {
+      curve,
+      [raw ? "rawData" : "hashToSign"]: hashToSign,
+      ...(raw ? { dataHash: signatureKey } : {}),
+    })
 
+    // Use unified sign function
     const txHash = await multisigSigner.write.sign([
-      hashToSign,
+      data,
       curve,
       signGas,
       callbackGas,
@@ -532,10 +557,11 @@ export const getSignatureForHash = async (
       hash: txHash,
     })
   }
+
   while (nearSignature === "0x") {
-    console.log("Waiting for signed hash...")
+    console.log(`Waiting for signed ${raw ? "raw data" : "hash"}...`)
     await wait(1)
-    nearSignature = await multisigSigner.read.signatures([hashToSign, curve])
+    nearSignature = await multisigSigner.read.signatures([signatureKey, curve])
   }
 
   const { r, s, v } = extractNearSignature(nearSignature)
