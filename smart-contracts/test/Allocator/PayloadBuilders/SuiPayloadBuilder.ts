@@ -28,12 +28,15 @@ describe("Allocator SuiPayloadBuilder", function () {
       const { payloadBuilder, depository } = await loadFixture(deployAllocator)
 
       // Create a transfer request for SUI
+      const currentTime = Math.floor(Date.now() / 1000)
+      const futureExpiration = BigInt(currentTime + 300) // 5 minutes from now
+
       const transferRequest = {
         amount: 500n,
         coin_type: {
           name: normalizeType("0x2::sui::SUI"),
         },
-        expiration: 1750663024480n,
+        expiration: futureExpiration,
         nonce: 1750662424480n,
         recipient:
           "0x5097529b04079ab34fbe734e658f199a66645f9c6c12fe24348830ca9617fcf4",
@@ -67,12 +70,15 @@ describe("Allocator SuiPayloadBuilder", function () {
         "0xf3c2bf47b0439563547e53615c277c8c4342b3f0074a23218e37c7e4c1f7121a::usdc::USDC"
 
       // Create a transfer request with custom coin
+      const currentTime2 = Math.floor(Date.now() / 1000)
+      const futureExpiration2 = BigInt(currentTime2 + 300) // 5 minutes from now
+
       const transferRequest = {
         amount: 100000000n,
         coin_type: {
           name: normalizeType(customCoin),
         },
-        expiration: 1749096049n,
+        expiration: futureExpiration2,
         nonce: 1749095749158n,
         recipient:
           "0x622f2b76c7331bbe04365995bcb287e0648cd4631455a25e62f54c76e5e28143",
@@ -99,6 +105,33 @@ describe("Allocator SuiPayloadBuilder", function () {
       expect(payload.startsWith("0x")).to.equal(true)
       expect(payload.length).to.be.greaterThan(2)
       expect(payload).to.equal(bytes)
+    })
+
+    it("should reject expired timestamp", async () => {
+      const { payloadBuilder, depository } = await loadFixture(deployAllocator)
+
+      const pastExpiration = Math.floor(Date.now() / 1000) - 300 // 5 minutes ago
+      const nonce = 1750662424480n
+
+      const data = encodeAbiParameters(
+        [{ type: "uint64" }, { type: "uint64" }],
+        [nonce, BigInt(pastExpiration)]
+      )
+
+      // Should revert with InvalidExpiration error
+      try {
+        await payloadBuilder.read.buildPayload([
+          1n,
+          depository.account.address,
+          normalizeType("0x2::sui::SUI"),
+          500n,
+          "0x5097529b04079ab34fbe734e658f199a66645f9c6c12fe24348830ca9617fcf4",
+          data,
+        ])
+        expect.fail("Expected transaction to revert")
+      } catch (error: any) {
+        expect(error.message).to.include("InvalidExpiration")
+      }
     })
   })
 
@@ -190,12 +223,15 @@ describe("Allocator SuiPayloadBuilder", function () {
         "0xf3c2bf47b0439563547e53615c277c8c4342b3f0074a23218e37c7e4c1f7121a::usdc::USDC"
 
       // Create a transfer request with custom coin
+      const currentTime5 = Math.floor(Date.now() / 1000)
+      const futureExpiration5 = BigInt(currentTime5 + 300) // 5 minutes from now
+
       const transferRequest = {
         amount: 100000000n,
         coin_type: {
           name: normalizeType(customCoin),
         },
-        expiration: 1749096049n,
+        expiration: futureExpiration5,
         nonce: 1749095749158n,
         recipient:
           "0x622f2b76c7331bbe04365995bcb287e0648cd4631455a25e62f54c76e5e28143",

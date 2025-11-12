@@ -51,6 +51,9 @@ contract SolanaPayloadBuilder is IPayloadBuilder {
     } else {
       // Decode provided nonce and expiration
       (nonce, expiration) = abi.decode(data, (uint64, int64));
+      if (expiration < int64(int256(block.timestamp))) {
+        revert InvalidExpiration();
+      }
     }
 
     // Encode request in Borsh compatible format

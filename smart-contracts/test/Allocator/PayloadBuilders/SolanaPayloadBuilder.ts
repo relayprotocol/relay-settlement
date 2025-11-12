@@ -28,9 +28,13 @@ describe("Allocator SolanaPayloadBuilder", function () {
   describe("buildPayload()", function () {
     it("should build a payload when using SOL (native currency)", async () => {
       const { payloadBuilder, depository } = await loadFixture(deployAllocator)
+      // Use future timestamp for expiration
+      const currentTime = Math.floor(Date.now() / 1000)
+      const futureExpiration = currentTime + 300 // 5 minutes from now
+
       const transferRequest = {
         amount: new BN(100000000),
-        expiration: new BN(1749096009),
+        expiration: new BN(futureExpiration),
         nonce: new BN(1749095710252),
         recipient: new PublicKey(
           "38WpM5VeBuUM1GLTF8aWAYs4p4JDVPjrFxh1YRxzFpLH"
@@ -48,7 +52,7 @@ describe("Allocator SolanaPayloadBuilder", function () {
 
       // Encode nonce and expiration in data parameter
       const nonce = 1749095710252n // From test data
-      const expiration = 1749096009n // From test data
+      const expiration = BigInt(futureExpiration) // Use future timestamp
       const data = encodeAbiParameters(
         [{ type: "uint64" }, { type: "int64" }],
         [nonce, expiration]
@@ -68,9 +72,13 @@ describe("Allocator SolanaPayloadBuilder", function () {
 
     it("should build a payload when using an SPL token", async () => {
       const { payloadBuilder, depository } = await loadFixture(deployAllocator)
+      // Use future timestamp for expiration
+      const currentTime2 = Math.floor(Date.now() / 1000)
+      const futureExpiration2 = currentTime2 + 300 // 5 minutes from now
+
       const transferRequest = {
         amount: new BN(100000000),
-        expiration: new BN(1749096049),
+        expiration: new BN(futureExpiration2),
         nonce: new BN(1749095749158),
         recipient: new PublicKey(
           "FDx39MbXSupLUaxmN3SQ9x3G6mtTjemZVcWgz7jkcvTD"
@@ -88,7 +96,7 @@ describe("Allocator SolanaPayloadBuilder", function () {
 
       // Use same nonce and expiration as native test for consistency
       const nonce = 1749095749158n
-      const expiration = 1749096049n
+      const expiration = BigInt(futureExpiration2)
       const data = encodeAbiParameters(
         [{ type: "uint64" }, { type: "int64" }],
         [nonce, expiration]
@@ -107,6 +115,33 @@ describe("Allocator SolanaPayloadBuilder", function () {
       expect(payload.startsWith("0x")).to.equal(true)
       expect(payload.length).to.be.greaterThan(2)
       expect(payload).to.equal(bytes)
+    })
+
+    it("should reject expired timestamp", async () => {
+      const { payloadBuilder, depository } = await loadFixture(deployAllocator)
+
+      const pastExpiration = Math.floor(Date.now() / 1000) - 300 // 5 minutes ago
+      const nonce = 1749095710252n
+
+      const data = encodeAbiParameters(
+        [{ type: "uint64" }, { type: "int64" }],
+        [nonce, BigInt(pastExpiration)]
+      )
+
+      // Should revert with InvalidExpiration error
+      try {
+        await payloadBuilder.read.buildPayload([
+          1n,
+          depository.account.address,
+          "",
+          100000000n,
+          base58ToBytes32("38WpM5VeBuUM1GLTF8aWAYs4p4JDVPjrFxh1YRxzFpLH"),
+          data,
+        ])
+        expect.fail("Expected transaction to revert")
+      } catch (error: any) {
+        expect(error.message).to.include("InvalidExpiration")
+      }
     })
   })
 
@@ -134,7 +169,8 @@ describe("Allocator SolanaPayloadBuilder", function () {
 
   describe("decodeDepositoryRequest", function () {
     const amount = 1n
-    const expiration = 1749096009n
+    const currentTime = Math.floor(Date.now() / 1000)
+    const expiration = BigInt(currentTime + 300) // 5 minutes from now
     const nonce = 1749095710252n
     const recipient = "ETZgVwqLnzZFQfK2YB1rDLratt4cCGwNHcV8jJokrxmm"
 
