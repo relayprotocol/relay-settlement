@@ -5,6 +5,14 @@ export const aurora: NetworkConfig = {
     wNEAR: "0xC42C30aC6Cc15faC9bD938618BcaA1a1FaE8501d",
   },
   chainId: 1313161554n,
+  contracts: {
+    dev: {
+      allocator: "0xFA2347546aeA769073643b32A10Fb4f3297B3d59",
+    },
+    prod: {
+      allocator: "0xE12Bc514e90E136CAD10413669a6CcDeb9E3aDB7",
+    },
+  },
   family: "ethereum-vm",
   isTestnet: false,
   name: "Aurora Mainnet (Near)",

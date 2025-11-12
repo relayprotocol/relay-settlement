@@ -42,6 +42,7 @@ import "./tasks/exportAbis"
 import "./tasks/grantRole"
 
 // Relay Multisig signer
+import { NetworkConfig } from "@relay-protocol/types"
 import "./tasks/relayMultisigSigner/check-hashes"
 import "./tasks/relayMultisigSigner/decode-multicall"
 import "./tasks/relayMultisigSigner/execute-transactions"
@@ -76,21 +77,33 @@ const etherscan = {
   customChains,
 }
 
-Object.keys(nets).forEach((id) => {
-  const { slug, rpc } = nets[id]
-  let accounts
-  const network = {
-    chainId: Number(id),
-    url: rpc[0],
-  }
-  if (DEPLOYER_PRIVATE_KEY) {
-    accounts = [DEPLOYER_PRIVATE_KEY]
-  }
-  networks[slug] = {
-    ...network,
-    accounts,
-  }
-})
+// check if protocol onctracts are present in the network config
+const PROTOCOL_CONTRACTS = ["allocator", "oracle"]
+const hasProcotolContracts = (n: NetworkConfig) => {
+  return [
+    ...Object.keys(n.contracts?.dev || {}),
+    ...Object.keys(n.contracts?.prod || {}),
+  ].some((contract) => PROTOCOL_CONTRACTS.includes(contract))
+}
+
+Object.keys(nets)
+  // we only "hub" networks to manage our contracts here
+  .filter((id: any) => hasProcotolContracts(nets[id]))
+  .forEach((id) => {
+    const { slug, rpc } = nets[id]
+    let accounts
+    const network = {
+      chainId: Number(id),
+      url: rpc[0],
+    }
+    if (DEPLOYER_PRIVATE_KEY) {
+      accounts = [DEPLOYER_PRIVATE_KEY]
+    }
+    networks[slug] = {
+      ...network,
+      accounts,
+    }
+  })
 
 // parse fork URL for tests
 const forkUrl = process.env.RPC_URL

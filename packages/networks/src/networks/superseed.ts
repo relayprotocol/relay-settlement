@@ -1,0 +1,16 @@
+import { NetworkConfig } from "@relay-protocol/types"
+
+export const superseed: NetworkConfig = {
+  chainId: 5330n,
+  contracts: {
+    prod: { depository: "0x4cD00E387622C35bDDB9b4c962C136462338BC31" },
+  },
+  family: "ethereum-vm",
+  hubChainId: "5330",
+  isTestnet: false,
+  name: "Superseed",
+  rpc: process.env.RPC_5330
+    ? [process.env.RPC_5330]
+    : ["[REDACTED-INTERNAL-RPC]"],
+  slug: "superseed",
+}

@@ -12,6 +12,14 @@ export const conduitTestnet: NetworkConfig = {
     },
   },
   chainId: 35779n,
+  contracts: {
+    dev: {
+      oracle: "0x64A3328Cf61025720c26dE2a87B6d913fA6e376a",
+    },
+    prod: {
+      oracle: "0x64A3328Cf61025720c26dE2a87B6d913fA6e376a",
+    },
+  },
   family: "ethereum-vm",
   isTestnet: true,
   name: "Conduit Relay Settlement testnet",

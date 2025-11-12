@@ -15,6 +15,6 @@
     "typescript": "5.9.3"
   },
   "dependencies": {
-    "@reservoir0x/relay-protocol-sdk": "0.0.44"
+    "@reservoir0x/relay-protocol-sdk": "0.0.50"
   }
 }

@@ -1,5 +1,10 @@
 import { VmType } from "@reservoir0x/relay-protocol-sdk"
 
+export interface ProtocolContracts {
+  depository?: string
+  oracle?: string
+  allocator?: string
+}
 export interface NetworkConfig {
   chainId: bigint
   name: string
@@ -26,6 +31,11 @@ export interface NetworkConfig {
   near?: {
     rpc: string
     signer: string
+  }
+  hubChainId?: string
+  contracts?: {
+    dev?: ProtocolContracts
+    prod?: ProtocolContracts
   }
 }
 
