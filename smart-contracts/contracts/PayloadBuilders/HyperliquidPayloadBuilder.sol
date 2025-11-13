@@ -26,15 +26,6 @@ struct UsdSendRequest {
   uint64 time;
 }
 
-/// @notice Request structure for spot token transfers on HyperLiquid
-struct SpotSendRequest {
-  string hyperliquidChain;
-  string destination;
-  string token;
-  string amount;
-  uint64 time;
-}
-
 /// @notice Request structure for asset sends on HyperLiquid
 struct SendAssetRequest {
   string hyperliquidChain;
@@ -50,7 +41,6 @@ struct SendAssetRequest {
 /// @notice Transaction type enum for better extensibility
 enum HyperLiquidTxType {
   UsdSend,
-  SpotSend,
   SendAsset
 }
 
@@ -71,8 +61,6 @@ contract HyperLiquidPayloadBuilder is IPayloadBuilder {
   error InvalidData();
   /// @notice Thrown when invalid decimal configuration is used
   error InvalidDecimals();
-  /// @notice Thrown when amount precision is not integral at target decimals
-  error NonIntegralAtPrecision();
   /// @notice Thrown when caller is not the allocator owner
   error NotRelayAllocatorOwner(address account);
   /// @notice Thrown when DEX is not whitelisted
@@ -108,16 +96,13 @@ contract HyperLiquidPayloadBuilder is IPayloadBuilder {
   string public hyperliquidChain;
 
   /// @notice Mapping from currency to target decimals for secure decimal handling
-  mapping(string => uint8) public targetDecimals;
-
-  /// @notice Whether to use the new `SendAsset` request
-  bool public useSendAsset;
+  mapping(string => uint8) public currencyDecimals;
 
   /// @notice DEX whitelist for source and destination DEX validation
   mapping(string => bool) public dexWhitelist;
 
   /// @notice RelayAllocator contract instance
-  IRelayAllocator public allocator;
+  IRelayAllocator public immutable allocator;
 
   /// @notice Constructor that initializes the payload builder with a HyperLiquid chain
   /// @param _hyperliquidChain The HyperLiquid chain to use (e.g., "Mainnet", "Testnet")
@@ -127,7 +112,7 @@ contract HyperLiquidPayloadBuilder is IPayloadBuilder {
     allocator = _allocator;
 
     // Set default decimals for Core USDC
-    targetDecimals[""] = 2;
+    currencyDecimals[""] = 8;
   }
 
   /// @notice Modifier to restrict access to allocator owner only
@@ -137,21 +122,16 @@ contract HyperLiquidPayloadBuilder is IPayloadBuilder {
     _;
   }
 
-  /// @notice Sets the target decimals for a specific currency
+  /// @notice Sets the decimal precision for a specific currency's raw amounts
+  /// @dev Specifies how many decimal places the raw amount represents (e.g., decimals=8 means 100000000 represents 1.00000000)
   /// @param currency The currency identifier
-  /// @param decimals The number of decimal places for this currency
-  function setTargetDecimals(
+  /// @param decimals The decimal precision of raw amounts for this currency
+  function setCurrencyDecimals(
     string calldata currency,
     uint8 decimals
   ) public onlyAllocatorOwner {
     if (decimals > 18) revert InvalidDecimals();
-    targetDecimals[currency] = decimals;
-  }
-
-  /// @notice Sets the value of the `useSendAsset` field
-  /// @param use The value to set
-  function setUseSendAsset(bool use) external onlyAllocatorOwner {
-    useSendAsset = use;
+    currencyDecimals[currency] = decimals;
   }
 
   /// @notice Sets the whitelist status for a DEX
@@ -166,7 +146,7 @@ contract HyperLiquidPayloadBuilder is IPayloadBuilder {
 
   /// @notice Builds a payload for HyperLiquid transactions
   /// @param currency Token currency (empty string for USD, token identifier for spots)
-  /// @param amount Token amount in 18 decimal precision
+  /// @param amount Raw token amount using the currency's configured decimal precision
   /// @param receiver Destination address for the transfer
   /// @param data ABI-encoded uint64 currentTime
   /// @return Encoded HyperLiquidTx containing the transaction data
@@ -187,20 +167,31 @@ contract HyperLiquidPayloadBuilder is IPayloadBuilder {
       currentTime = abi.decode(data, (uint64));
     }
 
-    // Determine target decimals based on currency
-    uint8 decimalsToUse = targetDecimals[currency];
-
     // Use default decimals if not configured
-    if (decimalsToUse == 0) {
+    if (currencyDecimals[currency] == 0) {
       revert InvalidDecimals();
     }
 
     // Convert amount to string with target decimal precision
-    string memory amountStr = toDecimalString18(amount, decimalsToUse);
+    string memory amountStr = toDecimalString(
+      amount,
+      currencyDecimals[currency]
+    );
 
     HyperLiquidTx memory transaction;
 
-    if (useSendAsset) {
+    bool isCoreUsdTransfer = bytes(currency).length == 0;
+    if (isCoreUsdTransfer) {
+      UsdSendRequest memory request = UsdSendRequest({
+        hyperliquidChain: hyperliquidChain,
+        destination: receiver,
+        amount: amountStr,
+        time: currentTime
+      });
+
+      transaction.txType = HyperLiquidTxType.UsdSend;
+      transaction.parameters = abi.encode(request);
+    } else {
       (, string memory sourceDex, string memory destinationDex) = abi.decode(
         data,
         (uint64, string, string)
@@ -224,32 +215,6 @@ contract HyperLiquidPayloadBuilder is IPayloadBuilder {
 
       transaction.txType = HyperLiquidTxType.SendAsset;
       transaction.parameters = abi.encode(request);
-    } else {
-      bool isCoreUsdTransfer = bytes(currency).length == 0;
-      if (isCoreUsdTransfer) {
-        // Core USD transfer
-        UsdSendRequest memory request = UsdSendRequest({
-          hyperliquidChain: hyperliquidChain,
-          destination: receiver,
-          amount: amountStr,
-          time: currentTime
-        });
-
-        transaction.txType = HyperLiquidTxType.UsdSend;
-        transaction.parameters = abi.encode(request);
-      } else {
-        // Spot transfer - use the currency string directly
-        SpotSendRequest memory request = SpotSendRequest({
-          hyperliquidChain: hyperliquidChain,
-          destination: receiver,
-          token: currency, // Use the currency string directly (e.g., "PURR:0xc1fb593aeffbeb02f85e0308e9956a90")
-          amount: amountStr,
-          time: currentTime
-        });
-
-        transaction.txType = HyperLiquidTxType.SpotSend;
-        transaction.parameters = abi.encode(request);
-      }
     }
 
     return abi.encode(transaction);
@@ -281,12 +246,6 @@ contract HyperLiquidPayloadBuilder is IPayloadBuilder {
         (UsdSendRequest)
       );
       return hashUsdSendRequest(request, domainSeparator);
-    } else if (transaction.txType == HyperLiquidTxType.SpotSend) {
-      SpotSendRequest memory request = abi.decode(
-        transaction.parameters,
-        (SpotSendRequest)
-      );
-      return hashSpotSendRequest(request, domainSeparator);
     } else if (transaction.txType == HyperLiquidTxType.SendAsset) {
       SendAssetRequest memory request = abi.decode(
         transaction.parameters,
@@ -312,28 +271,6 @@ contract HyperLiquidPayloadBuilder is IPayloadBuilder {
         USD_SEND_TYPEHASH,
         keccak256(bytes(request.hyperliquidChain)),
         keccak256(bytes(request.destination)),
-        keccak256(bytes(request.amount)),
-        request.time
-      )
-    );
-
-    return MessageHashUtils.toTypedDataHash(domainSeparator, structHash);
-  }
-
-  /// @notice Helper function to hash a SpotSendRequest and return the EIP-712 digest
-  /// @param request The SpotSendRequest to hash
-  /// @param domainSeparator The domain separator
-  /// @return The EIP712 hash
-  function hashSpotSendRequest(
-    SpotSendRequest memory request,
-    bytes32 domainSeparator
-  ) internal pure returns (bytes32) {
-    bytes32 structHash = keccak256(
-      abi.encode(
-        SPOT_SEND_TYPEHASH,
-        keccak256(bytes(request.hyperliquidChain)),
-        keccak256(bytes(request.destination)),
-        keccak256(bytes(request.token)),
         keccak256(bytes(request.amount)),
         request.time
       )
@@ -379,32 +316,25 @@ contract HyperLiquidPayloadBuilder is IPayloadBuilder {
     return "hyperliquid-vm";
   }
 
-  /// @notice Converts an 18-decimal precision amount to a decimal string with the specified precision
-  /// @dev Reverts with InvalidDecimals if `decimalsToShow` > 18.
-  /// @param amount The amount in 18-decimal precision (wei).
-  /// @param decimalsToShow Number of decimal places to show (0–18).
-  /// @return The formatted decimal string (e.g., "100.00" for 2 decimal places).
-  function toDecimalString18(
+  /// @notice Converts a raw amount to a decimal string using the specified decimal precision
+  /// @dev Reverts with InvalidDecimals if `decimals` > 18.
+  /// @param amount The raw amount stored with the specified decimal precision
+  /// @param decimals The decimal precision that the raw amount uses (e.g., 8 means the amount is stored as units of 10^-8)
+  /// @return The formatted decimal string (e.g., amount=100000000 with decimals=8 returns "1.00000000")
+  function toDecimalString(
     uint256 amount,
-    uint8 decimalsToShow
+    uint8 decimals
   ) public pure returns (string memory) {
-    if (decimalsToShow > 18) revert InvalidDecimals();
+    if (decimals > 18) revert InvalidDecimals();
 
     // Handle integer-only case (no decimal places)
-    if (decimalsToShow == 0) {
-      return Strings.toString(amount / 1e18);
+    if (decimals == 0) {
+      return Strings.toString(amount);
     }
 
-    // Calculate scaling factor to reduce precision from 18 to target decimals
-    uint256 precisionScale = 10 ** (18 - decimalsToShow);
-    // Strict mode: ensure precision consistency
-    if (amount % precisionScale != 0) revert NonIntegralAtPrecision();
-
-    // Scale down from 18 decimals to target decimal precision
-    uint256 scaledToTarget = amount / precisionScale;
-    uint256 decimalDivisor = 10 ** decimalsToShow;
-    uint256 integerPart = scaledToTarget / decimalDivisor;
-    uint256 fractionalPart = scaledToTarget % decimalDivisor;
+    uint256 decimalDivisor = 10 ** decimals;
+    uint256 integerPart = amount / decimalDivisor;
+    uint256 fractionalPart = amount % decimalDivisor;
 
     string memory integerString = Strings.toString(integerPart);
 
@@ -412,7 +342,7 @@ contract HyperLiquidPayloadBuilder is IPayloadBuilder {
     if (fractionalPart == 0) {
       // Preserve decimal format by adding zeros
       bytes memory resultWithZeros = new bytes(
-        bytes(integerString).length + 1 + decimalsToShow
+        bytes(integerString).length + 1 + decimals
       );
       uint256 writePosition;
 
@@ -429,7 +359,7 @@ contract HyperLiquidPayloadBuilder is IPayloadBuilder {
       resultWithZeros[writePosition++] = ".";
 
       // Add zeros for decimal places
-      for (uint256 zeroIndex = 0; zeroIndex < decimalsToShow; zeroIndex++) {
+      for (uint256 zeroIndex = 0; zeroIndex < decimals; zeroIndex++) {
         resultWithZeros[writePosition + zeroIndex] = "0";
       }
 
@@ -440,9 +370,9 @@ contract HyperLiquidPayloadBuilder is IPayloadBuilder {
     bytes memory fractionalString = bytes(Strings.toString(fractionalPart));
 
     // Pad fractional part with leading zeros to match target decimal places
-    if (fractionalString.length < decimalsToShow) {
-      bytes memory paddedFractional = new bytes(decimalsToShow);
-      uint256 paddingLength = decimalsToShow - fractionalString.length;
+    if (fractionalString.length < decimals) {
+      bytes memory paddedFractional = new bytes(decimals);
+      uint256 paddingLength = decimals - fractionalString.length;
 
       // Add leading zeros
       for (uint256 padIndex = 0; padIndex < paddingLength; padIndex++) {

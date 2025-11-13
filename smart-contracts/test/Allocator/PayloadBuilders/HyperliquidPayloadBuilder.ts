@@ -33,19 +33,6 @@ const USD_SEND_REQUEST_ABI = [
   },
 ]
 
-const SPOT_SEND_REQUEST_ABI = [
-  {
-    components: [
-      { name: "hyperliquidChain", type: "string" },
-      { name: "destination", type: "string" },
-      { name: "token", type: "string" },
-      { name: "amount", type: "string" },
-      { name: "time", type: "uint64" },
-    ],
-    type: "tuple",
-  },
-]
-
 const SEND_ASSET_REQUEST_ABI = [
   {
     components: [
@@ -71,7 +58,7 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
 
     const payloadBuilder = await hre.viem.deployContract(
       "HyperLiquidPayloadBuilder",
-      ["Testnet", allocator.address]
+      ["Mainnet", allocator.address]
     )
 
     return {
@@ -90,20 +77,20 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
       )
 
       const hyperliquidChain = await payloadBuilder.read.hyperliquidChain()
-      expect(hyperliquidChain).to.equal("Testnet")
+      expect(hyperliquidChain).to.equal("Mainnet")
     })
   })
 
-  describe("setTargetDecimals()", function () {
+  describe("setCurrencyDecimals()", function () {
     it("should set target decimals for empty currency (USD)", async () => {
       const { payloadBuilder, admin } = await loadFixture(
         deployHyperliquidPayloadBuilder
       )
 
-      await payloadBuilder.write.setTargetDecimals(["", 6], {
+      await payloadBuilder.write.setCurrencyDecimals(["", 6], {
         account: admin.account,
       })
-      const decimals = await payloadBuilder.read.targetDecimals([""])
+      const decimals = await payloadBuilder.read.currencyDecimals([""])
       expect(decimals).to.equal(6)
     })
 
@@ -113,10 +100,10 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
       )
 
       const currency = "PURR:0xc1fb593aeffbeb02f85e0308e9956a90"
-      await payloadBuilder.write.setTargetDecimals([currency, 8], {
+      await payloadBuilder.write.setCurrencyDecimals([currency, 8], {
         account: admin.account,
       })
-      const decimals = await payloadBuilder.read.targetDecimals([currency])
+      const decimals = await payloadBuilder.read.currencyDecimals([currency])
       expect(decimals).to.equal(8)
     })
 
@@ -126,7 +113,7 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
       )
 
       try {
-        await payloadBuilder.write.setTargetDecimals(["", 19], {
+        await payloadBuilder.write.setCurrencyDecimals(["", 19], {
           account: admin.account,
         })
         expect.fail("Expected transaction to revert")
@@ -141,7 +128,7 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
       )
 
       try {
-        await payloadBuilder.write.setTargetDecimals(["", 6], {
+        await payloadBuilder.write.setCurrencyDecimals(["", 6], {
           account: receiver.account,
         })
         expect.fail("Expected transaction to revert")
@@ -202,7 +189,7 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
         deployHyperliquidPayloadBuilder
       )
 
-      const amount = parseUnits("100.0", 18)
+      const amount = 10000000000n // 100.00000000 with DEFAULT_USD_DECIMALS = 8
       const testTime = 1640995200000n // Fixed timestamp in milliseconds
       const testData = encodeAbiParameters([{ type: "uint64" }], [testTime])
 
@@ -229,9 +216,9 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
         decodedPayload.parameters as `0x${string}`
       ) as any[]
 
-      expect(request.hyperliquidChain).to.equal("Testnet")
+      expect(request.hyperliquidChain).to.equal("Mainnet")
       expect(request.destination).to.equal(receiver.account.address)
-      expect(request.amount).to.equal("100.00") // Uses DEFAULT_USD_DECIMALS = 2
+      expect(request.amount).to.equal("100.00000000") // Uses DEFAULT_USD_DECIMALS = 8
       expect(request.time).to.equal(testTime)
     })
 
@@ -241,11 +228,11 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
       )
 
       // Set custom decimals for USD
-      await payloadBuilder.write.setTargetDecimals(["", 1], {
+      await payloadBuilder.write.setCurrencyDecimals(["", 1], {
         account: admin.account,
       })
 
-      const amount = parseUnits("100.0", 18)
+      const amount = 1000n // 100.0 with 1 decimal place
       const testTime = 1640995200000n
       const testData = encodeAbiParameters([{ type: "uint64" }], [testTime])
 
@@ -272,60 +259,10 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
       expect(request.amount).to.equal("100.0") // Uses custom 1 decimal place
     })
 
-    it("should build a payload for Spot token transfer (with currency)", async () => {
-      const { payloadBuilder, depository, receiver, admin } = await loadFixture(
-        deployHyperliquidPayloadBuilder
-      )
-
-      const amount = parseUnits("50.25", 18)
-      const currency = "PURR:0xc1fb593aeffbeb02f85e0308e9956a90"
-      const testTime = 1640995200000n
-
-      // Set target decimals for this currency
-      await payloadBuilder.write.setTargetDecimals([currency, 2], {
-        account: admin.account,
-      })
-
-      const testData = encodeAbiParameters([{ type: "uint64" }], [testTime])
-
-      const payload = await payloadBuilder.read.buildPayload([
-        1n, // chainId
-        depository.account.address, // depository
-        currency, // currency
-        amount, // amount
-        receiver.account.address, // receiver
-        testData, // data with timestamp only
-      ])
-
-      const [decodedPayload] = decodeAbiParameters(
-        HYPERLIQUID_TX_ABI,
-        payload
-      ) as any[]
-
-      // Should be SpotSend transaction type (1)
-      expect(decodedPayload.txType).to.equal(1)
-
-      // Decode the parameters as SpotSendRequest
-      const [request] = decodeAbiParameters(
-        SPOT_SEND_REQUEST_ABI,
-        decodedPayload.parameters as `0x${string}`
-      ) as any[]
-
-      expect(request.hyperliquidChain).to.equal("Testnet")
-      expect(request.destination).to.equal(receiver.account.address)
-      expect(request.token).to.equal(currency)
-      expect(request.amount).to.equal("50.25") // 50.25 with 2 decimal precision
-      expect(request.time).to.equal(testTime)
-    })
-
     it("should build a payload using SendAsset with whitelisted DEXs", async () => {
       const { payloadBuilder, depository, receiver, admin } = await loadFixture(
         deployHyperliquidPayloadBuilder
       )
-
-      await payloadBuilder.write.setUseSendAsset([true], {
-        account: admin.account,
-      })
 
       // Whitelist the DEXs
       await payloadBuilder.write.setDexWhitelist(["dex1", true], {
@@ -335,12 +272,12 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
         account: admin.account,
       })
 
-      const amount = parseUnits("50.25", 18)
+      const amount = 5025n // 50.25 with 2 decimal places
       const currency = "PURR:0xc1fb593aeffbeb02f85e0308e9956a90"
       const testTime = 1640995200000n
 
       // Set target decimals for this currency
-      await payloadBuilder.write.setTargetDecimals([currency, 2], {
+      await payloadBuilder.write.setCurrencyDecimals([currency, 2], {
         account: admin.account,
       })
 
@@ -363,8 +300,8 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
         payload
       ) as any[]
 
-      // Should be SendAsset transaction type (2)
-      expect(decodedPayload.txType).to.equal(2)
+      // Should be SendAsset transaction type (1)
+      expect(decodedPayload.txType).to.equal(1)
 
       // Decode the parameters as SendAssetRequest
       const [request] = decodeAbiParameters(
@@ -372,7 +309,7 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
         decodedPayload.parameters as `0x${string}`
       ) as any[]
 
-      expect(request.hyperliquidChain).to.equal("Testnet")
+      expect(request.hyperliquidChain).to.equal("Mainnet")
       expect(request.destination).to.equal(receiver.account.address)
       expect(request.sourceDex).to.equal("dex1")
       expect(request.destinationDex).to.equal("dex2")
@@ -387,10 +324,6 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
         deployHyperliquidPayloadBuilder
       )
 
-      await payloadBuilder.write.setUseSendAsset([true], {
-        account: admin.account,
-      })
-
       // Only whitelist one DEX
       await payloadBuilder.write.setDexWhitelist(["dex1", true], {
         account: admin.account,
@@ -401,7 +334,7 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
       const testTime = 1640995200000n
 
       // Set target decimals for this currency
-      await payloadBuilder.write.setTargetDecimals([currency, 2], {
+      await payloadBuilder.write.setCurrencyDecimals([currency, 2], {
         account: admin.account,
       })
 
@@ -479,7 +412,7 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
         deployHyperliquidPayloadBuilder
       )
 
-      const amount = parseUnits("1.05", 18)
+      const amount = 105000000n // 1.05000000 with DEFAULT_USD_DECIMALS = 8
       const chainId = 1n
       const testTime = 1640995200000n
       const testData = encodeAbiParameters([{ type: "uint64" }], [testTime])
@@ -509,9 +442,9 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
           version: "1",
         },
         message: {
-          amount: "1.05", // Uses DEFAULT_USD_DECIMALS = 2
+          amount: "1.05000000", // Uses DEFAULT_USD_DECIMALS = 8
           destination: receiver.account.address,
-          hyperliquidChain: "Testnet",
+          hyperliquidChain: "Mainnet",
           time: testTime,
         },
         primaryType: "HyperliquidTransaction:UsdSend",
@@ -528,82 +461,15 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
       expect(hash).to.equal(reconstructedHash)
     })
 
-    it("should hash a Spot transfer payload correctly using EIP712", async () => {
-      const { payloadBuilder, depository, receiver, admin } = await loadFixture(
-        deployHyperliquidPayloadBuilder
-      )
-
-      const amount = parseUnits("2.75", 18)
-      const chainId = 1n
-      const currency = "PURR:0xc1fb593aeffbeb02f85e0308e9956a90"
-      const testTime = 1640995200000n
-
-      // Set target decimals for this currency first
-      await payloadBuilder.write.setTargetDecimals([currency, 2], {
-        account: admin.account,
-      })
-
-      const testData = encodeAbiParameters([{ type: "uint64" }], [testTime])
-
-      const payload = await payloadBuilder.read.buildPayload([
-        chainId, // chainId
-        depository.account.address, // depository
-        currency, // currency
-        amount, // amount
-        receiver.account.address, // receiver
-        testData, // data with timestamp only
-      ])
-
-      const hash = (await payloadBuilder.read.hashToSign([
-        chainId, // chainId
-        depository.account.address, // depository
-        payload,
-        0, // hashIndex (not used in current implementation
-      ])) as `0x${string}`[]
-
-      // Reconstruct the EIP712 hash manually
-      const reconstructedHash = hashTypedData({
-        domain: {
-          chainId: Number(chainId),
-          name: "HyperliquidSignTransaction",
-          verifyingContract: zeroAddress,
-          version: "1",
-        },
-        message: {
-          amount: "2.75",
-          destination: receiver.account.address,
-          hyperliquidChain: "Testnet",
-          time: testTime,
-          token: currency,
-        },
-        primaryType: "HyperliquidTransaction:SpotSend",
-        types: {
-          "HyperliquidTransaction:SpotSend": [
-            { name: "hyperliquidChain", type: "string" },
-            { name: "destination", type: "string" },
-            { name: "token", type: "string" },
-            { name: "amount", type: "string" },
-            { name: "time", type: "uint64" },
-          ],
-        },
-      })
-
-      expect(hash).to.equal(reconstructedHash)
-    })
-
     it("should hash a SendAsset transfer payload correctly using EIP712", async () => {
       const { payloadBuilder, depository, receiver, admin } = await loadFixture(
         deployHyperliquidPayloadBuilder
       )
 
-      const amount = parseUnits("2.75", 18)
+      const amount = 275n // 2.75 with 2 decimal places
       const chainId = 1n
       const currency = "PURR:0xc1fb593aeffbeb02f85e0308e9956a90"
       const testTime = 1640995200000n
-
-      await payloadBuilder.write.setUseSendAsset([true], {
-        account: admin.account,
-      })
 
       // Whitelist the DEXs
       await payloadBuilder.write.setDexWhitelist(["dex1", true], {
@@ -614,7 +480,7 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
       })
 
       // Set target decimals for this currency
-      await payloadBuilder.write.setTargetDecimals([currency, 2], {
+      await payloadBuilder.write.setCurrencyDecimals([currency, 2], {
         account: admin.account,
       })
 
@@ -652,7 +518,7 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
           destination: receiver.account.address,
           destinationDex: "dex2",
           fromSubAccount: "",
-          hyperliquidChain: "Testnet",
+          hyperliquidChain: "Mainnet",
           nonce: testTime,
           sourceDex: "dex1",
           token: currency,
@@ -725,32 +591,31 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
     })
   })
 
-  describe("toDecimalString18()", function () {
+  describe("toDecimalString()", function () {
     it("should convert basic amounts correctly", async () => {
       const { payloadBuilder } = await loadFixture(
         deployHyperliquidPayloadBuilder
       )
 
-      // Test 100.0 with 1 decimal place
-      expect(
-        await payloadBuilder.read.toDecimalString18([
-          parseUnits("100.0", 18),
-          1,
-        ])
-      ).to.equal("100.0")
+      // Test 1000 with 1 decimal place (100.0)
+      expect(await payloadBuilder.read.toDecimalString([1000n, 1])).to.equal(
+        "100.0"
+      )
 
-      // Test 50.25 with 2 decimal places
-      expect(
-        await payloadBuilder.read.toDecimalString18([
-          parseUnits("50.25", 18),
-          2,
-        ])
-      ).to.equal("50.25")
+      // Test 5025 with 2 decimal places (50.25)
+      expect(await payloadBuilder.read.toDecimalString([5025n, 2])).to.equal(
+        "50.25"
+      )
 
-      // Test 1.05 with 2 decimal places
+      // Test 105 with 2 decimal places (1.05)
+      expect(await payloadBuilder.read.toDecimalString([105n, 2])).to.equal(
+        "1.05"
+      )
+
+      // Test 100000000 with 8 decimal places (1.00000000) - your example
       expect(
-        await payloadBuilder.read.toDecimalString18([parseUnits("1.05", 18), 2])
-      ).to.equal("1.05")
+        await payloadBuilder.read.toDecimalString([100000000n, 8])
+      ).to.equal("1.00000000")
     })
 
     it("should handle zero amounts", async () => {
@@ -759,32 +624,28 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
       )
 
       // Test 0 with various decimal places
-      expect(await payloadBuilder.read.toDecimalString18([0n, 1])).to.equal(
-        "0.0"
-      )
-      expect(await payloadBuilder.read.toDecimalString18([0n, 2])).to.equal(
+      expect(await payloadBuilder.read.toDecimalString([0n, 1])).to.equal("0.0")
+      expect(await payloadBuilder.read.toDecimalString([0n, 2])).to.equal(
         "0.00"
       )
-      expect(await payloadBuilder.read.toDecimalString18([0n, 6])).to.equal(
+      expect(await payloadBuilder.read.toDecimalString([0n, 6])).to.equal(
         "0.000000"
       )
     })
 
-    it("should handle integer amounts (decimalsToShow = 0)", async () => {
+    it("should handle integer amounts (decimals = 0)", async () => {
       const { payloadBuilder } = await loadFixture(
         deployHyperliquidPayloadBuilder
       )
 
-      // Test integer conversion
-      expect(
-        await payloadBuilder.read.toDecimalString18([parseUnits("100", 18), 0])
-      ).to.equal("100")
-      expect(
-        await payloadBuilder.read.toDecimalString18([parseUnits("42", 18), 0])
-      ).to.equal("42")
-      expect(
-        await payloadBuilder.read.toDecimalString18([parseUnits("1000", 18), 0])
-      ).to.equal("1000")
+      // Test integer conversion (no decimals)
+      expect(await payloadBuilder.read.toDecimalString([100n, 0])).to.equal(
+        "100"
+      )
+      expect(await payloadBuilder.read.toDecimalString([42n, 0])).to.equal("42")
+      expect(await payloadBuilder.read.toDecimalString([1000n, 0])).to.equal(
+        "1000"
+      )
     })
 
     it("should handle small amounts with leading zeros", async () => {
@@ -794,18 +655,18 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
 
       // Test amounts with leading zeros in fractional part
       expect(
-        await payloadBuilder.read.toDecimalString18([parseUnits("0.01", 18), 2])
+        await payloadBuilder.read.toDecimalString([1n, 2]) // 0.01
       ).to.equal("0.01")
       expect(
-        await payloadBuilder.read.toDecimalString18([
-          parseUnits("0.001", 18),
-          3,
+        await payloadBuilder.read.toDecimalString([
+          1n,
+          3, // 0.001
         ])
       ).to.equal("0.001")
       expect(
-        await payloadBuilder.read.toDecimalString18([
-          parseUnits("0.0001", 18),
-          4,
+        await payloadBuilder.read.toDecimalString([
+          1n,
+          4, // 0.0001
         ])
       ).to.equal("0.0001")
     })
@@ -816,9 +677,9 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
       )
 
       // Test with maximum 18 decimal places
-      const maxPrecisionAmount = parseUnits("1.123456789012345678", 18)
+      const maxPrecisionAmount = 1123456789012345678n // 1.123456789012345678
       expect(
-        await payloadBuilder.read.toDecimalString18([maxPrecisionAmount, 18])
+        await payloadBuilder.read.toDecimalString([maxPrecisionAmount, 18])
       ).to.equal("1.123456789012345678")
     })
 
@@ -829,46 +690,45 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
 
       // Test decimal format preservation
       expect(
-        await payloadBuilder.read.toDecimalString18([
-          parseUnits("100.0", 18),
+        await payloadBuilder.read.toDecimalString([
+          100000n, // 100.000 with 3 decimals
           3,
         ])
       ).to.equal("100.000")
       expect(
-        await payloadBuilder.read.toDecimalString18([parseUnits("42.5", 18), 4])
+        await payloadBuilder.read.toDecimalString([425000n, 4]) // 42.5000 with 4 decimals
       ).to.equal("42.5000")
       expect(
-        await payloadBuilder.read.toDecimalString18([parseUnits("0.1", 18), 6])
+        await payloadBuilder.read.toDecimalString([100000n, 6]) // 0.100000 with 6 decimals
       ).to.equal("0.100000")
     })
 
-    it("should revert with InvalidDecimals for decimalsToShow > 18", async () => {
+    it("should revert with InvalidDecimals for decimals > 18", async () => {
       const { payloadBuilder } = await loadFixture(
         deployHyperliquidPayloadBuilder
       )
 
       try {
-        await payloadBuilder.read.toDecimalString18([parseUnits("100", 18), 19])
+        await payloadBuilder.read.toDecimalString([100n, 19])
         expect.fail("Expected transaction to revert")
       } catch (error: any) {
         expect(error.message).to.include("InvalidDecimals")
       }
     })
 
-    it("should revert with NonIntegralAtPrecision in strict mode", async () => {
+    it("should handle any raw amount without precision errors", async () => {
       const { payloadBuilder } = await loadFixture(
         deployHyperliquidPayloadBuilder
       )
 
-      // Try to convert 1.12345 to 2 decimal places (should fail in strict mode)
-      const amount = parseUnits("1.12345", 18)
+      // Test any raw amount - no more strict precision checking
+      expect(
+        await payloadBuilder.read.toDecimalString([112345n, 5]) // 1.12345
+      ).to.equal("1.12345")
 
-      try {
-        await payloadBuilder.read.toDecimalString18([amount, 2])
-        expect.fail("Expected transaction to revert")
-      } catch (error: any) {
-        expect(error.message).to.include("NonIntegralAtPrecision")
-      }
+      expect(
+        await payloadBuilder.read.toDecimalString([112345n, 2]) // 1123.45
+      ).to.equal("1123.45")
     })
 
     it("should handle edge cases", async () => {
@@ -877,13 +737,13 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
       )
 
       // Test very large numbers
-      const largeAmount = parseUnits("999999999999.123456", 18)
+      const largeAmount = 999999999999123456n // 999999999999.123456 with 6 decimals
       expect(
-        await payloadBuilder.read.toDecimalString18([largeAmount, 6])
+        await payloadBuilder.read.toDecimalString([largeAmount, 6])
       ).to.equal("999999999999.123456")
 
-      // Test 1 wei
-      expect(await payloadBuilder.read.toDecimalString18([1n, 18])).to.equal(
+      // Test smallest unit with 18 decimals
+      expect(await payloadBuilder.read.toDecimalString([1n, 18])).to.equal(
         "0.000000000000000001"
       )
     })
@@ -908,17 +768,11 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
       )
 
       const usdSendTypeHash = await payloadBuilder.read.USD_SEND_TYPEHASH()
-      const spotSendTypeHash = await payloadBuilder.read.SPOT_SEND_TYPEHASH()
       const sendAssetTypeHash = await payloadBuilder.read.SEND_ASSET_TYPEHASH()
 
       const expectedUsdSendTypeHash = keccak256(
         Buffer.from(
           "HyperliquidTransaction:UsdSend(string hyperliquidChain,string destination,string amount,uint64 time)"
-        )
-      )
-      const expectedSpotSendTypeHash = keccak256(
-        Buffer.from(
-          "HyperliquidTransaction:SpotSend(string hyperliquidChain,string destination,string token,string amount,uint64 time)"
         )
       )
       const expectedSendAssetTypeHash = keccak256(
@@ -928,7 +782,6 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
       )
 
       expect(usdSendTypeHash).to.equal(expectedUsdSendTypeHash)
-      expect(spotSendTypeHash).to.equal(expectedSpotSendTypeHash)
       expect(sendAssetTypeHash).to.equal(expectedSendAssetTypeHash)
     })
   })
