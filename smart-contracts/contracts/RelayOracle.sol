@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 import {RelayHub} from "./RelayHub.sol";
 
@@ -34,7 +35,6 @@ contract RelayOracle is AccessControl, EIP712 {
   // Errors
 
   error AlreadyExecuted(bytes32 idempotencyKey);
-  error InvalidSignature();
   error UnauthorizedOracle(address oracle);
 
   // Roles
@@ -74,18 +74,11 @@ contract RelayOracle is AccessControl, EIP712 {
 
   /// @notice Execute actions
   /// @param execution The actions to execute
-  /// @param oracle The signing oracle
   /// @param signature The oracle signature
   function execute(
     Execution calldata execution,
-    address oracle,
     bytes calldata signature
   ) external {
-    // Error if the oracle is not an authorized address
-    if (!hasRole(ORACLE_ROLE, oracle)) {
-      revert UnauthorizedOracle(oracle);
-    }
-
     bytes32 idempotencyKey = execution.idempotencyKey;
 
     // Error if the idempotency key is marked as executed
@@ -96,9 +89,13 @@ contract RelayOracle is AccessControl, EIP712 {
     // Mark the idempotency key as executed
     isExecuted[idempotencyKey] = true;
 
-    // Verify the oracle signature
-    if (!oracle.isValidSignatureNow(_hashExecution(execution), signature)) {
-      revert InvalidSignature();
+    // Recover oracle address from signature
+    bytes32 digest = _hashExecution(execution);
+    address oracle = ECDSA.recover(digest, signature);
+
+    // Error if the oracle is not an authorized address
+    if (!hasRole(ORACLE_ROLE, oracle)) {
+      revert UnauthorizedOracle(oracle);
     }
 
     bytes[] calldata actions = execution.actions;

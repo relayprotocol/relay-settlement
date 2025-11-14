@@ -1,5 +1,5 @@
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
-import { generateTokenId, generateAddress } from "@relay-protocol/hub-utils"
+import { generateAddress, generateTokenId } from "@relay-protocol/hub-utils"
 import { ActionType } from "@reservoir0x/relay-protocol-sdk"
 import { expect } from "chai"
 import { randomBytes } from "crypto"
@@ -30,7 +30,6 @@ interface TransferActionData {
 describe("execute", function () {
   const setup = async () => {
     const { admin, hub, oracle, utils } = await loadFixture(deployOracle)
-
     const [, oracleWallet, ...otherWallets] = await hre.viem.getWalletClients()
 
     // Grant role
@@ -216,7 +215,7 @@ describe("execute", function () {
   }
 
   it("should execute a single mint action", async () => {
-    const { hub, mint, oracle, oracleWallet, otherWallets, publicClient } =
+    const { hub, mint, oracle, otherWallets, publicClient } =
       await loadFixture(setup)
 
     const currency = otherWallets[0].account.address
@@ -252,7 +251,6 @@ describe("execute", function () {
         actions: [action],
         idempotencyKey,
       },
-      oracleWallet.account.address,
       signature,
     ])
 
@@ -276,15 +274,8 @@ describe("execute", function () {
   })
 
   it("should execute a single burn action", async () => {
-    const {
-      burn,
-      hub,
-      mint,
-      oracle,
-      oracleWallet,
-      otherWallets,
-      publicClient,
-    } = await loadFixture(setup)
+    const { burn, hub, mint, oracle, otherWallets, publicClient } =
+      await loadFixture(setup)
 
     const currency = otherWallets[0].account.address
     const from = otherWallets[1].account.address
@@ -315,7 +306,6 @@ describe("execute", function () {
           actions: [action],
           idempotencyKey,
         },
-        oracleWallet.account.address,
         signature,
       ])
     }
@@ -338,7 +328,6 @@ describe("execute", function () {
         actions: [action],
         idempotencyKey,
       },
-      oracleWallet.account.address,
       signature,
     ])
 
@@ -365,15 +354,8 @@ describe("execute", function () {
   })
 
   it("should execute a single transfer action", async () => {
-    const {
-      hub,
-      mint,
-      oracle,
-      oracleWallet,
-      otherWallets,
-      publicClient,
-      transfer,
-    } = await loadFixture(setup)
+    const { hub, mint, oracle, otherWallets, publicClient, transfer } =
+      await loadFixture(setup)
 
     const currency = otherWallets[0].account.address
     const from = otherWallets[1].account.address
@@ -410,7 +392,6 @@ describe("execute", function () {
           actions: [action],
           idempotencyKey,
         },
-        oracleWallet.account.address,
         signature,
       ])
     }
@@ -438,7 +419,6 @@ describe("execute", function () {
         actions: [action],
         idempotencyKey,
       },
-      oracleWallet.account.address,
       signature,
     ])
 
@@ -474,7 +454,6 @@ describe("execute", function () {
       hub,
       createAction,
       oracle,
-      oracleWallet,
       otherWallets,
       publicClient,
       signExecution,
@@ -567,7 +546,6 @@ describe("execute", function () {
         actions,
         idempotencyKey,
       },
-      oracleWallet.account.address,
       signature,
     ])
 
@@ -617,8 +595,7 @@ describe("execute", function () {
   })
 
   it("should fail to execute the same idempotency key multiple times", async () => {
-    const { mint, oracle, oracleWallet, otherWallets } =
-      await loadFixture(setup)
+    const { mint, oracle, otherWallets } = await loadFixture(setup)
 
     const currency = otherWallets[0].account.address
     const to = otherWallets[1].account.address
@@ -647,7 +624,6 @@ describe("execute", function () {
         actions: [action],
         idempotencyKey,
       },
-      oracleWallet.account.address,
       signature,
     ])
 
@@ -657,18 +633,17 @@ describe("execute", function () {
           actions: [action],
           idempotencyKey,
         },
-        oracleWallet.account.address,
         signature,
       ])
     ).to.be.rejectedWith("AlreadyExecuted")
   })
 
   it("should fail to execute if the signature is invalid", async () => {
-    const { mint, oracle, oracleWallet, otherWallets } =
-      await loadFixture(setup)
+    const { mint, oracle, otherWallets } = await loadFixture(setup)
 
     const currency = otherWallets[0].account.address
     const to = otherWallets[1].account.address
+    const attacker = otherWallets[8]
     const amount = 10n ** 18n
 
     const hubTokenId = generateTokenId({
@@ -688,16 +663,54 @@ describe("execute", function () {
       hubTokenId: hubTokenId,
     } as const
     const { idempotencyKey, action } = await mint(data)
+    const actions = [action]
+
+    // fail with malformed sig
+    await expect(
+      oracle.write.execute([
+        {
+          actions,
+          idempotencyKey,
+        },
+        `0x${randomBytes(65).toString("hex")}`,
+      ])
+    ).to.be.rejectedWith("ECDSAInvalidSignature")
+
+    // failed with unauthorized sig
+    const unauthorizedSignature = await attacker.signTypedData({
+      domain: {
+        chainId: await attacker.getChainId(),
+        name: "RelayOracle",
+        verifyingContract: oracle.address,
+        version: "1",
+      },
+      message: {
+        actions,
+        idempotencyKey,
+      },
+      primaryType: "Execution",
+      types: {
+        Execution: [
+          {
+            name: "idempotencyKey",
+            type: "bytes32",
+          },
+          {
+            name: "actions",
+            type: "bytes[]",
+          },
+        ],
+      },
+    })
 
     await expect(
       oracle.write.execute([
         {
-          actions: [action],
+          actions,
           idempotencyKey,
         },
-        oracleWallet.account.address,
-        `0x${randomBytes(65).toString("hex")}`,
+        unauthorizedSignature,
       ])
-    ).to.be.rejectedWith("InvalidSignature")
+    ).to.be.rejectedWith("UnauthorizedOracle")
   })
 })
