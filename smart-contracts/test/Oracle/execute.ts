@@ -4,28 +4,20 @@ import { ActionType } from "@reservoir0x/relay-protocol-sdk"
 import { expect } from "chai"
 import { randomBytes } from "crypto"
 import hre from "hardhat"
-import { Hex, encodeAbiParameters } from "viem"
+import { Hex } from "viem"
 
 import { deployOracle } from "../helpers/deployOracle"
 
-interface MintActionData {
-  hubToAddress: string
-  hubTokenId: string
-  amount: string
-}
-
-interface BurnActionData {
-  hubFromAddress: string
-  hubTokenId: string
-  amount: string
-}
-
-interface TransferActionData {
-  hubFromAddress: string
-  hubToAddress: string
-  hubTokenId: string
-  amount: string
-}
+import {
+  burnAction,
+  BurnActionData,
+  createAction,
+  mintAction,
+  MintActionData,
+  signExecution,
+  transferAction,
+  TransferActionData,
+} from "../helpers/oracle"
 
 describe("execute", function () {
   const setup = async () => {
@@ -36,179 +28,23 @@ describe("execute", function () {
     const ORACLE_ROLE = await oracle.read.ORACLE_ROLE()
     await oracle.write.grantRole([ORACLE_ROLE, oracleWallet.account.address])
 
-    const signExecution = async (idempotencyKey: Hex, actions: Hex[]) =>
-      oracleWallet.signTypedData({
-        domain: {
-          chainId: await oracleWallet.getChainId(),
-          name: "RelayOracle",
-          verifyingContract: oracle.address,
-          version: "1",
-        },
-        message: {
-          actions,
-          idempotencyKey,
-        },
-        primaryType: "Execution",
-        types: {
-          Execution: [
-            {
-              name: "idempotencyKey",
-              type: "bytes32",
-            },
-            {
-              name: "actions",
-              type: "bytes[]",
-            },
-          ],
-        },
-      })
-
-    const mint = async (data: MintActionData) => {
-      // Create action
-      const idempotencyKey = `0x${randomBytes(32).toString("hex")}` as Hex
-      const action = createAction(ActionType.MINT, data)
-
-      // Sign
-      const signature = await signExecution(idempotencyKey, [action])
-
-      return {
-        action,
-        idempotencyKey,
-        signature,
-      }
-    }
-    const burn = async (data: BurnActionData) => {
-      // Create action
-      const idempotencyKey = `0x${randomBytes(32).toString("hex")}` as Hex
-      const action = createAction(ActionType.BURN, data)
-
-      // Sign
-      const signature = await signExecution(idempotencyKey, [action])
-
-      return {
-        action,
-        idempotencyKey,
-        signature,
-      }
-    }
-    const transfer = async (data: TransferActionData) => {
-      // Create action
-      const idempotencyKey = `0x${randomBytes(32).toString("hex")}` as Hex
-      const action = createAction(ActionType.TRANSFER, data)
-
-      // Sign
-      const signature = await signExecution(idempotencyKey, [action])
-
-      return {
-        action,
-        idempotencyKey,
-        signature,
-      }
-    }
-
-    // Helper function to create action data with default values
-    const createAction = (
-      type: ActionType,
-      overrides: Partial<
-        MintActionData | BurnActionData | TransferActionData
-      > = {}
-    ) => {
-      // Generate default hub addresses and token ID
-      const defaultCurrency = otherWallets[0].account.address
-      const defaultFrom = otherWallets[1].account.address
-      const defaultTo = otherWallets[1].account.address
-
-      const defaultHubTokenId = generateTokenId({
-        address: defaultCurrency,
-        chainId: "1",
-        family: "ethereum-vm",
-      })
-
-      const defaultHubFromAddress = generateAddress({
-        address: defaultFrom,
-        chainId: "1",
-        family: "ethereum-vm",
-      })
-
-      const defaultHubToAddress = generateAddress({
-        address: defaultTo,
-        chainId: "1",
-        family: "ethereum-vm",
-      })
-
-      const defaultData = {
-        amount: 10n ** 18n,
-        hubFromAddress: defaultHubFromAddress,
-        hubToAddress: defaultHubToAddress,
-        hubTokenId: defaultHubTokenId,
-        ...overrides,
-      }
-
-      // Manually encode the action data to match what the contract expects
-      if (type === ActionType.MINT) {
-        return encodeAbiParameters(
-          [
-            { name: "actionType", type: "uint8" },
-            { name: "hubToAddress", type: "address" },
-            { name: "hubTokenId", type: "uint256" },
-            { name: "amount", type: "uint256" },
-          ],
-          [
-            type,
-            defaultData.hubToAddress as `0x${string}`,
-            BigInt(defaultData.hubTokenId),
-            BigInt(defaultData.amount),
-          ]
-        ) as Hex
-      } else if (type === ActionType.BURN) {
-        return encodeAbiParameters(
-          [
-            { name: "actionType", type: "uint8" },
-            { name: "hubFromAddress", type: "address" },
-            { name: "hubTokenId", type: "uint256" },
-            { name: "amount", type: "uint256" },
-          ],
-          [
-            type,
-            defaultData.hubFromAddress as `0x${string}`,
-            BigInt(defaultData.hubTokenId),
-            BigInt(defaultData.amount),
-          ]
-        ) as Hex
-      } else if (type === ActionType.TRANSFER) {
-        return encodeAbiParameters(
-          [
-            { name: "actionType", type: "uint8" },
-            { name: "hubFromAddress", type: "address" },
-            { name: "hubToAddress", type: "address" },
-            { name: "hubTokenId", type: "uint256" },
-            { name: "amount", type: "uint256" },
-          ],
-          [
-            type,
-            defaultData.hubFromAddress as `0x${string}`,
-            defaultData.hubToAddress as `0x${string}`,
-            BigInt(defaultData.hubTokenId),
-            BigInt(defaultData.amount),
-          ]
-        ) as Hex
-      }
-
-      throw new Error(`Unknown action type: ${type}`)
-    }
+    const mint = (data: MintActionData) =>
+      mintAction(data, oracle.address, oracleWallet)
+    const transfer = (data: TransferActionData) =>
+      transferAction(data, oracle.address, oracleWallet)
+    const burn = (data: BurnActionData) =>
+      burnAction(data, oracle.address, oracleWallet)
 
     const publicClient = await hre.viem.getPublicClient()
     return {
       admin,
       burn,
-      createAction,
       hub,
       mint,
       oracle,
       oracleWallet,
       otherWallets,
       publicClient,
-      signExecution,
       transfer,
       utils,
     }
@@ -238,6 +74,7 @@ describe("execute", function () {
       hubToAddress: hubToAddress,
       hubTokenId: hubTokenId,
     } as const
+
     const { idempotencyKey, action, signature } = await mint(data)
 
     const hubBalanceBefore = await hub.read.balanceOf([
@@ -450,14 +287,8 @@ describe("execute", function () {
   })
 
   it("should execute multiple actions in one call", async () => {
-    const {
-      hub,
-      createAction,
-      oracle,
-      otherWallets,
-      publicClient,
-      signExecution,
-    } = await loadFixture(setup)
+    const { hub, oracle, oracleWallet, otherWallets, publicClient } =
+      await loadFixture(setup)
 
     const mintTo1 = otherWallets[1].account.address
     const mintTo2 = otherWallets[2].account.address
@@ -497,30 +328,45 @@ describe("execute", function () {
     const actions = [
       // Mint 1
       createAction(ActionType.MINT, {
+        amount: amount,
         hubToAddress: hubMintTo1Address,
+        hubTokenId: hubTokenId,
       }),
       // Mint 2
       createAction(ActionType.MINT, {
+        amount: amount,
         hubToAddress: hubMintTo2Address,
+        hubTokenId: hubTokenId,
       }),
       // Mint 3
       createAction(ActionType.MINT, {
+        amount: amount,
         hubToAddress: hubMintTo3Address,
+        hubTokenId: hubTokenId,
       }),
       // Transfer
       createAction(ActionType.TRANSFER, {
+        amount: amount,
         hubFromAddress: hubMintTo1Address,
         hubToAddress: hubTransferToAddress,
+        hubTokenId: hubTokenId,
       }),
       // Burn
       createAction(ActionType.BURN, {
+        amount: amount,
         hubFromAddress: hubTransferToAddress,
+        hubTokenId: hubTokenId,
       }),
     ]
 
     // Create single idempotency key and signature for all actions
     const idempotencyKey = `0x${randomBytes(32).toString("hex")}` as Hex
-    const signature = await signExecution(idempotencyKey, actions)
+    const signature = await signExecution(
+      idempotencyKey,
+      actions,
+      oracle.address,
+      oracleWallet
+    )
 
     // Get balances before execution
     const mintTo1BalanceBefore = await hub.read.balanceOf([

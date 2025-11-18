@@ -71,23 +71,78 @@ contract RelayOracle is AccessControl, EIP712 {
   }
 
   // Public methods
-
   /// @notice Execute actions
+  /// @param executions The actions to execute
+  /// @param signatures The oracle signatures
+  function executeMultiple(
+    Execution[] calldata executions,
+    bytes[] calldata signatures
+  ) external {
+    uint256 executionsLength = executions.length;
+    for (uint256 i; i < executionsLength; i++) {
+      try this.execute(executions[i], signatures[i]) {
+        // Execution succeeded
+      } catch {
+        // Execution failed, continue with next
+      }
+    }
+  }
+
+  /// @notice Execute a single set of actions
   /// @param execution The actions to execute
   /// @param signature The oracle signature
   function execute(
     Execution calldata execution,
     bytes calldata signature
   ) external {
+    _execute(execution, signature);
+  }
+
+  // Internal methods
+
+  /// @notice Executes a single action based on its encoded type and data.
+  /// @param action The ABI-encoded action, with the first byte specifying the action type.
+  function _executeAction(bytes memory action) internal virtual {
+    // Extract the action type from the first byte of the encoded action data
+    uint8 actionType = abi.decode(action, (uint8));
+
+    if (ActionType(actionType) == ActionType.MINT) {
+      (, address hubToAddress, uint256 hubTokenId, uint256 amount) = abi.decode(
+        action,
+        (uint8, address, uint256, uint256)
+      );
+      HUB.mint(hubToAddress, hubTokenId, amount);
+    } else if (ActionType(actionType) == ActionType.BURN) {
+      (, address hubFromAddress, uint256 hubTokenId, uint256 amount) = abi
+        .decode(action, (uint8, address, uint256, uint256));
+
+      HUB.burn(hubFromAddress, hubTokenId, amount);
+    } else if (ActionType(actionType) == ActionType.TRANSFER) {
+      (
+        ,
+        address hubFromAddress,
+        address hubToAddress,
+        uint256 hubTokenId,
+        uint256 amount
+      ) = abi.decode(action, (uint8, address, address, uint256, uint256));
+
+      HUB.transferFrom(hubFromAddress, hubToAddress, hubTokenId, amount);
+    }
+  }
+
+  /// @notice Execute actions
+  /// @param execution The actions to execute
+  /// @param signature The oracle signature
+  function _execute(
+    Execution calldata execution,
+    bytes calldata signature
+  ) internal {
     bytes32 idempotencyKey = execution.idempotencyKey;
 
     // Error if the idempotency key is marked as executed
     if (isExecuted[idempotencyKey]) {
       revert AlreadyExecuted(idempotencyKey);
     }
-
-    // Mark the idempotency key as executed
-    isExecuted[idempotencyKey] = true;
 
     // Recover oracle address from signature
     bytes32 digest = _hashExecution(execution);
@@ -98,42 +153,20 @@ contract RelayOracle is AccessControl, EIP712 {
       revert UnauthorizedOracle(oracle);
     }
 
+    // Mark the idempotency key as executed
+    isExecuted[idempotencyKey] = true;
+
     bytes[] calldata actions = execution.actions;
     unchecked {
       uint256 actionsLength = actions.length;
       for (uint256 i; i < actionsLength; i++) {
         bytes calldata action = actions[i];
-
-        // Extract the action type from the first byte of the encoded action data
-        uint8 actionType = abi.decode(action, (uint8));
-
-        if (ActionType(actionType) == ActionType.MINT) {
-          (, address hubToAddress, uint256 hubTokenId, uint256 amount) = abi
-            .decode(action, (uint8, address, uint256, uint256));
-          HUB.mint(hubToAddress, hubTokenId, amount);
-        } else if (ActionType(actionType) == ActionType.BURN) {
-          (, address hubFromAddress, uint256 hubTokenId, uint256 amount) = abi
-            .decode(action, (uint8, address, uint256, uint256));
-
-          HUB.burn(hubFromAddress, hubTokenId, amount);
-        } else if (ActionType(actionType) == ActionType.TRANSFER) {
-          (
-            ,
-            address hubFromAddress,
-            address hubToAddress,
-            uint256 hubTokenId,
-            uint256 amount
-          ) = abi.decode(action, (uint8, address, address, uint256, uint256));
-
-          HUB.transferFrom(hubFromAddress, hubToAddress, hubTokenId, amount);
-        }
+        _executeAction(action);
       }
     }
 
     emit Executed(idempotencyKey, actions);
   }
-
-  // Internal methods
 
   /// @notice Hash an execution
   /// @param execution The execution to hash
