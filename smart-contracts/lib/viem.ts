@@ -1,4 +1,4 @@
-import { conduitTestnet, sovereignTestnet } from "@relay-protocol/networks"
+import { conduitTestnet } from "@relay-protocol/networks"
 import { defineChain } from "viem"
 import * as viemChains from "viem/chains"
 
@@ -13,18 +13,7 @@ const conduitTestnetViem = defineChain({
   },
 })
 
-const sovereignTestnetViem = defineChain({
-  id: Number(sovereignTestnet.chainId),
-  name: sovereignTestnet.name,
-  nativeCurrency: sovereignTestnet.nativeCurrency!,
-  rpcUrls: {
-    default: {
-      http: sovereignTestnet.rpc,
-    },
-  },
-})
-
-const customChains = [conduitTestnetViem, sovereignTestnetViem]
+const customChains = [conduitTestnetViem]
 
 const isCustomChain = (chainId: bigint) => {
   const viemSupportedChainIds = Object.values(viemChains).map(({ id }) =>
