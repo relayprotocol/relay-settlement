@@ -65,6 +65,8 @@ contract HyperLiquidPayloadBuilder is IPayloadBuilder {
   error NotRelayAllocatorOwner(address account);
   /// @notice Thrown when DEX is not whitelisted
   error InvalidDEX();
+  /// @notice Thrown when nonce is outside valid time range
+  error InvalidNonceTime();
 
   // EIP712 domain configuration
   /// @notice The signing domain for EIP712
@@ -144,6 +146,24 @@ contract HyperLiquidPayloadBuilder is IPayloadBuilder {
     dexWhitelist[dex] = whitelisted;
   }
 
+  /// @notice Validates that nonce/time is within acceptable range with safety buffer
+  /// @dev Nonces must be within (T - 2 days + 1 hour, T + 1 day - 1 hour) to account for signing and execution delays
+  /// @param nonce The nonce to validate (in milliseconds)
+  function validateNonceTime(uint64 nonce) internal view {
+    uint64 blockTime = uint64(block.timestamp * 1000); // Convert to milliseconds
+    uint64 twoDays = 2 * 24 * 60 * 60 * 1000; // 2 days in milliseconds
+    uint64 oneDay = 1 * 24 * 60 * 60 * 1000; // 1 day in milliseconds
+    uint64 safetyBuffer = 1 * 60 * 60 * 1000; // 1 hour buffer in milliseconds
+
+    // Check if nonce is within (T - 2 days + 1 hour, T + 1 day - 1 hour) to account for delays
+    if (
+      nonce <= blockTime - twoDays + safetyBuffer ||
+      nonce >= blockTime + oneDay - safetyBuffer
+    ) {
+      revert InvalidNonceTime();
+    }
+  }
+
   /// @notice Builds a payload for HyperLiquid transactions
   /// @param currency Token currency (empty string for USD, token identifier for spots)
   /// @param amount Raw token amount using the currency's configured decimal precision
@@ -166,6 +186,9 @@ contract HyperLiquidPayloadBuilder is IPayloadBuilder {
       // Decode provided currentTime only
       currentTime = abi.decode(data, (uint64));
     }
+
+    // Validate nonce/time is within acceptable range
+    validateNonceTime(currentTime);
 
     // Use default decimals if not configured
     if (currencyDecimals[currency] == 0) {

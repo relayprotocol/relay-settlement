@@ -190,7 +190,7 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
       )
 
       const amount = 10000000000n // 100.00000000 with DEFAULT_USD_DECIMALS = 8
-      const testTime = 1640995200000n // Fixed timestamp in milliseconds
+      const testTime = BigInt(Date.now()) // Current timestamp in milliseconds
       const testData = encodeAbiParameters([{ type: "uint64" }], [testTime])
 
       const payload = await payloadBuilder.read.buildPayload([
@@ -233,7 +233,7 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
       })
 
       const amount = 1000n // 100.0 with 1 decimal place
-      const testTime = 1640995200000n
+      const testTime = BigInt(Date.now())
       const testData = encodeAbiParameters([{ type: "uint64" }], [testTime])
 
       const payload = await payloadBuilder.read.buildPayload([
@@ -274,7 +274,7 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
 
       const amount = 5025n // 50.25 with 2 decimal places
       const currency = "PURR:0xc1fb593aeffbeb02f85e0308e9956a90"
-      const testTime = 1640995200000n
+      const testTime = BigInt(Date.now())
 
       // Set target decimals for this currency
       await payloadBuilder.write.setCurrencyDecimals([currency, 2], {
@@ -331,7 +331,7 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
 
       const amount = parseUnits("50.25", 18)
       const currency = "PURR:0xc1fb593aeffbeb02f85e0308e9956a90"
-      const testTime = 1640995200000n
+      const testTime = BigInt(Date.now())
 
       // Set target decimals for this currency
       await payloadBuilder.write.setCurrencyDecimals([currency, 2], {
@@ -365,7 +365,7 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
 
       const amount = parseUnits("50.25", 18)
       const currency = "UNCONFIGURED:0x123"
-      const testTime = 1640995200000n
+      const testTime = BigInt(Date.now())
       const testData = encodeAbiParameters([{ type: "uint64" }], [testTime])
 
       try {
@@ -404,6 +404,103 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
         expect(error.message).to.include("InvalidData")
       }
     })
+
+    it("should revert with InvalidNonceTime for nonce too far in past", async () => {
+      const { payloadBuilder, depository, receiver } = await loadFixture(
+        deployHyperliquidPayloadBuilder
+      )
+
+      const amount = 10000000000n
+      const currentTime = BigInt(Date.now())
+      const tooOldTime =
+        currentTime - BigInt(2 * 24 * 60 * 60 * 1000) + BigInt(30 * 60 * 1000) // T - 2 days + 30min (invalid with 1hr buffer)
+      const testData = encodeAbiParameters([{ type: "uint64" }], [tooOldTime])
+
+      try {
+        await payloadBuilder.read.buildPayload([
+          1n,
+          depository.account.address,
+          "",
+          amount,
+          receiver.account.address,
+          testData,
+        ])
+        expect.fail("Expected transaction to revert")
+      } catch (error: any) {
+        expect(error.message).to.include("InvalidNonceTime")
+      }
+    })
+
+    it("should revert with InvalidNonceTime for nonce too far in future", async () => {
+      const { payloadBuilder, depository, receiver } = await loadFixture(
+        deployHyperliquidPayloadBuilder
+      )
+
+      const amount = 10000000000n
+      const currentTime = BigInt(Date.now())
+      const tooFutureTime =
+        currentTime + BigInt(1 * 24 * 60 * 60 * 1000) - BigInt(30 * 60 * 1000) // T + 1 day - 30min (invalid with 1hr buffer)
+      const testData = encodeAbiParameters(
+        [{ type: "uint64" }],
+        [tooFutureTime]
+      )
+
+      try {
+        await payloadBuilder.read.buildPayload([
+          1n,
+          depository.account.address,
+          "",
+          amount,
+          receiver.account.address,
+          testData,
+        ])
+        expect.fail("Expected transaction to revert")
+      } catch (error: any) {
+        expect(error.message).to.include("InvalidNonceTime")
+      }
+    })
+
+    it("should validate nonce times for SendAsset transactions", async () => {
+      const { payloadBuilder, depository, receiver, admin } = await loadFixture(
+        deployHyperliquidPayloadBuilder
+      )
+
+      // Setup DEX whitelist
+      await payloadBuilder.write.setDexWhitelist(["dex1", true], {
+        account: admin.account,
+      })
+      await payloadBuilder.write.setDexWhitelist(["dex2", true], {
+        account: admin.account,
+      })
+
+      const amount = 5025n
+      const currency = "PURR:0xc1fb593aeffbeb02f85e0308e9956a90"
+      const currentTime = BigInt(Date.now())
+      const tooFutureTime = currentTime + BigInt(2 * 24 * 60 * 60 * 1000) // 2 days in future (invalid)
+
+      await payloadBuilder.write.setCurrencyDecimals([currency, 2], {
+        account: admin.account,
+      })
+
+      const testData = encodeAbiParameters(
+        [{ type: "uint64" }, { type: "string" }, { type: "string" }],
+        [tooFutureTime, "dex1", "dex2"]
+      )
+
+      try {
+        await payloadBuilder.read.buildPayload([
+          1n,
+          depository.account.address,
+          currency,
+          amount,
+          receiver.account.address,
+          testData,
+        ])
+        expect.fail("Expected transaction to revert")
+      } catch (error: any) {
+        expect(error.message).to.include("InvalidNonceTime")
+      }
+    })
   })
 
   describe("hashToSign()", function () {
@@ -414,7 +511,7 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
 
       const amount = 105000000n // 1.05000000 with DEFAULT_USD_DECIMALS = 8
       const chainId = 1n
-      const testTime = 1640995200000n
+      const testTime = BigInt(Date.now())
       const testData = encodeAbiParameters([{ type: "uint64" }], [testTime])
 
       const payload = await payloadBuilder.read.buildPayload([
@@ -469,7 +566,7 @@ describe("Allocator HyperliquidPayloadBuilder", function () {
       const amount = 275n // 2.75 with 2 decimal places
       const chainId = 1n
       const currency = "PURR:0xc1fb593aeffbeb02f85e0308e9956a90"
-      const testTime = 1640995200000n
+      const testTime = BigInt(Date.now())
 
       // Whitelist the DEXs
       await payloadBuilder.write.setDexWhitelist(["dex1", true], {
