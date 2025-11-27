@@ -2,7 +2,9 @@ import { task } from "hardhat/config"
 import {
   BitcoinTxSchema,
   EthereumTxSchema,
+  SolanaTxSchema,
   buildBitcoinTransaction,
+  buildSolanaTransaction,
   buildEvmTransaction,
   loadTransactions,
 } from "./utils"
@@ -23,6 +25,8 @@ task(
         result = await buildEvmTransaction(EthereumTxSchema.parse(tx))
       } else if (tx.family === "bitcoin-vm") {
         result = await buildBitcoinTransaction(BitcoinTxSchema.parse(tx))
+      } else if (tx.family === "solana-vm") {
+        result = await buildSolanaTransaction(SolanaTxSchema.parse(tx))
       } else {
         throw new Error(
           `Unsupported transaction family: ${tx.family}. Please add support!`

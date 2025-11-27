@@ -12,6 +12,7 @@ import {
   BitcoinTxSchema,
   buildBitcoinTransaction,
   buildEvmTransaction,
+  buildSolanaTransaction,
   getSignatureForHash,
   hasBitcoinTransactionBeenExecuted,
   hasEvmTransactionBeenExecuted,
@@ -23,6 +24,10 @@ import {
   broadcastTransaction,
   buildBitcoinTransactionFromPayload,
 } from "../../lib/bitcoin"
+
+import { derivePublicKey } from "../../lib/near"
+import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes"
+import { PublicKey, Keypair, Connection } from "@solana/web3.js"
 
 async function executeEvmTransaction(
   tx: Extract<Transaction, { family: "ethereum-vm" }>,
@@ -127,6 +132,105 @@ async function executeBitcoinTransaction(
   console.log(`✅ Bitcoin transaction confirmed: ${txid}`)
 }
 
+export async function executeSolanaTransaction(
+  tx: Extract<Transaction, { family: "solana-vm" }>,
+  relayMultisigSigner: string,
+  hre: HardhatRuntimeEnvironment
+) {
+  const {
+    transaction,
+    hashesToSign: [hashToSign],
+  } = await buildSolanaTransaction(tx)
+
+  if (!transaction) {
+    throw new Error("Failed to build Solana transaction")
+  }
+
+  const hexSignature = await getSignatureForHash(
+    relayMultisigSigner,
+    hashToSign,
+    "Eddsa",
+    hre,
+    true
+  )
+
+  // Ok so now we have the signature AND the payload! We can submit!
+
+  // Convert the signature array to Uint8Array
+  const signatureBytes = new Uint8Array(
+    Buffer.from(hexSignature.slice(2), "hex")
+  )
+
+  const derivationPath = relayMultisigSigner.toLowerCase()
+  // remove 0x for aurora address
+  const predecessor = `${relayMultisigSigner.substring(2).toLowerCase()}.aurora`
+  const domainId = 1
+
+  // Get the public key from the NEAR contract
+  const { publicKey } = await derivePublicKey(
+    derivationPath,
+    predecessor,
+    Number(domainId)
+  )
+  const feePayer = new PublicKey(bs58.decode(publicKey))
+
+  transaction.addSignature(feePayer, signatureBytes)
+
+  if (feePayer.toBase58() !== tx.from) {
+    throw new Error(
+      `❌ Signer does not match transaction sender... Got ${feePayer.toBase58()}`
+    )
+  }
+
+  // If using Durable Nonce, we need the nonce account authority to sign the nonceAdvance instruction
+  if (tx.nonceAccount && tx.nonceAccountAuth) {
+    console.log(
+      `🔑 Adding nonce authority signature for nonce account: ${tx.nonceAccount}`
+    )
+
+    // Read nonce authority private key from environment variable
+    const nonceAuthorityPrivateKey =
+      process.env.SOLANA_NONCE_AUTHORITY_PRIVATE_KEY
+    if (!nonceAuthorityPrivateKey) {
+      throw new Error(
+        "❌ Durable Nonce transaction requires SOLANA_NONCE_AUTHORITY_PRIVATE_KEY environment variable to be set"
+      )
+    }
+
+    // Parse and add nonce authority signature
+    const nonceAuthorityKeypair = Keypair.fromSecretKey(
+      bs58.decode(nonceAuthorityPrivateKey)
+    )
+
+    // Verify nonce authority matches
+    if (nonceAuthorityKeypair.publicKey.toBase58() !== tx.nonceAccountAuth) {
+      throw new Error(
+        `❌ Nonce authority private key does not match nonceAccountAuth. Expected: ${tx.nonceAccountAuth}, Got: ${nonceAuthorityKeypair.publicKey.toBase58()}`
+      )
+    }
+
+    // Sign the transaction with nonce authority
+    transaction.sign([nonceAuthorityKeypair])
+
+    console.log("✅ Nonce authority signature added")
+  }
+
+  const serializedTransaction = transaction.serialize()
+  const signature = bs58.encode(transaction.signatures[0])
+  const connection = new Connection(tx.rpc, "confirmed")
+
+  await connection.sendRawTransaction(serializedTransaction, {
+    maxRetries: 0,
+  })
+
+  console.log(`🚀 Transaction sent via ${tx.rpc}: ${signature}`)
+
+  // Durable Nonce transactions use signature-based confirmation
+  await connection.confirmTransaction(signature, "confirmed")
+
+  console.log(`✅ Transaction confirmed: ${signature}`)
+}
+
 function countRequiredSignatures(transactions: Transaction[]): number {
   return transactions.reduce((count, tx) => {
     if (tx.family === "bitcoin-vm") {
@@ -164,6 +268,8 @@ task(
           await executeEvmTransaction(tx, relayMultisigSigner, hre)
         } else if (tx.family === "bitcoin-vm") {
           await executeBitcoinTransaction(tx, relayMultisigSigner, hre)
+        } else if (tx.family === "solana-vm") {
+          await executeSolanaTransaction(tx, relayMultisigSigner, hre)
         } else {
           throw new Error(
             `Unsupported transaction family: ${tx.family}. Please add support!`

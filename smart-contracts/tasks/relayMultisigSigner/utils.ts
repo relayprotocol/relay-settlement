@@ -4,11 +4,13 @@ import {
   createPublicClient,
   encodeFunctionData,
   getAddress,
+  GetContractReturnType,
   http,
   keccak256,
   parseEther,
   serializeTransaction,
   encodePacked,
+  fromHex,
 } from "viem"
 import { z } from "zod"
 import * as bitcoin from "bitcoinjs-lib"
@@ -17,6 +19,17 @@ import { buildBitcoinTransactionFromPayload } from "../../lib/bitcoin"
 import { wait } from "../../lib/wait"
 import { extractNearSignature } from "../../lib/near"
 import { HardhatRuntimeEnvironment } from "hardhat/types"
+
+import {
+  Connection,
+  PublicKey,
+  TransactionMessage,
+  VersionedTransaction,
+  ComputeBudgetProgram,
+  TransactionInstruction,
+  SystemProgram,
+  NonceAccount,
+} from "@solana/web3.js"
 
 const ethereumAddress = z
   .string()
@@ -32,10 +45,12 @@ const ethereumAddress = z
       })
     }
   })
+  .transform((val) => val as `0x${string}`)
 
 const hex0x = z
   .string()
   .regex(/^0x[0-9a-fA-F]*$/, "Must be a 0x-prefixed hex string")
+  .transform((val) => val as `0x${string}`)
 
 const integerString = z
   .string()
@@ -78,16 +93,66 @@ export const BitcoinTxSchema = z.object({
   outputs: z.array(BitcoinTxOutputSchema),
 })
 
-const EmptyTxSchema = z
-  .object({
-    family: z.enum(["solana-vm"]),
+const solanaPublicKey = z
+  .string()
+  .regex(
+    /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
+    "Must be a valid base58 Solana public key"
+  )
+  .superRefine((val, ctx) => {
+    try {
+      new PublicKey(val)
+    } catch {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Invalid Solana public key",
+      })
+    }
   })
-  .strict() // disallow any other fields
+
+export const SolanaTxSchema = z
+  .object({
+    addressLookupTableAddresses: z.array(solanaPublicKey).optional(),
+    computeUnitLimit: integerString.optional(),
+    computeUnitPrice: integerString.optional(),
+    family: z.literal("solana-vm"),
+    from: solanaPublicKey,
+    instructions: z.array(
+      z.object({
+        data: z.string(),
+        keys: z.array(
+          z.object({
+            isSigner: z.boolean(),
+            isWritable: z.boolean(),
+            pubkey: solanaPublicKey,
+          })
+        ),
+        programId: solanaPublicKey, // hex string
+      })
+    ),
+    // Durable Nonce fields - both must be provided together
+    nonceAccount: solanaPublicKey.optional(),
+    nonceAccountAuth: solanaPublicKey.optional(),
+    rpc: z.string().url(),
+  })
+  .refine(
+    (data) => {
+      // Both nonce fields must be provided together or not at all
+      const hasNonceAccount = !!data.nonceAccount
+      const hasNonceAuth = !!data.nonceAccountAuth
+      return hasNonceAccount === hasNonceAuth
+    },
+    {
+      message:
+        "nonceAccount and nonceAccountAuth must both be provided when using Durable Nonce",
+      path: ["nonceAccount"],
+    }
+  )
 
 export const TransactionSchema = z.discriminatedUnion("family", [
   EthereumTxSchema,
+  SolanaTxSchema,
   BitcoinTxSchema,
-  EmptyTxSchema,
 ])
 
 // TS type
@@ -169,11 +234,10 @@ export const buildEvmTransaction = async (
   const raw = {
     chainId,
     data: tx.calldata,
-    from: tx.from,
     gas: BigInt(tx.gas),
     nonce: tx.nonce,
     to: tx.to,
-    type: "eip1559",
+    type: "eip1559" as const,
     value: parseEther(tx.amount),
   }
 
@@ -428,6 +492,140 @@ export async function buildBitcoinTransaction(
   }
 }
 
+export const buildSolanaTransaction = async (
+  tx: z.infer<typeof SolanaTxSchema>
+): Promise<BuildTransactionResult> => {
+  const connection = new Connection(tx.rpc, "confirmed")
+
+  console.log(tx)
+
+  // Convert instructions from schema format to TransactionInstruction format
+  const instructions = tx.instructions.map(
+    (instruction) =>
+      new TransactionInstruction({
+        data: Buffer.from(instruction.data, "hex"),
+        keys: instruction.keys.map((key) => ({
+          isSigner: key.isSigner,
+          isWritable: key.isWritable,
+          pubkey: new PublicKey(key.pubkey),
+        })),
+        programId: new PublicKey(instruction.programId),
+      })
+  )
+
+  // Get address lookup table accounts if provided
+  const addressLookupTableAccounts = tx.addressLookupTableAddresses
+    ? await Promise.all(
+        tx.addressLookupTableAddresses.map(async (address) => {
+          const result = await connection.getAddressLookupTable(
+            new PublicKey(address)
+          )
+          if (!result.value) {
+            throw new Error(`Address lookup table not found: ${address}`)
+          }
+          return result.value
+        })
+      )
+    : []
+
+  // Determine blockhash strategy
+  let blockhash: string
+  let nonceInfo: { account: PublicKey; authority: PublicKey } | null = null
+
+  if (tx.nonceAccount && tx.nonceAccountAuth) {
+    // Use Durable Nonce
+    const nonceAccount = new PublicKey(tx.nonceAccount)
+    const nonceAccountAuth = new PublicKey(tx.nonceAccountAuth)
+
+    const nonceAccountInfo = await connection.getAccountInfo(nonceAccount)
+    if (!nonceAccountInfo) {
+      throw new Error(`Nonce account not found: ${tx.nonceAccount}`)
+    }
+
+    // Parse nonce account data using the official NonceAccount helper
+    const nonceAccountData = NonceAccount.fromAccountData(nonceAccountInfo.data)
+
+    // Verify the nonce authority matches
+    if (nonceAccountData.authorizedPubkey.toBase58() !== tx.nonceAccountAuth) {
+      throw new Error(
+        `Nonce authority mismatch. Account authority: ${nonceAccountData.authorizedPubkey.toBase58()}, Expected: ${tx.nonceAccountAuth}`
+      )
+    }
+
+    // Use the nonce as recentBlockhash
+    blockhash = nonceAccountData.nonce
+
+    nonceInfo = { account: nonceAccount, authority: nonceAccountAuth }
+  } else {
+    throw new Error(
+      "❌ Durable nonce is required for Solana transactions. Please provide nonceAccount and nonceAccountAuth fields."
+    )
+  }
+
+  // Build instructions in correct order
+  const allInstructions = []
+
+  // 1. Nonce advance MUST be the first instruction if using durable nonce
+  if (nonceInfo) {
+    allInstructions.push(
+      SystemProgram.nonceAdvance({
+        authorizedPubkey: nonceInfo.authority,
+        noncePubkey: nonceInfo.account,
+      })
+    )
+  }
+
+  // 2. Add compute budget instructions if specified
+  if (tx.computeUnitLimit) {
+    allInstructions.push(
+      ComputeBudgetProgram.setComputeUnitLimit({
+        units: parseInt(tx.computeUnitLimit),
+      })
+    )
+  }
+  if (tx.computeUnitPrice) {
+    allInstructions.push(
+      ComputeBudgetProgram.setComputeUnitPrice({
+        microLamports: parseInt(tx.computeUnitPrice),
+      })
+    )
+  }
+
+  // 3. Add the actual business logic instructions
+  allInstructions.push(...instructions)
+
+  // Create versioned transaction
+  const messageV0 = new TransactionMessage({
+    instructions: allInstructions,
+    payerKey: new PublicKey(tx.from),
+    recentBlockhash: blockhash,
+  }).compileToV0Message(addressLookupTableAccounts)
+
+  const versionedTransaction = new VersionedTransaction(messageV0)
+
+  // Simulate transaction to check for errors
+  try {
+    const simulationResult =
+      await connection.simulateTransaction(versionedTransaction)
+    if (simulationResult.value.err) {
+      throw new Error(
+        `Simulation failed: ${JSON.stringify(simulationResult.value.err)}`
+      )
+    }
+  } catch (error: any) {
+    console.error("❌ Solana transaction simulation failed:", tx, error.message)
+  }
+
+  const messageBytes = versionedTransaction.message.serialize()
+  const payload = ("0x" +
+    Buffer.from(messageBytes).toString("hex")) as `0x${string}`
+  return {
+    hashesToSign: [payload],
+    payload: payload,
+    transaction: versionedTransaction,
+  }
+}
+
 export function loadTransactions(path: string) {
   const raw = readFileSync(path, "utf8")
   const data: unknown = JSON.parse(raw)
@@ -438,7 +636,7 @@ export function loadTransactions(path: string) {
 
 export const createTransactionBundle = async (
   transactionsPath: string,
-  relayMultisigSigner: RelayMultisigSigner$Type
+  relayMultisigSigner: GetContractReturnType<RelayMultisigSigner$Type["abi"]>
 ) => {
   const transactions = loadTransactions(transactionsPath)
 
@@ -454,6 +652,11 @@ export const createTransactionBundle = async (
     } else if (tx.family === "bitcoin-vm") {
       result = await buildBitcoinTransaction(BitcoinTxSchema.parse(tx))
       curve = "Ecdsa"
+    } else if (tx.family === "solana-vm") {
+      result = await buildSolanaTransaction(
+        tx as z.infer<typeof SolanaTxSchema>
+      )
+      curve = "Eddsa"
     } else {
       throw new Error(
         `Unsupported transaction family: ${tx.family}. Please add support!`
@@ -489,7 +692,7 @@ const encodeSignatureCall = (
   const callData = encodeFunctionData({
     abi: relayMultisigSigner.abi,
     args: [data, curve],
-    functionName: "approve",
+    functionName: "approveSignature",
   })
 
   return {
@@ -562,6 +765,11 @@ export const getSignatureForHash = async (
     console.log(`Waiting for signed ${raw ? "raw data" : "hash"}...`)
     await wait(1)
     nearSignature = await multisigSigner.read.signatures([signatureKey, curve])
+  }
+
+  const jsonSignature = JSON.parse(fromHex(nearSignature, "string"))
+  if (jsonSignature.scheme === "Ed25519") {
+    return "0x" + Buffer.from(jsonSignature.signature).toString("hex")
   }
 
   const { r, s, v } = extractNearSignature(nearSignature)

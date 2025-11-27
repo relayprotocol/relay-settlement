@@ -44,10 +44,13 @@ import "./tasks/grantRole"
 // Relay Multisig signer
 import { NetworkConfig } from "@relay-protocol/types"
 import "./tasks/relayMultisigSigner/check-hashes"
+import "./tasks/relayMultisigSigner/create-nonce-account"
 import "./tasks/relayMultisigSigner/decode-multicall"
 import "./tasks/relayMultisigSigner/execute-transactions"
 import "./tasks/relayMultisigSigner/simulate"
 import "./tasks/relayMultisigSigner/submit"
+import "./tasks/relayMultisigSigner/solana/solana-program-upgrade-with-migration"
+import "./tasks/relayMultisigSigner/full/solana"
 
 // get pk from shell
 const { DEPLOYER_PRIVATE_KEY } = process.env

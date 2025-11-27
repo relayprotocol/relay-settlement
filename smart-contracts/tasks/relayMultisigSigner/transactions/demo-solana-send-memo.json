@@ -1,0 +1,24 @@
+[
+  {
+    "family": "solana-vm",
+    "rpc": "https://api.devnet.solana.com",
+    "from": "pbnVAmA562nYFK1p4B3uKQPrNaeefAPYXDxyioHvQwj",
+    "computeUnitLimit": "100000",
+    "computeUnitPrice": "1500",
+    "nonceAccount": "4EsxguybEYzAyYUAm3qXSMsTKv9oS2DqtMoRQhKuVDWW",
+    "nonceAccountAuth": "8PQiqqFUw3ud3S9M6paJVtW7N8J4bBzrzhRaKZgYZo99",
+    "instructions": [
+      {
+        "keys": [
+          {
+            "pubkey": "pbnVAmA562nYFK1p4B3uKQPrNaeefAPYXDxyioHvQwj",
+            "isSigner": true,
+            "isWritable": false
+          }
+        ],
+        "programId": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+        "data": "48656c6c6f20536f6c616e61204d756c7469736967205369676e6572"
+      }
+    ]
+  }
+]

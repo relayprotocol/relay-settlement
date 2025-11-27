@@ -82,3 +82,33 @@ Pre-requisite: add a `SAFE_API_KEY` env variable!
 4. The signers on the multisig can verify that the SAFE transaction they are signing is correct by running `relay-multisig-signer:check-hashes --transactions <manifest.json> --relay-multisig-signer <multisig signer address> --safe-transaction-nonce <transaction number>`. If they match they can sign (approve the multisig tx).
 5. Once the SAFE transaction has been executed, anyone can execute all the transactions from the bundle using
    `relay-multisig-signer:execute-transactions --transactions <manifest.json> --relay-multisig-signer <multisig signer address> --safe-transaction-nonce <transaction number>`
+
+### Solana Program Upgrades
+
+Deploy and upgrade Solana programs using a dual-wallet approach to minimize multisig transactions.
+
+**Setup:**
+
+```bash
+# Create durable nonce account
+yarn hardhat relay-multisig-signer:solana-create-nonce-account --rpc <rpc-url> --payer <private-key>
+
+# Set nonce/buffer authority (same wallet handles both nonce and buffer operations)
+export SOLANA_NONCE_AUTHORITY_PRIVATE_KEY=<private-key-base58>
+```
+
+**Generate upgrade transaction:**
+
+```bash
+# For initial deploy
+bun tasks/relayMultisigSigner/scripts/generate-solana-upgrade-transaction.ts \
+  --rpc <rpc-url> --program-path <program.so> --program-keypair <keypair.json> \
+  --upgrade-authority <multisig-address> --nonce-account <nonce-address>
+
+# For upgrade
+bun tasks/relayMultisigSigner/scripts/generate-solana-upgrade-transaction.ts \
+  --rpc <rpc-url> --program-path <program.so> --program-id <program-id> \
+  --upgrade-authority <multisig-address> --nonce-account <nonce-address>
+```
+
+The `generate-solana-upgrade-transaction.ts` script only handles the deploy/upgrade infrastructure (buffer operations, program deployment). Contract-specific initialization, migration, or other business logic should be added as additional instructions or separate transactions in the manifest. Durable nonce is required due to long multisig signing times that cause recent blockhash expiration.
