@@ -112,3 +112,43 @@ bun tasks/relayMultisigSigner/scripts/generate-solana-upgrade-transaction.ts \
 ```
 
 The `generate-solana-upgrade-transaction.ts` script only handles the deploy/upgrade infrastructure (buffer operations, program deployment). Contract-specific initialization, migration, or other business logic should be added as additional instructions or separate transactions in the manifest. Durable nonce is required due to long multisig signing times that cause recent blockhash expiration.
+
+## Hub / Oracle
+
+### Add your hub network to the `@relay-protocol/networks` package
+
+- First you need to add a network manifest file to the [network package](`../packages/networks/src`).
+- Make sure the file has an (empty for now) `contracts` section - or it will be ignored by hardhat
+- Rebuild the package `yarn workspace @relay-protocol/networks clean && yarn workspace @relay-protocol/networks build`
+
+### Deploy the contracts
+
+You can now deploy the Hub and Oracle contracts on your new chain.
+
+```sh
+yarn hardhat hub:setup --network <hub-network>
+```
+
+NB: This will also configure correctly the oracle as `OPERATOR_ROLE` of the hub, and set the deployer address as `ORACLE_ROLE` for testing purposes - you may want to revoke that later.
+
+### Test perms on the oracle
+
+```sh
+yarn hardhat test-oracle --network <hub-network> --oracle <hub-network>
+```
+
+WARN: This will write and tweak balances of accounts on the hub
+
+### Set roles
+
+There is two main roles to set: the `ORACLE_ROLE` to allow an offchain oracle to send data to the hub via the oracle contract, and the `EDITOR_ROLE` that can update tokens metadata directly on the hub.
+
+```sh
+# grant offchain oracle signer write access to the oracle contract
+yarn hardhat grant-role --contract <oracle-contract> --account <offchain-oracle-signer> --role ORACLE_ROLE --network <hub-network>
+
+# grant editors write metadata access to the hub
+yarn hardhat grant-role --contract <hub-contract> --accounts <list-of-signers> --role EDITOR_ROLE --network <hub-network>
+```
+
+NB: we pass a list of editors addresses to the hub to support multi-EOA
