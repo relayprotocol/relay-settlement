@@ -1,10 +1,12 @@
 {
-  "Allocator#AuroraXccUtils": "0x87Bac09FbbD402BDC77345EfB4E104c4e2dA07a3",
-  "Allocator#ChainSignatures": "0xD1d0dF9a6F3Fd0003853e185a37A91f61535eCbC",
-  "Allocator#Codec": "0xABc50D5DfcAdbAd05d97516a35236614717089Fa",
-  "Allocator#Utils": "0xa0Ad61e6C42A8B3383279C8b011e16c440BC5382",
-  "Allocator#AuroraSdk": "0x78675F8dAc6b227a1822f74223a2677b20F5A03D",
-  "Allocator#Allocator": "0xE12Bc514e90E136CAD10413669a6CcDeb9E3aDB7",
-  "EVMPayloadBuilder#Utils": "0x202de033638cb30e4B5B846B0D846E96a0a210f7",
-  "EVMPayloadBuilder#EVMPayloadBuilder": "0x66375620ED97fF94EbcAd32aBe8057B8c36651fF"
+  "RelayAllocator#AuroraXccUtils": "0xcE52dFcaB035225f6Fc8525Ee58Fcb1c20530902",
+  "RelayAllocator#ChainSignatures": "0xeDa05b271597fDAf5a695F16bECC5f9575CDf864",
+  "RelayAllocator#Codec": "0xd8643d56bE5D91B0959267c5EdB33FbaA6e0aeF4",
+  "RelayAllocator#Utils": "0xF7FeebcaAC12960eB5053D7E80F93B4e982c5c5b",
+  "RelayAllocator#AuroraSdk": "0x2bb806235Bb81b7cb15271f3F56a21c114E4F2d1",
+  "RelayAllocator#RelayAllocator": "0x7EdA04920F22ba6A2b9f2573fd9a6F6F1946Ff9f",
+  "EVMPayloadBuilder#Utils": "0x7c5B4a61a91152F042Ce69e338D70ccb45Ab070F",
+  "EVMPayloadBuilder#EVMPayloadBuilder": "0x56309fa32d81054603b4AaDe7f6C55291D574EFD",
+  "SolanaPayloadBuilder#SolanaPayloadBuilder": "0xF0d5Cfc8f55f7Aa74aD870504a84511558953c2B",
+  "HyperLiquidPayloadBuilder#HyperLiquidPayloadBuilder": "0xbFfd3edf3CBC6B73Cafdd81076458dA6eaA407D0"
 }

@@ -1,0 +1,10 @@
+{
+  "RelayAllocator#AuroraXccUtils": "0x83ad5B62d3ca7805a4feac4b4986f8f0db8d8170",
+  "RelayAllocator#ChainSignatures": "0xDF7Ac31feD9B60D062151312C46A6847b7D7fB35",
+  "RelayAllocator#Codec": "0x90cf8fAc327Bd7984566d083a441c2a0ffdF6Ff3",
+  "RelayAllocator#Utils": "0x5AA9ca240174A54aF6d9bfc69214b2ED948De86d",
+  "RelayAllocator#AuroraSdk": "0x7C9733B19e14f37aCA367fBD78922C098C55C874",
+  "RelayAllocator#RelayAllocator": "0x45348c213bf7dDB8E45f34CA4F333307A78ecB9a",
+  "EVMPayloadBuilder#Utils": "0xe7c413AD124533597Bd53ED8d764be5328cB333A",
+  "EVMPayloadBuilder#EVMPayloadBuilder": "0x8005488FF4f8982D2D8c1D602e6d747b1428dd41"
+}

@@ -36,9 +36,12 @@ export const getAllocatorPublicKey = async (
   allocatorAddress: string,
   family: ChainType
 ) => {
-  const { isTestnet, near: nearNetwork } =
-    networks[await publicClient.getChainId()]
-  const { rpc: nearRpcUrl } = nearNetwork!
+  const { isTestnet } = networks[await publicClient.getChainId()]
+
+  const { rpc: nearRpcUrl } = {
+    rpc: "https://rpc.mainnet.near.org",
+    // signer: "v1.signer",
+  }
 
   // Get the near signer from the allocator contract
   const nearSigner = (await publicClient.readContract({
