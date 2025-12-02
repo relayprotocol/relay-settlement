@@ -1,19 +1,29 @@
-import { conduitTestnet } from "@relay-protocol/networks"
+import { conduitTestnet, calderaTestnet } from "@relay-protocol/networks"
 import { defineChain } from "viem"
 import * as viemChains from "viem/chains"
 
-const conduitTestnetViem = defineChain({
-  id: Number(conduitTestnet.chainId),
-  name: conduitTestnet.name,
-  nativeCurrency: conduitTestnet.nativeCurrency!,
-  rpcUrls: {
-    default: {
-      http: conduitTestnet.rpc,
+const customChains = [
+  defineChain({
+    id: Number(conduitTestnet.chainId),
+    name: conduitTestnet.name,
+    nativeCurrency: conduitTestnet.nativeCurrency!,
+    rpcUrls: {
+      default: {
+        http: conduitTestnet.rpc,
+      },
     },
-  },
-})
-
-const customChains = [conduitTestnetViem]
+  }),
+  defineChain({
+    id: Number(calderaTestnet.chainId),
+    name: calderaTestnet.name,
+    nativeCurrency: calderaTestnet.nativeCurrency!,
+    rpcUrls: {
+      default: {
+        http: calderaTestnet.rpc,
+      },
+    },
+  }),
+]
 
 const isCustomChain = (chainId: bigint) => {
   const viemSupportedChainIds = Object.values(viemChains).map(({ id }) =>
