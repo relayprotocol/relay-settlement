@@ -11,6 +11,7 @@ export const aurora: NetworkConfig = {
     },
     prod: {
       allocator: "0xE12Bc514e90E136CAD10413669a6CcDeb9E3aDB7",
+      multisigSigner: "0x66667945C34b399993cA834587886b8508dB39B1",
     },
   },
   family: "ethereum-vm",

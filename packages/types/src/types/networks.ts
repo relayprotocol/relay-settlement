@@ -4,6 +4,7 @@ export interface ProtocolContracts {
   depository?: string
   oracle?: string
   allocator?: string
+  multisigSigner?: string
 }
 export interface NetworkConfig {
   chainId: bigint

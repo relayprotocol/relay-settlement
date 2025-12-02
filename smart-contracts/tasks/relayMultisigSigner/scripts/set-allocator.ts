@@ -1,3 +1,4 @@
+import * as networks from "@relay-protocol/networks"
 import {
   createPublicClient,
   encodeFunctionData,
@@ -7,19 +8,12 @@ import {
 } from "viem"
 
 const main = async () => {
-  const rpcUrls = [
-    "https://rpc.mevblocker.io",
-    "https://mainnet.optimism.io",
-    "https://polygon-rpc.com",
-    "https://api.mainnet.abs.xyz",
-    "https://mainnet.base.org",
-    "https://arb1.arbitrum.io/rpc",
-  ]
+  const chains = ["ethereum"]
 
   const txs = await Promise.all(
-    rpcUrls.map(async (rpcUrl) => {
+    chains.map(async (chain) => {
       const rpc = createPublicClient({
-        transport: http(rpcUrl),
+        transport: http(networks.networks[chain].rpc[0]),
       })
 
       const fees = await rpc.estimateFeesPerGas()
@@ -28,17 +22,18 @@ const main = async () => {
         amount: "0",
         calldata: encodeFunctionData({
           abi: parseAbi(["function setAllocator(address)"]),
-          args: ["0xe40EcC02e4Ec499393876a31E4af97fa9C069814"],
+          args: [(networks.networks["aurora"] as any).contracts.prod.allocator],
           functionName: "setAllocator",
         }),
-        from: "0x16c4dEEB433bde1804d8f17cd1Ba3D29a30f9671",
-        to: "0x5CB1De3603A71Ac2f67b12bFbF095013FE4Ac299",
+        from: ((networks.networks["aurora"] as any).contracts.prod as any)
+          .multisigSigner,
+        to: (networks.networks[chain] as any).contracts.prod.depository,
       } as const
 
       const gas = await rpc.estimateGas({
         account: txData.from,
         data: txData.calldata,
-        to: txData.to,
+        to: txData.to as any,
         value: parseEther(txData.amount),
       })
 
@@ -48,7 +43,7 @@ const main = async () => {
         maxFeePerGas: fees!.maxFeePerGas!.toString(),
         maxPriorityFeePerGas: fees!.maxPriorityFeePerGas!.toString(),
         nonce: await rpc.getTransactionCount({ address: txData.from }),
-        rpc: rpcUrl,
+        rpc: networks.networks[chain].rpc[0],
         ...txData,
       }
     })
