@@ -1,29 +1,24 @@
-import { conduitTestnet, calderaTestnet } from "@relay-protocol/networks"
+import {
+  calderaTestnet,
+  conduitTestnet,
+  sovereignTestnet,
+} from "@relay-protocol/networks"
 import { defineChain } from "viem"
 import * as viemChains from "viem/chains"
 
-const customChains = [
-  defineChain({
-    id: Number(conduitTestnet.chainId),
-    name: conduitTestnet.name,
-    nativeCurrency: conduitTestnet.nativeCurrency!,
-    rpcUrls: {
-      default: {
-        http: conduitTestnet.rpc,
+const customChains = [conduitTestnet, calderaTestnet, sovereignTestnet].map(
+  (chain) =>
+    defineChain({
+      id: Number(chain.chainId),
+      name: chain.name,
+      nativeCurrency: chain.nativeCurrency!,
+      rpcUrls: {
+        default: {
+          http: chain.rpc,
+        },
       },
-    },
-  }),
-  defineChain({
-    id: Number(calderaTestnet.chainId),
-    name: calderaTestnet.name,
-    nativeCurrency: calderaTestnet.nativeCurrency!,
-    rpcUrls: {
-      default: {
-        http: calderaTestnet.rpc,
-      },
-    },
-  }),
-]
+    })
+)
 
 const isCustomChain = (chainId: bigint) => {
   const viemSupportedChainIds = Object.values(viemChains).map(({ id }) =>
@@ -44,7 +39,7 @@ export const getViemClients = async (hre: any) => {
   if (isCustomChain(chainId)) {
     const chain = getCustomChain(chainId)
     if (chain) {
-      const publicClient = hre.viem.getPublicClient({ chain })
+      const publicClient = await hre.viem.getPublicClient({ chain })
       const walletClients = await hre.viem.getWalletClients({
         chain,
       })
@@ -53,8 +48,8 @@ export const getViemClients = async (hre: any) => {
     // viem will throw if chain is unknwon
     throw Error("Viem unsupported chain. Add to lib/viem.ts")
   } else {
-    const publicClient = hre.viem.getPublicClient()
+    const publicClient = await hre.viem.getPublicClient()
     const walletClients = await hre.viem.getWalletClients()
-    return { public: publicClient, walletClients }
+    return { publicClient, walletClients }
   }
 }
