@@ -27,6 +27,7 @@ import "./tasks/allocator/full/sui"
 // hub tasks
 import "./tasks/hub/add-operator"
 import "./tasks/hub/hub-setup"
+import "./tasks/hub/test-oracle"
 
 // deployments
 import "./tasks/deployments/allocator"
