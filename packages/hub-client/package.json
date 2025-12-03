@@ -1,6 +1,6 @@
 {
   "name": "@relay-protocol/hub-client",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -14,7 +14,7 @@
   "dependencies": {
     "@relay-protocol/abis": "workspace:*",
     "@relay-protocol/hub-utils": "workspace:*",
-    "@reservoir0x/relay-protocol-sdk": "0.0.44",
+    "@reservoir0x/relay-protocol-sdk": "0.0.55",
     "ethers": "6.15.0"
   },
   "scripts": {

@@ -1732,7 +1732,7 @@ __metadata:
     "@relay-protocol/eslint-config": "workspace:*"
     "@relay-protocol/hub-utils": "workspace:*"
     "@relay-protocol/tsconfig": "workspace:*"
-    "@reservoir0x/relay-protocol-sdk": "npm:0.0.44"
+    "@reservoir0x/relay-protocol-sdk": "npm:0.0.55"
     eslint: "npm:9.36.0"
     ethers: "npm:6.15.0"
     tsup: "npm:8.5.0"
@@ -1764,7 +1764,7 @@ __metadata:
     "@relay-protocol/eslint-config": "workspace:*"
     "@relay-protocol/tsconfig": "workspace:*"
     "@relay-protocol/types": "workspace:*"
-    "@reservoir0x/relay-protocol-sdk": "npm:0.0.44"
+    "@reservoir0x/relay-protocol-sdk": "npm:0.0.55"
     eslint: "npm:9.36.0"
     tsup: "npm:8.5.0"
     typescript: "npm:5.9.3"
@@ -1853,7 +1853,7 @@ __metadata:
   dependencies:
     "@relay-protocol/eslint-config": "workspace:*"
     "@relay-protocol/tsconfig": "workspace:*"
-    "@reservoir0x/relay-protocol-sdk": "npm:0.0.50"
+    "@reservoir0x/relay-protocol-sdk": "npm:0.0.55"
     eslint: "npm:9.36.0"
     typescript: "npm:5.9.3"
   languageName: unknown
@@ -1875,9 +1875,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@reservoir0x/relay-protocol-sdk@npm:0.0.44":
-  version: 0.0.44
-  resolution: "@reservoir0x/relay-protocol-sdk@npm:0.0.44"
+"@reservoir0x/relay-protocol-sdk@npm:0.0.55":
+  version: 0.0.55
+  resolution: "@reservoir0x/relay-protocol-sdk@npm:0.0.55"
   dependencies:
     "@coral-xyz/anchor": "npm:^0.31.1"
     "@mysten/sui": "npm:^1.24.0"
@@ -1887,23 +1887,7 @@ __metadata:
     js-sha256: "npm:^0.11.0"
     tronweb: "npm:^6.0.4"
     viem: "npm:^2.26.3"
-  checksum: 10c0/4e48cc638a4d948f55555533334559771a12057b20e66bc7e4c40d4cb22896654dde4c3acf0851e3c2342c04a9ed40414c7a50606c9361e9462e8fd664955810
-  languageName: node
-  linkType: hard
-
-"@reservoir0x/relay-protocol-sdk@npm:0.0.50":
-  version: 0.0.50
-  resolution: "@reservoir0x/relay-protocol-sdk@npm:0.0.50"
-  dependencies:
-    "@coral-xyz/anchor": "npm:^0.31.1"
-    "@mysten/sui": "npm:^1.24.0"
-    bech32: "npm:^2.0.0"
-    bitcoinjs-lib: "npm:^6.1.7"
-    bs58: "npm:^6.0.0"
-    js-sha256: "npm:^0.11.0"
-    tronweb: "npm:^6.0.4"
-    viem: "npm:^2.26.3"
-  checksum: 10c0/720e402fedddc6f6f67a7f0b3ee26cbf1cada5a0991dd423594c69405349546d9548f0a682457bac2e0139cfd7b3723cc87b47c34209b3db2e87239def4b0354
+  checksum: 10c0/8eba73095c54bdb616156a52e5c8f0423ea01435d2af82a2a4419d58245fcf6f6b277e5935671f132ee0e30766b438a5f3f51885513ff47076db5ddfb81c5503
   languageName: node
   linkType: hard
 
