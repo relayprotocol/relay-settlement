@@ -235,10 +235,10 @@ export const buildEvmTransaction = async (
   const raw = {
     chainId,
     data: tx.calldata,
+    from: tx.from,
     gas: BigInt(tx.gas),
     nonce: tx.nonce,
     to: tx.to,
-    type: "eip1559" as const,
     value: parseEther(tx.amount),
   }
 
@@ -687,15 +687,26 @@ export const createTransactionBundle = async (
 const encodeSignatureCall = (
   hashToSign: `0x${string}`,
   curve: "Ecdsa" | "Eddsa",
-  relayMultisigSigner: RelayMultisigSigner$Type,
-  raw: boolean = false
+  relayMultisigSigner: RelayMultisigSigner$Type
 ) => {
-  // Use unified approve function for both hash and raw data
-  const data = raw ? hashToSign : encodePacked(["bytes32"], [hashToSign])
+  // Use the old on-chain ABI signature: approveSignature(bytes32,string)
+  // Note: The deployed contract uses bytes32, not bytes
+  const oldAbi = [
+    {
+      inputs: [
+        { internalType: "bytes32", name: "data", type: "bytes32" },
+        { internalType: "string", name: "curve", type: "string" },
+      ],
+      name: "approveSignature",
+      outputs: [],
+      stateMutability: "nonpayable",
+      type: "function",
+    },
+  ] as const
 
   const callData = encodeFunctionData({
-    abi: relayMultisigSigner.abi,
-    args: [data, curve],
+    abi: oldAbi,
+    args: [hashToSign, curve],
     functionName: "approveSignature",
   })
 

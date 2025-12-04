@@ -5,13 +5,17 @@ import {
   createSafeClientWithConfig,
 } from "../helpers/safe"
 import { createTransactionBundle } from "./utils"
+import { networks } from "@relay-protocol/networks"
 
 task(
   "relay-multisig-signer:check-hashes",
   "Checks transaction hashes from a transactions manifest file against a Gnosis Safe. They must match the transactions from the manifest."
 )
   .addParam("transactions", "The path to the transactions manifest file")
-  .addParam("relayMultisigSigner", "address of the relay multisig signer")
+  .addOptionalParam(
+    "relayMultisigSigner",
+    "address of the relay multisig signer (optional, will be extracted from network config)"
+  )
   .addParam("safeTransactionNonce", "nonce of the safe transaction")
   .setAction(
     async (
@@ -22,9 +26,29 @@ task(
       },
       hre
     ) => {
+      // Extract relay multisig signer address from network config if not provided
+      let multisigSignerAddress = relayMultisigSignerAddress
+      if (!multisigSignerAddress) {
+        const chainId = String(hre.network.config.chainId)
+        const networkConfig = networks[chainId]
+        if (!networkConfig) {
+          throw new Error(
+            `❌ Network ${hre.network.name} (chainId: ${chainId}) not found in @relay-protocol/networks`
+          )
+        }
+        multisigSignerAddress =
+          networkConfig.contracts?.prod?.multisigSigner ||
+          networkConfig.contracts?.dev?.multisigSigner
+        if (!multisigSignerAddress) {
+          throw new Error(
+            `❌ multisigSigner not found in network config for ${hre.network.name}`
+          )
+        }
+      }
+
       const relayMultisigSigner = await hre.viem.getContractAt(
         "RelayMultisigSigner",
-        relayMultisigSignerAddress
+        multisigSignerAddress
       )
 
       // TODO: should we handle this if the owner is _not_ a SAFE? (things will fail later).
@@ -51,7 +75,7 @@ task(
         const action = safeTransactionActions[i]
         if (
           checksumAddress(action.to as `0x${string}`) !==
-          checksumAddress(relayMultisigSignerAddress)
+          checksumAddress(multisigSignerAddress)
         ) {
           throw new Error(
             `❌ Action ${i} is not addressed to the relay multisig signer`
