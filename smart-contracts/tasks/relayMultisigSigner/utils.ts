@@ -66,8 +66,9 @@ export const EthereumTxSchema = z.object({
   family: z.literal("ethereum-vm"),
   from: ethereumAddress,
   gas: integerString,
-  maxFeePerGas: integerString,
-  maxPriorityFeePerGas: integerString,
+  gasPrice: integerString.optional(),
+  maxFeePerGas: integerString.optional(),
+  maxPriorityFeePerGas: integerString.optional(),
   nonce: z.number().int().nonnegative(),
   rpc: z.string().url(),
   to: ethereumAddress,
@@ -259,8 +260,11 @@ export const buildEvmTransaction = async (
 
   const transaction = {
     ...raw,
-    maxFeePerGas: BigInt(tx.maxFeePerGas),
-    maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas),
+    gasPrice: tx.gasPrice ? BigInt(tx.gasPrice) : undefined,
+    maxFeePerGas: tx.maxFeePerGas ? BigInt(tx.maxFeePerGas) : undefined,
+    maxPriorityFeePerGas: tx.maxPriorityFeePerGas
+      ? BigInt(tx.maxPriorityFeePerGas)
+      : undefined,
   }
 
   const payload = serializeTransaction(transaction) // EVM
