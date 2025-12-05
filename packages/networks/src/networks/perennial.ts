@@ -9,6 +9,7 @@ export const perennial: NetworkConfig = {
   hubChainId: "1424",
   isTestnet: false,
   name: "Perennial",
+  relaySolverChainId: 1424,
   rpc: process.env.RPC_1424
     ? [process.env.RPC_1424]
     : ["[REDACTED-INTERNAL-RPC]"],

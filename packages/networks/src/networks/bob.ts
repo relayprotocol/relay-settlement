@@ -9,6 +9,7 @@ export const bob: NetworkConfig = {
   hubChainId: "60808",
   isTestnet: false,
   name: "BOB",
+  relaySolverChainId: 60808,
   rpc: process.env.RPC_60808
     ? [process.env.RPC_60808]
     : ["[REDACTED-INTERNAL-RPC]"],

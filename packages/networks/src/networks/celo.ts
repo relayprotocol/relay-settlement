@@ -9,6 +9,7 @@ export const celo: NetworkConfig = {
   hubChainId: "42220",
   isTestnet: false,
   name: "Celo",
+  relaySolverChainId: 42220,
   rpc: process.env.RPC_42220
     ? [process.env.RPC_42220]
     : ["[REDACTED-INTERNAL-RPC]"],

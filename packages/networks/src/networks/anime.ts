@@ -9,6 +9,7 @@ export const anime: NetworkConfig = {
   hubChainId: "69000",
   isTestnet: false,
   name: "Anime",
+  relaySolverChainId: 69000,
   rpc: process.env.RPC_69000
     ? [process.env.RPC_69000]
     : [

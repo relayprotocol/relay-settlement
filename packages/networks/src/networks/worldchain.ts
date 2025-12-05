@@ -9,6 +9,7 @@ export const worldchain: NetworkConfig = {
   hubChainId: "480",
   isTestnet: false,
   name: "Worldchain",
+  relaySolverChainId: 480,
   rpc: process.env.RPC_480
     ? [process.env.RPC_480]
     : ["[REDACTED-INTERNAL-RPC]"],

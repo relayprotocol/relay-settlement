@@ -9,6 +9,7 @@ export const katana: NetworkConfig = {
   hubChainId: "747474",
   isTestnet: false,
   name: "Katana",
+  relaySolverChainId: 747474,
   rpc: process.env.RPC_747474
     ? [process.env.RPC_747474]
     : ["https://rpc.katana.network"],

@@ -9,6 +9,7 @@ export const arenaZ: NetworkConfig = {
   hubChainId: "7897",
   isTestnet: false,
   name: "Arena Z",
+  relaySolverChainId: 7897,
   rpc: process.env.RPC_7897
     ? [process.env.RPC_7897]
     : ["[REDACTED-INTERNAL-RPC]"],

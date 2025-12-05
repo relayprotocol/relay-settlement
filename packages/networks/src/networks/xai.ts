@@ -9,6 +9,7 @@ export const xai: NetworkConfig = {
   hubChainId: "660279",
   isTestnet: false,
   name: "XAI",
+  relaySolverChainId: 660279,
   rpc: process.env.RPC_660279
     ? [process.env.RPC_660279]
     : ["[REDACTED-INTERNAL-RPC]"],

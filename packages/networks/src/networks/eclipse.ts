@@ -11,6 +11,7 @@ export const eclipse: NetworkConfig = {
     "64090895945001603038992093854505754448788867346671798212401362354189266349171",
   isTestnet: false,
   name: "Eclipse",
+  relaySolverChainId: 9286185,
   rpc: process.env.RPC_ECLIPSE
     ? [process.env.RPC_ECLIPSE]
     : [

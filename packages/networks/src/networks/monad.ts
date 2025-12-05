@@ -9,6 +9,7 @@ export const monad: NetworkConfig = {
   hubChainId: "143",
   isTestnet: false,
   name: "Monad",
+  relaySolverChainId: 143,
   rpc: process.env.RPC_143
     ? [process.env.RPC_143]
     : [

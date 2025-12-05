@@ -9,6 +9,7 @@ export const optimism: NetworkConfig = {
   hubChainId: "10",
   isTestnet: false,
   name: "Optimism",
+  relaySolverChainId: 10,
   rpc: process.env.RPC_10
     ? [process.env.RPC_10]
     : ["[REDACTED-INTERNAL-RPC]"],

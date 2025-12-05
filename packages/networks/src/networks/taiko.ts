@@ -9,6 +9,7 @@ export const taiko: NetworkConfig = {
   hubChainId: "167000",
   isTestnet: false,
   name: "Taiko",
+  relaySolverChainId: 167000,
   rpc: process.env.RPC_167000
     ? [process.env.RPC_167000]
     : ["[REDACTED-INTERNAL-RPC]"],

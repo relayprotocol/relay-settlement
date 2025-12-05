@@ -9,6 +9,7 @@ export const powerloom: NetworkConfig = {
   hubChainId: "7869",
   isTestnet: false,
   name: "Powerloom",
+  relaySolverChainId: 7869,
   rpc: process.env.RPC_7869
     ? [process.env.RPC_7869]
     : ["https://rpc-v2.powerloom.network"],

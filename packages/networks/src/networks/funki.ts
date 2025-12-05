@@ -9,6 +9,7 @@ export const funki: NetworkConfig = {
   hubChainId: "33979",
   isTestnet: false,
   name: "Funki",
+  relaySolverChainId: 33979,
   rpc: process.env.RPC_33979
     ? [process.env.RPC_33979]
     : ["[REDACTED-INTERNAL-RPC]"],

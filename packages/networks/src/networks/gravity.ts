@@ -9,6 +9,7 @@ export const gravity: NetworkConfig = {
   hubChainId: "1625",
   isTestnet: false,
   name: "Gravity",
+  relaySolverChainId: 1625,
   rpc: process.env.RPC_1625
     ? [process.env.RPC_1625]
     : ["[REDACTED-INTERNAL-RPC]"],

@@ -9,6 +9,7 @@ export const unichain: NetworkConfig = {
   hubChainId: "130",
   isTestnet: false,
   name: "Unichain",
+  relaySolverChainId: 130,
   rpc: process.env.RPC_130
     ? [process.env.RPC_130]
     : ["[REDACTED-INTERNAL-RPC]"],

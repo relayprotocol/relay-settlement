@@ -9,6 +9,7 @@ export const boba: NetworkConfig = {
   hubChainId: "288",
   isTestnet: false,
   name: "Boba",
+  relaySolverChainId: 288,
   rpc: process.env.RPC_288
     ? [process.env.RPC_288]
     : ["[REDACTED-INTERNAL-RPC]"],

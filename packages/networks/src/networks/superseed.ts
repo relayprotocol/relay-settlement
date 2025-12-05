@@ -9,6 +9,7 @@ export const superseed: NetworkConfig = {
   hubChainId: "5330",
   isTestnet: false,
   name: "Superseed",
+  relaySolverChainId: 5330,
   rpc: process.env.RPC_5330
     ? [process.env.RPC_5330]
     : ["[REDACTED-INTERNAL-RPC]"],

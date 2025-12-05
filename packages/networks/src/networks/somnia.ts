@@ -9,6 +9,7 @@ export const somnia: NetworkConfig = {
   hubChainId: "5031",
   isTestnet: false,
   name: "Somnia",
+  relaySolverChainId: 5031,
   rpc: process.env.RPC_5031
     ? [process.env.RPC_5031]
     : ["https://api.infra.mainnet.somnia.network"],

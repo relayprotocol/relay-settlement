@@ -9,6 +9,7 @@ export const soneium: NetworkConfig = {
   hubChainId: "1868",
   isTestnet: false,
   name: "Soneium",
+  relaySolverChainId: 1868,
   rpc: process.env.RPC_1868
     ? [process.env.RPC_1868]
     : ["[REDACTED-INTERNAL-RPC]"],

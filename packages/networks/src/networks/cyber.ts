@@ -9,6 +9,7 @@ export const cyber: NetworkConfig = {
   hubChainId: "7560",
   isTestnet: false,
   name: "Cyber",
+  relaySolverChainId: 7560,
   rpc: process.env.RPC_7560
     ? [process.env.RPC_7560]
     : ["[REDACTED-INTERNAL-RPC]"],

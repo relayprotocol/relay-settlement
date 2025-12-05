@@ -9,6 +9,7 @@ export const forma: NetworkConfig = {
   hubChainId: "984122",
   isTestnet: false,
   name: "Forma",
+  relaySolverChainId: 984122,
   rpc: process.env.RPC_984122
     ? [process.env.RPC_984122]
     : ["[REDACTED-INTERNAL-RPC]"],

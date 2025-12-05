@@ -9,6 +9,7 @@ export const b3: NetworkConfig = {
   hubChainId: "8333",
   isTestnet: false,
   name: "B3",
+  relaySolverChainId: 8333,
   rpc: process.env.RPC_8333
     ? [process.env.RPC_8333]
     : ["[REDACTED-INTERNAL-RPC]"],

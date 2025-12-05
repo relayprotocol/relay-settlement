@@ -9,6 +9,7 @@ export const linea: NetworkConfig = {
   hubChainId: "59144",
   isTestnet: false,
   name: "Linea",
+  relaySolverChainId: 59144,
   rpc: process.env.RPC_59144
     ? [process.env.RPC_59144]
     : ["[REDACTED-INTERNAL-RPC]"],

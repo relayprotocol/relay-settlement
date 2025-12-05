@@ -9,6 +9,7 @@ export const gunz: NetworkConfig = {
   hubChainId: "43419",
   isTestnet: false,
   name: "Gunz",
+  relaySolverChainId: 43419,
   rpc: process.env.RPC_43419
     ? [process.env.RPC_43419]
     : [

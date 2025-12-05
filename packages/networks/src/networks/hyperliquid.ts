@@ -8,6 +8,7 @@ export const hyperliquid: NetworkConfig = {
     "111378472430415857054556056192544272316610524417112732947551032542507639335976",
   isTestnet: false,
   name: "Hyperliquid",
+  relaySolverChainId: 1337,
   rpc: process.env.RPC_HYPERLIQUID
     ? [process.env.RPC_HYPERLIQUID]
     : ["https://api.hyperliquid.xyz"],

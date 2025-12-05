@@ -9,6 +9,7 @@ export const mantle: NetworkConfig = {
   hubChainId: "5000",
   isTestnet: false,
   name: "Mantle",
+  relaySolverChainId: 5000,
   rpc: process.env.RPC_5000
     ? [process.env.RPC_5000]
     : ["[REDACTED-INTERNAL-RPC]"],

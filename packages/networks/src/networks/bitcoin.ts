@@ -13,6 +13,7 @@ export const bitcoin: NetworkConfig = {
     "56960375584792109628315999883526364004747792730920852649053369508622489636429",
   isTestnet: false,
   name: "Bitcoin",
+  relaySolverChainId: 8253038,
   rpc: process.env.RPC_BITCOIN
     ? [process.env.RPC_BITCOIN]
     : [

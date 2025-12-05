@@ -9,6 +9,7 @@ export const abstract: NetworkConfig = {
   hubChainId: "2741",
   isTestnet: false,
   name: "Abstract",
+  relaySolverChainId: 2741,
   rpc: process.env.RPC_2741
     ? [process.env.RPC_2741]
     : ["https://api.mainnet.abs.xyz"],

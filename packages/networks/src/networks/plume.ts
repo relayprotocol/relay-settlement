@@ -9,6 +9,7 @@ export const plume: NetworkConfig = {
   hubChainId: "98866",
   isTestnet: false,
   name: "Plume",
+  relaySolverChainId: 98866,
   rpc: process.env.RPC_98866
     ? [process.env.RPC_98866]
     : ["[REDACTED-INTERNAL-RPC]"],
