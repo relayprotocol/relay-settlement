@@ -9,6 +9,7 @@ export const lordchain: NetworkConfig = {
   hubChainId: "84530008",
   isTestnet: false,
   name: "Lordchain",
+  relaySolverChainId: 84530008,
   rpc: process.env.RPC_84530008
     ? [process.env.RPC_84530008]
     : ["[REDACTED-INTERNAL-RPC]"],

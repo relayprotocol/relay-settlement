@@ -9,6 +9,7 @@ export const onchainPoints: NetworkConfig = {
   hubChainId: "17071",
   isTestnet: false,
   name: "Onchain Points",
+  relaySolverChainId: 17071,
   rpc: process.env.RPC_17071
     ? [process.env.RPC_17071]
     : [

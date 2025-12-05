@@ -9,6 +9,7 @@ export const apex: NetworkConfig = {
   hubChainId: "70700",
   isTestnet: false,
   name: "Apex",
+  relaySolverChainId: 70700,
   rpc: process.env.RPC_70700
     ? [process.env.RPC_70700]
     : ["[REDACTED-INTERNAL-RPC]"],

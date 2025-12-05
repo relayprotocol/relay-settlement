@@ -28,6 +28,7 @@ export const conduitTestnet: NetworkConfig = {
     name: "eth",
     symbol: "eth",
   },
+  relaySolverChainId: 35779,
   rpc: process.env.RPC_35779
     ? [process.env.RPC_35779]
     : ["https://rpc-relay-settlement-testnet-7ht8qhd7mf.t.conduit.xyz"],

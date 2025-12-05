@@ -9,6 +9,7 @@ export const game7: NetworkConfig = {
   hubChainId: "2187",
   isTestnet: false,
   name: "Game7",
+  relaySolverChainId: 2187,
   rpc: process.env.RPC_2187
     ? [process.env.RPC_2187]
     : ["[REDACTED-INTERNAL-RPC]"],
