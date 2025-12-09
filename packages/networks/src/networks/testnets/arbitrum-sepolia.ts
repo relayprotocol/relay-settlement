@@ -4,10 +4,10 @@ export const arbitrumSepolia: NetworkConfig = {
   chainId: 421614n,
   contracts: {
     dev: {
-      oracle: "0x64A3328Cf61025720c26dE2a87B6d913fA6e376a",
+      oracle: "0x53db93710C8d80ADa59db2b5ee63d7A4783fcD98",
     },
     prod: {
-      oracle: "0x53db93710C8d80ADa59db2b5ee63d7A4783fcD98",
+      oracle: "0x3b26D06Ea8252a73742d2125D1ACEb594ECEE5c6",
     },
   },
   family: "ethereum-vm",
