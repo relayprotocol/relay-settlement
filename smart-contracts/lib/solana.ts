@@ -285,6 +285,12 @@ export type RelayDepository = {
         kind: "struct"
         fields: [
           {
+            name: "domain"
+            type: {
+              array: ["u8", 32]
+            }
+          },
+          {
             name: "recipient"
             type: "publicKey"
           },
@@ -305,6 +311,10 @@ export type RelayDepository = {
           {
             name: "expiration"
             type: "i64"
+          },
+          {
+            name: "vaultAddress"
+            type: "publicKey"
           },
         ]
       }
@@ -783,6 +793,12 @@ export const IDL: RelayDepository = {
       type: {
         fields: [
           {
+            name: "domain",
+            type: {
+              array: ["u8", 32],
+            },
+          },
+          {
             name: "recipient",
             type: "publicKey",
           },
@@ -803,6 +819,10 @@ export const IDL: RelayDepository = {
           {
             name: "expiration",
             type: "i64",
+          },
+          {
+            name: "vaultAddress",
+            type: "publicKey",
           },
         ],
         kind: "struct",

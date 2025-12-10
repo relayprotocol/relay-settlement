@@ -3,26 +3,84 @@ pragma solidity ^0.8.28;
 import {IPayloadBuilder} from "../RelayAllocator.sol";
 import {Utils} from "../Utils.sol";
 
+/// @title IRelayAllocator
+/// @notice Interface for RelayAllocator contract
+// solhint-disable-next-line use-natspec
+interface IRelayAllocator {
+  /// @notice Returns the owner address of the RelayAllocator contract
+  /// @return The address of the contract owner
+  function owner() external view returns (address);
+}
+
+/// @notice Configuration for a specific chain
+struct ChainConfig {
+  bytes32 domain; /// @notice Domain separator for the chain
+  bytes32 vaultAddress; /// @notice Vault address for the chain
+}
+
 /// @title SolanaPayloadBuilder
 /// @author Relay Protocol
 /// @notice Builds Borsh-encoded payloads for Solana chain withdrawals
 contract SolanaPayloadBuilder is IPayloadBuilder {
   error InvalidExpiration();
+  error NotRelayAllocatorOwner(address account);
+  error ChainNotConfigured(uint256 chainId);
+
+  /// @notice RelayAllocator contract instance
+  IRelayAllocator public immutable allocator;
+
+  /// @notice Chain configuration for each chain ID
+  mapping(uint256 => ChainConfig) public chainConfigs;
+
+  /// @notice Constructor that initializes the payload builder with allocator
+  /// @param _allocator The RelayAllocator contract address
+  constructor(IRelayAllocator _allocator) {
+    allocator = _allocator;
+  }
+
+  /// @notice Modifier to restrict access to allocator owner only
+  modifier onlyAllocatorOwner() {
+    if (msg.sender != allocator.owner())
+      revert NotRelayAllocatorOwner(msg.sender);
+    _;
+  }
+
+  /// @notice Sets the chain configuration for a specific chain
+  /// @param chainId The chain ID
+  /// @param domain The domain separator (32 bytes)
+  /// @param vaultAddress The vault address (32 bytes)
+  function setChainConfig(
+    uint256 chainId,
+    bytes32 domain,
+    bytes32 vaultAddress
+  ) external onlyAllocatorOwner {
+    chainConfigs[chainId] = ChainConfig({
+      domain: domain,
+      vaultAddress: vaultAddress
+    });
+  }
 
   /// @notice Builds Borsh-encoded payload for Solana withdrawal
+  /// @param chainId Chain ID to get domain and vault configuration
   /// @param currency SPL token address (empty for SOL)
   /// @param amount Amount to withdraw
   /// @param receiver Recipient public key
   /// @param data Optional nonce and expiration (empty for defaults)
   /// @return Borsh-encoded transaction payload
   function buildPayload(
-    uint256 /* chainId */,
+    uint256 chainId,
     string calldata /* depository */,
     string memory currency,
     uint256 amount,
     string memory receiver,
     bytes calldata data
   ) external view override returns (bytes memory) {
+    // Get chain configuration
+    ChainConfig memory config = chainConfigs[chainId];
+    if (config.vaultAddress == bytes32(0)) {
+      revert ChainNotConfigured(chainId);
+    }
+
     // Parse token address (None means SOL)
     bytes32 tokenPubkey;
     bytes32 recipientPubkey = Utils.hexStringToBytes32(receiver);
@@ -58,12 +116,20 @@ contract SolanaPayloadBuilder is IPayloadBuilder {
 
     // Encode request in Borsh compatible format
     return
-      encodeBorsh(recipientPubkey, tokenPubkey, amountU64, nonce, expiration);
+      encodeBorsh(
+        config.domain,
+        recipientPubkey,
+        tokenPubkey,
+        amountU64,
+        nonce,
+        expiration,
+        config.vaultAddress
+      );
   }
 
   /// @notice Returns message hash to sign for Solana transaction
   /// @param payload Borsh-encoded transaction payload
-  /// @return hashes Array with single SHA256 hash
+  /// @return SHA256 hash of the payload
   function hashToSign(
     uint256 /* chainId */,
     string calldata /* depository */,
@@ -85,44 +151,55 @@ contract SolanaPayloadBuilder is IPayloadBuilder {
     return "solana-vm";
   }
 
-  /// @notice Encodes Solana transaction payload in Borsh format
+  /// @notice Encodes Solana TransferRequest in Borsh format
+  /// @dev Field order matches Rust struct:
+  ///      1. domain, 2. recipient, 3. token, 4. amount, 5. nonce, 6. expiration, 7. vault_address
+  /// @param domain Domain separator (32 bytes)
   /// @param recipient Recipient public key (32 bytes)
   /// @param token SPL token public key (zero for SOL)
-  /// @param amount Amount to transfer
-  /// @param nonce Unique transaction nonce
-  /// @param expiration Expiration timestamp (seconds)
-  /// @return Borsh-encoded transaction payload
+  /// @param amount Amount to transfer (u64)
+  /// @param nonce Unique transaction nonce (u64)
+  /// @param expiration Expiration timestamp in seconds (i64)
+  /// @param vaultAddress Vault address (32 bytes)
+  /// @return Borsh-encoded TransferRequest payload
   function encodeBorsh(
+    bytes32 domain,
     bytes32 recipient,
     bytes32 token,
     uint64 amount,
     uint64 nonce,
-    int64 expiration
+    int64 expiration,
+    bytes32 vaultAddress
   ) internal pure returns (bytes memory) {
     bytes memory result;
 
-    // 1. Recipient (32 bytes)
+    // 1. Domain (32 bytes)
+    result = bytes.concat(result, domain);
+
+    // 2. Recipient (32 bytes)
     result = bytes.concat(result, recipient);
 
-    // 2. Token (Option<Pubkey>) - using 1 byte prefix
+    // 3. Token (Option<Pubkey>) - 1 byte discriminant + optional 32 bytes
     if (token == bytes32(0)) {
-      // None means SOL
+      // None (0x00) for native SOL
       result = bytes.concat(result, hex"00");
     } else {
-      // Some means SPL token
-      result = bytes.concat(result, hex"01");
-      result = bytes.concat(result, token);
+      // Some (0x01) for SPL token
+      result = bytes.concat(result, hex"01", token);
     }
 
-    // 3. Amount (8 bytes, little-endian)
+    // 4. Amount (8 bytes, little-endian u64)
     result = bytes.concat(result, Utils.encodeUint64LE(amount));
 
-    // 4. Nonce (8 bytes, little-endian)
+    // 5. Nonce (8 bytes, little-endian u64)
     result = bytes.concat(result, Utils.encodeUint64LE(nonce));
 
-    // 5. Expiration (8 bytes, little-endian)
+    // 6. Expiration (8 bytes, little-endian i64)
     if (expiration < 0) revert InvalidExpiration();
     result = bytes.concat(result, Utils.encodeUint64LE(uint64(expiration)));
+
+    // 7. Vault address (32 bytes)
+    result = bytes.concat(result, vaultAddress);
 
     return result;
   }
