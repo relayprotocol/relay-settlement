@@ -52,6 +52,8 @@ import "./tasks/relayMultisigSigner/simulate"
 import "./tasks/relayMultisigSigner/submit"
 import "./tasks/relayMultisigSigner/solana/solana-program-upgrade-with-migration"
 import "./tasks/relayMultisigSigner/full/solana"
+import "./tasks/relayMultisigSigner/full/tron"
+import "./tasks/relayMultisigSigner/generate-tron-headers"
 
 // get pk from shell
 const { DEPLOYER_PRIVATE_KEY } = process.env
@@ -92,7 +94,10 @@ const hasProcotolContracts = (n: NetworkConfig) => {
 
 Object.keys(nets)
   // we only "hub" networks to manage our contracts here
-  .filter((id: any) => hasProcotolContracts(nets[id]))
+  .filter(
+    (id: any) =>
+      hasProcotolContracts(nets[id]) || nets[id].slug.includes("testnet")
+  )
   .forEach((id) => {
     const { slug, rpc } = nets[id]
     let accounts

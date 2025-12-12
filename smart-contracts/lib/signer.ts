@@ -75,7 +75,7 @@ export const getAllocatorPublicKey = async (
   return allocatorPublicKeyRaw
 }
 
-const computeEvmAddress = (allocatorPublicKeyRaw: string) => {
+export const computeEvmAddress = (allocatorPublicKeyRaw: string) => {
   // Decode the base58 public key and convert to Ethereum address format
   const allocatorPublicKey = `0x04${Buffer.from(base58.decode(allocatorPublicKeyRaw)).toString("hex")}`
 

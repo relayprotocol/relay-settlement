@@ -3,8 +3,10 @@ import {
   BitcoinTxSchema,
   EthereumTxSchema,
   SolanaTxSchema,
+  TronTxSchema,
   buildBitcoinTransaction,
   buildSolanaTransaction,
+  buildTronTransaction,
   buildEvmTransaction,
   loadTransactions,
 } from "./utils"
@@ -27,6 +29,8 @@ task(
         result = await buildBitcoinTransaction(BitcoinTxSchema.parse(tx))
       } else if (tx.family === "solana-vm") {
         result = await buildSolanaTransaction(SolanaTxSchema.parse(tx))
+      } else if (tx.family === "tron-vm") {
+        result = await buildTronTransaction(TronTxSchema.parse(tx))
       } else {
         throw new Error(
           `Unsupported transaction family: ${tx.family}. Please add support!`

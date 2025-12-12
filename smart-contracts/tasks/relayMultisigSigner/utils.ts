@@ -30,6 +30,7 @@ import {
   SystemProgram,
   NonceAccount,
 } from "@solana/web3.js"
+import * as tronweb from "tronweb"
 
 const ethereumAddress = z
   .string()
@@ -111,6 +112,49 @@ const solanaPublicKey = z
     }
   })
 
+const tronAddress = z
+  .string()
+  .regex(
+    /^T[1-9A-HJ-NP-Za-km-z]{33}$/,
+    "Must be a valid base58 Tron address starting with T"
+  )
+  .superRefine((val, ctx) => {
+    // Validate using TronWeb address utility
+    try {
+      const isValid = tronweb.utils.address.isAddress(val)
+      if (!isValid) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Invalid Tron address",
+        })
+      }
+    } catch {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Invalid Tron address format",
+      })
+    }
+  })
+
+// Tron Contract Parameter Types
+// Reference: https://github.com/tronprotocol/tronweb/blob/master/src/types/Contract.ts
+// To add support for more contract types, define the parameter schema here and add to TronTxSchema union
+
+const TransferContractSchema = z.object({
+  amount: z.number(),
+  owner_address: z.string(),
+  to_address: z.string(),
+})
+
+const TriggerSmartContractSchema = z.object({
+  call_token_value: z.number().optional(),
+  call_value: z.number().optional(),
+  contract_address: z.string(),
+  data: z.string().optional(),
+  owner_address: z.string(),
+  token_id: z.number().optional(),
+})
+
 export const SolanaTxSchema = z
   .object({
     addressLookupTableAddresses: z.array(solanaPublicKey).optional(),
@@ -150,10 +194,36 @@ export const SolanaTxSchema = z
     }
   )
 
+// Tron Transaction Schema with discriminated union for contract types
+const TronTxBaseSchema = z.object({
+  expiration: z.number().int().optional(),
+  family: z.literal("tron-vm"),
+  feeLimit: integerString.optional(),
+  from: tronAddress,
+  memo: z.string().optional(),
+  permissionId: z.number().int().nonnegative().default(0),
+  refBlockBytes: z.string().optional(),
+  refBlockHash: z.string().optional(),
+  rpc: z.string().url(),
+  timestamp: z.number().int().optional(),
+})
+
+export const TronTxSchema = z.discriminatedUnion("contractType", [
+  TronTxBaseSchema.extend({
+    contractType: z.literal("TransferContract"),
+    parameter: TransferContractSchema,
+  }),
+  TronTxBaseSchema.extend({
+    contractType: z.literal("TriggerSmartContract"),
+    parameter: TriggerSmartContractSchema,
+  }),
+])
+
 export const TransactionSchema = z.discriminatedUnion("family", [
   EthereumTxSchema,
   SolanaTxSchema,
   BitcoinTxSchema,
+  TronTxSchema,
 ])
 
 // TS type
@@ -630,6 +700,146 @@ export const buildSolanaTransaction = async (
   }
 }
 
+export const buildTronTransaction = async (
+  tx: z.infer<typeof TronTxSchema>
+): Promise<BuildTransactionResult> => {
+  const tronWeb = new tronweb.TronWeb({
+    fullHost: tx.rpc,
+    fullNode: new tronweb.providers.HttpProvider(tx.rpc),
+  })
+
+  // Build raw_data options (similar to TronWeb's createTransaction)
+  const options: any = {}
+
+  // Add header info if not provided
+  if (
+    !tx.refBlockBytes ||
+    !tx.refBlockHash ||
+    !tx.timestamp ||
+    !tx.expiration
+  ) {
+    const block = await tronWeb.trx.getCurrentBlock()
+    const blockNum = block.block_header.raw_data.number
+    options.ref_block_bytes =
+      tx.refBlockBytes || blockNum.toString(16).slice(-4).padStart(4, "0")
+    options.ref_block_hash = tx.refBlockHash || block.blockID.slice(16, 32)
+    const blockTimestamp = block.block_header.raw_data.timestamp
+    options.timestamp = tx.timestamp || blockTimestamp
+    options.expiration = tx.expiration || blockTimestamp + 60 * 60 * 5 * 1000
+  } else {
+    options.ref_block_bytes = tx.refBlockBytes
+    options.ref_block_hash = tx.refBlockHash
+    options.timestamp = tx.timestamp
+    options.expiration = tx.expiration
+  }
+
+  // Add fee_limit
+  options.fee_limit = parseInt(tx.feeLimit || "1000000")
+
+  // Add memo if provided
+  if (tx.memo) {
+    options.data = Buffer.from(tx.memo).toString("hex")
+  }
+
+  // Convert parameter addresses to hex format for protobuf encoding
+  const parameterValue: Record<string, any> = { ...tx.parameter }
+
+  // Convert all address fields to hex format if they look like base58 addresses
+  Object.keys(parameterValue).forEach((key) => {
+    const value = parameterValue[key]
+    if (typeof value === "string" && value.startsWith("T")) {
+      // This looks like a base58 Tron address, convert to hex
+      parameterValue[key] = tronWeb.address.toHex(value)
+    }
+  })
+
+  // Build transaction
+  const transaction: any = {
+    raw_data: {
+      contract: [
+        {
+          parameter: {
+            type_url: `type.googleapis.com/protocol.${tx.contractType}`,
+            value: parameterValue,
+          },
+          type: tx.contractType,
+        },
+      ],
+      ...options,
+    },
+    raw_data_hex: "",
+    txID: "",
+    visible: false,
+  }
+
+  // Add Permission_id if specified
+  if (tx.permissionId && tx.permissionId > 0) {
+    transaction.raw_data.contract[0].Permission_id = tx.permissionId
+  }
+
+  // Generate txID and raw_data_hex (following TronWeb's createTransaction)
+  const pb = tronweb.utils.transaction.txJsonToPb(transaction)
+  transaction.txID = tronweb.utils.transaction.txPbToTxID(pb).replace(/^0x/, "")
+  transaction.raw_data_hex = tronweb.utils.transaction
+    .txPbToRawDataHex(pb)
+    .toLowerCase()
+
+  // Simulate transaction to check for errors
+  try {
+    // Check if sender account exists and has sufficient balance
+    const account = await tronWeb.trx.getAccount(tx.from)
+    if (!account || !account.address) {
+      throw new Error(`Account ${tx.from} does not exist`)
+    }
+
+    // Check bandwidth and energy resources
+    const accountResources = await tronWeb.trx.getAccountResources(tx.from)
+    console.log("📊 Account resources:", {
+      EnergyLimit: accountResources.EnergyLimit || 0,
+      EnergyUsed: accountResources.EnergyUsed || 0,
+      NetLimit: accountResources.NetLimit || 0,
+      NetUsed: accountResources.NetUsed || 0,
+      freeNetLimit: accountResources.freeNetLimit || 0,
+      freeNetUsed: accountResources.freeNetUsed || 0,
+    })
+
+    // For TriggerSmartContract, try to simulate the call
+    if (tx.contractType === "TriggerSmartContract") {
+      const { contract_address, data } = tx.parameter
+      if (contract_address && data) {
+        try {
+          await tronWeb.transactionBuilder.triggerConstantContract(
+            contract_address,
+            "",
+            {
+              callValue: tx.parameter.call_value ?? 0,
+              input: data,
+            },
+            [],
+            tx.from
+          )
+          console.log("✅ Smart contract call simulation passed")
+        } catch (error: any) {
+          console.warn("⚠️  Smart contract simulation warning:", error.message)
+        }
+      }
+    }
+  } catch (error: any) {
+    console.error("❌ Tron transaction simulation failed:", tx, error.message)
+    throw new Error(`Tron transaction validation failed: ${error.message}`)
+  }
+
+  // The hash to sign is the txID
+  const hashToSign = `0x${transaction.txID}` as const
+  const payload = `0x${transaction.raw_data_hex}` as const
+
+  return {
+    hashesToSign: [hashToSign],
+    payload,
+    transaction,
+  }
+}
+
 export function loadTransactions(path: string) {
   const raw = readFileSync(path, "utf8")
   const data: unknown = JSON.parse(raw)
@@ -661,6 +871,9 @@ export const createTransactionBundle = async (
         tx as z.infer<typeof SolanaTxSchema>
       )
       curve = "Eddsa"
+    } else if (tx.family === "tron-vm") {
+      result = await buildTronTransaction(tx as z.infer<typeof TronTxSchema>)
+      curve = "Ecdsa"
     } else {
       throw new Error(
         `Unsupported transaction family: ${tx.family}. Please add support!`
@@ -738,7 +951,6 @@ export const getSignatureForHash = async (
     : encodePacked(["bytes32"], [hashToSign as `0x${string}`])
 
   const signatureKey = keccak256(data)
-
   let nearSignature = await multisigSigner.read.signatures([
     signatureKey,
     curve,

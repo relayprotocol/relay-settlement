@@ -13,6 +13,7 @@ import {
   buildBitcoinTransaction,
   buildEvmTransaction,
   buildSolanaTransaction,
+  buildTronTransaction,
   getSignatureForHash,
   hasBitcoinTransactionBeenExecuted,
   hasEvmTransactionBeenExecuted,
@@ -28,6 +29,7 @@ import {
 import { derivePublicKey } from "../../lib/near"
 import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes"
 import { PublicKey, Keypair, Connection } from "@solana/web3.js"
+import * as tronweb from "tronweb"
 
 async function executeEvmTransaction(
   tx: Extract<Transaction, { family: "ethereum-vm" }>,
@@ -231,6 +233,95 @@ export async function executeSolanaTransaction(
   console.log(`✅ Transaction confirmed: ${signature}`)
 }
 
+export async function executeTronTransaction(
+  tx: Extract<Transaction, { family: "tron-vm" }>,
+  relayMultisigSigner: string,
+  hre: HardhatRuntimeEnvironment
+) {
+  const {
+    transaction,
+    hashesToSign: [hashToSign],
+  } = await buildTronTransaction(tx)
+
+  // Get signature from RelayMultisigSigner using Ecdsa
+  const hexSignature = await getSignatureForHash(
+    relayMultisigSigner,
+    hashToSign,
+    "Ecdsa",
+    hre
+  )
+
+  const tronSignature = hexSignature.slice(2).toLowerCase()
+
+  // Add signature to transaction
+  if (Array.isArray(transaction.signature)) {
+    if (!transaction.signature.includes(tronSignature)) {
+      transaction.signature.push(tronSignature)
+    }
+  } else {
+    transaction.signature = [tronSignature]
+  }
+
+  // Broadcast transaction
+  const tronWeb = new tronweb.TronWeb({
+    fullHost: tx.rpc,
+    fullNode: new tronweb.providers.HttpProvider(tx.rpc),
+  })
+
+  console.log(`🚀 Broadcasting Tron transaction: ${transaction.txID}`)
+
+  const result = await tronWeb.trx.sendRawTransaction(transaction)
+  if (!result.result) {
+    console.log(JSON.stringify(result, null, 2))
+    throw new Error(
+      `❌ Transaction broadcast failed: ${result.code || "Unknown error"}`
+    )
+  }
+
+  console.log(`🚀 Transaction sent via ${tx.rpc}: ${transaction.txID}`)
+
+  // Wait for confirmation (similar to Ethereum's waitForTransactionReceipt)
+  const startTime = Date.now()
+  const timeout = 60000 // 60 seconds
+
+  let receipt: any
+  while (!receipt || !Object.keys(receipt).length) {
+    // Check timeout
+    if (Date.now() - startTime > timeout) {
+      throw new Error(
+        `Transaction check timed out after ${timeout / 1000} seconds`
+      )
+    }
+
+    try {
+      receipt = await tronWeb.trx.getUnconfirmedTransactionInfo(
+        transaction.txID
+      )
+    } catch {
+      // Skip errors
+    }
+
+    // Check if transaction reverted
+    if (
+      receipt &&
+      receipt.receipt?.result &&
+      receipt.receipt.result !== "SUCCESS"
+    ) {
+      throw new Error(`Transaction reverted: ${receipt.receipt.result}`)
+    }
+
+    // Wait if not confirmed yet
+    if (!receipt || !Object.keys(receipt).length || !receipt.receipt?.result) {
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+    }
+  }
+
+  console.log(`✅ Transaction confirmed: ${transaction.txID}`)
+  if (receipt.receipt?.result === "SUCCESS") {
+    console.log("✅ Transaction executed successfully")
+  }
+}
+
 function countRequiredSignatures(transactions: Transaction[]): number {
   return transactions.reduce((count, tx) => {
     if (tx.family === "bitcoin-vm") {
@@ -270,6 +361,8 @@ task(
           await executeBitcoinTransaction(tx, relayMultisigSigner, hre)
         } else if (tx.family === "solana-vm") {
           await executeSolanaTransaction(tx, relayMultisigSigner, hre)
+        } else if (tx.family === "tron-vm") {
+          await executeTronTransaction(tx, relayMultisigSigner, hre)
         } else {
           throw new Error(
             `Unsupported transaction family: ${tx.family}. Please add support!`

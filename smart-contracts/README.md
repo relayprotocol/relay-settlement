@@ -113,6 +113,36 @@ bun tasks/relayMultisigSigner/scripts/generate-solana-upgrade-transaction.ts \
 
 The `generate-solana-upgrade-transaction.ts` script only handles the deploy/upgrade infrastructure (buffer operations, program deployment). Contract-specific initialization, migration, or other business logic should be added as additional instructions or separate transactions in the manifest. Durable nonce is required due to long multisig signing times that cause recent blockhash expiration.
 
+### Tron Transaction Support
+
+Execute Tron transactions using the RelayMultisigSigner. Supports `TransferContract` and `TriggerSmartContract`. See `tasks/relayMultisigSigner/transactions/demo-tron-*.json` for examples.
+
+**Run test:**
+
+```bash
+# Deploy and execute
+yarn hardhat full:relay-multisig-signer:tron \
+  --network aurora-testnet \
+  --transaction-file tasks/relayMultisigSigner/transactions/demo-tron-transfer.json \
+  --wnear <wnear-token-address>
+
+# Using existing RelayMultisigSigner
+yarn hardhat full:relay-multisig-signer:tron \
+  --network aurora-testnet \
+  --transaction-file tasks/relayMultisigSigner/transactions/demo-tron-transfer.json \
+  --relay-multisig-signer <existing-address>
+```
+
+**For async submit/execute workflows:** Generate transaction headers (similar to Solana's Durable Nonce) to prevent expiration during multisig signing. Tron transactions have a maximum 24-hour expiration; the command generates 16-hour headers.
+
+```bash
+yarn hardhat relay-multisig-signer:generate-tron-headers --rpc https://api.shasta.trongrid.io
+```
+
+The test task automatically derives the Tron address from the ECDSA public key. Ensure it has sufficient TRX. Faucet: https://www.trongrid.io/faucet
+
+To add support for additional contract types, define the parameter schema in `tasks/relayMultisigSigner/utils.ts` and add to `TronTxSchema`. Reference: https://github.com/tronprotocol/tronweb/blob/master/src/types/Contract.ts
+
 ## Hub / Oracle
 
 ### Add your hub network to the `@relay-protocol/networks` package
