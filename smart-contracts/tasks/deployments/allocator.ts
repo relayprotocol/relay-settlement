@@ -75,32 +75,36 @@ task("deploy:allocator", "Deploy the Allocator contract")
     }
   )
 
-task(
-  "deploy:solana-payload-builder",
-  "Deploys a SolanaPayloadBuilder contract"
-).setAction(async (_, { ignition, run }) => {
-  // Let's now deploy the payload builder contract
-  const { solanaPayloadBuilder } = await ignition.deploy(
-    SolanaPayloadBuilderModule,
-    {
-      parameters: {},
+task("deploy:solana-payload-builder", "Deploys a SolanaPayloadBuilder contract")
+  .addOptionalParam("allocator", "The address of the allocator")
+  .setAction(async ({ allocator }, { ignition, run }) => {
+    // Let's now deploy the payload builder contract
+    const { solanaPayloadBuilder } = await ignition.deploy(
+      SolanaPayloadBuilderModule,
+      {
+        deploymentId: "chain-1313161554-solana",
+        parameters: {
+          SolanaPayloadBuilderModule: {
+            _allocator: allocator,
+          },
+        },
+      }
+    )
+
+    try {
+      await run("verify:verify", {
+        address: solanaPayloadBuilder.address,
+        constructorArguments: [],
+      })
+    } catch (error) {
+      console.error("Verification failed", error)
     }
-  )
 
-  try {
-    await run("verify:verify", {
-      address: solanaPayloadBuilder.address,
-      constructorArguments: [],
-    })
-  } catch (error) {
-    console.error("Verification failed", error)
-  }
-
-  console.log(
-    `SolanaPayloadBuilder deployed to: ${solanaPayloadBuilder.address}`
-  )
-  return solanaPayloadBuilder.address
-})
+    console.log(
+      `SolanaPayloadBuilder deployed to: ${solanaPayloadBuilder.address}`
+    )
+    return solanaPayloadBuilder.address
+  })
 
 task(
   "deploy:hyperliquid-payload-builder",

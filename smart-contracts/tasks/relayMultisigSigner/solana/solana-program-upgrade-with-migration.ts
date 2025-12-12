@@ -390,7 +390,7 @@ async function executeMigration(
 
     // Call migrate_domain_separator to set the domain separator
     console.log("🔄 Calling migrate_domain_separator...")
-    const chainId = "solana-mainnet" // You can make this configurable if needed
+    const chainId = "solana" // You can make this configurable if needed
 
     // Create the migrate_domain_separator instruction manually to avoid IDL version issues
     // The discriminator for migrate_domain_separator from the upgraded IDL
