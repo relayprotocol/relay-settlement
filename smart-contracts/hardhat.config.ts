@@ -25,6 +25,7 @@ import "./tasks/allocator/full/solana"
 import "./tasks/allocator/full/sui"
 
 // hub tasks
+import "./tasks/hub/add-editors"
 import "./tasks/hub/add-operator"
 import "./tasks/hub/hub-setup"
 import "./tasks/hub/test-oracle"
@@ -48,12 +49,12 @@ import "./tasks/relayMultisigSigner/check-hashes"
 import "./tasks/relayMultisigSigner/create-nonce-account"
 import "./tasks/relayMultisigSigner/decode-multicall"
 import "./tasks/relayMultisigSigner/execute-transactions"
-import "./tasks/relayMultisigSigner/simulate"
-import "./tasks/relayMultisigSigner/submit"
-import "./tasks/relayMultisigSigner/solana/solana-program-upgrade-with-migration"
 import "./tasks/relayMultisigSigner/full/solana"
 import "./tasks/relayMultisigSigner/full/tron"
 import "./tasks/relayMultisigSigner/generate-tron-headers"
+import "./tasks/relayMultisigSigner/simulate"
+import "./tasks/relayMultisigSigner/solana/solana-program-upgrade-with-migration"
+import "./tasks/relayMultisigSigner/submit"
 
 // get pk from shell
 const { DEPLOYER_PRIVATE_KEY } = process.env

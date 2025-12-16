@@ -16,13 +16,11 @@ task("hub:add-editors", "Grant EDITOR_ROLE to a list of addresses")
       )
     }
 
-    await Promise.all(
-      accounts.map((account) =>
-        run("grant-role", {
-          account,
-          contract: hubAddress,
-          role: "OPERATOR_ROLE",
-        })
-      )
-    )
+    for (const account of accounts) {
+      await run("grant-role", {
+        account,
+        contract: hubAddress,
+        role: "OPERATOR_ROLE",
+      })
+    }
   })
