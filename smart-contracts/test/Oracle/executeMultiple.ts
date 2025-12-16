@@ -328,4 +328,129 @@ describe("executeMultiple", function () {
       Boolean(logFailing.find((l) => l.transactionHash === executeTxHash))
     ).to.equal(false)
   })
+
+  it("should emit ExecutionFailed when a tx fails inside a batch", async () => {
+    const {
+      oracle,
+      oracleWallet,
+      publicClient,
+      amount,
+      idempotencyKey,
+      hubAddress1,
+      hubAddress2,
+      hubTokenId1,
+    } = await loadFixture(setup)
+
+    // transfer action will fail with underflow
+    const failingTransferAction = [
+      createAction(ActionType.TRANSFER, {
+        amount: amount * 2n,
+        hubFromAddress: hubAddress1,
+        hubToAddress: hubAddress2,
+        hubTokenId: hubTokenId1,
+      }),
+    ]
+
+    const idempotencyKeyFailing = idempotencyKey()
+    const signatureFailing = await signExecution(
+      idempotencyKeyFailing,
+      failingTransferAction,
+      oracle.address,
+      oracleWallet
+    )
+
+    // Execute the failing action
+    const executeTxHash = await oracle.write.executeMultiple([
+      [
+        {
+          actions: failingTransferAction,
+          idempotencyKey: idempotencyKeyFailing,
+        },
+      ],
+      [signatureFailing],
+    ])
+
+    // Check for ExecutionFailed event
+    const executionFailedLogs = await publicClient.getContractEvents({
+      abi: oracle.abi,
+      address: oracle.address,
+      args: {
+        idempotencyKey: idempotencyKeyFailing,
+      },
+      eventName: "ExecutionFailed",
+    })
+
+    expect(
+      Boolean(
+        executionFailedLogs.find((l) => l.transactionHash === executeTxHash)
+      )
+    ).to.equal(true)
+
+    // Executed event was NOT emitted
+    const executedLogs = await publicClient.getContractEvents({
+      abi: oracle.abi,
+      address: oracle.address,
+      args: {
+        idempotencyKey: idempotencyKeyFailing,
+      },
+      eventName: "Executed",
+    })
+
+    expect(
+      Boolean(executedLogs.find((l) => l.transactionHash === executeTxHash))
+    ).to.equal(false)
+  })
+
+  it("should fail silently when already executed", async () => {
+    const {
+      oracle,
+      oracleWallet,
+      execution1Actions,
+      publicClient,
+      idempotencyKey,
+    } = await loadFixture(setup)
+
+    const idempotencyKey1 = idempotencyKey()
+
+    // First, execute an action successfully
+    const signature1 = await signExecution(
+      idempotencyKey1,
+      execution1Actions,
+      oracle.address,
+      oracleWallet
+    )
+
+    await oracle.write.executeMultiple([
+      [
+        {
+          actions: execution1Actions,
+          idempotencyKey: idempotencyKey1,
+        },
+      ],
+      [signature1],
+    ])
+
+    // try to execute the same action again
+    await oracle.write.executeMultiple([
+      [
+        {
+          actions: execution1Actions,
+          idempotencyKey: idempotencyKey1,
+        },
+      ],
+      [signature1],
+    ])
+
+    // verify no event was emitted
+    const executedLogs = await publicClient.getContractEvents({
+      abi: oracle.abi,
+      address: oracle.address,
+      args: {
+        idempotencyKey: idempotencyKey1,
+      },
+      eventName: "Executed",
+    })
+
+    expect(executedLogs.length).to.equal(0)
+  })
 })

@@ -32,8 +32,10 @@ contract RelayOracle is AccessControl, EIP712 {
   /// @notice Emitted when actions were executed
   event Executed(bytes32 indexed idempotencyKey, bytes[] actions);
 
-  // Errors
+  /// @notice Emitted when an action failed to execute in a batch
+  event ExecutionFailed(bytes32 indexed idempotencyKey, bytes[] actions);
 
+  // Errors
   error AlreadyExecuted(bytes32 idempotencyKey);
   error UnauthorizedOracle(address oracle);
 
@@ -80,10 +82,19 @@ contract RelayOracle is AccessControl, EIP712 {
   ) external {
     uint256 executionsLength = executions.length;
     for (uint256 i; i < executionsLength; i++) {
+      // skip if already executed
+      if (isExecuted[executions[i].idempotencyKey]) {
+        continue;
+      }
+
       try this.execute(executions[i], signatures[i]) {
         // Execution succeeded
       } catch {
-        // Execution failed, continue with next
+        // if execution failed, throw event and continue with next
+        emit ExecutionFailed(
+          executions[i].idempotencyKey,
+          executions[i].actions
+        );
       }
     }
   }
@@ -95,6 +106,10 @@ contract RelayOracle is AccessControl, EIP712 {
     Execution calldata execution,
     bytes calldata signature
   ) external {
+    // Error if the idempotency key is marked as executed
+    if (isExecuted[execution.idempotencyKey]) {
+      revert AlreadyExecuted(execution.idempotencyKey);
+    }
     _execute(execution, signature);
   }
 
@@ -138,11 +153,6 @@ contract RelayOracle is AccessControl, EIP712 {
     bytes calldata signature
   ) internal {
     bytes32 idempotencyKey = execution.idempotencyKey;
-
-    // Error if the idempotency key is marked as executed
-    if (isExecuted[idempotencyKey]) {
-      revert AlreadyExecuted(idempotencyKey);
-    }
 
     // Recover oracle address from signature
     bytes32 digest = _hashExecution(execution);
