@@ -9,7 +9,6 @@ export const tron: NetworkConfig = {
   hubChainId: "728126428",
   isTestnet: false,
   name: "Tron",
-  relaySolverChainId: 728126428,
   rpc: process.env.RPC_TRON
     ? [process.env.RPC_TRON]
     : ["https://api.trongrid.io/jsonrpc"],

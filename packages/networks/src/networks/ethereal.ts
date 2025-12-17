@@ -9,7 +9,6 @@ export const ethereal: NetworkConfig = {
   hubChainId: "5064014",
   isTestnet: false,
   name: "Ethereal",
-  relaySolverChainId: 5064014,
   rpc: process.env.RPC_5064014
     ? [process.env.RPC_5064014]
     : [

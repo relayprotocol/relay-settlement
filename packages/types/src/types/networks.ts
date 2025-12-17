@@ -14,7 +14,6 @@ export interface NetworkConfig {
   earliestBlock?: number
   isTestnet: boolean
   assets?: NetworkAssets
-  relaySolverChainId?: number
   rpc: [string, ...string[]]
   explorerApiUrl?: string
   blockExplorer?: {

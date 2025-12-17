@@ -9,7 +9,6 @@ export const plasma: NetworkConfig = {
   hubChainId: "9745",
   isTestnet: false,
   name: "Plasma",
-  relaySolverChainId: 9745,
   rpc: process.env.RPC_9745
     ? [process.env.RPC_9745]
     : ["https://rpc.plasma.to"],

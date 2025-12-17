@@ -9,7 +9,6 @@ export const boss: NetworkConfig = {
   hubChainId: "70701",
   isTestnet: false,
   name: "Boss",
-  relaySolverChainId: 70701,
   rpc: process.env.RPC_70701
     ? [process.env.RPC_70701]
     : ["[REDACTED-INTERNAL-RPC]"],

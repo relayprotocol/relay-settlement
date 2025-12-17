@@ -9,7 +9,6 @@ export const sei: NetworkConfig = {
   hubChainId: "1329",
   isTestnet: false,
   name: "Sei",
-  relaySolverChainId: 1329,
   rpc: process.env.RPC_1329
     ? [process.env.RPC_1329]
     : ["[REDACTED-INTERNAL-RPC]"],

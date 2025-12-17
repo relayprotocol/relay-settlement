@@ -9,7 +9,6 @@ export const morph: NetworkConfig = {
   hubChainId: "2818",
   isTestnet: false,
   name: "Morph",
-  relaySolverChainId: 2818,
   rpc: process.env.RPC_2818
     ? [process.env.RPC_2818]
     : ["https://rpc.morphl2.io"],

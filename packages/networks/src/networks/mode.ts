@@ -9,7 +9,6 @@ export const mode: NetworkConfig = {
   hubChainId: "34443",
   isTestnet: false,
   name: "Mode",
-  relaySolverChainId: 34443,
   rpc: process.env.RPC_34443
     ? [process.env.RPC_34443]
     : ["[REDACTED-INTERNAL-RPC]"],

@@ -9,7 +9,6 @@ export const syndicate: NetworkConfig = {
   hubChainId: "510003",
   isTestnet: false,
   name: "Syndicate",
-  relaySolverChainId: 510003,
   rpc: process.env.RPC_510003
     ? [process.env.RPC_510003]
     : ["[REDACTED-INTERNAL-RPC]"],

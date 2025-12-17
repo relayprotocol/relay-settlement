@@ -9,7 +9,6 @@ export const hyperevm: NetworkConfig = {
   hubChainId: "999",
   isTestnet: false,
   name: "HyperEVM",
-  relaySolverChainId: 999,
   rpc: process.env.RPC_999
     ? [process.env.RPC_999]
     : ["[REDACTED-INTERNAL-RPC]"],

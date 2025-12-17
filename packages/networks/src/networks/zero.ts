@@ -9,7 +9,6 @@ export const zero: NetworkConfig = {
   hubChainId: "543210",
   isTestnet: false,
   name: "Zero",
-  relaySolverChainId: 543210,
   rpc: process.env.RPC_543210
     ? [process.env.RPC_543210]
     : ["[REDACTED-INTERNAL-RPC]"],

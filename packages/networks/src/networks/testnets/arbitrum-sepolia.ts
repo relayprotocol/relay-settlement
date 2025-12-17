@@ -13,7 +13,6 @@ export const arbitrumSepolia: NetworkConfig = {
   family: "ethereum-vm",
   isTestnet: true,
   name: "Arbitrum Sepolia",
-  relaySolverChainId: 421614,
   rpc: process.env.RPC_421614
     ? [process.env.RPC_421614]
     : ["https://sepolia-rollup.arbitrum.io/rpc"],

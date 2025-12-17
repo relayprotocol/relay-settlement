@@ -10,7 +10,6 @@ export const base: NetworkConfig = {
   hubChainId: "8453",
   isTestnet: false,
   name: "Base",
-  relaySolverChainId: 8453,
   rpc: process.env.RPC_8453
     ? [process.env.RPC_8453]
     : ["[REDACTED-INTERNAL-RPC]"],

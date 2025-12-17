@@ -9,7 +9,6 @@ export const cronos: NetworkConfig = {
   hubChainId: "25",
   isTestnet: false,
   name: "Cronos",
-  relaySolverChainId: 25,
   rpc: process.env.RPC_25 ? [process.env.RPC_25] : ["https://evm.cronos.org"],
   slug: "cronos",
 }

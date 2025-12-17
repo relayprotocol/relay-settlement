@@ -9,7 +9,6 @@ export const avalanche: NetworkConfig = {
   hubChainId: "43114",
   isTestnet: false,
   name: "Avalanche",
-  relaySolverChainId: 43114,
   rpc: process.env.RPC_43114
     ? [process.env.RPC_43114]
     : ["[REDACTED-INTERNAL-RPC]"],

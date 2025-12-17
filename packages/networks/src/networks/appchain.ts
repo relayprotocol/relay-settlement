@@ -9,7 +9,6 @@ export const appchain: NetworkConfig = {
   hubChainId: "466",
   isTestnet: false,
   name: "Appchain",
-  relaySolverChainId: 466,
   rpc: process.env.RPC_466
     ? [process.env.RPC_466]
     : ["[REDACTED-INTERNAL-RPC]"],

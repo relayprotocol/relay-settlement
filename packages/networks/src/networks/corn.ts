@@ -9,7 +9,6 @@ export const corn: NetworkConfig = {
   hubChainId: "21000000",
   isTestnet: false,
   name: "Corn",
-  relaySolverChainId: 21000000,
   rpc: process.env.RPC_21000000
     ? [process.env.RPC_21000000]
     : ["[REDACTED-INTERNAL-RPC]"],

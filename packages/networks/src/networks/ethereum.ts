@@ -10,7 +10,6 @@ export const ethereum: NetworkConfig = {
   hubChainId: "1",
   isTestnet: false,
   name: "Ethereum",
-  relaySolverChainId: 1,
   rpc: process.env.RPC_1
     ? [process.env.RPC_1]
     : ["[REDACTED-INTERNAL-RPC]"],

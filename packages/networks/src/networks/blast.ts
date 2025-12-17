@@ -9,7 +9,6 @@ export const blast: NetworkConfig = {
   hubChainId: "81457",
   isTestnet: false,
   name: "Blast",
-  relaySolverChainId: 81457,
   rpc: process.env.RPC_81457
     ? [process.env.RPC_81457]
     : ["[REDACTED-INTERNAL-RPC]"],

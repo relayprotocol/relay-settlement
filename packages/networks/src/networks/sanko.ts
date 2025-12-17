@@ -9,7 +9,6 @@ export const sanko: NetworkConfig = {
   hubChainId: "1996",
   isTestnet: false,
   name: "Sanko",
-  relaySolverChainId: 1996,
   rpc: process.env.RPC_1996
     ? [process.env.RPC_1996]
     : ["[REDACTED-INTERNAL-RPC]"],

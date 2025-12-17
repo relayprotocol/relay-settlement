@@ -9,7 +9,6 @@ export const zora: NetworkConfig = {
   hubChainId: "7777777",
   isTestnet: false,
   name: "Zora",
-  relaySolverChainId: 7777777,
   rpc: process.env.RPC_7777777
     ? [process.env.RPC_7777777]
     : ["[REDACTED-INTERNAL-RPC]"],

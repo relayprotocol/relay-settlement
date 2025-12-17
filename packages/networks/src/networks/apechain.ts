@@ -9,7 +9,6 @@ export const apechain: NetworkConfig = {
   hubChainId: "33139",
   isTestnet: false,
   name: "Apechain",
-  relaySolverChainId: 33139,
   rpc: process.env.RPC_33139
     ? [process.env.RPC_33139]
     : ["[REDACTED-INTERNAL-RPC]"],

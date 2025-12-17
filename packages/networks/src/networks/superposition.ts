@@ -9,7 +9,6 @@ export const superposition: NetworkConfig = {
   hubChainId: "55244",
   isTestnet: false,
   name: "Superposition",
-  relaySolverChainId: 55244,
   rpc: process.env.RPC_55244
     ? [process.env.RPC_55244]
     : ["[REDACTED-INTERNAL-RPC]"],

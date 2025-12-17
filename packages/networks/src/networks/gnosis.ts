@@ -9,7 +9,6 @@ export const gnosis: NetworkConfig = {
   hubChainId: "100",
   isTestnet: false,
   name: "Gnosis",
-  relaySolverChainId: 100,
   rpc: process.env.RPC_100
     ? [process.env.RPC_100]
     : ["[REDACTED-INTERNAL-RPC]"],

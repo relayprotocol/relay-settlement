@@ -9,7 +9,6 @@ export const ronin: NetworkConfig = {
   hubChainId: "2020",
   isTestnet: false,
   name: "Ronin",
-  relaySolverChainId: 2020,
   rpc: process.env.RPC_2020
     ? [process.env.RPC_2020]
     : ["[REDACTED-INTERNAL-RPC]"],

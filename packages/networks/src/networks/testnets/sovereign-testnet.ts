@@ -18,7 +18,6 @@ export const sovereignTestnet: NetworkConfig = {
     name: "eth",
     symbol: "eth",
   },
-  relaySolverChainId: 6669,
   rpc: process.env.RPC_6669
     ? [process.env.RPC_6669]
     : ["http://23.22.122.118/rpc"],

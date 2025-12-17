@@ -9,7 +9,6 @@ export const hemi: NetworkConfig = {
   hubChainId: "43111",
   isTestnet: false,
   name: "Hemi",
-  relaySolverChainId: 43111,
   rpc: process.env.RPC_43111
     ? [process.env.RPC_43111]
     : ["[REDACTED-INTERNAL-RPC]"],

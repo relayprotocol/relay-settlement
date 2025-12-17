@@ -9,7 +9,6 @@ export const sonic: NetworkConfig = {
   hubChainId: "146",
   isTestnet: false,
   name: "Sonic",
-  relaySolverChainId: 146,
   rpc: process.env.RPC_146
     ? [process.env.RPC_146]
     : ["[REDACTED-INTERNAL-RPC]"],

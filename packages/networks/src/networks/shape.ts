@@ -9,7 +9,6 @@ export const shape: NetworkConfig = {
   hubChainId: "360",
   isTestnet: false,
   name: "Shape",
-  relaySolverChainId: 360,
   rpc: process.env.RPC_360
     ? [process.env.RPC_360]
     : ["[REDACTED-INTERNAL-RPC]"],

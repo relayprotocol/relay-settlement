@@ -21,7 +21,6 @@ export const aurora: NetworkConfig = {
     rpc: "https://rpc.mainnet.near.org",
     signer: "v1.signer",
   },
-  relaySolverChainId: 1313161554,
   rpc: process.env.RPC_1313161554
     ? [process.env.RPC_1313161554]
     : ["https://mainnet.aurora.dev"],

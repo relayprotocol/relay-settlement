@@ -9,7 +9,6 @@ export const swellchain: NetworkConfig = {
   hubChainId: "1923",
   isTestnet: false,
   name: "Swellchain",
-  relaySolverChainId: 1923,
   rpc: process.env.RPC_1923
     ? [process.env.RPC_1923]
     : ["https://swell-mainnet.alt.technology"],

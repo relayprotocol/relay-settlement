@@ -9,7 +9,6 @@ export const zksync: NetworkConfig = {
   hubChainId: "324",
   isTestnet: false,
   name: "zkSync",
-  relaySolverChainId: 324,
   rpc: process.env.RPC_324
     ? [process.env.RPC_324]
     : ["[REDACTED-INTERNAL-RPC]"],

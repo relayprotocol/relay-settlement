@@ -9,7 +9,6 @@ export const polygonZkevm: NetworkConfig = {
   hubChainId: "1101",
   isTestnet: false,
   name: "Polygon zkEVM",
-  relaySolverChainId: 1101,
   rpc: process.env.RPC_1101
     ? [process.env.RPC_1101]
     : ["[REDACTED-INTERNAL-RPC]"],

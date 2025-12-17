@@ -10,7 +10,6 @@ export const polygon: NetworkConfig = {
   hubChainId: "137",
   isTestnet: false,
   name: "Polygon",
-  relaySolverChainId: 137,
   rpc: process.env.RPC_137
     ? [process.env.RPC_137]
     : ["[REDACTED-INTERNAL-RPC]"],

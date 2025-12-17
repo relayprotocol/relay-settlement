@@ -9,7 +9,6 @@ export const scroll: NetworkConfig = {
   hubChainId: "534352",
   isTestnet: false,
   name: "Scroll",
-  relaySolverChainId: 534352,
   rpc: process.env.RPC_534352
     ? [process.env.RPC_534352]
     : ["[REDACTED-INTERNAL-RPC]"],

@@ -9,7 +9,6 @@ export const hychain: NetworkConfig = {
   hubChainId: "2911",
   isTestnet: false,
   name: "Hychain",
-  relaySolverChainId: 2911,
   rpc: process.env.RPC_2911
     ? [process.env.RPC_2911]
     : ["[REDACTED-INTERNAL-RPC]"],

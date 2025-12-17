@@ -9,7 +9,6 @@ export const mint: NetworkConfig = {
   hubChainId: "185",
   isTestnet: false,
   name: "Mint",
-  relaySolverChainId: 185,
   rpc: process.env.RPC_185
     ? [process.env.RPC_185]
     : ["[REDACTED-INTERNAL-RPC]"],

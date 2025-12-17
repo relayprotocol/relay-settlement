@@ -9,7 +9,6 @@ export const rari: NetworkConfig = {
   hubChainId: "1380012617",
   isTestnet: false,
   name: "Rari",
-  relaySolverChainId: 1380012617,
   rpc: process.env.RPC_1380012617
     ? [process.env.RPC_1380012617]
     : ["[REDACTED-INTERNAL-RPC]"],

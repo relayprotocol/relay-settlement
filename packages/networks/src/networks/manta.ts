@@ -9,7 +9,6 @@ export const manta: NetworkConfig = {
   hubChainId: "169",
   isTestnet: false,
   name: "Manta",
-  relaySolverChainId: 169,
   rpc: process.env.RPC_169
     ? [process.env.RPC_169]
     : ["[REDACTED-INTERNAL-RPC]"],

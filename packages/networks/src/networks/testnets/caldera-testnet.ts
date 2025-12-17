@@ -26,7 +26,6 @@ export const calderaTestnet: NetworkConfig = {
     name: "eth",
     symbol: "eth",
   },
-  relaySolverChainId: 5377137,
   rpc: process.env.RPC_5377137
     ? [process.env.RPC_5377137]
     : ["https://relay-settlement-testnet.rpc.caldera.xyz/http"],

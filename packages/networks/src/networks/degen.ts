@@ -9,7 +9,6 @@ export const degen: NetworkConfig = {
   hubChainId: "666666666",
   isTestnet: false,
   name: "Degen",
-  relaySolverChainId: 666666666,
   rpc: process.env.RPC_666666666
     ? [process.env.RPC_666666666]
     : ["[REDACTED-INTERNAL-RPC]"],

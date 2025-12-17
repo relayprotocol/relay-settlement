@@ -9,7 +9,6 @@ export const berachain: NetworkConfig = {
   hubChainId: "80094",
   isTestnet: false,
   name: "Berachain",
-  relaySolverChainId: 80094,
   rpc: process.env.RPC_80094
     ? [process.env.RPC_80094]
     : ["https://rpc.berachain.com"],

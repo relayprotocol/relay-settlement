@@ -12,7 +12,6 @@ export const auroraTestnet: NetworkConfig = {
     rpc: "https://test.rpc.fastnear.com",
     signer: "v1.signer-prod.testnet",
   },
-  relaySolverChainId: 1313161555,
   rpc: process.env.RPC_1313161555
     ? [process.env.RPC_1313161555]
     : ["https://testnet.aurora.dev"],

@@ -11,7 +11,6 @@ export const ancient8: NetworkConfig = {
   hubChainId: "888888888",
   isTestnet: false,
   name: "Ancient8",
-  relaySolverChainId: 888888888,
   rpc: process.env.RPC_888888888
     ? [process.env.RPC_888888888]
     : ["[REDACTED-INTERNAL-RPC]"],

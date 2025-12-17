@@ -9,7 +9,6 @@ export const metis: NetworkConfig = {
   hubChainId: "1088",
   isTestnet: false,
   name: "Metis",
-  relaySolverChainId: 1088,
   rpc: process.env.RPC_1088
     ? [process.env.RPC_1088]
     : ["[REDACTED-INTERNAL-RPC]"],

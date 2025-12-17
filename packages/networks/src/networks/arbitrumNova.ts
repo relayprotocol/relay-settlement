@@ -9,7 +9,6 @@ export const arbitrumNova: NetworkConfig = {
   hubChainId: "42170",
   isTestnet: false,
   name: "Arbitrum Nova",
-  relaySolverChainId: 42170,
   rpc: process.env.RPC_42170
     ? [process.env.RPC_42170]
     : ["[REDACTED-INTERNAL-RPC]"],

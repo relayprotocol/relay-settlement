@@ -9,7 +9,6 @@ export const zircuit: NetworkConfig = {
   hubChainId: "48900",
   isTestnet: false,
   name: "Zircuit",
-  relaySolverChainId: 48900,
   rpc: process.env.RPC_48900
     ? [process.env.RPC_48900]
     : ["[REDACTED-INTERNAL-RPC]"],

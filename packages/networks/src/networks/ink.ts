@@ -9,7 +9,6 @@ export const ink: NetworkConfig = {
   hubChainId: "57073",
   isTestnet: false,
   name: "Ink",
-  relaySolverChainId: 57073,
   rpc: process.env.RPC_57073
     ? [process.env.RPC_57073]
     : ["[REDACTED-INTERNAL-RPC]"],

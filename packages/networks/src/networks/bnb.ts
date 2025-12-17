@@ -9,7 +9,6 @@ export const bnb: NetworkConfig = {
   hubChainId: "56",
   isTestnet: false,
   name: "BNB Chain",
-  relaySolverChainId: 56,
   rpc: process.env.RPC_56
     ? [process.env.RPC_56]
     : ["[REDACTED-INTERNAL-RPC]"],

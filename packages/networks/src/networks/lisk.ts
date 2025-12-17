@@ -9,7 +9,6 @@ export const lisk: NetworkConfig = {
   hubChainId: "1135",
   isTestnet: false,
   name: "Lisk",
-  relaySolverChainId: 1135,
   rpc: process.env.RPC_1135
     ? [process.env.RPC_1135]
     : ["[REDACTED-INTERNAL-RPC]"],

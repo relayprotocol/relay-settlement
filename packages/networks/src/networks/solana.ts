@@ -12,7 +12,6 @@ export const solana: NetworkConfig = {
     "50176979118388105370421134508366610418687875236156196470082648173271157915018",
   isTestnet: false,
   name: "Solana",
-  relaySolverChainId: 792703809,
   rpc: process.env.RPC_SOLANA
     ? [process.env.RPC_SOLANA]
     : ["[REDACTED-INTERNAL-RPC]"],

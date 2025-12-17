@@ -9,7 +9,6 @@ export const story: NetworkConfig = {
   hubChainId: "1514",
   isTestnet: false,
   name: "Story",
-  relaySolverChainId: 1514,
   rpc: process.env.RPC_1514
     ? [process.env.RPC_1514]
     : ["[REDACTED-INTERNAL-RPC]"],
