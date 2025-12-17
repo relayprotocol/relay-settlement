@@ -134,6 +134,9 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
   /// @notice Precompute the hash of the curve
   bytes32 private constant ECDSA_HASH = keccak256("Ecdsa");
 
+  /// @notice Preventing concurrent signature requests for the same payload
+  uint256 private constant PENDING_SIGNATURE_COOLDOWN = 60 minutes;
+
   /// @notice Gas for withdrawals to NEAR
   uint64 public immutable NEAR_WITHDRAW_GAS = 2_000_000_000_000;
 
@@ -169,6 +172,9 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
 
   /// @notice Signed payloads: withdrawal request hash => hash to sign => signed payload
   mapping(bytes32 => mapping(bytes32 => bytes)) public signedPayloads;
+
+  /// @notice Pending signatures: withdrawal request hash => hash to sign => expiration timestamp
+  mapping(bytes32 => mapping(bytes32 => uint256)) public pendingSignatures;
 
   /// @notice Payload timestamps: withdrawal request hash => timestamp when payload becomes ready
   mapping(bytes32 => uint256) public payloadTimestamps;
@@ -207,6 +213,7 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
   error PayloadNotReady(bytes32 withdrawRequestHash);
   error PayloadAlreadyBuilt(bytes32 withdrawRequestHash);
   error PayloadAlreadySigned(bytes32 withdrawRequestHash);
+  error SignaturePending(bytes32 withdrawRequestHash, uint256 expiration);
   error SignCallbackFailed(bytes32 withdrawRequestHash);
   error WithdrawalRequestFailed();
 
@@ -520,6 +527,15 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
     if (signedPayloads[withdrawRequestHash][hashToSign].length > 0) {
       revert PayloadAlreadySigned(withdrawRequestHash);
     }
+
+    uint256 expiration = pendingSignatures[withdrawRequestHash][hashToSign];
+    if (block.timestamp < expiration) {
+      revert SignaturePending(withdrawRequestHash, expiration);
+    }
+
+    pendingSignatures[withdrawRequestHash][hashToSign] =
+      block.timestamp + PENDING_SIGNATURE_COOLDOWN;
+
     // Encode the JSON request for the signer
     bytes memory data = ChainSignatures.encodeJSONRequest(
       ChainSignatures.stringifyBytes(abi.encodePacked(hashToSign)),
@@ -569,6 +585,7 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
         keccak256("SIGNATURE_CALLBACK_ROLE")
       );
     }
+
     // triggering this function requires Aurora precompiles and therefore has no unit tests
     PromiseResult memory result = AuroraSdk.promiseResult(0);
 
