@@ -1,5 +1,5 @@
 {
-  "extends": "@relay-protocol/tsconfig",
+  "extends": "@relay-settlement/tsconfig",
   "compilerOptions": {
     "declaration": true,
     "outDir": "./dist",

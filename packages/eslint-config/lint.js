@@ -51,7 +51,7 @@ const packageJson = JSON.parse(
   fs.readFileSync(path.join(cwd, "package.json"), "utf8")
 )
 const isRoot = packageJson.workspaces && packageJson.workspaces.length > 0
-const isEslintConfig = packageJson.name === "@relay-protocol/eslint-config"
+const isEslintConfig = packageJson.name === "@relay-settlement/eslint-config"
 
 // Skip linting if we're in the eslint-config package itself
 if (isEslintConfig) {

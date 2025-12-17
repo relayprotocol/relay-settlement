@@ -1,5 +1,5 @@
 {
-  "name": "@relay-protocol/hub-monorepo",
+  "name": "@relay-settlement/hub-monorepo",
   "private": true,
   "version": "0.0.1",
   "workspaces": [
@@ -13,10 +13,10 @@
     "packages:build": "yarn packages --topological-dev run build",
     "lint": "lint",
     "test": "yarn workspaces foreach --all run test",
-    "packages": "yarn workspaces foreach --recursive --from '{@relay-protocol/eslint-config,@relay-protocol/tsconfig,@relay-protocol/types,@relay-protocol/fixtures,@relay-protocol/abis,@relay-protocol/networks,@relay-protocol/hub-utils,@relay-protocol/hub-client,@relay-protocol/smart-contracts}'"
+    "packages": "yarn workspaces foreach --recursive --from '{@relay-settlement/eslint-config,@relay-settlement/tsconfig,@relay-settlement/types,@relay-settlement/fixtures,@relay-settlement/abis,@relay-settlement/networks,@relay-settlement/hub-utils,@relay-settlement/hub-client,@relay-settlement/smart-contracts}'"
   },
   "devDependencies": {
-    "@relay-protocol/eslint-config": "workspace:*",
+    "@relay-settlement/eslint-config": "workspace:*",
     "@types/node": "24.6.1",
     "eslint": "9.36.0",
     "husky": "9.1.7",

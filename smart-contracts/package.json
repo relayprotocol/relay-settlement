@@ -1,5 +1,5 @@
 {
-  "name": "@relay-protocol/smart-contracts",
+  "name": "@relay-settlement/smart-contracts",
   "scripts": {
     "build": "yarn hardhat compile",
     "build:abis": "yarn hardhat export:abis",
@@ -16,7 +16,7 @@
     "@nomicfoundation/hardhat-verify": "2.1.1",
     "@nomicfoundation/hardhat-viem": "2.1.1",
     "@nomicfoundation/ignition-core": "0.15.13",
-    "@relay-protocol/eslint-config": "workspace:*",
+    "@relay-settlement/eslint-config": "workspace:*",
     "@types/chai": "4.2.0",
     "@types/chai-as-promised": "7.1.6",
     "@types/fs-extra": "^11",
@@ -40,9 +40,8 @@
     "@near-js/providers": "2.3.2",
     "@nomiclabs/hardhat-solhint": "4.1.0",
     "@openzeppelin/contracts": "5.3.0",
-    "@relay-protocol/fixtures": "workspace:*",
-    "@relay-protocol/hub-utils": "workspace:*",
-    "@relay-protocol/networks": "workspace:*",
+    "@relay-settlement/fixtures": "workspace:*",
+    "@relay-settlement/hub-utils": "workspace:*",
     "@reservoir0x/relay-protocol-sdk": "0.0.43",
     "@safe-global/sdk-starter-kit": "3.0.1",
     "@solana/web3.js": "1.98.4",

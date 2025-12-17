@@ -1,4 +1,4 @@
-import { NetworkConfig } from "@relay-protocol/types"
+import { NetworkConfig } from "@relay-settlement/types"
 
 export const b3: NetworkConfig = {
   chainId: 8333n,

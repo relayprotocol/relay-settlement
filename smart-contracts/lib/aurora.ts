@@ -1,4 +1,4 @@
-import networks from "@relay-protocol/networks"
+import networks from "@relay-settlement/networks"
 import { HardhatRuntimeEnvironment } from "hardhat/types"
 
 export function getWNEARAddress(chainId: bigint): string {

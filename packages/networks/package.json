@@ -1,6 +1,6 @@
 {
   "description": "Relay Protocol's supported networks",
-  "name": "@relay-protocol/networks",
+  "name": "@relay-settlement/networks",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -10,7 +10,7 @@
       "require": "./dist/index.js"
     }
   },
-  "version": "2.1.4",
+  "version": "2.1.5",
   "license": "MIT",
   "scripts": {
     "start": "tsc --watch",
@@ -19,9 +19,9 @@
     "build": "tsup src/index.ts --dts --format esm,cjs"
   },
   "devDependencies": {
-    "@relay-protocol/eslint-config": "workspace:^",
-    "@relay-protocol/tsconfig": "workspace:./packages/tsconfig",
-    "@relay-protocol/types": "workspace:./packages/types",
+    "@relay-settlement/eslint-config": "workspace:^",
+    "@relay-settlement/tsconfig": "workspace:./packages/tsconfig",
+    "@relay-settlement/types": "workspace:./packages/types",
     "eslint": "9.36.0",
     "fs-extra": "11.3.2",
     "tsup": "8.5.0",

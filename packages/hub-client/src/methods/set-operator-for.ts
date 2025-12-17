@@ -1,5 +1,5 @@
-import { RelayHub } from "@relay-protocol/abis"
-import { generateAddress } from "@relay-protocol/hub-utils"
+import { RelayHub } from "@relay-settlement/abis"
+import { generateAddress } from "@relay-settlement/hub-utils"
 import { ethers } from "ethers"
 import { SetOperatorForParams, SubmitTxParams } from "../client"
 

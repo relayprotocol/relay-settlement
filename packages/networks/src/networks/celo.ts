@@ -1,4 +1,4 @@
-import { NetworkConfig } from "@relay-protocol/types"
+import { NetworkConfig } from "@relay-settlement/types"
 
 export const celo: NetworkConfig = {
   chainId: 42220n,

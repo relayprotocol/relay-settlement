@@ -30,10 +30,10 @@ jobs:
       - name: Build packages
         run: |
           yarn build
-          yarn workspace @relay-protocol/smart-contracts build
+          yarn workspace @relay-settlement/smart-contracts build
 
       - name: Run linters for all workspaces
-        run: yarn workspaces foreach --all --topological-dev --exclude @relay-protocol/hub-monorepo run lint
+        run: yarn workspaces foreach --all --topological-dev --exclude @relay-settlement/hub-monorepo run lint
 
       - name: Run workspace tests
-        run: yarn workspaces foreach --all --topological-dev --exclude @relay-protocol/hub-monorepo run test
+        run: yarn workspaces foreach --all --topological-dev --exclude @relay-settlement/hub-monorepo run test

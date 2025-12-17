@@ -1,4 +1,4 @@
-import { VirtualAddressComponents } from "@relay-protocol/types"
+import { VirtualAddressComponents } from "@relay-settlement/types"
 
 export const addressesTestCases: Array<{
   name: string

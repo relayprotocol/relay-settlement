@@ -1676,21 +1676,21 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@relay-protocol/abis@workspace:*, @relay-protocol/abis@workspace:packages/abis":
+"@relay-settlement/abis@workspace:*, @relay-settlement/abis@workspace:packages/abis":
   version: 0.0.0-use.local
-  resolution: "@relay-protocol/abis@workspace:packages/abis"
+  resolution: "@relay-settlement/abis@workspace:packages/abis"
   dependencies:
-    "@relay-protocol/eslint-config": "workspace:*"
-    "@relay-protocol/tsconfig": "workspace:*"
+    "@relay-settlement/eslint-config": "workspace:*"
+    "@relay-settlement/tsconfig": "workspace:*"
     eslint: "npm:9.36.0"
     tsup: "npm:8.5.0"
     typescript: "npm:5.9.3"
   languageName: unknown
   linkType: soft
 
-"@relay-protocol/eslint-config@workspace:*, @relay-protocol/eslint-config@workspace:^, @relay-protocol/eslint-config@workspace:packages/eslint-config":
+"@relay-settlement/eslint-config@workspace:*, @relay-settlement/eslint-config@workspace:^, @relay-settlement/eslint-config@workspace:packages/eslint-config":
   version: 0.0.0-use.local
-  resolution: "@relay-protocol/eslint-config@workspace:packages/eslint-config"
+  resolution: "@relay-settlement/eslint-config@workspace:packages/eslint-config"
   dependencies:
     "@eslint/js": "npm:9.36.0"
     eslint: "npm:9.36.0"
@@ -1712,26 +1712,26 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@relay-protocol/fixtures@workspace:*, @relay-protocol/fixtures@workspace:packages/fixtures":
+"@relay-settlement/fixtures@workspace:*, @relay-settlement/fixtures@workspace:packages/fixtures":
   version: 0.0.0-use.local
-  resolution: "@relay-protocol/fixtures@workspace:packages/fixtures"
+  resolution: "@relay-settlement/fixtures@workspace:packages/fixtures"
   dependencies:
-    "@relay-protocol/eslint-config": "workspace:*"
-    "@relay-protocol/tsconfig": "workspace:*"
-    "@relay-protocol/types": "workspace:*"
+    "@relay-settlement/eslint-config": "workspace:*"
+    "@relay-settlement/tsconfig": "workspace:*"
+    "@relay-settlement/types": "workspace:*"
     eslint: "npm:9.36.0"
     typescript: "npm:5.9.3"
   languageName: unknown
   linkType: soft
 
-"@relay-protocol/hub-client@workspace:packages/hub-client":
+"@relay-settlement/hub-client@workspace:packages/hub-client":
   version: 0.0.0-use.local
-  resolution: "@relay-protocol/hub-client@workspace:packages/hub-client"
+  resolution: "@relay-settlement/hub-client@workspace:packages/hub-client"
   dependencies:
-    "@relay-protocol/abis": "workspace:*"
-    "@relay-protocol/eslint-config": "workspace:*"
-    "@relay-protocol/hub-utils": "workspace:*"
-    "@relay-protocol/tsconfig": "workspace:*"
+    "@relay-settlement/abis": "workspace:*"
+    "@relay-settlement/eslint-config": "workspace:*"
+    "@relay-settlement/hub-utils": "workspace:*"
+    "@relay-settlement/tsconfig": "workspace:*"
     "@reservoir0x/relay-protocol-sdk": "npm:0.0.55"
     eslint: "npm:9.36.0"
     ethers: "npm:6.15.0"
@@ -1741,11 +1741,11 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@relay-protocol/hub-monorepo@workspace:.":
+"@relay-settlement/hub-monorepo@workspace:.":
   version: 0.0.0-use.local
-  resolution: "@relay-protocol/hub-monorepo@workspace:."
+  resolution: "@relay-settlement/hub-monorepo@workspace:."
   dependencies:
-    "@relay-protocol/eslint-config": "workspace:*"
+    "@relay-settlement/eslint-config": "workspace:*"
     "@types/node": "npm:24.6.1"
     eslint: "npm:9.36.0"
     husky: "npm:9.1.7"
@@ -1757,13 +1757,13 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@relay-protocol/hub-utils@workspace:*, @relay-protocol/hub-utils@workspace:packages/hub-utils":
+"@relay-settlement/hub-utils@workspace:*, @relay-settlement/hub-utils@workspace:packages/hub-utils":
   version: 0.0.0-use.local
-  resolution: "@relay-protocol/hub-utils@workspace:packages/hub-utils"
+  resolution: "@relay-settlement/hub-utils@workspace:packages/hub-utils"
   dependencies:
-    "@relay-protocol/eslint-config": "workspace:*"
-    "@relay-protocol/tsconfig": "workspace:*"
-    "@relay-protocol/types": "workspace:*"
+    "@relay-settlement/eslint-config": "workspace:*"
+    "@relay-settlement/tsconfig": "workspace:*"
+    "@relay-settlement/types": "workspace:*"
     "@reservoir0x/relay-protocol-sdk": "npm:0.0.55"
     eslint: "npm:9.36.0"
     tsup: "npm:8.5.0"
@@ -1772,13 +1772,13 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@relay-protocol/networks@workspace:*, @relay-protocol/networks@workspace:packages/networks":
+"@relay-settlement/networks@workspace:packages/networks":
   version: 0.0.0-use.local
-  resolution: "@relay-protocol/networks@workspace:packages/networks"
+  resolution: "@relay-settlement/networks@workspace:packages/networks"
   dependencies:
-    "@relay-protocol/eslint-config": "workspace:^"
-    "@relay-protocol/tsconfig": "workspace:./packages/tsconfig"
-    "@relay-protocol/types": "workspace:./packages/types"
+    "@relay-settlement/eslint-config": "workspace:^"
+    "@relay-settlement/tsconfig": "workspace:./packages/tsconfig"
+    "@relay-settlement/types": "workspace:./packages/types"
     eslint: "npm:9.36.0"
     fs-extra: "npm:11.3.2"
     tsup: "npm:8.5.0"
@@ -1786,9 +1786,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@relay-protocol/smart-contracts@workspace:smart-contracts":
+"@relay-settlement/smart-contracts@workspace:smart-contracts":
   version: 0.0.0-use.local
-  resolution: "@relay-protocol/smart-contracts@workspace:smart-contracts"
+  resolution: "@relay-settlement/smart-contracts@workspace:smart-contracts"
   dependencies:
     "@coral-xyz/anchor": "npm:0.27.0"
     "@mysten/sui": "npm:1.38.0"
@@ -1802,10 +1802,9 @@ __metadata:
     "@nomicfoundation/ignition-core": "npm:0.15.13"
     "@nomiclabs/hardhat-solhint": "npm:4.1.0"
     "@openzeppelin/contracts": "npm:5.3.0"
-    "@relay-protocol/eslint-config": "workspace:*"
-    "@relay-protocol/fixtures": "workspace:*"
-    "@relay-protocol/hub-utils": "workspace:*"
-    "@relay-protocol/networks": "workspace:*"
+    "@relay-settlement/eslint-config": "workspace:*"
+    "@relay-settlement/fixtures": "workspace:*"
+    "@relay-settlement/hub-utils": "workspace:*"
     "@reservoir0x/relay-protocol-sdk": "npm:0.0.43"
     "@safe-global/sdk-starter-kit": "npm:3.0.1"
     "@solana/web3.js": "npm:1.98.4"
@@ -1842,18 +1841,18 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@relay-protocol/tsconfig@workspace:*, @relay-protocol/tsconfig@workspace:./packages/tsconfig, @relay-protocol/tsconfig@workspace:packages/tsconfig":
+"@relay-settlement/tsconfig@workspace:*, @relay-settlement/tsconfig@workspace:./packages/tsconfig, @relay-settlement/tsconfig@workspace:packages/tsconfig":
   version: 0.0.0-use.local
-  resolution: "@relay-protocol/tsconfig@workspace:packages/tsconfig"
+  resolution: "@relay-settlement/tsconfig@workspace:packages/tsconfig"
   languageName: unknown
   linkType: soft
 
-"@relay-protocol/types@workspace:*, @relay-protocol/types@workspace:./packages/types, @relay-protocol/types@workspace:packages/types":
+"@relay-settlement/types@workspace:*, @relay-settlement/types@workspace:./packages/types, @relay-settlement/types@workspace:packages/types":
   version: 0.0.0-use.local
-  resolution: "@relay-protocol/types@workspace:packages/types"
+  resolution: "@relay-settlement/types@workspace:packages/types"
   dependencies:
-    "@relay-protocol/eslint-config": "workspace:*"
-    "@relay-protocol/tsconfig": "workspace:*"
+    "@relay-settlement/eslint-config": "workspace:*"
+    "@relay-settlement/tsconfig": "workspace:*"
     "@reservoir0x/relay-protocol-sdk": "npm:0.0.55"
     eslint: "npm:9.36.0"
     typescript: "npm:5.9.3"

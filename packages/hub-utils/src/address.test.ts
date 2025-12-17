@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { generateAddress } from "./address"
-import { addressesTestCases } from "@relay-protocol/fixtures"
+import { addressesTestCases } from "@relay-settlement/fixtures"
 import { ethers } from "ethers"
 
 describe("Virtual Addresses", () => {

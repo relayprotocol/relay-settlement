@@ -5,7 +5,7 @@ import {
   createSafeClientWithConfig,
 } from "../helpers/safe"
 import { createTransactionBundle } from "./utils"
-import { networks } from "@relay-protocol/networks"
+import { networks } from "@relay-settlement/networks"
 
 task(
   "relay-multisig-signer:check-hashes",
@@ -33,7 +33,7 @@ task(
         const networkConfig = networks[chainId]
         if (!networkConfig) {
           throw new Error(
-            `❌ Network ${hre.network.name} (chainId: ${chainId}) not found in @relay-protocol/networks`
+            `❌ Network ${hre.network.name} (chainId: ${chainId}) not found in @relay-settlement/networks`
           )
         }
         multisigSignerAddress =

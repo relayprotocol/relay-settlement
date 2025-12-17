@@ -1,7 +1,7 @@
 import "@nomicfoundation/hardhat-ignition"
 import "@nomicfoundation/hardhat-toolbox-viem"
 import "@nomiclabs/hardhat-solhint"
-import { networks as nets } from "@relay-protocol/networks"
+import { networks as nets } from "@relay-settlement/networks"
 import "hardhat-gas-reporter"
 import type { HardhatUserConfig } from "hardhat/config"
 import "solidity-coverage"
@@ -44,7 +44,7 @@ import "./tasks/exportAbis"
 import "./tasks/grantRole"
 
 // Relay Multisig signer
-import { NetworkConfig } from "@relay-protocol/types"
+import { NetworkConfig } from "@relay-settlement/types"
 import "./tasks/relayMultisigSigner/check-hashes"
 import "./tasks/relayMultisigSigner/create-nonce-account"
 import "./tasks/relayMultisigSigner/decode-multicall"

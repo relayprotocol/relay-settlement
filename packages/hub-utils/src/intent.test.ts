@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { intentTestCases } from "@relay-protocol/fixtures"
+import { intentTestCases } from "@relay-settlement/fixtures"
 import { generateIntentAddress } from "./intent"
 import { ethers } from "ethers"
 

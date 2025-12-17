@@ -1,5 +1,5 @@
 {
-  "name": "@relay-protocol/hub-client",
+  "name": "@relay-settlement/hub-client",
   "version": "0.0.2",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -12,8 +12,8 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@relay-protocol/abis": "workspace:*",
-    "@relay-protocol/hub-utils": "workspace:*",
+    "@relay-settlement/abis": "workspace:*",
+    "@relay-settlement/hub-utils": "workspace:*",
     "@reservoir0x/relay-protocol-sdk": "0.0.55",
     "ethers": "6.15.0"
   },
@@ -26,8 +26,8 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
-    "@relay-protocol/eslint-config": "workspace:*",
-    "@relay-protocol/tsconfig": "workspace:*",
+    "@relay-settlement/eslint-config": "workspace:*",
+    "@relay-settlement/tsconfig": "workspace:*",
     "eslint": "9.36.0",
     "tsup": "8.5.0",
     "typescript": "5.9.3",

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import { generateTokenId } from "./token"
-import { tokenIdTestCases } from "@relay-protocol/fixtures"
-import { TokenIdComponents } from "@relay-protocol/types"
+import { tokenIdTestCases } from "@relay-settlement/fixtures"
+import { TokenIdComponents } from "@relay-settlement/types"
 
 describe("Token ID Generation", () => {
   test.each(tokenIdTestCases)("$name", ({ input, expectedValue }) => {

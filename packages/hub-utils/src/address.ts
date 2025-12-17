@@ -1,4 +1,7 @@
-import { VirtualAddress, VirtualAddressComponents } from "@relay-protocol/types"
+import {
+  VirtualAddress,
+  VirtualAddressComponents,
+} from "@relay-settlement/types"
 import { ethers } from "ethers"
 
 import { getCheckSummedAddress } from "./utils"

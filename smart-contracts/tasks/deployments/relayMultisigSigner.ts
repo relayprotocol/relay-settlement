@@ -1,4 +1,4 @@
-import networks from "@relay-protocol/networks"
+import networks from "@relay-settlement/networks"
 import { task } from "hardhat/config"
 import RelayMultisigSignerModule from "../../ignition/modules/RelayMultisigSignerModule"
 import { parseUnits } from "viem"

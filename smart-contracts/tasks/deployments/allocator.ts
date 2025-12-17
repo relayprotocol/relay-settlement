@@ -1,4 +1,4 @@
-import networks from "@relay-protocol/networks"
+import networks from "@relay-settlement/networks"
 import * as bitcoin from "bitcoinjs-lib"
 import { task } from "hardhat/config"
 import AllocatorModule from "../../ignition/modules/RelayAllocator"

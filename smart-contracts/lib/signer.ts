@@ -1,5 +1,5 @@
-import { networks } from "@relay-protocol/networks"
-import { ChainType } from "@relay-protocol/types"
+import { networks } from "@relay-settlement/networks"
+import { ChainType } from "@relay-settlement/types"
 import { base58 } from "@scure/base"
 import { publicKeyToAddress } from "viem/accounts"
 import { derivePublicKey } from "./near"

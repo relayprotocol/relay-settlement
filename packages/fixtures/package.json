@@ -1,5 +1,5 @@
 {
-  "name": "@relay-protocol/fixtures",
+  "name": "@relay-settlement/fixtures",
   "version": "0.0.1",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,9 +9,9 @@
     "lint": "lint"
   },
   "devDependencies": {
-    "@relay-protocol/eslint-config": "workspace:*",
-    "@relay-protocol/tsconfig": "workspace:*",
-    "@relay-protocol/types": "workspace:*",
+    "@relay-settlement/eslint-config": "workspace:*",
+    "@relay-settlement/tsconfig": "workspace:*",
+    "@relay-settlement/types": "workspace:*",
     "eslint": "9.36.0",
     "typescript": "5.9.3"
   }

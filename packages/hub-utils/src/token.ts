@@ -1,5 +1,5 @@
 import { ethers } from "ethers"
-import { TokenIdComponents, TokenId } from "@relay-protocol/types"
+import { TokenIdComponents, TokenId } from "@relay-settlement/types"
 import { getCheckSummedAddress } from "./utils"
 
 /**

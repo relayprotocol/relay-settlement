@@ -1,5 +1,5 @@
 {
-  "name": "@relay-protocol/tsconfig",
+  "name": "@relay-settlement/tsconfig",
   "version": "0.0.1",
   "main": "tsconfig.json",
   "description": "Base Typescript config",

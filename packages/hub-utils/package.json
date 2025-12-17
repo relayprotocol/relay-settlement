@@ -1,5 +1,5 @@
 {
-  "name": "@relay-protocol/hub-utils",
+  "name": "@relay-settlement/hub-utils",
   "version": "0.1.5",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -13,15 +13,15 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
-    "@relay-protocol/eslint-config": "workspace:*",
-    "@relay-protocol/tsconfig": "workspace:*",
+    "@relay-settlement/eslint-config": "workspace:*",
+    "@relay-settlement/tsconfig": "workspace:*",
     "eslint": "9.36.0",
     "tsup": "8.5.0",
     "typescript": "5.9.3",
     "vitest": "3.2.4"
   },
   "dependencies": {
-    "@relay-protocol/types": "workspace:*",
+    "@relay-settlement/types": "workspace:*",
     "@reservoir0x/relay-protocol-sdk": "0.0.55"
   }
 }

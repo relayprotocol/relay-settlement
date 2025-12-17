@@ -1,5 +1,5 @@
 import { ethers } from "ethers"
-import { VirtualAddress } from "@relay-protocol/types"
+import { VirtualAddress } from "@relay-settlement/types"
 
 export const generateIntentAddress = (intentId: string): VirtualAddress => {
   const addressHash = ethers.keccak256(

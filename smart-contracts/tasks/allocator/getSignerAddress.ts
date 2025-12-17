@@ -1,4 +1,4 @@
-import { ChainType } from "@relay-protocol/types"
+import { ChainType } from "@relay-settlement/types"
 import { task } from "hardhat/config"
 import { deriveAllocatorSignerAddress } from "../../lib/signer"
 

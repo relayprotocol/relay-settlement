@@ -1,5 +1,5 @@
 import { task } from "hardhat/config"
-import networks from "@relay-protocol/networks"
+import networks from "@relay-settlement/networks"
 import { checkAndApproveWNEAR } from "../../../lib/aurora"
 import { derivePublicKey } from "../../../lib/near"
 import { computeEvmAddress } from "../../../lib/signer"

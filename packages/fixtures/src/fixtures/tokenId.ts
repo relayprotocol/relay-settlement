@@ -1,4 +1,4 @@
-import { TokenIdComponents } from "@relay-protocol/types"
+import { TokenIdComponents } from "@relay-settlement/types"
 export const tokenIdTestCases: Array<{
   name: string
   input: TokenIdComponents

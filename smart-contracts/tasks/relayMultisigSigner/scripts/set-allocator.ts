@@ -1,4 +1,4 @@
-import * as networks from "@relay-protocol/networks"
+import * as networks from "@relay-settlement/networks"
 import {
   createPublicClient,
   encodeFunctionData,

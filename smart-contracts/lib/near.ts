@@ -1,5 +1,5 @@
 import { JsonRpcProvider } from "@near-js/providers"
-import { networks } from "@relay-protocol/networks"
+import { networks } from "@relay-settlement/networks"
 import { fromHex } from "viem"
 
 // default values are Aurora testnet

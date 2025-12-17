@@ -2,7 +2,7 @@ import {
   loadFixture,
   time,
 } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
-import { generateAddress } from "@relay-protocol/hub-utils"
+import { generateAddress } from "@relay-settlement/hub-utils"
 import { expect } from "chai"
 import hre from "hardhat"
 import { decodeEventLog, getAddress, keccak256, zeroAddress } from "viem"
