@@ -5,12 +5,13 @@ export const aurora: NetworkConfig = {
     wNEAR: "0xC42C30aC6Cc15faC9bD938618BcaA1a1FaE8501d",
   },
   blockExplorer: {
+    apiKey: "abc",
     chainId: 1313161554,
     network: "aurora",
     urls: {
       apiURL: "https://explorer.aurora.dev/api",
       browserURL: "https://explorer.aurora.dev",
-    },
+    }, // Blockscout doesn't require a real API key
   },
   chainId: 1313161554n,
   contracts: {

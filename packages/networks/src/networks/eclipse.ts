@@ -13,6 +13,6 @@ export const eclipse: NetworkConfig = {
   name: "Eclipse",
   rpc: process.env.RPC_ECLIPSE
     ? [process.env.RPC_ECLIPSE]
-    : ["https://acv-resevoir.eclipserpc.xyz"],
+    : ["https://mainnetbeta-rpc.eclipse.xyz"],
   slug: "eclipse",
 }

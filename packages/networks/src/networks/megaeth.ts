@@ -11,6 +11,6 @@ export const megaeth: NetworkConfig = {
   name: "MegaETH",
   rpc: process.env.RPC_4326
     ? [process.env.RPC_4326]
-    : ["https://alpha.megaeth.com/rpc"],
+    : ["https://mainnet.megaeth.com/rpc"],
   slug: "megaeth",
 }

@@ -79,8 +79,20 @@ const customChains = Object.keys(nets)
   .filter((id) => nets[id].blockExplorer)
   .map((id) => nets[id].blockExplorer)
 
+// Build etherscan API keys from network configs
+const etherscanApiKeys = Object.keys(nets).reduce(
+  (acc, id) => {
+    const network = nets[id]
+    if (network.blockExplorer?.apiKey) {
+      acc[network.blockExplorer.network] = network.blockExplorer.apiKey
+    }
+    return acc
+  },
+  { mainnet: "C1KDFD2PHN7FXXXT1AW5PG27I5JB23J41D" } as Record<string, string>
+)
+
 const etherscan = {
-  apiKey: "C1KDFD2PHN7FXXXT1AW5PG27I5JB23J41D",
+  apiKey: etherscanApiKeys,
   customChains,
 }
 

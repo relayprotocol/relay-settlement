@@ -5,12 +5,13 @@ export const auroraTestnet: NetworkConfig = {
     wNEAR: "0x4861825E75ab14553E5aF711EbbE6873d369d146",
   },
   blockExplorer: {
+    apiKey: "abc",
     chainId: 1313161555,
     network: "aurora-testnet",
     urls: {
       apiURL: "https://explorer.testnet.aurora.dev/api",
       browserURL: "https://explorer.testnet.aurora.dev",
-    },
+    }, // Blockscout doesn't require a real API key
   },
   chainId: 1313161555n,
   family: "ethereum-vm",

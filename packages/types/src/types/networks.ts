@@ -23,6 +23,7 @@ export interface NetworkConfig {
       apiURL: string
       browserURL: string
     }
+    apiKey?: string
   }
   nativeCurrency?: {
     decimals: number
