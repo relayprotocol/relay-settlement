@@ -13,7 +13,7 @@
     "packages:build": "yarn packages --topological-dev run build",
     "lint": "lint",
     "test": "yarn workspaces foreach --all run test",
-    "packages": "yarn workspaces foreach --recursive --from '{@relay-settlement/eslint-config,@relay-settlement/tsconfig,@relay-settlement/types,@relay-settlement/fixtures,@relay-settlement/abis,@relay-settlement/networks,@relay-settlement/hub-utils,@relay-settlement/hub-client,@relay-settlement/smart-contracts}'"
+    "packages": "yarn workspaces foreach --recursive --from '{@relay-settlement/eslint-config,@relay-settlement/tsconfig,@relay-settlement/types,@relay-settlement/fixtures,@relay-settlement/abis,@relay-settlement/networks,@relay-settlement/hub-utils,@relay-settlement/hub-client,@relay-settlement/smart-contracts,@relay-protocol/settlement-sdk}'"
   },
   "devDependencies": {
     "@relay-settlement/eslint-config": "workspace:*",
