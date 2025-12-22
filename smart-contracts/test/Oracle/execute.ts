@@ -1,5 +1,8 @@
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
-import { generateAddress, generateTokenId } from "@relay-settlement/hub-utils"
+import {
+  generateAddress,
+  generateTokenId,
+} from "@relay-protocol/settlement-sdk"
 import { ActionType } from "@reservoir0x/relay-protocol-sdk"
 import { expect } from "chai"
 import { randomBytes } from "crypto"

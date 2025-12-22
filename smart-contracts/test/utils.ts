@@ -4,7 +4,10 @@ import {
 } from "@relay-settlement/fixtures"
 import { expect } from "chai"
 
-import { generateAddress, generateTokenId } from "@relay-settlement/hub-utils"
+import {
+  generateAddress,
+  generateTokenId,
+} from "@relay-protocol/settlement-sdk"
 import hre from "hardhat"
 
 describe("Token ID Generation", () => {

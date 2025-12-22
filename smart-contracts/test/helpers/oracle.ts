@@ -1,4 +1,7 @@
-import { generateAddress, generateTokenId } from "@relay-settlement/hub-utils"
+import {
+  generateAddress,
+  generateTokenId,
+} from "@relay-protocol/settlement-sdk"
 import { ActionType } from "@reservoir0x/relay-protocol-sdk"
 import { randomBytes } from "crypto"
 import { encodeAbiParameters, Hex } from "viem"

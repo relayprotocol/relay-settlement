@@ -1,5 +1,8 @@
 import { RelayHub } from "@relay-settlement/abis"
-import { generateAddress, generateTokenId } from "@relay-settlement/hub-utils"
+import {
+  generateAddress,
+  generateTokenId,
+} from "@relay-protocol/settlement-sdk"
 import { ethers } from "ethers"
 import { MintParams, SubmitTxParams } from "../client"
 

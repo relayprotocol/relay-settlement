@@ -12,9 +12,8 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@relay-protocol/settlement-sdk": "workspace:*",
     "@relay-settlement/abis": "workspace:*",
-    "@relay-settlement/hub-utils": "workspace:*",
-    "@reservoir0x/relay-protocol-sdk": "0.0.55",
     "ethers": "6.15.0"
   },
   "scripts": {
