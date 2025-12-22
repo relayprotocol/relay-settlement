@@ -11,6 +11,6 @@ export const sei: NetworkConfig = {
   name: "Sei",
   rpc: process.env.RPC_1329
     ? [process.env.RPC_1329]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://evm-rpc.sei-apis.com"],
   slug: "sei",
 }

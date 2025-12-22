@@ -11,6 +11,6 @@ export const bob: NetworkConfig = {
   name: "BOB",
   rpc: process.env.RPC_60808
     ? [process.env.RPC_60808]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.gobob.xyz"],
   slug: "bob",
 }

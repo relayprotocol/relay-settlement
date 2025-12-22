@@ -11,6 +11,6 @@ export const hemi: NetworkConfig = {
   name: "Hemi",
   rpc: process.env.RPC_43111
     ? [process.env.RPC_43111]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.hemi.network/rpc"],
   slug: "hemi",
 }

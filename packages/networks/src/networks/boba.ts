@@ -11,6 +11,6 @@ export const boba: NetworkConfig = {
   name: "Boba",
   rpc: process.env.RPC_288
     ? [process.env.RPC_288]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://mainnet.boba.network"],
   slug: "boba",
 }

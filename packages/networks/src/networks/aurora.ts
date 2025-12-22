@@ -4,6 +4,14 @@ export const aurora: NetworkConfig = {
   assets: {
     wNEAR: "0xC42C30aC6Cc15faC9bD938618BcaA1a1FaE8501d",
   },
+  blockExplorer: {
+    chainId: 1313161554,
+    network: "aurora",
+    urls: {
+      apiURL: "https://explorer.aurora.dev/api",
+      browserURL: "https://explorer.aurora.dev",
+    },
+  },
   chainId: 1313161554n,
   contracts: {
     dev: {
@@ -11,7 +19,7 @@ export const aurora: NetworkConfig = {
     },
     prod: {
       allocator: "0xE12Bc514e90E136CAD10413669a6CcDeb9E3aDB7",
-      multisigSigner: "0x66667945C34b399993cA834587886b8508dB39B1",
+      multisigSigner: "0xb538ee6515F9d16eBD0BACD0503733815c9b070c",
     },
   },
   family: "ethereum-vm",

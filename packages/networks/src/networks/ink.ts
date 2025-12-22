@@ -11,6 +11,6 @@ export const ink: NetworkConfig = {
   name: "Ink",
   rpc: process.env.RPC_57073
     ? [process.env.RPC_57073]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc-gel.inkonchain.com"],
   slug: "ink",
 }

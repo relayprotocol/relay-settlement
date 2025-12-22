@@ -11,6 +11,6 @@ export const rari: NetworkConfig = {
   name: "Rari",
   rpc: process.env.RPC_1380012617
     ? [process.env.RPC_1380012617]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://mainnet.rpc.rarichain.org/http"],
   slug: "rari",
 }

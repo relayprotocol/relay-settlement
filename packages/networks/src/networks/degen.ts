@@ -11,6 +11,6 @@ export const degen: NetworkConfig = {
   name: "Degen",
   rpc: process.env.RPC_666666666
     ? [process.env.RPC_666666666]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.degen.tips"],
   slug: "degen",
 }

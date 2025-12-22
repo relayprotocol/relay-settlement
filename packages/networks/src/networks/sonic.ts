@@ -11,6 +11,6 @@ export const sonic: NetworkConfig = {
   name: "Sonic",
   rpc: process.env.RPC_146
     ? [process.env.RPC_146]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.soniclabs.com"],
   slug: "sonic",
 }

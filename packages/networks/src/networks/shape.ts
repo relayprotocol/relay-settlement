@@ -11,6 +11,6 @@ export const shape: NetworkConfig = {
   name: "Shape",
   rpc: process.env.RPC_360
     ? [process.env.RPC_360]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://mainnet.shape.network"],
   slug: "shape",
 }

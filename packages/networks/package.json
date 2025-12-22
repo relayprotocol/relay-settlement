@@ -10,7 +10,7 @@
       "require": "./dist/index.js"
     }
   },
-  "version": "2.1.5",
+  "version": "3.0.0",
   "license": "MIT",
   "scripts": {
     "start": "tsc --watch",

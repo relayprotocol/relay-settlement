@@ -11,6 +11,6 @@ export const manta: NetworkConfig = {
   name: "Manta",
   rpc: process.env.RPC_169
     ? [process.env.RPC_169]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://pacific-rpc.manta.network/http"],
   slug: "manta",
 }

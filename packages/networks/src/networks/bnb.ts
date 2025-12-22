@@ -11,6 +11,6 @@ export const bnb: NetworkConfig = {
   name: "BNB Chain",
   rpc: process.env.RPC_56
     ? [process.env.RPC_56]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://bsc-dataseed.binance.org", "https://rpc.ankr.com/bsc"],
   slug: "bnb",
 }

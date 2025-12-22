@@ -11,6 +11,6 @@ export const plume: NetworkConfig = {
   name: "Plume",
   rpc: process.env.RPC_98866
     ? [process.env.RPC_98866]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.plume.org"],
   slug: "plume",
 }

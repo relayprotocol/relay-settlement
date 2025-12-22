@@ -12,6 +12,6 @@ export const base: NetworkConfig = {
   name: "Base",
   rpc: process.env.RPC_8453
     ? [process.env.RPC_8453]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://mainnet.base.org", "https://base.llamarpc.com"],
   slug: "base",
 }

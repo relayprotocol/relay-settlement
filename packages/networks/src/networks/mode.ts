@@ -11,6 +11,6 @@ export const mode: NetworkConfig = {
   name: "Mode",
   rpc: process.env.RPC_34443
     ? [process.env.RPC_34443]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://mainnet.mode.network"],
   slug: "mode",
 }

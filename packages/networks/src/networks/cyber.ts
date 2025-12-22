@@ -11,6 +11,6 @@ export const cyber: NetworkConfig = {
   name: "Cyber",
   rpc: process.env.RPC_7560
     ? [process.env.RPC_7560]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://cyber.alt.technology"],
   slug: "cyber",
 }

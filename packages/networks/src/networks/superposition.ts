@@ -11,6 +11,6 @@ export const superposition: NetworkConfig = {
   name: "Superposition",
   rpc: process.env.RPC_55244
     ? [process.env.RPC_55244]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.superposition.so"],
   slug: "superposition",
 }

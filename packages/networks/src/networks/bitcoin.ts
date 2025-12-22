@@ -15,8 +15,6 @@ export const bitcoin: NetworkConfig = {
   name: "Bitcoin",
   rpc: process.env.RPC_BITCOIN
     ? [process.env.RPC_BITCOIN]
-    : [
-        "[REDACTED-INTERNAL-RPC]",
-      ],
+    : ["https://billowing-purple-crater.btc.quiknode.pro"],
   slug: "bitcoin",
 }

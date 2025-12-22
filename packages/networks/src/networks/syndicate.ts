@@ -11,6 +11,6 @@ export const syndicate: NetworkConfig = {
   name: "Syndicate",
   rpc: process.env.RPC_510003
     ? [process.env.RPC_510003]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.syndicate.io"],
   slug: "syndicate",
 }

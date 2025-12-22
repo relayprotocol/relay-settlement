@@ -11,8 +11,6 @@ export const anime: NetworkConfig = {
   name: "Anime",
   rpc: process.env.RPC_69000
     ? [process.env.RPC_69000]
-    : [
-        "[REDACTED-INTERNAL-RPC]",
-      ],
+    : ["https://rpc-animechain-39xf6m45e3.t.conduit.xyz"],
   slug: "anime",
 }

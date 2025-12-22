@@ -11,6 +11,6 @@ export const corn: NetworkConfig = {
   name: "Corn",
   rpc: process.env.RPC_21000000
     ? [process.env.RPC_21000000]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://maizenet-rpc.usecorn.com"],
   slug: "corn",
 }

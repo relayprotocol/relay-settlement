@@ -11,6 +11,6 @@ export const blast: NetworkConfig = {
   name: "Blast",
   rpc: process.env.RPC_81457
     ? [process.env.RPC_81457]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.blast.io", "https://rpc.ankr.com/blast"],
   slug: "blast",
 }

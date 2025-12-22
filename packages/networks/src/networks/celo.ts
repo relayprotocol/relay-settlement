@@ -11,6 +11,6 @@ export const celo: NetworkConfig = {
   name: "Celo",
   rpc: process.env.RPC_42220
     ? [process.env.RPC_42220]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://forno.celo.org"],
   slug: "celo",
 }

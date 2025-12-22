@@ -11,6 +11,6 @@ export const metis: NetworkConfig = {
   name: "Metis",
   rpc: process.env.RPC_1088
     ? [process.env.RPC_1088]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://andromeda.metis.io/?owner=1088"],
   slug: "metis",
 }

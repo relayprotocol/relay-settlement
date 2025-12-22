@@ -11,6 +11,6 @@ export const linea: NetworkConfig = {
   name: "Linea",
   rpc: process.env.RPC_59144
     ? [process.env.RPC_59144]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.linea.build", "https://linea.drpc.org"],
   slug: "linea",
 }

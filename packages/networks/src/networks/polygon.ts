@@ -12,6 +12,6 @@ export const polygon: NetworkConfig = {
   name: "Polygon",
   rpc: process.env.RPC_137
     ? [process.env.RPC_137]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://polygon-rpc.com", "https://rpc.ankr.com/polygon"],
   slug: "polygon",
 }

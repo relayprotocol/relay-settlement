@@ -11,6 +11,6 @@ export const gnosis: NetworkConfig = {
   name: "Gnosis",
   rpc: process.env.RPC_100
     ? [process.env.RPC_100]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.gnosischain.com", "https://rpc.ankr.com/gnosis"],
   slug: "gnosis",
 }

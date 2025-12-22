@@ -11,6 +11,6 @@ export const lisk: NetworkConfig = {
   name: "Lisk",
   rpc: process.env.RPC_1135
     ? [process.env.RPC_1135]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.api.lisk.com"],
   slug: "lisk",
 }

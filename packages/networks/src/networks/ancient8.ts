@@ -13,6 +13,6 @@ export const ancient8: NetworkConfig = {
   name: "Ancient8",
   rpc: process.env.RPC_888888888
     ? [process.env.RPC_888888888]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.ancient8.gg"],
   slug: "ancient8",
 }

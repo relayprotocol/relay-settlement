@@ -11,6 +11,6 @@ export const polygonZkevm: NetworkConfig = {
   name: "Polygon zkEVM",
   rpc: process.env.RPC_1101
     ? [process.env.RPC_1101]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://zkevm-rpc.com"],
   slug: "polygon_zkevm",
 }

@@ -11,6 +11,6 @@ export const arbitrumNova: NetworkConfig = {
   name: "Arbitrum Nova",
   rpc: process.env.RPC_42170
     ? [process.env.RPC_42170]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://nova.arbitrum.io/rpc"],
   slug: "arbitrum_nova",
 }

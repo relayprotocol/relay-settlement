@@ -11,6 +11,6 @@ export const redstone: NetworkConfig = {
   name: "Redstone",
   rpc: process.env.RPC_690
     ? [process.env.RPC_690]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.redstonechain.com"],
   slug: "redstone",
 }

@@ -11,6 +11,6 @@ export const zero: NetworkConfig = {
   name: "Zero",
   rpc: process.env.RPC_543210
     ? [process.env.RPC_543210]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.zerion.io/v1/zero"],
   slug: "zero",
 }

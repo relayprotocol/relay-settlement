@@ -11,6 +11,6 @@ export const worldchain: NetworkConfig = {
   name: "Worldchain",
   rpc: process.env.RPC_480
     ? [process.env.RPC_480]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://worldchain-mainnet.g.alchemy.com/public"],
   slug: "worldchain",
 }

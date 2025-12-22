@@ -11,6 +11,6 @@ export const unichain: NetworkConfig = {
   name: "Unichain",
   rpc: process.env.RPC_130
     ? [process.env.RPC_130]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://mainnet.unichain.org"],
   slug: "unichain",
 }

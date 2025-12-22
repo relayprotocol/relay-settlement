@@ -11,6 +11,6 @@ export const funki: NetworkConfig = {
   name: "Funki",
   rpc: process.env.RPC_33979
     ? [process.env.RPC_33979]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc-mainnet.funkichain.com"],
   slug: "funki",
 }

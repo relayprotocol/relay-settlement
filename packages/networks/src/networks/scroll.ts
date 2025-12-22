@@ -11,6 +11,6 @@ export const scroll: NetworkConfig = {
   name: "Scroll",
   rpc: process.env.RPC_534352
     ? [process.env.RPC_534352]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.scroll.io"],
   slug: "scroll",
 }

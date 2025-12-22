@@ -11,6 +11,6 @@ export const mint: NetworkConfig = {
   name: "Mint",
   rpc: process.env.RPC_185
     ? [process.env.RPC_185]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.mintchain.io"],
   slug: "mint",
 }

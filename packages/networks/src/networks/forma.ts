@@ -11,6 +11,6 @@ export const forma: NetworkConfig = {
   name: "Forma",
   rpc: process.env.RPC_984122
     ? [process.env.RPC_984122]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.forma.art"],
   slug: "forma",
 }

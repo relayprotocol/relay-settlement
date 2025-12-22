@@ -11,6 +11,6 @@ export const story: NetworkConfig = {
   name: "Story",
   rpc: process.env.RPC_1514
     ? [process.env.RPC_1514]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://mainnet.storyrpc.io"],
   slug: "story",
 }

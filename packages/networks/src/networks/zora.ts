@@ -11,6 +11,6 @@ export const zora: NetworkConfig = {
   name: "Zora",
   rpc: process.env.RPC_7777777
     ? [process.env.RPC_7777777]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.zora.energy"],
   slug: "zora",
 }

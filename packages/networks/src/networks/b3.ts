@@ -11,6 +11,6 @@ export const b3: NetworkConfig = {
   name: "B3",
   rpc: process.env.RPC_8333
     ? [process.env.RPC_8333]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://mainnet-rpc.b3.fun/http"],
   slug: "b3",
 }

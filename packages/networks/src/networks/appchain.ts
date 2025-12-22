@@ -11,6 +11,6 @@ export const appchain: NetworkConfig = {
   name: "Appchain",
   rpc: process.env.RPC_466
     ? [process.env.RPC_466]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.appchain.xyz/http"],
   slug: "appchain",
 }

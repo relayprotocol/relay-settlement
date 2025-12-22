@@ -11,6 +11,6 @@ export const ronin: NetworkConfig = {
   name: "Ronin",
   rpc: process.env.RPC_2020
     ? [process.env.RPC_2020]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://api.roninchain.com/rpc"],
   slug: "ronin",
 }

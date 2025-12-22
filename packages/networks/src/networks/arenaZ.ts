@@ -11,6 +11,6 @@ export const arenaZ: NetworkConfig = {
   name: "Arena Z",
   rpc: process.env.RPC_7897
     ? [process.env.RPC_7897]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.arena-z.gg"],
   slug: "arena_z",
 }

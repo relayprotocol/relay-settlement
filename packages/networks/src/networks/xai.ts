@@ -11,6 +11,6 @@ export const xai: NetworkConfig = {
   name: "XAI",
   rpc: process.env.RPC_660279
     ? [process.env.RPC_660279]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://xai-chain.net/rpc"],
   slug: "xai",
 }

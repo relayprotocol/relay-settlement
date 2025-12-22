@@ -11,6 +11,6 @@ export const soneium: NetworkConfig = {
   name: "Soneium",
   rpc: process.env.RPC_1868
     ? [process.env.RPC_1868]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.soneium.org"],
   slug: "soneium",
 }

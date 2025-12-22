@@ -11,8 +11,6 @@ export const ethereal: NetworkConfig = {
   name: "Ethereal",
   rpc: process.env.RPC_5064014
     ? [process.env.RPC_5064014]
-    : [
-        "[REDACTED-INTERNAL-RPC]",
-      ],
+    : ["https://rpc-ethereal-mainnet-0.t.conduit.xyz"],
   slug: "ethereal",
 }

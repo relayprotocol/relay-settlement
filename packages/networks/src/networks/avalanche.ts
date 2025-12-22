@@ -11,6 +11,9 @@ export const avalanche: NetworkConfig = {
   name: "Avalanche",
   rpc: process.env.RPC_43114
     ? [process.env.RPC_43114]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : [
+        "https://api.avax.network/ext/bc/C/rpc",
+        "https://rpc.ankr.com/avalanche",
+      ],
   slug: "avalanche",
 }

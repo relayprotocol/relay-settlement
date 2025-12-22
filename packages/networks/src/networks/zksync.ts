@@ -11,6 +11,6 @@ export const zksync: NetworkConfig = {
   name: "zkSync",
   rpc: process.env.RPC_324
     ? [process.env.RPC_324]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://mainnet.era.zksync.io"],
   slug: "zksync",
 }

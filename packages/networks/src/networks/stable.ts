@@ -9,8 +9,6 @@ export const stable: NetworkConfig = {
   hubChainId: "988",
   isTestnet: false,
   name: "Stable",
-  rpc: process.env.RPC_988
-    ? [process.env.RPC_988]
-    : ["[REDACTED-INTERNAL-RPC]"],
+  rpc: process.env.RPC_988 ? [process.env.RPC_988] : ["https://rpc.stable.xyz"],
   slug: "stable",
 }

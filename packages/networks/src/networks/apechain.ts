@@ -11,6 +11,6 @@ export const apechain: NetworkConfig = {
   name: "Apechain",
   rpc: process.env.RPC_33139
     ? [process.env.RPC_33139]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://apechain.calderachain.xyz/http"],
   slug: "apechain",
 }

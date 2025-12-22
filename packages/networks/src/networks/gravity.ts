@@ -11,6 +11,6 @@ export const gravity: NetworkConfig = {
   name: "Gravity",
   rpc: process.env.RPC_1625
     ? [process.env.RPC_1625]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.gravity.xyz"],
   slug: "gravity",
 }

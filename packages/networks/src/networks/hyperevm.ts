@@ -11,6 +11,6 @@ export const hyperevm: NetworkConfig = {
   name: "HyperEVM",
   rpc: process.env.RPC_999
     ? [process.env.RPC_999]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.hyperliquid.xyz/evm"],
   slug: "hyperevm",
 }

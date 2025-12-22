@@ -11,6 +11,6 @@ export const perennial: NetworkConfig = {
   name: "Perennial",
   rpc: process.env.RPC_1424
     ? [process.env.RPC_1424]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.perennial.foundation"],
   slug: "perennial",
 }

@@ -12,6 +12,6 @@ export const optimism: NetworkConfig = {
   name: "Optimism",
   rpc: process.env.RPC_10
     ? [process.env.RPC_10]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://mainnet.optimism.io", "https://rpc.ankr.com/optimism"],
   slug: "optimism",
 }

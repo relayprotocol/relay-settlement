@@ -11,6 +11,6 @@ export const superseed: NetworkConfig = {
   name: "Superseed",
   rpc: process.env.RPC_5330
     ? [process.env.RPC_5330]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://mainnet.superseed.xyz"],
   slug: "superseed",
 }

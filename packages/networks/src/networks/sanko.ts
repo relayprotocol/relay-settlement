@@ -11,6 +11,6 @@ export const sanko: NetworkConfig = {
   name: "Sanko",
   rpc: process.env.RPC_1996
     ? [process.env.RPC_1996]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://mainnet.sanko.xyz"],
   slug: "sanko",
 }

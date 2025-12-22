@@ -11,6 +11,6 @@ export const mantle: NetworkConfig = {
   name: "Mantle",
   rpc: process.env.RPC_5000
     ? [process.env.RPC_5000]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.mantle.xyz"],
   slug: "mantle",
 }

@@ -14,6 +14,6 @@ export const solana: NetworkConfig = {
   name: "Solana",
   rpc: process.env.RPC_SOLANA
     ? [process.env.RPC_SOLANA]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://api.mainnet-beta.solana.com"],
   slug: "solana",
 }

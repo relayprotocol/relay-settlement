@@ -11,6 +11,6 @@ export const taiko: NetworkConfig = {
   name: "Taiko",
   rpc: process.env.RPC_167000
     ? [process.env.RPC_167000]
-    : ["[REDACTED-INTERNAL-RPC]"],
+    : ["https://rpc.mainnet.taiko.xyz"],
   slug: "taiko",
 }
