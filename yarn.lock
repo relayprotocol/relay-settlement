@@ -1898,18 +1898,6 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@relay-settlement/fixtures@workspace:*, @relay-settlement/fixtures@workspace:packages/fixtures":
-  version: 0.0.0-use.local
-  resolution: "@relay-settlement/fixtures@workspace:packages/fixtures"
-  dependencies:
-    "@relay-settlement/eslint-config": "workspace:*"
-    "@relay-settlement/tsconfig": "workspace:*"
-    "@relay-settlement/types": "workspace:*"
-    eslint: "npm:9.36.0"
-    typescript: "npm:5.9.3"
-  languageName: unknown
-  linkType: soft
-
 "@relay-settlement/hub-client@workspace:packages/hub-client":
   version: 0.0.0-use.local
   resolution: "@relay-settlement/hub-client@workspace:packages/hub-client"
@@ -1974,7 +1962,6 @@ __metadata:
     "@openzeppelin/contracts": "npm:5.3.0"
     "@relay-protocol/settlement-sdk": "workspace:*"
     "@relay-settlement/eslint-config": "workspace:*"
-    "@relay-settlement/fixtures": "workspace:*"
     "@reservoir0x/relay-protocol-sdk": "npm:0.0.43"
     "@safe-global/sdk-starter-kit": "npm:3.0.1"
     "@solana/web3.js": "npm:1.98.4"
@@ -2017,7 +2004,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@relay-settlement/types@workspace:*, @relay-settlement/types@workspace:./packages/types, @relay-settlement/types@workspace:packages/types":
+"@relay-settlement/types@workspace:./packages/types, @relay-settlement/types@workspace:packages/types":
   version: 0.0.0-use.local
   resolution: "@relay-settlement/types@workspace:packages/types"
   dependencies:

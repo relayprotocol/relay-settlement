@@ -1,7 +1,5 @@
-import {
-  addressesTestCases,
-  tokenIdTestCases,
-} from "@relay-settlement/fixtures"
+import { addressesTestCases } from "./fixtures/address"
+import { tokenIdTestCases } from "./fixtures/tokenId"
 import { expect } from "chai"
 
 import {

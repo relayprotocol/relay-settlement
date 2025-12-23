@@ -1,21 +1,22 @@
-import { VirtualAddressComponents } from "@relay-settlement/types"
-
-export const addressesTestCases: Array<{
+import { TokenIdComponents } from "@relay-protocol/settlement-sdk"
+export const tokenIdTestCases: Array<{
   name: string
-  input: VirtualAddressComponents
-  expectedAddress: `0x${string}`
+  input: TokenIdComponents
+  expectedValue: bigint
 }> = [
   {
-    expectedAddress: "0xb1AF659094F7CF6c3FfE7e4d056d968B0Fe58663",
+    expectedValue:
+      5126370114286486119248922823807248445856144931672230102669788761404601632355n,
     input: {
       address: "0x0000000000000000000000000000000000000000",
       chainId: 1n,
       family: "ethereum-vm",
     },
-    name: "ETH on Ethereum", // '0x' + 64 hex characters
+    name: "ETH on Ethereum",
   },
   {
-    expectedAddress: "0xa1e17A109f1909b54C5611c6655AFcbAF1F09239",
+    expectedValue:
+      101142405549722680701516949243527989485095939267215334056209565926507227943481n,
     input: {
       address: "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq",
       chainId: 1n,
@@ -24,7 +25,8 @@ export const addressesTestCases: Array<{
     name: "Bitcoin",
   },
   {
-    expectedAddress: "0xAa261e59fd53c7B115f1aae3918D416629ace745",
+    expectedValue:
+      108890717977569292143568470585265267208172758058844132994285904278323093890885n,
     input: {
       address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
       chainId: 1n,
@@ -33,7 +35,8 @@ export const addressesTestCases: Array<{
     name: "USDC on Solana",
   },
   {
-    expectedAddress: "0xe3c144E770F8547Df5aF51A2d4E84C9c289CcC3a",
+    expectedValue:
+      30815307311220170804965801606391678921022824512560571593430839734064343993402n,
     input: {
       address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
       chainId: 8453n,
