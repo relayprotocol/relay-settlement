@@ -1,4 +1,4 @@
-import { VmType } from "@reservoir0x/relay-protocol-sdk"
+import { VmType } from "./utils"
 
 export interface ProtocolContracts {
   depository?: string

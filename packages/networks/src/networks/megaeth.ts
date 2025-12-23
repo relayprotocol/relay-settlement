@@ -1,4 +1,4 @@
-import { NetworkConfig } from "@relay-settlement/types"
+import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
 
 export const megaeth: NetworkConfig = {
   chainId: 4326n,

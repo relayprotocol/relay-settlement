@@ -1,4 +1,4 @@
-import { NetworkConfig } from "@relay-settlement/types"
+import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
 
 export const corn: NetworkConfig = {
   chainId: 21000000n,

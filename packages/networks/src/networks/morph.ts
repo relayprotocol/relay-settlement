@@ -1,4 +1,4 @@
-import { NetworkConfig } from "@relay-settlement/types"
+import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
 
 export const morph: NetworkConfig = {
   chainId: 2818n,

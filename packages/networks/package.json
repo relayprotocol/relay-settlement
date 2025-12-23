@@ -19,9 +19,9 @@
     "build": "tsup src/index.ts --dts --format esm,cjs"
   },
   "devDependencies": {
+    "@relay-protocol/settlement-sdk": "workspace:./packages/sdk",
     "@relay-settlement/eslint-config": "workspace:^",
     "@relay-settlement/tsconfig": "workspace:./packages/tsconfig",
-    "@relay-settlement/types": "workspace:./packages/types",
     "eslint": "9.36.0",
     "fs-extra": "11.3.2",
     "tsup": "8.5.0",

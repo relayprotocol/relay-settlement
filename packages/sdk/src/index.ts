@@ -80,6 +80,12 @@ import {
   generateTokenId,
 } from "./hub/hub-utils"
 
+import type {
+  NetworkConfig,
+  NetworkConfigs,
+  ProtocolContracts,
+} from "./networks"
+
 export {
   // Order
   Order,
@@ -157,4 +163,9 @@ export {
   WithdrawalInitiationMessage,
   WithdrawalInitiatedMessage,
   WithdrawalAddressRequest,
+
+  // networks
+  NetworkConfigs,
+  ProtocolContracts,
+  NetworkConfig,
 }

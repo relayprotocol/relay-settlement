@@ -44,7 +44,7 @@ import "./tasks/exportAbis"
 import "./tasks/grantRole"
 
 // Relay Multisig signer
-import { NetworkConfig } from "@relay-settlement/types"
+import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
 import "./tasks/relayMultisigSigner/check-hashes"
 import "./tasks/relayMultisigSigner/create-nonce-account"
 import "./tasks/relayMultisigSigner/decode-multicall"

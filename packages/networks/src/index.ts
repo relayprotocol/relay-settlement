@@ -1,4 +1,4 @@
-import type { NetworkConfigs } from "@relay-settlement/types"
+import type { NetworkConfigs } from "@relay-protocol/settlement-sdk"
 
 import * as supportedNetworks from "./networks"
 
