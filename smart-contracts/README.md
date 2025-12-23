@@ -70,7 +70,7 @@ Bridge to Aurora Testnet Via https://testnet.rainbowbridge.app/
 
 A smart contract that can use Near's Chain Signatures (via Aurora) to sign hashes submitted from a Multisig. This lets the Relay team control smart contracts (and EOAs) on various chains (EVM, Bitcoin, Solana... etc) from a multisig wallet without sharing a private key.
 
-We have deployed an instance of this contract on Aurora at `0x66667945C34b399993cA834587886b8508dB39B1`.
+We have deployed an instance of this contract on Aurora at `0xb538ee6515F9d16eBD0BACD0503733815c9b070c`.
 
 ### Example of flow:
 

@@ -2,13 +2,17 @@ import { task } from "hardhat/config"
 import { checksumAddress } from "viem"
 import { createSafeClient } from "@safe-global/sdk-starter-kit"
 import { createTransactionBundle } from "./utils"
+import { networks } from "@relay-settlement/networks"
 
 task(
   "relay-multisig-signer:submit",
   "Submits transactions from a transactions manifest file to a Gnosis Safe."
 )
   .addParam("transactions", "The path to the transactions manifest file")
-  .addParam("relayMultisigSigner", "address of the relay multisig signer")
+  .addOptionalParam(
+    "relayMultisigSigner",
+    "address of the relay multisig signer (defaults to network config)"
+  )
   .setAction(
     async (
       {
@@ -19,9 +23,28 @@ task(
     ) => {
       const [user] = await hre.viem.getWalletClients()
 
+      // Get the relay multisig signer address from network config if not provided
+      let resolvedAddress = relayMultisigSignerAddress
+      if (!resolvedAddress) {
+        const chainId = hre.network.config.chainId
+        if (!chainId) {
+          throw new Error("Chain ID not found in network config")
+        }
+        const network = networks[chainId.toString()]
+        if (!network?.contracts?.prod?.multisigSigner) {
+          throw new Error(
+            `No multisigSigner address found in network config for chain ${chainId}`
+          )
+        }
+        resolvedAddress = network.contracts.prod.multisigSigner
+        console.log(
+          `Using multisigSigner address from network config: ${resolvedAddress}`
+        )
+      }
+
       const relayMultisigSigner = await hre.viem.getContractAt(
         "RelayMultisigSigner",
-        relayMultisigSignerAddress
+        resolvedAddress
       )
 
       // TODO: should we handle this if the owner is _not_ a SAFE? (things will fail later).

@@ -39,7 +39,7 @@ export const getAllocatorPublicKey = async (
   const { isTestnet } = networks[await publicClient.getChainId()]
 
   const { rpc: nearRpcUrl } = {
-    rpc: "https://rpc.mainnet.near.org",
+    rpc: "https://free.rpc.fastnear.com",
     // signer: "v1.signer",
   }
 

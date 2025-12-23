@@ -8,5 +8,10 @@
   "EVMPayloadBuilder#Utils": "0x7c5B4a61a91152F042Ce69e338D70ccb45Ab070F",
   "EVMPayloadBuilder#EVMPayloadBuilder": "0x56309fa32d81054603b4AaDe7f6C55291D574EFD",
   "SolanaPayloadBuilder#SolanaPayloadBuilder": "0xF0d5Cfc8f55f7Aa74aD870504a84511558953c2B",
-  "HyperLiquidPayloadBuilder#HyperLiquidPayloadBuilder": "0xbFfd3edf3CBC6B73Cafdd81076458dA6eaA407D0"
+  "HyperLiquidPayloadBuilder#HyperLiquidPayloadBuilder": "0xbFfd3edf3CBC6B73Cafdd81076458dA6eaA407D0",
+  "RelayMultisigSigner#AuroraXccUtils": "0x43dB8b760a9d43d7da1116E6BA93E3a0FfD4b0C0",
+  "RelayMultisigSigner#ChainSignatures": "0xCf031391274df58ddFE7F1Bc56c6DA327837B1d9",
+  "RelayMultisigSigner#Codec": "0xbc9341b20710cBcE6318934dc6c49077BAa92106",
+  "RelayMultisigSigner#AuroraSdk": "0xb6E614f3BDb7Cf4552Eb4F064fF9Ab546d15057c",
+  "RelayMultisigSigner#RelayMultisigSigner": "0xb538ee6515F9d16eBD0BACD0503733815c9b070c"
 }

@@ -900,26 +900,15 @@ export const createTransactionBundle = async (
 const encodeSignatureCall = (
   hashToSign: `0x${string}`,
   curve: "Ecdsa" | "Eddsa",
-  relayMultisigSigner: RelayMultisigSigner$Type
+  relayMultisigSigner: RelayMultisigSigner$Type,
+  useRawData: boolean = false
 ) => {
-  // Use the old on-chain ABI signature: approveSignature(bytes32,string)
-  // Note: The deployed contract uses bytes32, not bytes
-  const oldAbi = [
-    {
-      inputs: [
-        { internalType: "bytes32", name: "data", type: "bytes32" },
-        { internalType: "string", name: "curve", type: "string" },
-      ],
-      name: "approveSignature",
-      outputs: [],
-      stateMutability: "nonpayable",
-      type: "function",
-    },
-  ] as const
+  // Encode the data as bytes (the contract expects bytes, not bytes32)
+  const data = useRawData ? hashToSign : encodePacked(["bytes32"], [hashToSign])
 
   const callData = encodeFunctionData({
-    abi: oldAbi,
-    args: [hashToSign, curve],
+    abi: relayMultisigSigner.abi,
+    args: [data, curve],
     functionName: "approveSignature",
   })
 
