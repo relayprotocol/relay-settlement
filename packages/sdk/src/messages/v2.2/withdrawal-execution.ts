@@ -52,10 +52,10 @@ export const getSubmitWithdrawRequestHash = (
 }
 
 export type WithdrawalAddressParams = {
-  depositoryAddress: string
+  depository: string
   depositoryChainId: bigint
   currency: string
-  recipientAddress: string
+  recipient: string
   withdrawerAlias: string
   amount: bigint
   withdrawalNonce: string
@@ -64,10 +64,10 @@ export type WithdrawalAddressParams = {
 /**
  * Compute deterministic withdrawal address
  *
- * @param depositoryAddress the depository contract holding the funds on origin chain
+ * @param depository the depository contract holding the funds on origin chain
  * @param depositoryChainId the chain id of the depository contract currently holding the funds
  * @param currency the id of the currency as expressed on origin chain (string)
- * @param recipientAddress the address that will receive the withdrawn funds on destination chain
+ * @param recipient the address that will receive the withdrawn funds on destination chain
  * @param withdrawerAlias the address that owns the balance on the settlement chain
  * before the withdrawal is initiated
  * @param amount the balance to withdraw
@@ -93,10 +93,10 @@ export function getWithdrawalAddress(
         "bytes32",
       ],
       [
-        withdrawalParams.depositoryAddress as `0x${string}`,
+        withdrawalParams.depository as `0x${string}`,
         withdrawalParams.depositoryChainId,
         withdrawalParams.currency,
-        withdrawalParams.recipientAddress as `0x${string}`,
+        withdrawalParams.recipient as `0x${string}`,
         withdrawalParams.withdrawerAlias as `0x${string}`,
         withdrawalParams.amount,
         nonce,
@@ -113,7 +113,7 @@ export function getWithdrawalAddress(
 // and we pass the amount as a string
 export type WithdrawalAddressRequest = Omit<
   WithdrawalAddressParams,
-  "depositoryChainId" | "amount" | "depositoryAddress"
+  "depositoryChainId" | "amount" | "depository"
 > & {
   chainId: string
   amount: string
