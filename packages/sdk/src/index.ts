@@ -68,6 +68,7 @@ import {
   WithdrawalInitiationMessage,
   WithdrawalInitiatedMessage,
   WithdrawalAddressRequest,
+  computeWithdrawerBalanceMessage,
 } from "./messages/v2.2/withdrawal-execution"
 
 import {
@@ -163,6 +164,7 @@ export {
   WithdrawalInitiationMessage,
   WithdrawalInitiatedMessage,
   WithdrawalAddressRequest,
+  computeWithdrawerBalanceMessage,
 
   // networks
   NetworkConfigs,

@@ -57,7 +57,6 @@ export type WithdrawalAddressParams = {
   currency: string
   recipient: string
   withdrawerAlias: string
-  amount: bigint
   withdrawalNonce: string
 }
 
@@ -70,7 +69,6 @@ export type WithdrawalAddressParams = {
  * @param recipient the address that will receive the withdrawn funds on destination chain
  * @param withdrawerAlias the address that owns the balance on the settlement chain
  * before the withdrawal is initiated
- * @param amount the balance to withdraw
  * @param withdrawalNonce nonce to prevent collisions for similar withdrawals
  * @returns withdrawal address (in lower case)
  */
@@ -83,22 +81,13 @@ export function getWithdrawalAddress(
   )
   const hash = keccak256(
     encodePacked(
-      [
-        "address",
-        "uint256",
-        "string",
-        "address",
-        "address",
-        "uint256",
-        "bytes32",
-      ],
+      ["address", "uint256", "string", "address", "address", "bytes32"],
       [
         withdrawalParams.depository as `0x${string}`,
         withdrawalParams.depositoryChainId,
         withdrawalParams.currency,
         withdrawalParams.recipient as `0x${string}`,
         withdrawalParams.withdrawerAlias as `0x${string}`,
-        withdrawalParams.amount,
         nonce,
       ]
     )
@@ -109,19 +98,42 @@ export function getWithdrawalAddress(
   return `0x${withdrawalAddress}` as `0x${string}`
 }
 
+// compute a message about withdrawer balance
+// to be signed as auth proof for the oracle
+export function computeWithdrawerBalanceMessage(
+  withdrawerAlias: string,
+  amount: bigint,
+  withdrawalNonce: string
+) {
+  return keccak256(
+    encodePacked(
+      ["address", "uint256", "bytes32"],
+      [
+        withdrawerAlias as `0x${string}`,
+        BigInt(amount),
+        withdrawalNonce as `0x${string}`,
+      ]
+    )
+  )
+}
+
 // for oracle requests, we replace the hub chain id by a slug used in the oracle (e.g. 'base')
-// and we pass the amount as a string
+// nb: withdrawer is called 'owner' on the solver
 export type WithdrawalAddressRequest = Omit<
   WithdrawalAddressParams,
-  "depositoryChainId" | "amount" | "depository"
+  "depositoryChainId" | "amount" | "depository" | "withdrawerAlias"
 > & {
+  withdrawer: string
+  withdrawerChainId: string
   chainId: string
-  amount: string
 }
 
 // types for oracle routes
 export type WithdrawalInitiationMessage = {
-  data: WithdrawalAddressRequest & { settlementChainId: string }
+  data: WithdrawalAddressRequest & {
+    settlementChainId: string
+    signature: string
+  }
   result: {
     withdrawalAddress: string
   }

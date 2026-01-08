@@ -10,13 +10,12 @@ describe("getWithdrawalAddress", () => {
       currency: "10340230",
       recipient: "0x9876543210987654321098765432109876543210",
       withdrawerAlias: "0x9876543210987654321098765432109876543210",
-      amount: 1000n,
       withdrawalNonce: "haha",
     }
 
     const address = getWithdrawalAddress(params)
     expect(address).toMatch(/^0x[0-9a-f]{40}$/i)
-    expect(address).toBe("0xb73fed6628648bfac09347a115ded54ca2bc58d3")
+    expect(address).toBe("0x4057440951d7d3052d308c0460202d0e8bba3ae3")
     expect(getAddress(address).toLowerCase()).toMatch(address)
   })
 })
