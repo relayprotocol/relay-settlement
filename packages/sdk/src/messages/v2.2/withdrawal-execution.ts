@@ -63,7 +63,7 @@ export type WithdrawalAddressParams = {
 /**
  * Compute deterministic withdrawal address
  *
- * @param depository the depository contract holding the funds on origin chain
+ * @param depository the depository contract holding the funds on origin chain (as string)
  * @param depositoryChainId the chain id of the depository contract currently holding the funds
  * @param currency the id of the currency as expressed on origin chain (string)
  * @param recipient the address that will receive the withdrawn funds on destination chain
@@ -81,9 +81,9 @@ export function getWithdrawalAddress(
   )
   const hash = keccak256(
     encodePacked(
-      ["address", "uint256", "string", "address", "address", "bytes32"],
+      ["string", "uint256", "string", "address", "address", "bytes32"],
       [
-        withdrawalParams.depository as `0x${string}`,
+        withdrawalParams.depository,
         withdrawalParams.depositoryChainId,
         withdrawalParams.currency,
         withdrawalParams.recipient as `0x${string}`,
@@ -131,6 +131,7 @@ export type WithdrawalAddressRequest = Omit<
 // types for oracle routes
 export type WithdrawalInitiationMessage = {
   data: WithdrawalAddressRequest & {
+    expectedAmount: string
     settlementChainId: string
     signature: string
   }
@@ -141,6 +142,7 @@ export type WithdrawalInitiationMessage = {
 
 export type WithdrawalInitiatedMessage = {
   data: WithdrawalAddressRequest & {
+    expectedAmount: string
     settlementChainId: string
   }
   result: {
