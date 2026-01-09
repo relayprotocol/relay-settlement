@@ -16,6 +16,7 @@ import "./tasks/allocator/signPayload"
 import "./tasks/allocator/submitWithdrawRequest"
 import "./tasks/allocator/withdrawToNear"
 import "./tasks/depository/withdraw"
+import "./tasks/depository/checkOwners"
 
 // allocator test suite
 import "./tasks/allocator/full/bitcoin"

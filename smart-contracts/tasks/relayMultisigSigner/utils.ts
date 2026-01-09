@@ -19,6 +19,7 @@ import { buildBitcoinTransactionFromPayload } from "../../lib/bitcoin"
 import { wait } from "../../lib/wait"
 import { extractNearSignature } from "../../lib/near"
 import { HardhatRuntimeEnvironment } from "hardhat/types"
+import { networks } from "@relay-settlement/networks"
 
 import {
   Connection,
@@ -848,6 +849,25 @@ export function loadTransactions(path: string) {
   return TransactionsSchema.parse(data)
 }
 
+// Helper function to get chain name from transaction
+const getChainNameFromTransaction = (tx: Transaction): string => {
+  if ("rpc" in tx) {
+    // Try to find the network by RPC URL
+    for (const [, network] of Object.entries(networks)) {
+      if (network.rpc.includes(tx.rpc)) {
+        return network.name || network.slug
+      }
+    }
+    // If not found, try to extract from RPC URL
+    const url = new URL(tx.rpc)
+    return url.hostname.split(".")[0] || "unknown"
+  }
+  if (tx.family === "bitcoin-vm") {
+    return tx.network === "mainnet" ? "Bitcoin" : "Bitcoin Testnet"
+  }
+  return "unknown"
+}
+
 export const createTransactionBundle = async (
   transactionsPath: string,
   relayMultisigSigner: GetContractReturnType<RelayMultisigSigner$Type["abi"]>
@@ -880,10 +900,11 @@ export const createTransactionBundle = async (
       )
     }
 
+    const chainName = getChainNameFromTransaction(tx)
     result.hashesToSign.forEach((hash, index) => {
       const useRawData = tx.family === "solana-vm"
       console.log(
-        `🏗️  Building ${useRawData ? "raw data" : "hash"} #${index} for tx #${i} (${tx.family}) : ${hash}`
+        `🏗️  Building ${useRawData ? "raw data" : "hash"} #${index} for tx #${i} (${chainName} - ${tx.family}) : ${hash}`
       )
       const transactionForBundle = encodeSignatureCall(
         hash,
