@@ -72,12 +72,12 @@ export function getWithdrawalAddress(
   )
   const hash = keccak256(
     encodePacked(
-      ["string", "uint256", "string", "address", "address", "bytes32"],
+      ["string", "uint256", "string", "string", "address", "bytes32"],
       [
         withdrawalParams.depository,
         withdrawalParams.depositoryChainId,
         withdrawalParams.currency,
-        withdrawalParams.recipient as `0x${string}`,
+        withdrawalParams.recipient,
         withdrawalParams.withdrawerAlias as `0x${string}`,
         nonce,
       ]

@@ -18,7 +18,7 @@ describe("getWithdrawalAddress", () => {
 
     const address = getWithdrawalAddress(params)
     expect(address).toMatch(/^0x[0-9a-f]{40}$/i)
-    expect(address).toBe("0x137217a86a5450584d540cc307b83e225ebd5c54")
+    expect(address).toBe("0xeb62c71a37203bfc46fcda13f727129901bcf05c")
     expect(getAddress(address).toLowerCase()).toMatch(address)
   })
 })
