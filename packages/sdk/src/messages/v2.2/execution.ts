@@ -18,7 +18,7 @@ export type ExecutionMessageMetadata = {
   hubTokenId: bigint
   origin: {
     address: string
-    chainId: bigint
+    chainId: string
     family: VmType
   }
   oracleChainId: string
