@@ -69,6 +69,9 @@ import {
   WithdrawalInitiatedMessage,
   WithdrawalAddressRequest,
   computeWithdrawerBalanceMessage,
+  OnChainWithdrawalQuery,
+  OnchainWithdrawalSignatureRequest,
+  OnchainWithdrawalRequest,
 } from "./messages/v2.2/withdrawal-execution"
 
 import {
@@ -165,6 +168,9 @@ export {
   WithdrawalInitiatedMessage,
   WithdrawalAddressRequest,
   computeWithdrawerBalanceMessage,
+  OnChainWithdrawalQuery,
+  OnchainWithdrawalSignatureRequest,
+  OnchainWithdrawalRequest,
 
   // networks
   NetworkConfigs,

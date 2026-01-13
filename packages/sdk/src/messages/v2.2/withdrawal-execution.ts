@@ -1,4 +1,11 @@
-import { Hex, Address, encodePacked, keccak256 } from "viem"
+import {
+  Hex,
+  Address,
+  encodeAbiParameters,
+  parseAbiParameters,
+  encodePacked,
+  keccak256,
+} from "viem"
 
 export interface SubmitWithdrawRequest {
   chainId: string // chainId of the destination chain on which the user will withdraw
@@ -7,48 +14,32 @@ export interface SubmitWithdrawRequest {
   amount: string // Amount to withdraw
   spender: string // address of the account that owns the balance in the Hub contract (can be an alias)
   receiver: string // Address of the account on the destination chain
-  data: string // add tional data
+  data: string // additional data
   nonce: string // Nonce for replay protection
 }
 
 export const getSubmitWithdrawRequestHash = (
   request: SubmitWithdrawRequest
 ) => {
-  // EIP712 type from RelayAllocator
-  const PAYLOAD_TYPEHASH = keccak256(
-    "SubmitWithdrawRequest(uint256 chainId,string depository,string currency,uint256 amount,address spender,string receiver,bytes data,bytes32 nonce)" as Hex
+  const encoded = encodeAbiParameters(
+    parseAbiParameters([
+      "(uint256 chainId, string depository, string currency, uint256 amount, address spender, string receiver, bytes data, bytes32 nonce)",
+    ]),
+    [
+      {
+        chainId: BigInt(request.chainId),
+        depository: request.depository,
+        currency: request.currency,
+        amount: BigInt(request.amount),
+        spender: request.spender as Address,
+        receiver: request.receiver,
+        data: request.data as Hex,
+        nonce: request.nonce as Hex,
+      },
+    ]
   )
 
-  // Create EIP712 digest
-  const digest = keccak256(
-    encodePacked(
-      [
-        "bytes32",
-        "uint256",
-        "bytes32",
-        "bytes32",
-        "uint256",
-        "address",
-        "bytes32",
-        "bytes32",
-        "bytes32",
-      ],
-      [
-        PAYLOAD_TYPEHASH,
-        BigInt(request.chainId),
-        keccak256(request.depository as Hex),
-        keccak256(request.currency as Hex),
-        BigInt(request.amount),
-        request.spender as Address,
-        keccak256(request.receiver as Hex),
-        keccak256(request.data as Hex),
-        request.nonce as Hex,
-      ]
-    )
-  )
-
-  // The withdrawal address is the digest itself (as a hex string)
-  return digest
+  return keccak256(encoded)
 }
 
 export type WithdrawalAddressParams = {
@@ -148,5 +139,56 @@ export type WithdrawalInitiatedMessage = {
   result: {
     proofOfWithdrawalAddressBalance: string
     withdrawalAddress: string
+  }
+}
+
+// types for Hub routes
+export type OnChainWithdrawalQuery = {
+  data: {
+    chainId: string
+    payloadId: string
+    payloadParams: SubmitWithdrawRequest
+  }
+  result: {
+    encodedData: string
+    signature?: string
+    signer?: string
+  }
+}
+
+export type OnchainWithdrawalRequest = {
+  data: {
+    chainId: string
+    currency: string
+    amount: string
+    recipient: string
+    spender: string
+    nonce: string
+    additionalData?: {
+      "hyperliquid-vm"?: {
+        currencyHyperliquidSymbol: string
+      }
+    }
+    signature: string
+    owner: string
+    ownerChainId: string // not needed
+  }
+  result: {
+    id: string
+    encodedData: string
+    payloadId: string
+    submitWithdrawalRequestParams: SubmitWithdrawRequest
+    signer: string
+  }
+}
+
+export type OnchainWithdrawalSignatureRequest = {
+  data: {
+    chainId: string
+    payloadId: string
+    payloadParams: SubmitWithdrawRequest
+  }
+  result: {
+    message: string
   }
 }
