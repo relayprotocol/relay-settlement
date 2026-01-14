@@ -41,7 +41,6 @@
     "@nomiclabs/hardhat-solhint": "4.1.0",
     "@openzeppelin/contracts": "5.3.0",
     "@relay-protocol/settlement-sdk": "workspace:*",
-    "@reservoir0x/relay-protocol-sdk": "0.0.43",
     "@safe-global/sdk-starter-kit": "3.0.1",
     "@solana/web3.js": "1.98.4",
     "base58-solidity": "1.0.2",

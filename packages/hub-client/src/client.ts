@@ -1,4 +1,4 @@
-import { VmType } from "@reservoir0x/relay-protocol-sdk"
+import { VmType } from "@relay-protocol/settlement-sdk"
 
 export interface MintParams {
   family: VmType

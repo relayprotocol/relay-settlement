@@ -2,7 +2,7 @@ import {
   generateAddress,
   generateTokenId,
 } from "@relay-protocol/settlement-sdk"
-import { ActionType } from "@reservoir0x/relay-protocol-sdk"
+import { ActionType } from "@relay-protocol/settlement-sdk"
 import { randomBytes } from "crypto"
 import { encodeAbiParameters, Hex } from "viem"
 
