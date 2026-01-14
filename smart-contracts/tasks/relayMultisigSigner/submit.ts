@@ -2,7 +2,7 @@ import { task } from "hardhat/config"
 import { checksumAddress } from "viem"
 import { createSafeClient } from "@safe-global/sdk-starter-kit"
 import { createTransactionBundle } from "./utils"
-import { networks } from "@relay-settlement/networks"
+import { networks } from "@relay-protocol/settlement-networks"
 
 task(
   "relay-multisig-signer:submit",

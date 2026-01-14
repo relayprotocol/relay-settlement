@@ -1,6 +1,6 @@
 {
   "description": "Relay Protocol's supported networks",
-  "name": "@relay-settlement/networks",
+  "name": "@relay-protocol/settlement-networks",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",

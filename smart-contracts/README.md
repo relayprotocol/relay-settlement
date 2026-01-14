@@ -145,11 +145,11 @@ To add support for additional contract types, define the parameter schema in `ta
 
 ## Hub / Oracle
 
-### Add your hub network to the `@relay-settlement/networks` package
+### Add your hub network to the `@relay-protocol/settlement-networks` package
 
 - First you need to add a network manifest file to the [network package](`../packages/networks/src`).
 - Make sure the file has an (empty for now) `contracts` section - or it will be ignored by hardhat
-- Rebuild the package `yarn workspace @relay-settlement/networks clean && yarn workspace @relay-settlement/networks build`
+- Rebuild the package `yarn workspace @relay-protocol/settlement-networks clean && yarn workspace @relay-protocol/settlement-networks build`
 
 ### Deploy the contracts
 

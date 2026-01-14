@@ -2,7 +2,7 @@ import {
   calderaTestnet,
   conduitTestnet,
   sovereignTestnet,
-} from "@relay-settlement/networks"
+} from "@relay-protocol/settlement-networks"
 import { defineChain } from "viem"
 import * as viemChains from "viem/chains"
 

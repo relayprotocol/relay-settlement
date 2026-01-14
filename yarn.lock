@@ -1844,6 +1844,20 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@relay-protocol/settlement-networks@workspace:packages/networks":
+  version: 0.0.0-use.local
+  resolution: "@relay-protocol/settlement-networks@workspace:packages/networks"
+  dependencies:
+    "@relay-protocol/settlement-sdk": "workspace:./packages/sdk"
+    "@relay-settlement/eslint-config": "workspace:^"
+    "@relay-settlement/tsconfig": "workspace:./packages/tsconfig"
+    eslint: "npm:9.36.0"
+    fs-extra: "npm:11.3.2"
+    tsup: "npm:8.5.0"
+    typescript: "npm:5.9.3"
+  languageName: unknown
+  linkType: soft
+
 "@relay-protocol/settlement-sdk@workspace:*, @relay-protocol/settlement-sdk@workspace:./packages/sdk, @relay-protocol/settlement-sdk@workspace:packages/sdk":
   version: 0.0.0-use.local
   resolution: "@relay-protocol/settlement-sdk@workspace:packages/sdk"
@@ -1927,20 +1941,6 @@ __metadata:
     ts-node: "npm:10.9.2"
     typescript: "npm:5.9.3"
     typescript-eslint: "npm:8.45.0"
-  languageName: unknown
-  linkType: soft
-
-"@relay-settlement/networks@workspace:packages/networks":
-  version: 0.0.0-use.local
-  resolution: "@relay-settlement/networks@workspace:packages/networks"
-  dependencies:
-    "@relay-protocol/settlement-sdk": "workspace:./packages/sdk"
-    "@relay-settlement/eslint-config": "workspace:^"
-    "@relay-settlement/tsconfig": "workspace:./packages/tsconfig"
-    eslint: "npm:9.36.0"
-    fs-extra: "npm:11.3.2"
-    tsup: "npm:8.5.0"
-    typescript: "npm:5.9.3"
   languageName: unknown
   linkType: soft
 

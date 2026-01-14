@@ -2,7 +2,7 @@
 // ABOUTME: Displays the owner address for each depository contract found in the networks config
 
 import { task } from "hardhat/config"
-import { networks } from "@relay-settlement/networks"
+import { networks } from "@relay-protocol/settlement-networks"
 import { createPublicClient, http, getContract } from "viem"
 import { Connection, PublicKey } from "@solana/web3.js"
 import { BorshCoder } from "@coral-xyz/anchor"

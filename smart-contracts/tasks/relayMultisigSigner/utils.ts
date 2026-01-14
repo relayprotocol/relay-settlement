@@ -19,7 +19,7 @@ import { buildBitcoinTransactionFromPayload } from "../../lib/bitcoin"
 import { wait } from "../../lib/wait"
 import { extractNearSignature } from "../../lib/near"
 import { HardhatRuntimeEnvironment } from "hardhat/types"
-import { networks } from "@relay-settlement/networks"
+import { networks } from "@relay-protocol/settlement-networks"
 
 import {
   Connection,

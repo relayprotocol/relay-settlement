@@ -3,7 +3,7 @@
 
 import { writeFileSync } from "fs"
 import { join } from "path"
-import { networks } from "@relay-settlement/networks"
+import { networks } from "@relay-protocol/settlement-networks"
 import { createPublicClient, http } from "viem"
 import { deriveAllocatorSignerAddress } from "../../../lib/signer"
 

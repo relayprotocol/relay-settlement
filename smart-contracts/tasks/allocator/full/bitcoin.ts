@@ -24,7 +24,7 @@ import {
 import { getAllocatorPublicKey } from "../../../lib/signer"
 import { extractNearSignature } from "../../../lib/near"
 import { wait } from "../../../lib/wait"
-import { networks } from "@relay-settlement/networks"
+import { networks } from "@relay-protocol/settlement-networks"
 
 task(
   "full:bitcoin",

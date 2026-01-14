@@ -1,7 +1,7 @@
 import { ChainType } from "@relay-settlement/types"
 import { task } from "hardhat/config"
 import { deriveAllocatorSignerAddress } from "../../lib/signer"
-import { networks } from "@relay-settlement/networks"
+import { networks } from "@relay-protocol/settlement-networks"
 
 const SUPPORTED_FAMILIES: ChainType[] = [
   "bitcoin-vm",

@@ -1,7 +1,7 @@
 import "@nomicfoundation/hardhat-ignition"
 import "@nomicfoundation/hardhat-toolbox-viem"
 import "@nomiclabs/hardhat-solhint"
-import { networks as nets } from "@relay-settlement/networks"
+import { networks as nets } from "@relay-protocol/settlement-networks"
 import "hardhat-gas-reporter"
 import type { HardhatUserConfig } from "hardhat/config"
 import "solidity-coverage"

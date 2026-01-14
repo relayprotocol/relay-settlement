@@ -1,5 +1,5 @@
 import { task } from "hardhat/config"
-import networks from "@relay-settlement/networks"
+import networks from "@relay-protocol/settlement-networks"
 import {
   recoverTypedDataAddress,
   zeroAddress,
