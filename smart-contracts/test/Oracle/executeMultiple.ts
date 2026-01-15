@@ -178,6 +178,7 @@ describe("executeMultiple", function () {
           idempotencyKey: idempotencyKey3,
         },
       ],
+      oracleWallet.account.address,
       [signature1, signature2, signature3],
     ])
 
@@ -301,6 +302,7 @@ describe("executeMultiple", function () {
           idempotencyKey: idempotencyKeyFailing,
         },
       ],
+      oracleWallet.account.address,
       [signature1, signature2, signature3, signatureFailing],
     ])
 
@@ -370,6 +372,7 @@ describe("executeMultiple", function () {
           idempotencyKey: idempotencyKeyFailing,
         },
       ],
+      oracleWallet.account.address,
       [signatureFailing],
     ])
 
@@ -430,6 +433,7 @@ describe("executeMultiple", function () {
           idempotencyKey: idempotencyKey1,
         },
       ],
+      oracleWallet.account.address,
       [signature1],
     ])
 
@@ -441,6 +445,7 @@ describe("executeMultiple", function () {
           idempotencyKey: idempotencyKey1,
         },
       ],
+      oracleWallet.account.address,
       [signature1],
     ])
 

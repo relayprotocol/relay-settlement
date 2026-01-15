@@ -54,7 +54,7 @@ describe("execute", function () {
   }
 
   it("should execute a single mint action", async () => {
-    const { hub, mint, oracle, otherWallets, publicClient } =
+    const { hub, mint, oracle, oracleWallet, otherWallets, publicClient } =
       await loadFixture(setup)
 
     const currency = otherWallets[0].account.address
@@ -91,6 +91,7 @@ describe("execute", function () {
         actions: [action],
         idempotencyKey,
       },
+      oracleWallet.account.address,
       signature,
     ])
 
@@ -114,8 +115,15 @@ describe("execute", function () {
   })
 
   it("should execute a single burn action", async () => {
-    const { burn, hub, mint, oracle, otherWallets, publicClient } =
-      await loadFixture(setup)
+    const {
+      burn,
+      hub,
+      mint,
+      oracle,
+      oracleWallet,
+      otherWallets,
+      publicClient,
+    } = await loadFixture(setup)
 
     const currency = otherWallets[0].account.address
     const from = otherWallets[1].account.address
@@ -146,6 +154,7 @@ describe("execute", function () {
           actions: [action],
           idempotencyKey,
         },
+        oracleWallet.account.address,
         signature,
       ])
     }
@@ -168,6 +177,7 @@ describe("execute", function () {
         actions: [action],
         idempotencyKey,
       },
+      oracleWallet.account.address,
       signature,
     ])
 
@@ -194,8 +204,15 @@ describe("execute", function () {
   })
 
   it("should execute a single transfer action", async () => {
-    const { hub, mint, oracle, otherWallets, publicClient, transfer } =
-      await loadFixture(setup)
+    const {
+      hub,
+      mint,
+      oracle,
+      oracleWallet,
+      otherWallets,
+      publicClient,
+      transfer,
+    } = await loadFixture(setup)
 
     const currency = otherWallets[0].account.address
     const from = otherWallets[1].account.address
@@ -232,6 +249,7 @@ describe("execute", function () {
           actions: [action],
           idempotencyKey,
         },
+        oracleWallet.account.address,
         signature,
       ])
     }
@@ -259,6 +277,7 @@ describe("execute", function () {
         actions: [action],
         idempotencyKey,
       },
+      oracleWallet.account.address,
       signature,
     ])
 
@@ -395,6 +414,7 @@ describe("execute", function () {
         actions,
         idempotencyKey,
       },
+      oracleWallet.account.address,
       signature,
     ])
 
@@ -444,7 +464,8 @@ describe("execute", function () {
   })
 
   it("should fail to execute the same idempotency key multiple times", async () => {
-    const { mint, oracle, otherWallets } = await loadFixture(setup)
+    const { mint, oracle, oracleWallet, otherWallets } =
+      await loadFixture(setup)
 
     const currency = otherWallets[0].account.address
     const to = otherWallets[1].account.address
@@ -473,6 +494,7 @@ describe("execute", function () {
         actions: [action],
         idempotencyKey,
       },
+      oracleWallet.account.address,
       signature,
     ])
 
@@ -482,13 +504,15 @@ describe("execute", function () {
           actions: [action],
           idempotencyKey,
         },
+        oracleWallet.account.address,
         signature,
       ])
     ).to.be.rejectedWith("AlreadyExecuted")
   })
 
   it("should fail to execute if the signature is invalid", async () => {
-    const { mint, oracle, otherWallets } = await loadFixture(setup)
+    const { mint, oracle, oracleWallet, otherWallets } =
+      await loadFixture(setup)
 
     const currency = otherWallets[0].account.address
     const to = otherWallets[1].account.address
@@ -521,11 +545,24 @@ describe("execute", function () {
           actions,
           idempotencyKey,
         },
+        oracleWallet.account.address,
         `0x${randomBytes(65).toString("hex")}`,
       ])
-    ).to.be.rejectedWith("ECDSAInvalidSignature")
+    ).to.be.rejectedWith("InvalidSignature")
 
-    // failed with unauthorized sig
+    // fail with unauthorized oracle address
+    await expect(
+      oracle.write.execute([
+        {
+          actions,
+          idempotencyKey,
+        },
+        attacker.account.address,
+        `0x${randomBytes(65).toString("hex")}`,
+      ])
+    ).to.be.rejectedWith("UnauthorizedOracle")
+
+    // fail with valid signature from unauthorized signer
     const unauthorizedSignature = await attacker.signTypedData({
       domain: {
         chainId: await attacker.getChainId(),
@@ -552,14 +589,16 @@ describe("execute", function () {
       },
     })
 
+    // Passing oracle address but signature from attacker - should fail with InvalidSignature
     await expect(
       oracle.write.execute([
         {
           actions,
           idempotencyKey,
         },
+        oracleWallet.account.address,
         unauthorizedSignature,
       ])
-    ).to.be.rejectedWith("UnauthorizedOracle")
+    ).to.be.rejectedWith("InvalidSignature")
   })
 })

@@ -4,7 +4,6 @@ pragma solidity ^0.8.24;
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
-import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 import {RelayHub} from "./RelayHub.sol";
 
@@ -38,6 +37,7 @@ contract RelayOracle is AccessControl, EIP712 {
   // Errors
   error AlreadyExecuted(bytes32 idempotencyKey);
   error UnauthorizedOracle(address oracle);
+  error InvalidSignature(address oracle);
 
   // Roles
 
@@ -75,9 +75,11 @@ contract RelayOracle is AccessControl, EIP712 {
   // Public methods
   /// @notice Execute actions
   /// @param executions The actions to execute
+  /// @param oracle The oracle address that signed all executions
   /// @param signatures The oracle signatures
   function executeMultiple(
     Execution[] calldata executions,
+    address oracle,
     bytes[] calldata signatures
   ) external {
     uint256 executionsLength = executions.length;
@@ -87,7 +89,7 @@ contract RelayOracle is AccessControl, EIP712 {
         continue;
       }
 
-      try this.execute(executions[i], signatures[i]) {
+      try this.execute(executions[i], oracle, signatures[i]) {
         // Execution succeeded
       } catch {
         // if execution failed, throw event and continue with next
@@ -101,16 +103,18 @@ contract RelayOracle is AccessControl, EIP712 {
 
   /// @notice Execute a single set of actions
   /// @param execution The actions to execute
-  /// @param signature The oracle signature
+  /// @param oracle The oracle address that signed the execution
+  /// @param signature The oracle signature (ECDSA or EIP-1271)
   function execute(
     Execution calldata execution,
+    address oracle,
     bytes calldata signature
   ) external {
     // Error if the idempotency key is marked as executed
     if (isExecuted[execution.idempotencyKey]) {
       revert AlreadyExecuted(execution.idempotencyKey);
     }
-    _execute(execution, signature);
+    _execute(execution, oracle, signature);
   }
 
   // Internal methods
@@ -147,20 +151,24 @@ contract RelayOracle is AccessControl, EIP712 {
 
   /// @notice Execute actions
   /// @param execution The actions to execute
-  /// @param signature The oracle signature
+  /// @param oracle The oracle address that signed the execution
+  /// @param signature The oracle signature (ECDSA or EIP-1271)
   function _execute(
     Execution calldata execution,
+    address oracle,
     bytes calldata signature
   ) internal {
     bytes32 idempotencyKey = execution.idempotencyKey;
 
-    // Recover oracle address from signature
-    bytes32 digest = _hashExecution(execution);
-    address oracle = ECDSA.recover(digest, signature);
-
     // Error if the oracle is not an authorized address
     if (!hasRole(ORACLE_ROLE, oracle)) {
       revert UnauthorizedOracle(oracle);
+    }
+
+    // Verify the signature (supports both EOA and EIP-1271 contract signatures)
+    bytes32 digest = _hashExecution(execution);
+    if (!oracle.isValidSignatureNow(digest, signature)) {
+      revert InvalidSignature(oracle);
     }
 
     // Mark the idempotency key as executed
