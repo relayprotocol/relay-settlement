@@ -1,23 +1,18 @@
-import {
-  calderaTestnet,
-  conduitTestnet,
-  sovereignTestnet,
-} from "@relay-protocol/settlement-networks"
+import { relay, sovereignTestnet } from "@relay-protocol/settlement-networks"
 import { defineChain } from "viem"
 import * as viemChains from "viem/chains"
 
-const customChains = [conduitTestnet, calderaTestnet, sovereignTestnet].map(
-  (chain) =>
-    defineChain({
-      id: Number(chain.chainId),
-      name: chain.name,
-      nativeCurrency: chain.nativeCurrency!,
-      rpcUrls: {
-        default: {
-          http: chain.rpc,
-        },
+const customChains = [relay, sovereignTestnet].map((chain) =>
+  defineChain({
+    id: Number(chain.chainId),
+    name: chain.name,
+    nativeCurrency: chain.nativeCurrency!,
+    rpcUrls: {
+      default: {
+        http: chain.rpc,
       },
-    })
+    },
+  })
 )
 
 const isCustomChain = (chainId: bigint) => {
