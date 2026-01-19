@@ -38,6 +38,23 @@ export const getViemClients = async (hre: any) => {
       const walletClients = await hre.viem.getWalletClients({
         chain,
       })
+
+      // verify fee estimation works
+      try {
+        const fees = await publicClient.estimateFeesPerGas()
+        console.log(fees)
+        if (!fees.maxFeePerGas || fees.maxFeePerGas === 0n) {
+          console.warn(
+            `Warning: Fee estimation returned 0 for chain ${chainId}. Using defaults.`
+          )
+        }
+      } catch (error) {
+        console.warn(
+          `Warning: Fee estimation failed for chain ${chainId}:`,
+          error
+        )
+      }
+
       return { publicClient, walletClients }
     }
     // viem will throw if chain is unknwon

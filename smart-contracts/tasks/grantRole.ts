@@ -40,9 +40,34 @@ task(
       return
     }
 
-    // Grant the role
-    const hash = await contract.write.grantRole([roleBytes32, account])
-    console.log(`Transaction submitted: ${hash}`)
+    // estimate the fees
+    const block = await publicClient.getBlock({ blockTag: "latest" })
+    const baseFee = block.baseFeePerGas || 0n
+
+    let hash: string
+    if (!baseFee || baseFee === 0n) {
+      const gasPrice = await publicClient.getGasPrice()
+      hash = await contract.write.grantRole([roleBytes32, account], {
+        gasPrice,
+      })
+    } else {
+      // EIP-1559 transaction
+      const maxPriorityFeePerGas = 0n // 1 gwei
+      const maxFeePerGas = baseFee + maxPriorityFeePerGas + 2n // Add 2 wei buffer for safety
+
+      console.log("Fee details:", {
+        baseFee: baseFee.toString(),
+        maxFeePerGas: maxFeePerGas.toString(),
+        maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
+      })
+
+      // Grant the role
+      hash = await contract.write.grantRole([roleBytes32, account], {
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+      })
+      console.log(`Transaction submitted: ${hash}`)
+    }
 
     // Wait for transaction confirmation
     const receipt = await publicClient.waitForTransactionReceipt({ hash })
