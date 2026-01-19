@@ -20,7 +20,7 @@ task("hub:add-editors", "Grant EDITOR_ROLE to a list of addresses")
       await run("grant-role", {
         account,
         contract: hubAddress,
-        role: "OPERATOR_ROLE",
+        role: "EDITOR_ROLE",
       })
     }
   })
