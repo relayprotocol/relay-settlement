@@ -7,6 +7,7 @@ import {
   recoverAddress,
   serializeTransaction,
 } from "viem"
+import { networks } from "@relay-protocol/settlement-networks"
 import { checkAndApproveWNEAR } from "../../lib/aurora"
 import {
   BitcoinTxSchema,
@@ -336,10 +337,39 @@ task(
   "Executes transactions from a manifest file, signing them via the relay multisig signer"
 )
   .addParam("transactions", "The path to the transactions manifest file")
-  .addParam("relayMultisigSigner", "address of the relay multisig signer")
+  .addOptionalParam(
+    "relayMultisigSigner",
+    "address of the relay multisig signer (defaults to network config)"
+  )
   .setAction(
-    async ({ transactions: transactionsPath, relayMultisigSigner }, hre) => {
+    async (
+      {
+        transactions: transactionsPath,
+        relayMultisigSigner: relayMultisigSignerAddress,
+      },
+      hre
+    ) => {
       const [user] = await hre.viem.getWalletClients()
+
+      // Get the relay multisig signer address from network config if not provided
+      let relayMultisigSigner = relayMultisigSignerAddress
+      if (!relayMultisigSigner) {
+        const chainId = hre.network.config.chainId
+        if (!chainId) {
+          throw new Error("Chain ID not found in network config")
+        }
+        const network = networks[chainId.toString()]
+        if (!network?.contracts?.prod?.multisigSigner) {
+          throw new Error(
+            `No multisigSigner address found in network config for chain ${chainId}`
+          )
+        }
+        relayMultisigSigner = network.contracts.prod.multisigSigner
+        console.log(
+          `Using multisigSigner address from network config: ${relayMultisigSigner}`
+        )
+      }
+
       const transactions = loadTransactions(transactionsPath)
 
       // We need 1 yocto Near for each signature (Bitcoin needs one per input)
