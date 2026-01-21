@@ -1,4 +1,4 @@
-import { RelayHub } from "@relay-settlement/abis"
+import { RelayHub } from "@relay-protocol/settlement-abis"
 import {
   generateAddress,
   generateTokenId,

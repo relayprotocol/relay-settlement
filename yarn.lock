@@ -1844,6 +1844,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@relay-protocol/settlement-abis@workspace:*, @relay-protocol/settlement-abis@workspace:packages/abis":
+  version: 0.0.0-use.local
+  resolution: "@relay-protocol/settlement-abis@workspace:packages/abis"
+  dependencies:
+    "@relay-settlement/eslint-config": "workspace:*"
+    "@relay-settlement/tsconfig": "workspace:*"
+    eslint: "npm:9.36.0"
+    tsup: "npm:8.5.0"
+    typescript: "npm:5.9.3"
+  languageName: unknown
+  linkType: soft
+
 "@relay-protocol/settlement-networks@workspace:packages/networks":
   version: 0.0.0-use.local
   resolution: "@relay-protocol/settlement-networks@workspace:packages/networks"
@@ -1876,18 +1888,6 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@relay-settlement/abis@workspace:*, @relay-settlement/abis@workspace:packages/abis":
-  version: 0.0.0-use.local
-  resolution: "@relay-settlement/abis@workspace:packages/abis"
-  dependencies:
-    "@relay-settlement/eslint-config": "workspace:*"
-    "@relay-settlement/tsconfig": "workspace:*"
-    eslint: "npm:9.36.0"
-    tsup: "npm:8.5.0"
-    typescript: "npm:5.9.3"
-  languageName: unknown
-  linkType: soft
-
 "@relay-settlement/eslint-config@workspace:*, @relay-settlement/eslint-config@workspace:^, @relay-settlement/eslint-config@workspace:packages/eslint-config":
   version: 0.0.0-use.local
   resolution: "@relay-settlement/eslint-config@workspace:packages/eslint-config"
@@ -1916,8 +1916,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@relay-settlement/hub-client@workspace:packages/hub-client"
   dependencies:
+    "@relay-protocol/settlement-abis": "workspace:*"
     "@relay-protocol/settlement-sdk": "workspace:*"
-    "@relay-settlement/abis": "workspace:*"
     "@relay-settlement/eslint-config": "workspace:*"
     "@relay-settlement/tsconfig": "workspace:*"
     eslint: "npm:9.36.0"

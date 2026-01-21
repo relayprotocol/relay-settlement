@@ -7,6 +7,8 @@ import IHub from "./abis/ERC20View.sol/IHub.json"
 import BitcoinPayloadBuilder from "./abis/PayloadBuilders/BitcoinPayloadBuilder.sol/BitcoinPayloadBuilder.json"
 import DummyPayloadBuilder from "./abis/PayloadBuilders/DummyPayloadBuilder.sol/DummyPayloadBuilder.json"
 import EVMPayloadBuilder from "./abis/PayloadBuilders/EVMPayloadBuilder.sol/EVMPayloadBuilder.json"
+import HyperLiquidPayloadBuilder from "./abis/PayloadBuilders/HyperliquidPayloadBuilder.sol/HyperLiquidPayloadBuilder.json"
+import IRelayAllocator from "./abis/PayloadBuilders/HyperliquidPayloadBuilder.sol/IRelayAllocator.json"
 import SolanaPayloadBuilder from "./abis/PayloadBuilders/SolanaPayloadBuilder.sol/SolanaPayloadBuilder.json"
 import SuiPayloadBuilder from "./abis/PayloadBuilders/SuiPayloadBuilder.sol/SuiPayloadBuilder.json"
 import IEvmERC20 from "./abis/RelayAllocator.sol/IEvmERC20.json"
@@ -24,6 +26,7 @@ import Borsh from "./abis/aurora-xcc/Borsh.sol/Borsh.json"
 import Codec from "./abis/aurora-xcc/Codec.sol/Codec.json"
 import MockSafe from "./abis/mocks/MockSafe.sol/MockSafe.json"
 import MockWNEAR from "./abis/mocks/MockWNEAR.sol/MockWNEAR.json"
+import RelayMultisigSignerHarness from "./abis/mocks/RelayMultisigSignerHarness.sol/RelayMultisigSignerHarness.json"
 import Base64 from "./abis/solady/src/utils/Base64.sol/Base64.json"
 import JSONParserLib from "./abis/solady/src/utils/JSONParserLib.sol/JSONParserLib.json"
 import MyToken from "./abis/test-utils/MyToken.sol/MyToken.json"
@@ -35,6 +38,8 @@ export { IHub }
 export { BitcoinPayloadBuilder }
 export { DummyPayloadBuilder }
 export { EVMPayloadBuilder }
+export { HyperLiquidPayloadBuilder }
+export { IRelayAllocator }
 export { SolanaPayloadBuilder }
 export { SuiPayloadBuilder }
 export { IEvmERC20 }
@@ -52,6 +57,7 @@ export { Borsh }
 export { Codec }
 export { MockSafe }
 export { MockWNEAR }
+export { RelayMultisigSignerHarness }
 export { Base64 }
 export { JSONParserLib }
 export { MyToken }

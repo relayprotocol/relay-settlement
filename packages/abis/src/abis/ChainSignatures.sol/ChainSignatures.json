@@ -2,9 +2,9 @@
   {
     "inputs": [
       {
-        "internalType": "bytes32",
-        "name": "payloadHashToSign",
-        "type": "bytes32"
+        "internalType": "string",
+        "name": "payloadString",
+        "type": "string"
       },
       {
         "internalType": "string",
@@ -36,9 +36,9 @@
   {
     "inputs": [
       {
-        "internalType": "bytes32",
-        "name": "hexBytes",
-        "type": "bytes32"
+        "internalType": "bytes",
+        "name": "data",
+        "type": "bytes"
       }
     ],
     "name": "stringifyBytes",

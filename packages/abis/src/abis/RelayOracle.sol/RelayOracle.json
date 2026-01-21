@@ -49,12 +49,34 @@
   },
   {
     "inputs": [],
-    "name": "InvalidShortString",
+    "name": "ECDSAInvalidSignature",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "length",
+        "type": "uint256"
+      }
+    ],
+    "name": "ECDSAInvalidSignatureLength",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "s",
+        "type": "bytes32"
+      }
+    ],
+    "name": "ECDSAInvalidSignatureS",
     "type": "error"
   },
   {
     "inputs": [],
-    "name": "InvalidSignature",
+    "name": "InvalidShortString",
     "type": "error"
   },
   {
@@ -102,6 +124,25 @@
       }
     ],
     "name": "Executed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "idempotencyKey",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes[]",
+        "name": "actions",
+        "type": "bytes[]"
+      }
+    ],
+    "name": "ExecutionFailed",
     "type": "event"
   },
   {
@@ -294,17 +335,42 @@
         "type": "tuple"
       },
       {
-        "internalType": "address",
-        "name": "oracle",
-        "type": "address"
-      },
-      {
         "internalType": "bytes",
         "name": "signature",
         "type": "bytes"
       }
     ],
     "name": "execute",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "bytes32",
+            "name": "idempotencyKey",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes[]",
+            "name": "actions",
+            "type": "bytes[]"
+          }
+        ],
+        "internalType": "struct RelayOracle.Execution[]",
+        "name": "executions",
+        "type": "tuple[]"
+      },
+      {
+        "internalType": "bytes[]",
+        "name": "signatures",
+        "type": "bytes[]"
+      }
+    ],
+    "name": "executeMultiple",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

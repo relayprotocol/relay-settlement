@@ -162,6 +162,76 @@
   {
     "inputs": [
       {
+        "internalType": "bytes32",
+        "name": "hashToSign",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "string",
+        "name": "curve",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "__setPendingTimestamp",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "hashToSign",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "string",
+        "name": "curve",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "signature",
+        "type": "bytes"
+      }
+    ],
+    "name": "__setSignature",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "hashToSign",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "string",
+        "name": "curve",
+        "type": "string"
+      }
+    ],
+    "name": "__tryMarkPendingSignature",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "bytes",
         "name": "data",
         "type": "bytes"
