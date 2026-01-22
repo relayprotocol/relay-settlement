@@ -2,11 +2,14 @@ import { task } from "hardhat/config"
 import type { HardhatRuntimeEnvironment } from "hardhat/types"
 import {
   createPublicClient,
+  createWalletClient,
   parseSignature,
   http,
   recoverAddress,
   serializeTransaction,
+  formatEther,
 } from "viem"
+import { privateKeyToAccount } from "viem/accounts"
 import { networks } from "@relay-protocol/settlement-networks"
 import { checkAndApproveWNEAR } from "../../lib/aurora"
 import {
@@ -31,6 +34,296 @@ import { derivePublicKey } from "../../lib/near"
 import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes"
 import { PublicKey, Keypair, Connection } from "@solana/web3.js"
 import * as tronweb from "tronweb"
+
+async function ensureFunding(
+  tx: Extract<Transaction, { family: "ethereum-vm" }>
+) {
+  const networkClient = createPublicClient({
+    transport: http(tx.rpc),
+  })
+
+  // Get the chain ID from the RPC
+  const destinationChainId = await networkClient.getChainId()
+
+  // Check current balance of the from address
+  const currentBalance = await networkClient.getBalance({
+    address: tx.from as `0x${string}`,
+  })
+
+  // Estimate required gas cost
+  const gasLimit = BigInt(tx.gas)
+  const gasPrice = tx.maxFeePerGas
+    ? BigInt(tx.maxFeePerGas)
+    : tx.gasPrice
+      ? BigInt(tx.gasPrice)
+      : await networkClient.getGasPrice()
+
+  const estimatedGasCost = gasLimit * gasPrice
+  // Add 50% buffer for safety
+  const requiredAmount = (estimatedGasCost * 150n) / 100n
+
+  const shortfall = requiredAmount - currentBalance
+
+  // Relay has minimum bridge amounts, so ensure we're bridging at least $0.50 worth
+  // Using 0.0005 ETH (~$1.25) to cover minimum + fees
+  const minimumBridgeAmount = BigInt("500000000000000") // 0.0005 ETH
+  const amountToBridge =
+    shortfall > minimumBridgeAmount ? shortfall : minimumBridgeAmount
+
+  console.log(
+    `💰 Need to fund ${tx.from} with ${formatEther(amountToBridge)} native tokens`
+  )
+  console.log(
+    `   Current: ${formatEther(currentBalance)}, Required: ${formatEther(requiredAmount)}, Bridging: ${formatEther(amountToBridge)}`
+  )
+
+  // Get deployer private key from environment
+  const deployerPrivateKey = process.env.DEPLOYER_PRIVATE_KEY
+  if (!deployerPrivateKey) {
+    throw new Error("DEPLOYER_PRIVATE_KEY environment variable not set")
+  }
+
+  // Ensure private key has 0x prefix
+  const formattedPrivateKey = deployerPrivateKey.startsWith("0x")
+    ? deployerPrivateKey
+    : `0x${deployerPrivateKey}`
+
+  const deployerAccount = privateKeyToAccount(
+    formattedPrivateKey as `0x${string}`
+  )
+  const deployerAddress = deployerAccount.address
+
+  // Try to find a suitable source chain for funding
+  // Priority: Base > Arbitrum > Optimism > Ethereum
+  const preferredSourceChains = [
+    8453, // Base
+    42161, // Arbitrum
+    10, // Optimism
+    1, // Ethereum
+  ]
+
+  let sourceChainId: number | undefined
+  let sourceChainConfig: (typeof networks)[string] | undefined
+
+  for (const chainId of preferredSourceChains) {
+    const config = networks[chainId.toString()]
+    if (config && config.rpc && config.rpc.length > 0) {
+      sourceChainId = chainId
+      sourceChainConfig = config
+      break
+    }
+  }
+
+  if (!sourceChainId || !sourceChainConfig) {
+    throw new Error(
+      `No suitable source chain found for bridging. Tried: ${preferredSourceChains.join(", ")}`
+    )
+  }
+
+  const destChainName =
+    networks[destinationChainId.toString()]?.name ||
+    `chain ${destinationChainId}`
+  console.log(
+    `🌉 Using Relay to bridge from ${sourceChainConfig.name} to ${destChainName}`
+  )
+
+  // Get quote from Relay API
+  // CRITICAL: Only allow swaps on destination, never on origin (deposit side)
+  // This prevents complex multi-step transactions that can fail despite passing simulation
+  const quoteResponse = await fetch("https://api.relay.link/quote", {
+    body: JSON.stringify({
+      amount: amountToBridge.toString(),
+
+      destinationChainId: destinationChainId,
+
+      // Native token on destination
+      destinationCurrency: "0x0000000000000000000000000000000000000000",
+
+      // Disable swaps on origin chain - only swap on destination if needed
+      options: {
+        swapOnOrigin: false,
+      },
+
+      originChainId: sourceChainId,
+      // Native token on origin - MUST be native, no swaps on deposit
+      originCurrency: "0x0000000000000000000000000000000000000000",
+      recipient: tx.from,
+
+      referrer: "relay.settlement",
+
+      tradeType: "EXACT_INPUT",
+
+      user: deployerAddress,
+    }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  })
+
+  if (!quoteResponse.ok) {
+    const errorText = await quoteResponse.text()
+    throw new Error(
+      `Failed to get Relay quote: ${quoteResponse.status} ${errorText}`
+    )
+  }
+
+  const quote = await quoteResponse.json()
+
+  // Log the quote structure for debugging
+  if (
+    !quote.steps ||
+    !quote.steps[0] ||
+    !quote.steps[0].items ||
+    !quote.steps[0].items[0]
+  ) {
+    console.error("Unexpected quote structure:", JSON.stringify(quote, null, 2))
+    throw new Error("Invalid quote response from Relay API")
+  }
+
+  const totalFees =
+    quote.fees?.relayer?.amount || quote.details?.totalFees?.amount || "0"
+  console.log(`   Bridge quote received (fees: ${formatEther(totalFees)})`)
+
+  // Create a wallet client connected to the source chain
+  const sourceWalletClient = createWalletClient({
+    account: deployerAccount,
+    chain: {
+      id: sourceChainId,
+      name: sourceChainConfig.name,
+      nativeCurrency: { decimals: 18, name: "ETH", symbol: "ETH" },
+      rpcUrls: {
+        default: { http: [sourceChainConfig.rpc[0]] },
+        public: { http: [sourceChainConfig.rpc[0]] },
+      },
+    },
+    transport: http(sourceChainConfig.rpc[0]),
+  })
+
+  const sourceClient = createPublicClient({
+    transport: http(sourceChainConfig.rpc[0]),
+  })
+
+  const txData = quote.steps[0].items[0].data
+  if (!txData || !txData.to || !txData.data) {
+    console.error(
+      "Invalid transaction data:",
+      JSON.stringify(quote.steps[0].items[0], null, 2)
+    )
+    throw new Error("Invalid transaction data in quote response")
+  }
+
+  // CRITICAL: Simulate Relay deposit BEFORE broadcasting
+  // This prevents costly failures on L2s where L1 data fees can be 0.05-0.2 ETH
+  console.log("🔍 Simulating Relay deposit before sending...")
+  try {
+    await sourceClient.call({
+      account: deployerAddress,
+      data: txData.data as `0x${string}`,
+      to: txData.to as `0x${string}`,
+      value: BigInt(txData.value || "0"),
+    })
+    console.log("✅ Relay deposit simulation successful")
+  } catch (simulationError: any) {
+    const errorMsg = simulationError.message || simulationError.toString()
+    throw new Error(
+      `❌ Relay deposit simulation failed - would have reverted on-chain. Skipping to avoid expensive failure.\nError: ${errorMsg}`
+    )
+  }
+
+  console.log(`🚀 Sending bridge transaction on ${sourceChainConfig.name}...`)
+
+  const bridgeHash = await sourceWalletClient.sendTransaction({
+    data: txData.data as `0x${string}`,
+    to: txData.to as `0x${string}`,
+    value: BigInt(txData.value || "0"),
+  })
+
+  console.log(`   Bridge tx: ${bridgeHash}`)
+  await sourceClient.waitForTransactionReceipt({ hash: bridgeHash })
+
+  // Get deployer's balance on source chain before waiting (to detect refunds)
+  const deployerBalanceBeforeBridge = await sourceClient.getBalance({
+    address: deployerAddress,
+  })
+
+  // Wait for bridge completion by polling destination balance and checking Relay status
+  console.log("⏳ Waiting for bridge to complete...")
+  let attempts = 0
+  const maxAttempts = 60 // 5 minutes with 5 second intervals
+  while (attempts < maxAttempts) {
+    await new Promise((resolve) => setTimeout(resolve, 5000))
+
+    // Check balance on destination
+    const newBalance = await networkClient.getBalance({
+      address: tx.from as `0x${string}`,
+      blockTag: "latest", // Force latest block, not cached
+    })
+
+    // Check if balance increased from initial balance
+    if (newBalance > currentBalance) {
+      console.log(
+        `✅ Funding complete! New balance: ${formatEther(newBalance)} (was: ${formatEther(currentBalance)})`
+      )
+      return
+    }
+
+    // Every 30 seconds, check Relay status and deployer balance to detect refunds
+    if (attempts > 0 && attempts % 6 === 0) {
+      // Check if funds were refunded back to deployer on source chain
+      const deployerBalanceNow = await sourceClient.getBalance({
+        address: deployerAddress,
+      })
+      const expectedBalanceIfRefunded =
+        deployerBalanceBeforeBridge +
+        BigInt(txData.value || "0") -
+        BigInt("100000000000000") // Allow for gas costs
+
+      if (deployerBalanceNow > expectedBalanceIfRefunded) {
+        throw new Error(
+          `Bridge appears to have been refunded - deployer balance on ${sourceChainConfig.name} increased unexpectedly`
+        )
+      }
+
+      try {
+        const statusResponse = await fetch(
+          `https://api.relay.link/requests/status?hash=${bridgeHash}`
+        )
+        if (statusResponse.ok) {
+          const status = await statusResponse.json()
+          if (status.status === "refunded" || status.status === "failed") {
+            throw new Error(
+              `Bridge was ${status.status}. Reason: ${status.inTxs?.[0]?.statusReason || "Unknown"}`
+            )
+          }
+          console.log(
+            `   Still waiting... (${attempts * 5}s elapsed) - Balance: ${formatEther(newBalance)}, Status: ${status.status || "unknown"}`
+          )
+        } else {
+          console.log(
+            `   Still waiting... (${attempts * 5}s elapsed) - Balance: ${formatEther(newBalance)}`
+          )
+        }
+      } catch (error: any) {
+        // If the error is about refund/failure, rethrow it
+        if (
+          error.message?.includes("refunded") ||
+          error.message?.includes("failed")
+        ) {
+          throw error
+        }
+        // Otherwise just log and continue
+        console.log(
+          `   Still waiting... (${attempts * 5}s elapsed) - Balance: ${formatEther(newBalance)}`
+        )
+      }
+    }
+
+    attempts++
+  }
+
+  throw new Error("Bridge timeout - funds did not arrive within 5 minutes")
+}
 
 async function executeEvmTransaction(
   tx: Extract<Transaction, { family: "ethereum-vm" }>,
@@ -75,13 +368,75 @@ async function executeEvmTransaction(
     transport: http(tx.rpc),
   })
 
-  const hash = await networkClient.sendRawTransaction({
-    serializedTransaction,
+  // Proactively check balance before broadcasting to avoid silent rejections
+  const currentBalance = await networkClient.getBalance({
+    address: transaction.from as `0x${string}`,
   })
-  console.log(`🚀 Transaction sent via ${tx.rpc}: ${hash}`)
 
-  const receipt = await networkClient.waitForTransactionReceipt({ hash })
-  console.log(`✅ Transaction confirmed: ${receipt.transactionHash}`)
+  const gasLimit = BigInt(transaction.gas || 0)
+  const gasPrice = transaction.maxFeePerGas
+    ? BigInt(transaction.maxFeePerGas)
+    : transaction.gasPrice
+      ? BigInt(transaction.gasPrice)
+      : await networkClient.getGasPrice()
+
+  const estimatedGasCost = gasLimit * gasPrice
+  const txValue = transaction.value ? BigInt(transaction.value) : 0n
+  const requiredBalance = estimatedGasCost + txValue
+
+  if (currentBalance < requiredBalance) {
+    console.log(
+      `⚠️  Insufficient balance detected before broadcast. Current: ${formatEther(currentBalance)}, Required: ${formatEther(requiredBalance)}`
+    )
+    await ensureFunding(tx)
+
+    // Recheck balance after funding
+    const newBalance = await networkClient.getBalance({
+      address: transaction.from as `0x${string}`,
+    })
+    if (newBalance < requiredBalance) {
+      throw new Error(
+        `Insufficient funds after funding attempt. Have: ${formatEther(newBalance)}, Need: ${formatEther(requiredBalance)}`
+      )
+    }
+    console.log(
+      `✅ Funding successful, new balance: ${formatEther(newBalance)}`
+    )
+  }
+
+  try {
+    const hash = await networkClient.sendRawTransaction({
+      serializedTransaction,
+    })
+    console.log(`🚀 Transaction sent via ${tx.rpc}: ${hash}`)
+
+    const receipt = await networkClient.waitForTransactionReceipt({ hash })
+    console.log(`✅ Transaction confirmed: ${receipt.transactionHash}`)
+  } catch (error: any) {
+    // Check if error is due to insufficient funds
+    const errorMessage = error.message?.toLowerCase() || ""
+    if (
+      errorMessage.includes("insufficient funds") ||
+      errorMessage.includes("insufficient balance") ||
+      errorMessage.includes("gas * price + value")
+    ) {
+      console.log(
+        "⚠️  Insufficient funds error during broadcast, attempting to fund address..."
+      )
+      await ensureFunding(tx)
+
+      // Retry the transaction
+      const hash = await networkClient.sendRawTransaction({
+        serializedTransaction,
+      })
+      console.log(`🚀 Transaction sent via ${tx.rpc}: ${hash}`)
+
+      const receipt = await networkClient.waitForTransactionReceipt({ hash })
+      console.log(`✅ Transaction confirmed: ${receipt.transactionHash}`)
+    } else {
+      throw error
+    }
+  }
 }
 
 async function executeBitcoinTransaction(
@@ -381,23 +736,58 @@ task(
         BigInt(signatureCount)
       )
 
+      const failures: Array<{ index: number; tx: Transaction; error: string }> =
+        []
+
       for (let i = 0; i < transactions.length; i++) {
         console.log(`🏗️  Building transaction #${i}`)
         const tx = transactions[i]
 
-        if (tx.family === "ethereum-vm") {
-          await executeEvmTransaction(tx, relayMultisigSigner, hre)
-        } else if (tx.family === "bitcoin-vm") {
-          await executeBitcoinTransaction(tx, relayMultisigSigner, hre)
-        } else if (tx.family === "solana-vm") {
-          await executeSolanaTransaction(tx, relayMultisigSigner, hre)
-        } else if (tx.family === "tron-vm") {
-          await executeTronTransaction(tx, relayMultisigSigner, hre)
-        } else {
-          throw new Error(
-            `Unsupported transaction family: ${tx.family}. Please add support!`
-          )
+        try {
+          if (tx.family === "ethereum-vm") {
+            await executeEvmTransaction(tx, relayMultisigSigner, hre)
+          } else if (tx.family === "bitcoin-vm") {
+            await executeBitcoinTransaction(tx, relayMultisigSigner, hre)
+          } else if (tx.family === "solana-vm") {
+            await executeSolanaTransaction(tx, relayMultisigSigner, hre)
+          } else if (tx.family === "tron-vm") {
+            await executeTronTransaction(tx, relayMultisigSigner, hre)
+          } else {
+            throw new Error(
+              `Unsupported transaction family: ${tx.family}. Please add support!`
+            )
+          }
+        } catch (error: any) {
+          const errorMsg = error.message || error.toString() || "Unknown error"
+          console.error(`❌ Transaction #${i} failed: ${errorMsg}`)
+          failures.push({
+            error: errorMsg,
+            index: i,
+            tx,
+          })
+          // Continue to next transaction
         }
+      }
+
+      // Report summary
+      console.log(`\n${"=".repeat(80)}`)
+      console.log(
+        `\n✅ Successfully executed ${transactions.length - failures.length}/${transactions.length} transactions`
+      )
+
+      if (failures.length > 0) {
+        console.log(`\n❌ Failed transactions (${failures.length}):`)
+        for (const failure of failures) {
+          const txInfo =
+            failure.tx.family === "ethereum-vm"
+              ? `${failure.tx.to} on chain ${failure.tx.rpc}`
+              : `${failure.tx.family} transaction`
+          console.log(`  [${failure.index}] ${txInfo}`)
+          console.log(`      Error: ${failure.error}`)
+        }
+        console.log(
+          "\nTo retry failed transactions, re-run the same command. Already executed transactions will be skipped."
+        )
       }
     }
   )
