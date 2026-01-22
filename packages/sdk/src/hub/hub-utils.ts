@@ -1,26 +1,24 @@
-import { getAddress, keccak256, encodePacked } from "viem"
-import { VmType } from "../utils"
+import { Address, getAddress, keccak256, encodePacked, Hex } from "viem"
+
+import { encodeAddress, VmType } from "../utils"
 
 export interface TokenIdComponents {
   family: VmType
-  chainId: bigint
+  chainId: string
   address: string
 }
 
 export interface VirtualAddressComponents {
   family: VmType
-  chainId: bigint
+  chainId: string
   address: string
 }
 
 export type TokenId = bigint
-export type VirtualAddress = `0x${string}`
+export type VirtualAddress = Address
 
-export const getCheckSummedAddress = (family: string, address: string) => {
-  const checksummedAddress =
-    family === "ethereum-vm" ? getAddress(address) : address
-  return checksummedAddress
-}
+export const arrayToHex = (arr: Uint8Array): Hex =>
+  `0x${Buffer.from(arr).toString("hex")}`
 
 /**
  * Generates a virtual Ethereum address from token components
@@ -30,15 +28,14 @@ export const getCheckSummedAddress = (family: string, address: string) => {
  * then converts the last 20 bytes of the hash to an Ethereum address.
  * This is equivalent to the Solidity: address(uint160(uint256(addressHash)))
  */
-
 export function generateAddress(
   components: VirtualAddressComponents
 ): VirtualAddress {
   const { chainId, address, family } = components
   const addressHash = keccak256(
     encodePacked(
-      ["string", "uint256", family === "ethereum-vm" ? "address" : "string"],
-      [family, chainId, getCheckSummedAddress(family, address)]
+      ["string", "bytes"],
+      [chainId, arrayToHex(encodeAddress(address, family))]
     )
   )
   const addressBytes = addressHash.slice(2).slice(-40)
@@ -53,8 +50,8 @@ export function generateAddress(
 export function generateTokenId(components: TokenIdComponents): TokenId {
   const { family, chainId, address } = components
   const packedData = encodePacked(
-    ["string", "uint256", family === "ethereum-vm" ? "address" : "string"],
-    [family, chainId, getCheckSummedAddress(family, address)]
+    ["string", "bytes"],
+    [chainId, arrayToHex(encodeAddress(address, family))]
   )
   return BigInt(keccak256(packedData))
 }

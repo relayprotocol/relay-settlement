@@ -11,7 +11,7 @@ import { setOperatorFor } from "./methods/set-operator-for"
 import { transferFrom } from "./methods/transfer-from"
 
 // Use function expressions to maintain 'this' context
-export function createHubClient(params: { chainId: bigint; address: string }) {
+export function createHubClient(params: { chainId: string; address: string }) {
   const client = new HubClient(params)
 
   // Directly attach methods to the instance

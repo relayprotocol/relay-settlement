@@ -4,7 +4,7 @@ import { createHubClient } from ".."
 
 const hubClient = createHubClient({
   address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-  chainId: 10n,
+  chainId: "ethereum",
 })
 
 describe("burn", () => {
@@ -12,12 +12,12 @@ describe("burn", () => {
     const tx = await hubClient.burn({
       account: "0x1D682340264cF209257f24C3EDcb2a9fc0592535",
       amount: ethers.parseUnits("1", 18),
-      chainId: 10n,
+      chainId: "ethereum",
       family: "ethereum-vm",
       tokenAddress: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
     })
     expect(tx.data).toEqual(
-      "0xf5298aca000000000000000000000000cca30d2818c2d7de99e25c33dc96893c8310f0317c87c17d6f360b864fb885ac69aeca732f99c5726cbba7287e9d244785fac37d0000000000000000000000000000000000000000000000000de0b6b3a7640000"
+      "0xf5298aca00000000000000000000000048f534a952f8ee0cf3ef84ca71f6a2b46fab13a0ae90d0e5c4c1f0215bffd35b2984c32cf7e4e852916e144750a352b82524ef860000000000000000000000000000000000000000000000000de0b6b3a7640000"
     )
     expect(tx.value).toEqual(0n)
   })

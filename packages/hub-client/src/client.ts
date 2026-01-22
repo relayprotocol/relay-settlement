@@ -3,7 +3,7 @@ import { VmType } from "@relay-protocol/settlement-sdk"
 export interface MintParams {
   family: VmType
   account: string
-  chainId: bigint
+  chainId: string
   tokenAddress: string
   amount: bigint
 }
@@ -11,7 +11,7 @@ export interface MintParams {
 export interface BurnParams {
   family: VmType
   account: string
-  chainId: bigint
+  chainId: string
   tokenAddress: string
   amount: bigint
 }
@@ -19,7 +19,7 @@ export interface BurnParams {
 export interface TransferFromParams {
   family: VmType
   account: string
-  chainId: bigint
+  chainId: string
   tokenAddress: string
   amount: bigint
   recipientAddress: string
@@ -28,16 +28,16 @@ export interface TransferFromParams {
 export interface SetOperatorForParams {
   family: VmType
   account: string
-  chainId: bigint
+  chainId: string
   operatorAddress: string
   approved: boolean
 }
 
 export class HubClient {
-  chainId: bigint
+  chainId: string
   address: string
 
-  constructor({ chainId, address }: { chainId: bigint; address: string }) {
+  constructor({ chainId, address }: { chainId: string; address: string }) {
     this.chainId = chainId
     this.address = address
   }

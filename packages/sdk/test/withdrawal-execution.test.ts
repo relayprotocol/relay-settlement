@@ -1,24 +1,27 @@
+import { getAddress } from "viem"
 import { describe, it, expect } from "vitest"
+
+import { VmType } from "../src"
 import {
   getSubmitWithdrawRequestHash,
   getWithdrawalAddress,
 } from "../src/messages/v2.2/withdrawal-execution"
-import { getAddress } from "viem"
 
 describe("getWithdrawalAddress", () => {
   it("should return a valid withdrawal address", () => {
     const params = {
       depository: "0x1234567890123456789012345678901234567890",
-      depositoryChainId: 1n,
+      depositoryChainId: "ethereum",
+      depositoryVmType: "ethereum-vm" as VmType,
       currency: "10340230",
       recipient: "0x9876543210987654321098765432109876543210",
       withdrawerAlias: "0x9876543210987654321098765432109876543210",
-      withdrawalNonce: "haha",
+      withdrawalNonce: "0",
     }
 
     const address = getWithdrawalAddress(params)
     expect(address).toMatch(/^0x[0-9a-f]{40}$/i)
-    expect(address).toBe("0xeb62c71a37203bfc46fcda13f727129901bcf05c")
+    expect(address).toBe("0x1c1b40f43b18c2ff894a1bd8f1d13e0b1e92af0a")
     expect(getAddress(address).toLowerCase()).toMatch(address)
   })
 })

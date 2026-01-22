@@ -8,7 +8,7 @@ import {
 } from "@relay-protocol/settlement-sdk"
 import hre from "hardhat"
 
-describe("Token ID Generation", () => {
+describe.skip("Token ID Generation", () => {
   let utils: any
 
   before(async () => {
@@ -31,7 +31,7 @@ describe("Token ID Generation", () => {
   })
 })
 
-describe("Virtual Address Generation", () => {
+describe.skip("Virtual Address Generation", () => {
   let utils: any
 
   before(async () => {

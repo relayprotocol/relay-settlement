@@ -7,14 +7,17 @@ import {
   keccak256,
 } from "viem"
 
+import { arrayToHex } from "../../hub/hub-utils"
+import { encodeAddress, VmType } from "../../utils"
+
 export interface SubmitWithdrawRequest {
-  chainId: string // chainId of the destination chain on which the user will withdraw
-  depository: string // address of the depository account
-  currency: string
-  amount: string // Amount to withdraw
-  spender: string // address of the account that owns the balance in the Hub contract (can be an alias)
-  receiver: string // Address of the account on the destination chain
-  data: string // additional data
+  chainId: string // The chain id to withdraw on
+  depository: string // The depository contract address on the withdrawal chain
+  currency: string // The currency to withdraw
+  amount: string // The amount to withdraw
+  spender: string // The address of the account that owns the balance in the Hub contract (can be an alias)
+  receiver: string // The withdrawal recipient
+  data: string // Additional data
   nonce: string // Nonce for replay protection
 }
 
@@ -44,7 +47,7 @@ export const getSubmitWithdrawRequestHash = (
 
 export type WithdrawalAddressParams = {
   depository: string
-  depositoryChainId: bigint
+  depositoryChainId: string
   currency: string
   recipient: string
   withdrawerAlias: string
@@ -64,22 +67,33 @@ export type WithdrawalAddressParams = {
  * @returns withdrawal address (in lower case)
  */
 export function getWithdrawalAddress(
-  withdrawalParams: WithdrawalAddressParams
+  withdrawalParams: WithdrawalAddressParams & { depositoryVmType: VmType }
 ): string {
-  // pack and hash data
-  const nonce = keccak256(
-    encodePacked(["string"], [withdrawalParams.withdrawalNonce])
-  )
   const hash = keccak256(
     encodePacked(
-      ["string", "uint256", "string", "string", "address", "bytes32"],
+      ["string", "bytes", "bytes", "bytes", "address", "bytes32"],
       [
-        withdrawalParams.depository,
         withdrawalParams.depositoryChainId,
-        withdrawalParams.currency,
-        withdrawalParams.recipient,
+        arrayToHex(
+          encodeAddress(
+            withdrawalParams.depository,
+            withdrawalParams.depositoryVmType
+          )
+        ),
+        arrayToHex(
+          encodeAddress(
+            withdrawalParams.currency,
+            withdrawalParams.depositoryVmType
+          )
+        ),
+        arrayToHex(
+          encodeAddress(
+            withdrawalParams.recipient,
+            withdrawalParams.depositoryVmType
+          )
+        ),
         withdrawalParams.withdrawerAlias as `0x${string}`,
-        nonce,
+        `0x${BigInt(withdrawalParams.withdrawalNonce).toString(16).padStart(64, "0")}`,
       ]
     )
   )
@@ -87,6 +101,29 @@ export function getWithdrawalAddress(
   // get 40 bytes for an address
   const withdrawalAddress = hash.slice(2).slice(-40).toLowerCase()
   return `0x${withdrawalAddress}` as `0x${string}`
+}
+
+export function getOrderAddress(data: {
+  depositChainVmType: VmType
+  depositChainId: string
+  depositor: string
+  depositTimestamp: bigint
+  depositId: string
+}): string {
+  const hash = keccak256(
+    encodePacked(
+      ["string", "bytes", "uint256", "bytes32"],
+      [
+        data.depositChainId,
+        arrayToHex(encodeAddress(data.depositor, data.depositChainVmType)),
+        BigInt(data.depositTimestamp),
+        data.depositId as Hex,
+      ]
+    )
+  )
+
+  const orderAddress = hash.slice(2).slice(-40)
+  return `0x${orderAddress}` as `0x${string}`
 }
 
 // compute a message about withdrawer balance

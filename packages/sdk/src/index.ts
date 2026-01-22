@@ -79,7 +79,6 @@ import {
   VirtualAddressComponents,
   TokenId,
   VirtualAddress,
-  getCheckSummedAddress,
   generateAddress,
   generateTokenId,
 } from "./hub/hub-utils"
@@ -155,7 +154,6 @@ export {
   VirtualAddressComponents,
   TokenId,
   VirtualAddress,
-  getCheckSummedAddress,
   generateAddress,
   generateTokenId,
 
