@@ -182,3 +182,39 @@ yarn hardhat grant-role --contract <hub-contract> --accounts <list-of-signers> -
 ```
 
 NB: we pass a list of editors addresses to the hub to support multi-EOA
+
+### Submit HUB actions
+
+1. Edit the data to send in the `calls` array of `tasks/relayMultisigSigner/scripts/generate-hub-call.ts`
+
+2. Generate the manifest
+
+```
+bun tasks/relayMultisigSigner/scripts/generate-hub-call.ts
+```
+
+This will create a new JSON manifest.
+
+3. Submit the multisig tx
+
+```
+# simlaute first
+yarn hardhat relay-multisig-signer:simulate --transactions tasks/relayMultisigSigner/transactions/hub-calls-1.json
+
+# submit
+yarn hardhat relay-multisig-signer:submit --transactions tasks/relayMultisigSigner/transactions/hub-calls-1.json --network aurora
+```
+
+4. get all required signatures on the multitisg
+
+```
+# double check by using
+yarn hardhat relay-multisig-signer:check-hashes --transactions tasks/relayMultisigSigner/transactions/hub-calls-1.json --network aurora --safe-transaction-nonce 60
+```
+
+5. Execute the signed payload
+
+```
+yarn hardhat relay-multisig-signer:execute-transactions --transactions tasks/relayMultisigSigner/transactions/hub-calls-1.json --network aurora
+
+```

@@ -3,7 +3,7 @@ import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
 export const relay: NetworkConfig = {
   blockExplorer: {
     apiKey: "",
-    chainId: 1313161554,
+    chainId: 537713,
     network: "relay",
     urls: {
       apiURL: "https://explorer.chain.relay.link/api",
