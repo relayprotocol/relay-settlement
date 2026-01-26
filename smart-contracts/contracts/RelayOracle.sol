@@ -66,6 +66,7 @@ contract RelayOracle is AccessControl, EIP712 {
   /// @param admin The admin of the contract
   /// @param hub The hub contract
   constructor(address admin, address hub) EIP712("RelayOracle", "1") {
+    _setRoleAdmin(ADMIN_ROLE, ADMIN_ROLE);
     _setRoleAdmin(ORACLE_ROLE, ADMIN_ROLE);
     _grantRole(ADMIN_ROLE, admin);
 
