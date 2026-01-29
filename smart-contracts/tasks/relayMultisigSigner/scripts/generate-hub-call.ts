@@ -1,18 +1,17 @@
 // ABOUTME parse a manifest file for RelayHub operations to
 // be submitted through RelayMultisgSigner
-import { resolve } from "path"
-
-import { writeFileSync, readdirSync } from "fs"
-import { join } from "path"
-import {
-  relay as relayChain,
-  aurora,
-} from "@relay-protocol/settlement-networks"
+import { writeFileSync } from "fs"
 import { createPublicClient, encodeFunctionData, http } from "viem"
+import { relay as relayChain } from "@relay-protocol/settlement-networks"
 import { RelayHub, ERC20View } from "@relay-protocol/settlement-abis"
-import { deriveAllocatorSignerAddress } from "../../../lib/signer"
-
-const HUB_ADDRESS = "0xDDD361727C22A01EB137880678A20b0BEaE69318"
+import {
+  getSignerAddress,
+  createRelayChainClient,
+  RELAY_CHAIN_HUB_ADDRESS,
+  RELAY_CHAIN_GAS_CONFIG,
+  getManifestPath,
+  stringifyJsonWithBigInt,
+} from "./manifest-helpers"
 
 /**
  * The calls could be any operation on Relay Hub :
@@ -45,24 +44,7 @@ const calls: HubCallArgs[] = [
   },
 ]
 
-/**
- * Scans the given directory for transaction files (ignores files prefixed with "demo"),
- * parses the first three digits from each filename, and returns the biggest number found.
- * Returns undefined if no such file is found.
- */
-function getLatestManifestIndex(transactionsDir: string): number | undefined {
-  const dirPath = resolve(transactionsDir)
-  const files = readdirSync(dirPath).filter(
-    (fname) => !fname.startsWith("demo") && /^\d{3}/.test(fname) // must start with 3 digits
-  )
-  const numbers = files
-    .map((fname) => parseInt(fname.substring(0, 3), 10))
-    .filter((n) => !isNaN(n))
-  return Math.max(...numbers)
-}
-
 const getOperationName = async ({ method, args }: HubCallArgs) => {
-  // get nonce and estimate
   const relayChainClient = createPublicClient({
     transport: http(relayChain.rpc[0]),
   })
@@ -72,7 +54,7 @@ const getOperationName = async ({ method, args }: HubCallArgs) => {
 
   const erc20View = await relayChainClient.readContract({
     abi: RelayHub,
-    address: HUB_ADDRESS,
+    address: RELAY_CHAIN_HUB_ADDRESS,
     args: [BigInt(tokenId)],
     functionName: "erc20Views",
   })
@@ -85,55 +67,23 @@ const getOperationName = async ({ method, args }: HubCallArgs) => {
 
   return `${method}-${tokenName}-${amount}`
 }
-// network params
-const hubAddress = HUB_ADDRESS
-
-// TODO: update gas param once fee returned by the relay chain is accurate
-const maxFeePerGas = 7n
-const maxPriorityFeePerGas = 0n
-
-function stringifyJsonWithBigInt(obj: any) {
-  return JSON.stringify(
-    obj,
-    (_, value) => (typeof value === "bigint" ? value.toString() : value),
-    2
-  )
-}
 
 const main = async () => {
-  const multisigSigner = aurora.contracts?.prod?.multisigSigner
-  if (!multisigSigner) throw new Error("MultisigSigner not found")
-
-  const auroraClient = createPublicClient({
-    transport: http(aurora.rpc[0]),
-  })
-
-  const signerAddress = await deriveAllocatorSignerAddress(
-    auroraClient,
-    multisigSigner,
-    "ethereum-vm"
-  )
-  if (!signerAddress) throw new Error("Failed to derive signer")
+  const signerAddress = await getSignerAddress()
   console.log(`Using signer from MPC : ${signerAddress}`)
 
-  const operationNames = (
-    await Promise.all(calls.map((call) => getOperationName(call)))
-  )
+  const operationNames = (await Promise.all(calls.map(getOperationName)))
     .join("_")
     .replace(/ /g, "-")
   console.log(`Operation names: ${operationNames}`)
 
+  const { client: relayChainClient, rpcUrl } = createRelayChainClient()
   const txs = await Promise.all(
     calls.map(async ({ method, args }) => {
       const calldata = encodeFunctionData({
         abi: RelayHub,
         args: args,
         functionName: method,
-      })
-
-      // get nonce and estimate
-      const relayChainClient = createPublicClient({
-        transport: http(relayChain.rpc[0]),
       })
 
       const [nonce, gas] = await Promise.all([
@@ -143,32 +93,26 @@ const main = async () => {
         relayChainClient.estimateGas({
           account: signerAddress as `0x${string}`,
           data: calldata,
-          to: hubAddress,
+          to: HUB_ADDRESS,
         }),
       ])
 
-      const tx = {
+      return {
         amount: "0",
         calldata,
         family: "ethereum-vm",
         from: signerAddress,
-        gas: ((gas * 110n) / 100n).toString(), // bump estimtea
-        maxFeePerGas,
-        maxPriorityFeePerGas,
+        gas: ((gas * 110n) / 100n).toString(),
+        maxFeePerGas: RELAY_CHAIN_GAS_CONFIG.maxFeePerGas,
+        maxPriorityFeePerGas: RELAY_CHAIN_GAS_CONFIG.maxPriorityFeePerGas,
         nonce,
-        rpc: relayChain.rpc[0],
-        to: hubAddress,
+        rpc: rpcUrl,
+        to: RELAY_CHAIN_HUB_ADDRESS,
       }
-      return tx
     })
   )
 
-  const txManifestsDir = join(__dirname, "../transactions")
-  const numberPrefix = getLatestManifestIndex(txManifestsDir) || 0
-  const path = join(
-    txManifestsDir,
-    `${(numberPrefix + 1).toString().padStart(3, "0")}-hub-calls-${operationNames.slice(0, 50)}.json`
-  )
+  const path = getManifestPath("hub-calls", operationNames)
   writeFileSync(path, stringifyJsonWithBigInt(txs))
 
   console.log(`✅ Generated: ${path}`)
