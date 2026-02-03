@@ -4,6 +4,7 @@ import { base58 } from "@scure/base"
 import { publicKeyToAddress } from "viem/accounts"
 import { derivePublicKey } from "./near"
 import * as bitcoin from "bitcoinjs-lib"
+import * as tronweb from "tronweb"
 
 // EdDSA for Solana, ECDSA for EVM and Bitcoin
 export const getDomainId = (family: ChainType) =>
@@ -27,6 +28,7 @@ export const deriveAllocatorSignerAddress = async (
       allocatorPublicKey,
       bitcoin.networks[network]
     )
+  if (family === "tron-vm") return computeTronAddress(allocatorPublicKey)
 
   return
 }
@@ -36,10 +38,10 @@ export const getAllocatorPublicKey = async (
   allocatorAddress: string,
   family: ChainType
 ) => {
-  const { isTestnet } = networks[await publicClient.getChainId()]
+  const { isTestnet, near } = networks[await publicClient.getChainId()]
 
   const { rpc: nearRpcUrl } = {
-    rpc: "https://free.rpc.fastnear.com",
+    rpc: near?.rpc ?? "https://free.rpc.fastnear.com",
     // signer: "v1.signer",
   }
 
@@ -87,6 +89,17 @@ export const computeEvmAddress = (allocatorPublicKeyRaw: string) => {
 const computeSolanaAddress = (allocatorPublicKeyRaw: string) => {
   // The base58 decoded public key is the Solana address (Ed25519 format)
   return base58.encode(base58.decode(allocatorPublicKeyRaw))
+}
+
+const computeTronAddress = (allocatorPublicKeyRaw: string) => {
+  // TRON uses ECDSA (same as EVM) but with different address format
+  const evmAddress = computeEvmAddress(allocatorPublicKeyRaw)
+  // Take last 20 bytes (40 hex chars)
+  const addressHex = evmAddress.slice(-40)
+  // Add TRON prefix (0x41 for mainnet/testnet)
+  const tronAddressHex = `41${addressHex}`
+  // Convert to base58 using TronWeb
+  return tronweb.TronWeb.address.fromHex(tronAddressHex)
 }
 
 const computeBitcoinAddressForNetwork = (

@@ -1,0 +1,18 @@
+[
+  {
+    "family": "tron-vm",
+    "rpc": "https://api.trongrid.io",
+    "from": "TYQUbsiQjJoDCyP2Au22kHCGb6AbEJAbJp",
+    "contractType": "TransferContract",
+    "parameter": {
+      "owner_address": "TYQUbsiQjJoDCyP2Au22kHCGb6AbEJAbJp",
+      "to_address": "TGBD9UViFoxvnqxTUFHDdzQ6y79RreLCq4",
+      "amount": 1
+    },
+    "feeLimit": "1000000",
+    "refBlockBytes": "f1fa",
+    "refBlockHash": "8f9c054f3dba5e03",
+    "timestamp": 1770122235000,
+    "expiration": 1770179835000
+  }
+]

@@ -524,11 +524,36 @@ export async function executeSolanaTransaction(
   const predecessor = `${relayMultisigSigner.substring(2).toLowerCase()}.aurora`
   const domainId = 1
 
+  // Get network config for NEAR RPC
+  const publicClient = await hre.viem.getPublicClient()
+  const chainId = await publicClient.getChainId()
+  const { near } = networks[chainId]
+  const nearRpcUrl = near?.rpc ?? "https://free.rpc.fastnear.com"
+
+  // Get nearSigner from the RelayMultisigSigner contract
+  const nearSigner = (await publicClient.readContract({
+    abi: [
+      {
+        inputs: [],
+        name: "nearSigner",
+        outputs: [{ name: "", type: "string" }],
+        stateMutability: "view",
+        type: "function",
+      },
+    ],
+    address: relayMultisigSigner as `0x${string}`,
+    functionName: "nearSigner",
+  })) as string
+
+  console.log(`Using NEAR signer: ${nearSigner}, RPC: ${nearRpcUrl}`)
+
   // Get the public key from the NEAR contract
   const { publicKey } = await derivePublicKey(
     derivationPath,
     predecessor,
-    Number(domainId)
+    Number(domainId),
+    nearSigner,
+    nearRpcUrl
   )
   const feePayer = new PublicKey(bs58.decode(publicKey))
 
@@ -541,36 +566,45 @@ export async function executeSolanaTransaction(
   }
 
   // If using Durable Nonce, we need the nonce account authority to sign the nonceAdvance instruction
+  // Unless the nonce authority is the same as the MPC signer (tx.from), in which case the MPC signature covers both
   if (tx.nonceAccount && tx.nonceAccountAuth) {
-    console.log(
-      `🔑 Adding nonce authority signature for nonce account: ${tx.nonceAccount}`
-    )
-
-    // Read nonce authority private key from environment variable
-    const nonceAuthorityPrivateKey =
-      process.env.SOLANA_NONCE_AUTHORITY_PRIVATE_KEY
-    if (!nonceAuthorityPrivateKey) {
-      throw new Error(
-        "❌ Durable Nonce transaction requires SOLANA_NONCE_AUTHORITY_PRIVATE_KEY environment variable to be set"
+    if (tx.nonceAccountAuth === tx.from) {
+      // Nonce authority is the same as MPC signer, no additional signature needed
+      console.log(
+        `🔑 Nonce authority is MPC signer (${tx.nonceAccountAuth}), no additional signature needed`
       )
-    }
-
-    // Parse and add nonce authority signature
-    const nonceAuthorityKeypair = Keypair.fromSecretKey(
-      bs58.decode(nonceAuthorityPrivateKey)
-    )
-
-    // Verify nonce authority matches
-    if (nonceAuthorityKeypair.publicKey.toBase58() !== tx.nonceAccountAuth) {
-      throw new Error(
-        `❌ Nonce authority private key does not match nonceAccountAuth. Expected: ${tx.nonceAccountAuth}, Got: ${nonceAuthorityKeypair.publicKey.toBase58()}`
+    } else {
+      // Nonce authority is different, need to sign with private key
+      console.log(
+        `🔑 Adding nonce authority signature for nonce account: ${tx.nonceAccount}`
       )
+
+      // Read nonce authority private key from environment variable
+      const nonceAuthorityPrivateKey =
+        process.env.SOLANA_NONCE_AUTHORITY_PRIVATE_KEY
+      if (!nonceAuthorityPrivateKey) {
+        throw new Error(
+          "❌ Durable Nonce transaction requires SOLANA_NONCE_AUTHORITY_PRIVATE_KEY environment variable to be set"
+        )
+      }
+
+      // Parse and add nonce authority signature
+      const nonceAuthorityKeypair = Keypair.fromSecretKey(
+        bs58.decode(nonceAuthorityPrivateKey)
+      )
+
+      // Verify nonce authority matches
+      if (nonceAuthorityKeypair.publicKey.toBase58() !== tx.nonceAccountAuth) {
+        throw new Error(
+          `❌ Nonce authority private key does not match nonceAccountAuth. Expected: ${tx.nonceAccountAuth}, Got: ${nonceAuthorityKeypair.publicKey.toBase58()}`
+        )
+      }
+
+      // Sign the transaction with nonce authority
+      transaction.sign([nonceAuthorityKeypair])
+
+      console.log("✅ Nonce authority signature added")
     }
-
-    // Sign the transaction with nonce authority
-    transaction.sign([nonceAuthorityKeypair])
-
-    console.log("✅ Nonce authority signature added")
   }
 
   const serializedTransaction = transaction.serialize()

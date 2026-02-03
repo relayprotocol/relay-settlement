@@ -7,6 +7,7 @@ const SUPPORTED_FAMILIES: ChainType[] = [
   "bitcoin-vm",
   "ethereum-vm",
   "solana-vm",
+  "tron-vm",
   // 'sui-vm',
 ]
 
