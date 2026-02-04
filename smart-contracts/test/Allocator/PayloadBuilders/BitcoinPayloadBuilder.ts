@@ -344,7 +344,7 @@ describe("Allocator BitcoinPayloadBuilder", function () {
         tx.addInput(
           Buffer.from(utxo.txid, "hex").reverse(), // reverse for little-endian
           utxo.vout,
-          0xffffffff // sequence
+          0xfffffffd // sequence
         )
       })
 

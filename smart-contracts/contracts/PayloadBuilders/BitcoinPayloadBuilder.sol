@@ -44,6 +44,11 @@ struct BitcoinTransactionData {
 contract BitcoinPayloadBuilder is IPayloadBuilder {
   error InsufficientUTXOValue(uint64 totalInput, uint256 requiredAmount);
   error FeesTooHigh(uint64 amount, uint256 fees);
+  error OutputBelowMinThreshold(uint64 amount);
+
+  /// @dev The minimum UTXO amount required by most Bitcoin nodes
+  uint64 private constant MIN_UTXO_VALUE = 546;
+
   /// @notice The change script bytes for Bitcoin transactions
   bytes public changeScriptBytes;
 
@@ -113,15 +118,27 @@ contract BitcoinPayloadBuilder is IPayloadBuilder {
     if (amount < fees) {
       revert FeesTooHigh(amount, fees);
     }
+
+    // Ensure the recipient output is higher than the minimum UTXO value
+    uint64 receiverValue = amount - uint64(fees);
+    if (receiverValue < MIN_UTXO_VALUE) {
+      revert OutputBelowMinThreshold(receiverValue);
+    }
+
     // Output 1: to receiver
     bytes memory receiverScriptBytes = Base64.decode(receiverScript);
     outputs[0] = BitcoinTransactionDataOutput({
-      value: Utils.encodeUint64LE(amount - uint64(fees)),
+      value: Utils.encodeUint64LE(receiverValue),
       script: receiverScriptBytes
     });
 
     // Output 2: to self for change (if needed)
     if (change > 0) {
+      // Ensure the change output is higher than the minimum UTXO value
+      if (change < MIN_UTXO_VALUE) {
+        revert OutputBelowMinThreshold(receiverValue);
+      }
+
       outputs[1] = BitcoinTransactionDataOutput({
         value: Utils.encodeUint64LE(change),
         script: changeScriptBytes
@@ -201,8 +218,8 @@ contract BitcoinPayloadBuilder is IPayloadBuilder {
         scriptSigLen = hex"00";
         scriptSigBytes = "";
       }
-      // d) sequence = 0xFFFFFFFF (4 bytes LE)
-      bytes memory sequenceLE = Utils.encodeUint32LE(0xFFFFFFFF);
+      // d) sequence = 0xFFFFFFFD (replace-by-fee) (4 bytes LE)
+      bytes memory sequenceLE = Utils.encodeUint32LE(0xFFFFFFFD);
 
       // e) concat this input's fields:
       //    [ prevTxidLe || prevIndexLe || scriptSigLen || scriptSigBytes || sequenceLE ]
