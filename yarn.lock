@@ -1867,6 +1867,7 @@ __metadata:
     fs-extra: "npm:11.3.2"
     tsup: "npm:8.5.0"
     typescript: "npm:5.9.3"
+    vitest: "npm:3.2.4"
   languageName: unknown
   linkType: soft
 

@@ -16,7 +16,9 @@
     "start": "tsc --watch",
     "lint": "lint",
     "clean": "rm -rf ./dist",
-    "build": "tsup src/index.ts --dts --format esm,cjs"
+    "build": "tsup src/index.ts --dts --format esm,cjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@relay-protocol/settlement-sdk": "workspace:./packages/sdk",
@@ -25,7 +27,8 @@
     "eslint": "9.36.0",
     "fs-extra": "11.3.2",
     "tsup": "8.5.0",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
   },
   "files": [
     "dist"

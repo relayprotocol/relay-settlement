@@ -1,15 +1,9 @@
-import type { NetworkConfigs } from "@relay-protocol/settlement-sdk"
-
-import * as supportedNetworks from "./networks"
+import { initializeNetworks } from "./networks-index"
 
 export * from "./networks"
+export * from "./config-loader"
+export * from "./networks-index"
 
-export const networks: NetworkConfigs = {}
-
-Object.keys(supportedNetworks).forEach((networkName: string) => {
-  // @ts-expect-error Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'typeof import("/Users/julien/repos/unlock/packages/networks/src/networks/index")'.
-  const network = supportedNetworks[networkName]
-  networks[network.chainId] = network
-})
+export const networks = initializeNetworks()
 
 export default networks
