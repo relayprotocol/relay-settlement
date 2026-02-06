@@ -3,6 +3,7 @@
 Multi-chain settlement protocol. Monorepo using Yarn v4 workspaces.
 
 This is a **public repository**. All code, commits, PR descriptions, and comments are visible to the world. Keep this in mind:
+
 - Never commit secrets, private keys, internal URLs, or proprietary information.
 - Use clear, professional naming — no internal jargon, placeholder names, or obscure abbreviations.
 - READMEs and documentation matter. Update them when behavior changes.
@@ -25,12 +26,14 @@ This is a **public repository**. All code, commits, PR descriptions, and comment
 ## Commands
 
 From repo root:
+
 - `yarn install` — Install all workspace dependencies
 - `yarn build` — Build all packages and smart contracts
 - `yarn test` — Run all workspace tests
 - `yarn lint` — Lint all workspaces
 
 From `smart-contracts/`:
+
 - `yarn build` — Compile Solidity contracts
 - `yarn test` — Run Mocha/Chai test suite
 - `yarn coverage` — Generate solidity-coverage report
