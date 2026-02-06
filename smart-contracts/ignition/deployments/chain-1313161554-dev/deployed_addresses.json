@@ -7,5 +7,6 @@
   "RelayAllocator#RelayAllocator": "0x45348c213bf7dDB8E45f34CA4F333307A78ecB9a",
   "EVMPayloadBuilder#Utils": "0xe7c413AD124533597Bd53ED8d764be5328cB333A",
   "EVMPayloadBuilder#EVMPayloadBuilder": "0x8005488FF4f8982D2D8c1D602e6d747b1428dd41",
-  "SolanaPayloadBuilder#SolanaPayloadBuilder": "0xf58C966461a13D5931560F5bc6B9D2e0aca8Bfb7"
+  "SolanaPayloadBuilder#SolanaPayloadBuilder": "0xf58C966461a13D5931560F5bc6B9D2e0aca8Bfb7",
+  "BitcoinPayloadBuilder#BitcoinPayloadBuilder": "0x25a83F7A3b327E42CF3850c4884983b0A13a406E"
 }
