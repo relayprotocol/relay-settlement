@@ -852,7 +852,8 @@ export const getDecodedWithdrawalAmount = (
 
     case "bitcoin-vm": {
       const psbt = bitcoin.Psbt.fromHex(decodedWithdrawal.withdrawal.psbt)
-      return psbt.txOutputs[0].value.toString()
+      const fee = psbt.getFee()
+      return (psbt.txOutputs[0].value + fee).toString()
     }
 
     case "hyperliquid-vm": {
