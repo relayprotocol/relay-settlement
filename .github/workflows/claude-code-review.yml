@@ -29,7 +29,8 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           use_sticky_comment: true
           include_fix_links: true
-          claude_args: '--model opus --max-turns 3'
+          allowed_tools: 'Bash(git diff:*),Bash(git log:*),Bash(gh pr view:*),Bash(gh pr diff:*)'
+          claude_args: '--model opus --max-turns 5'
           prompt: |
             You are reviewing a pull request. Use `gh pr view` to get the PR title and description.
 
