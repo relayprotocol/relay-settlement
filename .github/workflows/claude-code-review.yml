@@ -11,7 +11,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-      issues: read
+      issues: write
       id-token: write
 
     steps:
@@ -28,6 +28,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           use_sticky_comment: true
+          show_full_output: true
           include_fix_links: true
           claude_args: '--model opus --max-turns 15'
           settings: |
