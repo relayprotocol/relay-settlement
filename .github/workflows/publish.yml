@@ -7,13 +7,12 @@ on:
     paths:
       - "packages/networks/**"
       - "packages/sdk/**"
-  workflow_dispatch:
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       id-token: write
 
     steps:
@@ -33,8 +32,6 @@ jobs:
         run: yarn build
 
       - name: Publish to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           cd packages/networks
-          npm publish --access public
+          npm publish
