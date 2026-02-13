@@ -27,8 +27,6 @@ jobs:
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          use_sticky_comment: true
-          show_full_output: true
           include_fix_links: true
           claude_args: '--model opus --max-turns 15'
           settings: |
@@ -45,7 +43,7 @@ jobs:
               }
             }
           prompt: |
-            You are reviewing a pull request. Use `gh pr view` to get the PR title and description.
+            You are reviewing pull request #${{ github.event.pull_request.number }} in the ${{ github.repository }} repository.
 
             This is a PUBLIC repository. All comments are visible to the world.
 
@@ -54,6 +52,7 @@ jobs:
             Perform a thorough code review. You have full git history available.
 
             ### Step 1: Gather context
+            - Run `gh pr view ${{ github.event.pull_request.number }}` to get the PR title and description.
             - Run `git diff origin/${PR_BASE_REF}...HEAD` to see all changes.
             - Run `git log --oneline origin/${PR_BASE_REF}..HEAD` to see commit history.
             - Read the changed files in full to understand surrounding context.
@@ -105,7 +104,16 @@ jobs:
             - Are there obvious performance issues (unbounded loops in contracts, N+1 queries)?
             - For contract changes: are events emitted for state changes?
 
-            ### Step 3: Output format
+            ### Step 3: Post your review
+
+            After completing your analysis, you MUST post your review as a comment on the PR using `gh`. Do NOT just output text -- you must actively post it.
+
+            Use this command to post your review:
+            ```
+            gh pr comment ${{ github.event.pull_request.number }} --body "<your review>"
+            ```
+
+            Format your review as follows:
 
             If you find NO high-confidence issues:
 
@@ -130,6 +138,7 @@ jobs:
             Severity levels: `CRITICAL` (will cause bugs/security issues), `WARNING` (likely problematic), `NOTE` (worth considering).
 
             ### Rules
+            - You MUST post your review as a PR comment using `gh pr comment`. Do not skip this step.
             - Do NOT flag issues you are not confident about. False positives waste reviewer time.
             - Do NOT make subjective style comments. Only flag objective problems.
             - Do NOT suggest adding comments or documentation unless something is actively misleading.
