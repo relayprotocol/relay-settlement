@@ -28,7 +28,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           include_fix_links: true
-          claude_args: '--model opus --max-turns 15'
+          claude_args: '--model opus --max-turns 30'
           settings: |
             {
               "permissions": {
@@ -36,6 +36,7 @@ jobs:
                   "Bash(git:*)",
                   "Bash(gh:*)",
                   "Bash(cat:*)",
+                  "Bash(grep:*)",
                   "Bash(echo:*)",
                   "Bash(env:*)",
                   "Bash(printenv:*)"
@@ -51,13 +52,14 @@ jobs:
 
             Perform a thorough code review. You have full git history available.
 
+            IMPORTANT: You have a limited turn budget. Be efficient -- combine commands when possible and only read files that are essential for your review. Always reserve your last turn to post the comment.
+
             ### Step 1: Gather context
             - Run `gh pr view ${{ github.event.pull_request.number }}` to get the PR title and description.
             - Run `git diff origin/${PR_BASE_REF}...HEAD` to see all changes.
             - Run `git log --oneline origin/${PR_BASE_REF}..HEAD` to see commit history.
-            - Read the changed files in full to understand surrounding context.
+            - Only read full files when the diff is unclear or you need surrounding context to verify correctness.
             - If a change modifies an algorithm, computation, or smart contract logic, read the entire function/contract to verify correctness.
-            - Check `git log --oneline -10 -- <file>` for recently changed files to understand their evolution.
 
             ### Step 2: Review checklist
             Evaluate the diff against each category. Only flag issues where you have HIGH CONFIDENCE there is a real problem. Do not speculate or flag stylistic nitpicks.
