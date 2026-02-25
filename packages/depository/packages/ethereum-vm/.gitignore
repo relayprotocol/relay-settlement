@@ -1,3 +1,6 @@
+# git submodules
+lib
+
 # Compiler files
 cache/
 out/
