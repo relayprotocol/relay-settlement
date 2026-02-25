@@ -146,4 +146,35 @@ library Utils {
         )
       );
   }
+
+  /// @notice Computes a deterministic withdrawal address from withdrawal parameters
+  /// @param depositoryChainId The chain ID of the depository as string
+  /// @param depository The depository contract address as pre-encoded bytes (via encodeAddress)
+  /// @param currency The currency as pre-encoded bytes (via encodeAddress)
+  /// @param recipient The recipient as pre-encoded bytes (via encodeAddress)
+  /// @param withdrawerAlias The withdrawer alias (owner of balance before withdrawal)
+  /// @param withdrawalNonce The nonce to prevent collisions
+  /// @return The computed withdrawal address
+  function computeWithdrawalAddress(
+    string memory depositoryChainId,
+    bytes memory depository,
+    bytes memory currency,
+    bytes memory recipient,
+    address withdrawerAlias,
+    bytes32 withdrawalNonce
+  ) external pure returns (address) {
+    bytes32 hash = keccak256(
+      abi.encodePacked(
+        depositoryChainId,
+        depository,
+        currency,
+        recipient,
+        withdrawerAlias,
+        withdrawalNonce
+      )
+    );
+
+    // Return last 20 bytes as address
+    return address(uint160(uint256(hash)));
+  }
 }
