@@ -1,6 +1,6 @@
 import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from '@ton/core';
 import { sign } from '@ton/crypto';
-import { JettonWallet } from "@ton-community/assets-sdk";
+import { JettonWallet } from '@ton-community/assets-sdk';
 
 export const ADDRESS_NONE = Address.parse('EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c');
 export const PROTOCOL_NAME = Buffer.from('RelayEscrow', 'ascii');
@@ -20,11 +20,11 @@ export enum CurrencyType {
 
 // Transfer request without signature
 export type TransferRequestData = {
-    nonce: bigint;         // 64 bits
-    expiry: number;        // 32 bits
+    nonce: bigint; // 64 bits
+    expiry: number; // 32 bits
     currencyType: CurrencyType;
     to: Address;
-    jettonWallet?: Address;  // empty for TON, jetton wallet for Jetton
+    jettonWallet?: Address; // empty for TON, jetton wallet for Jetton
     currency?: Address;
     amount: bigint;
     gasAmount: bigint;
@@ -33,36 +33,36 @@ export type TransferRequestData = {
 
 // Complete transfer request with signature
 export type TransferRequest = TransferRequestData & {
-    signature: Buffer;      // 512 bits
+    signature: Buffer; // 512 bits
 };
 
 export type DepositEvent = {
-    name: 'Deposit',
+    name: 'Deposit';
     data: {
         assetType: number; // 0 for TON, 1 for Jetton
         amount: bigint;
         depositor: string;
         currency: string;
         depositId: bigint;
-    }
-}
-  
+    };
+};
+
 export type WithdrawEvent = {
-    name: 'Withdraw',
+    name: 'Withdraw';
     data: {
         currency: string;
-        amount: bigint; 
+        amount: bigint;
         msgHash: bigint;
-    }
-}
+    };
+};
 
 export function relayEscrowConfigToCell(config: RelayEscrowConfig): Cell {
     return beginCell()
-    .storeAddress(config.owner)
-    .storeAddress(config.allocator)
-    .storeUint(config.nonce, 64)
-    .storeInt(config.chainId, 32)
-    .endCell();
+        .storeAddress(config.owner)
+        .storeAddress(config.allocator)
+        .storeUint(config.nonce, 64)
+        .storeInt(config.chainId, 32)
+        .endCell();
 }
 
 export const Opcodes = {
@@ -72,7 +72,10 @@ export const Opcodes = {
 };
 
 export class RelayEscrow implements Contract {
-    constructor(readonly address: Address, readonly init?: { code: Cell; data: Cell }) {}
+    constructor(
+        readonly address: Address,
+        readonly init?: { code: Cell; data: Cell },
+    ) {}
 
     static createFromAddress(address: Address) {
         return new RelayEscrow(address);
@@ -123,7 +126,7 @@ export class RelayEscrow implements Contract {
             allocator: Address;
             value: bigint;
             queryID?: number;
-        }
+        },
     ) {
         await provider.internal(via, {
             value: opts.value,
@@ -143,15 +146,15 @@ export class RelayEscrow implements Contract {
             value: bigint;
             queryID?: number;
             depositId?: bigint;
-        }
+        },
     ) {
         await provider.internal(via, {
             value: opts.value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginCell()
-                    .storeUint(Opcodes.deposit, 32)
-                    .storeUint(opts.queryID ?? 0, 64)
-                    .storeUint(opts.depositId ?? 0, 64)
+                .storeUint(Opcodes.deposit, 32)
+                .storeUint(opts.queryID ?? 0, 64)
+                .storeUint(opts.depositId ?? 0, 64)
                 .endCell(),
         });
     }
@@ -163,10 +166,10 @@ export class RelayEscrow implements Contract {
             requests: TransferRequest[];
             value: bigint;
             queryID?: number;
-        }
+        },
     ) {
         // Create transfer data cells
-        const transferCells = opts.requests.map(request => this.createTransferDataCell(request));
+        const transferCells = opts.requests.map((request) => this.createTransferDataCell(request));
 
         // Create actions cell with all transfers
         let actionsBuilder = beginCell().storeUint(transferCells.length, 8);
@@ -190,9 +193,7 @@ export class RelayEscrow implements Contract {
         // Split addresses into reference cell
         const addrData = beginCell()
             .storeAddress(request.to)
-            .storeAddress(request.currencyType === CurrencyType.TON
-                ? ADDRESS_NONE
-                : request.jettonWallet)
+            .storeAddress(request.currencyType === CurrencyType.TON ? ADDRESS_NONE : request.jettonWallet)
             .storeAddress(request.currency)
             .endCell();
 
@@ -218,16 +219,12 @@ export class RelayEscrow implements Contract {
     }
 
     private createTransferDataCell(request: TransferRequest): Cell {
-        const signatureCell = beginCell()
-            .storeBuffer(request.signature)
-            .endCell();
+        const signatureCell = beginCell().storeBuffer(request.signature).endCell();
 
         // Split addresses into reference cell
         const addrCell = beginCell()
             .storeAddress(request.to)
-            .storeAddress(request.currencyType === CurrencyType.TON
-                ? ADDRESS_NONE
-                : request.jettonWallet)
+            .storeAddress(request.currencyType === CurrencyType.TON ? ADDRESS_NONE : request.jettonWallet)
             .storeAddress(request.currency)
             .endCell();
 
@@ -249,7 +246,7 @@ export class RelayEscrow implements Contract {
         return mainCell.endCell();
     }
 
-   // Generate signature for transfer request
+    // Generate signature for transfer request
     async signTransfer(request: TransferRequestData, secretKey: Buffer, chainId: number): Promise<Buffer> {
         const message = this.createSigningMessage(request, chainId);
         const hash = message.hash();
@@ -270,7 +267,7 @@ export class RelayEscrow implements Contract {
             nonce?: bigint;
             gasAmount?: bigint;
             forwardAmount?: bigint;
-        }
+        },
     ): Promise<TransferRequest> {
         // Validate currency address for Jetton transfers
         if (opts.currencyType === CurrencyType.JETTON && !opts.jettonWallet) {
@@ -301,51 +298,55 @@ export class RelayEscrow implements Contract {
         // Return complete transfer request
         return {
             ...requestData,
-            signature
+            signature,
         };
     }
 
-    static async parseOutMessage(message: any, provider: ContractProvider): Promise<DepositEvent | WithdrawEvent | null> {
+    static async parseOutMessage(
+        message: any,
+        provider: ContractProvider,
+    ): Promise<DepositEvent | WithdrawEvent | null> {
         if (message.info.dest !== null) {
-          return null;
+            return null;
         }
         const body = message.body.beginParse();
         body.loadBits(6);
         const eventCode = body.loadUint(32);
-        if (eventCode === 2290588233) { // Deposit event
+        if (eventCode === 2290588233) {
+            // Deposit event
             const assetType = body.loadUint(1);
             const jettonWallet = body.loadAddress().toString();
-            const amount =  body.loadCoins();
+            const amount = body.loadCoins();
             const depositor = body.loadAddress().toString();
             const depositId = body.loadUint(64);
 
-            const eventJettonWallet = provider.open(
-                JettonWallet.createFromAddress(
-                    Address.parse(jettonWallet)
-                )
-            );
+            const eventJettonWallet = provider.open(JettonWallet.createFromAddress(Address.parse(jettonWallet)));
 
-          return {
-            name: "Deposit",
-            data: {
-                assetType,
-                currency: assetType === 0 ? ADDRESS_NONE.toString() : (await eventJettonWallet.getData()).jettonMaster.toString(),
-                amount,
-                depositor,
-                depositId
-            }
-          };
-        } else if (eventCode === 1552395902) { // Withdraw event
-          return {
-            name: "Withdraw",
-            data: {
-                currency: body.loadAddress().toString(),
-                amount: body.loadCoins(),
-                msgHash: body.loadUintBig(256)
-            }
-          };
+            return {
+                name: 'Deposit',
+                data: {
+                    assetType,
+                    currency:
+                        assetType === 0
+                            ? ADDRESS_NONE.toString()
+                            : (await eventJettonWallet.getData()).jettonMaster.toString(),
+                    amount,
+                    depositor,
+                    depositId,
+                },
+            };
+        } else if (eventCode === 1552395902) {
+            // Withdraw event
+            return {
+                name: 'Withdraw',
+                data: {
+                    currency: body.loadAddress().toString(),
+                    amount: body.loadCoins(),
+                    msgHash: body.loadUintBig(256),
+                },
+            };
         }
-      
+
         return null;
     }
 }

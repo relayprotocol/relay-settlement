@@ -9,8 +9,8 @@ export async function run(provider: NetworkProvider) {
                 id: Math.floor(Math.random() * 10000),
                 counter: 0,
             },
-            await compile('RelayEscrow')
-        )
+            await compile('RelayEscrow'),
+        ),
     );
 
     await relayEscrow.sendDeploy(provider.sender(), toNano('0.05'));

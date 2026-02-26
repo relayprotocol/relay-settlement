@@ -9,6 +9,7 @@ The Solana implementation provides secure deposit and transfer functionality for
 ## Architecture
 
 ### Core Components
+
 - **RelayDepository**: Main state (owner, allocator, vault_bump)
 - **Vault PDA**: Secure SOL custody (`seeds = ["vault"]`)
 - **UsedRequest**: Replay protection tracking
@@ -17,17 +18,21 @@ The Solana implementation provides secure deposit and transfer functionality for
 ## Instructions
 
 ### Administrative
+
 - `initialize`: Setup program with owner and allocator
 - `set_allocator` / `set_owner`: Update authorized addresses (owner only)
 
 ### Deposits
+
 - `deposit_native(amount, id)`: Deposit SOL to vault PDA
 - `deposit_token(amount, id)`: Deposit SPL tokens with automatic ATA creation
 
 ### Execution
+
 - `execute_transfer(request)`: Execute allocator-signed transfers
 
 **TransferRequest Structure**:
+
 ```rust
 pub struct TransferRequest {
     pub recipient: Pubkey,
@@ -41,11 +46,13 @@ pub struct TransferRequest {
 ## Security Features
 
 ### Ed25519 Signature Verification
+
 - Validates allocator signatures using Solana's Ed25519 program
 - Verifies message hash matches transfer request
 - Prevents signature reuse
 
 ### Protection Mechanisms
+
 - **Replay Protection**: Request hashes stored in UsedRequest PDAs
 - **Rent Protection**: Maintains vault rent-exempt balance for SOL transfers
 - **Token Fee Handling**: Automatic Token-2022 transfer fee calculation
@@ -54,6 +61,7 @@ pub struct TransferRequest {
 ## Events
 
 DepositEvent:
+
 ```rust
 pub struct DepositEvent {
     pub depositor: Pubkey,
@@ -64,6 +72,7 @@ pub struct DepositEvent {
 ```
 
 TransferExecutedEvent:
+
 ```rust
 pub struct TransferExecutedEvent {
     pub request: TransferRequest,
@@ -73,6 +82,7 @@ pub struct TransferExecutedEvent {
 ```
 
 ### Token Support
+
 - Native SOL transfers
 - Legacy SPL tokens
 - Token-2022 with transfer fees

@@ -1,4 +1,4 @@
-import { TronWeb } from "tronweb";
+import { TronWeb } from "tronweb"
 
 // Before running this script make sure to compile the contracts via Tronbox using `npx tronbox compile`
 
@@ -6,15 +6,15 @@ import { TronWeb } from "tronweb";
 // the dependencies are being imported (Tronbox doesn't seem to support `remappings.txt`).
 
 // Both the ABI and the bytecode are to be retrieved from the build artifacts (build/contracts/RelayDepository.json)
-const abi = [];
-const bytecode = "";
+const abi = []
+const bytecode = ""
 
 const tronWeb = new TronWeb({
   fullHost: process.env.FULL_NODE,
   privateKey: process.env.DEPLOYER_PK,
-});
+})
 
-(async () => {
+;(async () => {
   const contract = await tronWeb.contract().new({
     abi,
     bytecode,
@@ -23,7 +23,7 @@ const tronWeb = new TronWeb({
     callValue: 0,
     userFeePercentage: 100,
     originEnergyLimit: 10_000_000,
-  });
+  })
 
-  console.log("Contract deployed at: ", contract.address);
-})();
+  console.log("Contract deployed at: ", contract.address)
+})()

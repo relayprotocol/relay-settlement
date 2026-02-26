@@ -9,6 +9,7 @@ The Sui implementation of the Relay Depository provides secure deposit and trans
 ## Architecture
 
 ### Core Components
+
 - **Escrow**: Main shared object storing coins of different types
 - **AllocatorCap**: Capability object for administrative functions
 - **ExecutedRequests**: Tracks executed withdrawals for replay protection
@@ -17,17 +18,21 @@ The Sui implementation of the Relay Depository provides secure deposit and trans
 ## Instructions
 
 ### Administrative
+
 - `init`: Creates and shares the Escrow and ExecutedRequests objects
 - `set_allocator`: Updates the authorized allocator address and public key (requires AllocatorCap)
 
 ### Deposits
+
 - `deposit<T>(coin, id)`: Generic deposit function for any Sui coin type
 - `deposit_coin<T>(coin, id)`: Entry wrapper for depositing coins
 
 ### Execution
+
 - `execute_transfer<T>(request_params, signature)`: Execute allocator-signed transfers
 
 **TransferRequest Structure**:
+
 ```rust
 public struct TransferRequest has copy, drop {
     recipient: address,    // Destination address
@@ -41,11 +46,13 @@ public struct TransferRequest has copy, drop {
 ## Security Features
 
 ### Ed25519 Signature Verification
+
 - Validates allocator signatures using Sui's Ed25519 verification module
 - Signature covers the hash of the serialized transfer request
 - Prevents signature reuse through request tracking
 
 ### Protection Mechanisms
+
 - **Replay Protection**: Request hashes stored in ExecutedRequests object
 - **Time-based Expiration**: Transfers expire after specified timestamp
 - **Object Ownership**: Shared objects control access to funds
@@ -53,6 +60,7 @@ public struct TransferRequest has copy, drop {
 ## Events
 
 DepositEvent:
+
 ```rust
 public struct DepositEvent has copy, drop {
     coin_type: TypeName,
@@ -63,6 +71,7 @@ public struct DepositEvent has copy, drop {
 ```
 
 TransferExecutedEvent:
+
 ```rust
 public struct TransferExecutedEvent has copy, drop {
     request_hash: vector<u8>,
@@ -73,6 +82,7 @@ public struct TransferExecutedEvent has copy, drop {
 ```
 
 AllocatorChangedEvent:
+
 ```rust
 public struct AllocatorChangedEvent has copy, drop {
     old_allocator: address,
@@ -81,10 +91,12 @@ public struct AllocatorChangedEvent has copy, drop {
 ```
 
 ### View Functions
+
 - `get_allocator`: Returns current allocator address and public key
 - `get_balance<T>`: Returns balance of specific coin type
 - `check_request_executed`: Checks if a request has been executed
 
 ### Token Support
+
 - Native SUI coin
 - Any custom coin type

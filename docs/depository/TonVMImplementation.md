@@ -9,6 +9,7 @@ The TON implementation of the Relay Depository provides secure deposit and trans
 ## Architecture
 
 ### Core Components
+
 - **Main Contract**: Stores configuration and processes transactions
 - **Event Logging**: Emits transaction events through outgoing messages
 - **Storage Variables**: Persistent contract state (owner, allocator, nonce)
@@ -16,16 +17,20 @@ The TON implementation of the Relay Depository provides secure deposit and trans
 ## Instructions
 
 ### Administrative
+
 - `op::set_allocator`: Updates the authorized allocator address (owner only)
 
 ### Deposits
+
 - **TON deposits**: Either direct transfers or via `op::deposit` operation
 - **Jetton deposits**: Handled via `op::transfer_notification` callbacks
 
 ### Execution
+
 - `op::transfers`: Processes batch transfers with allocator signatures
 
 **TransferRequest Structure**:
+
 ```
 msg_nonce: uint64       // Unique nonce for replay protection
 expiry: uint32          // UNIX timestamp for validity
@@ -41,6 +46,7 @@ signature: bits512      // Ed25519 signature by allocator
 
 **Domain Separator**:
 The contract uses a domain separator pattern (similar to EIP-712) to prevent cross-chain and cross-contract replay attacks. The signed message includes:
+
 - Protocol name (`"RelayEscrow"`)
 - Contract address (`my_address()` - prevents cross-contract replay)
 - Chain ID (stored in contract state - prevents cross-chain replay)
@@ -51,11 +57,13 @@ This ensures signatures are only valid for the specific protocol, contract deplo
 ## Security Features
 
 ### Ed25519 Signature Verification
+
 - Validates allocator signatures using TON's native check_signature
 - Signature covers the hash of a cell containing transfer parameters
 - Maintains strict nonce progression for replay protection
 
 ### Protection Mechanisms
+
 - **Domain Separator**: Contract address and chain ID prevent cross-chain/cross-contract replay attacks
 - **Replay Protection**: Strict nonce ordering with incremental validation
 - **Time-based Expiration**: Transfers expire after specified timestamp
@@ -65,6 +73,7 @@ This ensures signatures are only valid for the specific protocol, contract deplo
 ## Events
 
 DepositEvent:
+
 ```
 event_id: uint32 = 0x88879a49
 asset_type: uint1 // 0=TON, 1=Jetton
@@ -75,6 +84,7 @@ id: uint64 // Optional deposit ID
 ```
 
 TransferEvent:
+
 ```
 event_id: uint32 = 0x5c87ae7e
 currency: MsgAddress // Asset address or empty for TON
@@ -83,11 +93,13 @@ msg_hash: uint256 // Hash of the signed message
 ```
 
 ### Get Methods
+
 - `get_owner()`: Returns owner address
 - `get_allocator()`: Returns allocator address
 - `get_nonce()`: Returns current nonce value
 - `get_chain_id()`: Returns chain ID
 
 ### Token Support
+
 - Native TON coins
 - Any TON Jetton token (TEP-74 standard)
