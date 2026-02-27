@@ -9,6 +9,7 @@
     "lint": "yarn lint:solidity && lint"
   },
   "devDependencies": {
+    "@nomicfoundation/hardhat-foundry": "1.2.1",
     "@nomicfoundation/hardhat-ignition": "0.15.13",
     "@nomicfoundation/hardhat-ignition-viem": "0.15.13",
     "@nomicfoundation/hardhat-network-helpers": "1.1.0",

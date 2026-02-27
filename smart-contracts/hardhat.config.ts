@@ -1,3 +1,4 @@
+import "@nomicfoundation/hardhat-foundry"
 import "@nomicfoundation/hardhat-ignition"
 import "@nomicfoundation/hardhat-toolbox-viem"
 import "@nomiclabs/hardhat-solhint"

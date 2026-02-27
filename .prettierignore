@@ -3,6 +3,7 @@
 **/artifacts
 **/dist
 **/cache
+**/cache_hardhat
 **/node_modules
 **/typechain-types
 .yarn

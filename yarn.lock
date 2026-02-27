@@ -1541,6 +1541,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@nomicfoundation/hardhat-foundry@npm:1.2.1":
+  version: 1.2.1
+  resolution: "@nomicfoundation/hardhat-foundry@npm:1.2.1"
+  dependencies:
+    picocolors: "npm:^1.1.0"
+  peerDependencies:
+    hardhat: ^2.26.0
+  checksum: 10c0/0cab1137f5aae2f58f61e963445fd300b026fa808b04c172f0e7c6508a880be743d4aca9aca21de90d52350dbb559665369706c8f3fe3f673bfdb7b9c301f322
+  languageName: node
+  linkType: hard
+
 "@nomicfoundation/hardhat-ignition-viem@npm:0.15.13":
   version: 0.15.13
   resolution: "@nomicfoundation/hardhat-ignition-viem@npm:0.15.13"
@@ -1952,6 +1963,7 @@ __metadata:
     "@coral-xyz/anchor": "npm:0.27.0"
     "@mysten/sui": "npm:1.38.0"
     "@near-js/providers": "npm:2.3.2"
+    "@nomicfoundation/hardhat-foundry": "npm:1.2.1"
     "@nomicfoundation/hardhat-ignition": "npm:0.15.13"
     "@nomicfoundation/hardhat-ignition-viem": "npm:0.15.13"
     "@nomicfoundation/hardhat-network-helpers": "npm:1.1.0"

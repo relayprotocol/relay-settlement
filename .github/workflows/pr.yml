@@ -21,6 +21,9 @@ jobs:
           node-version: 22
           cache: yarn
 
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
       - name: Enable Corepack
         run: corepack enable
 

@@ -1,0 +1,5 @@
+# ABOUTME: Minimal Foundry config for hardhat-foundry plugin.
+# ABOUTME: Provides remappings so Hardhat can compile the canonical depository source.
+[profile.default]
+src = "contracts"
+libs = ["node_modules"]

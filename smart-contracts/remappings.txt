@@ -1,0 +1,3 @@
+solady/src/=node_modules/solady/src/
+solady/=node_modules/solady/src/
+@openzeppelin/=node_modules/@openzeppelin/
