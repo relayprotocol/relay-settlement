@@ -9,9 +9,10 @@
   "EVMPayloadBuilder#EVMPayloadBuilder": "0x8005488FF4f8982D2D8c1D602e6d747b1428dd41",
   "SolanaPayloadBuilder#SolanaPayloadBuilder": "0xf58C966461a13D5931560F5bc6B9D2e0aca8Bfb7",
   "BitcoinPayloadBuilder#BitcoinPayloadBuilder": "0x25a83F7A3b327E42CF3850c4884983b0A13a406E",
-  "BitcoinDepositAddressBuilder#AuroraXccUtils": "0x91d649789A06C26D5a6D9d98E7CFE52be7AB7Cf2",
-  "BitcoinDepositAddressBuilder#ChainSignatures": "0xd72a23b91Efe8f27f282d0E743416da79f9deB35",
-  "BitcoinDepositAddressBuilder#Codec": "0x2aeaFA2254f60b22c7580B5FF2B73735042a695f",
-  "BitcoinDepositAddressBuilder#AuroraSdk": "0xa0AEE63d5D9A3f7d67356e320Ec19E0F57b3E46F",
-  "BitcoinDepositAddressBuilder#BitcoinDepositAddressBuilder": "0xAde24F3Bd29EC21e3D814F8A6a996fcf86feE87c"
+  "BitcoinDepositAddress#AuroraXccUtils": "0x0ADc9cd2f736f72664F5b7DA6A5e166B339D3A92",
+  "BitcoinDepositAddress#ChainSignatures": "0x0a7DEC5a433e4B22a7C9Ef65613966A9e0Bcc06F",
+  "BitcoinDepositAddress#Codec": "0xfaACb8fC928ce6a54659154E79574CF54442D67f",
+  "BitcoinDepositAddress#AuroraSdk": "0x5767d7a86EF68236A4CB3a4C64c622641d34F4f9",
+  "BitcoinDepositAddress#BitcoinDepositSweepBuilder": "0xF2Bc3E128c38AB9315EEe5e2d045CCFa24C0d6f1",
+  "BitcoinDepositAddress#BitcoinDepositAddress": "0xa70c41AD6fac238A39826493A8592cbc5df1dE9e"
 }

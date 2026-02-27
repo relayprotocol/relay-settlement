@@ -14,10 +14,5 @@
   "RelayMultisigSigner#Codec": "0xbc9341b20710cBcE6318934dc6c49077BAa92106",
   "RelayMultisigSigner#AuroraSdk": "0xb6E614f3BDb7Cf4552Eb4F064fF9Ab546d15057c",
   "RelayMultisigSigner#RelayMultisigSigner": "0xb538ee6515F9d16eBD0BACD0503733815c9b070c",
-  "BitcoinPayloadBuilder#BitcoinPayloadBuilder": "0x49f145214379FEe3F495Deef6a66288451541b5b",
-  "BitcoinDepositAddressBuilder#AuroraXccUtils": "0x198816F6CEB54BEd14f0b2B9e367A6AEE559111C",
-  "BitcoinDepositAddressBuilder#ChainSignatures": "0xEe6a52D6133C9CA993Ef45eaf9894f1D28F7CB0e",
-  "BitcoinDepositAddressBuilder#Codec": "0xBE3373cD6A2Ea656fEDdA3D6efaE9259bAC7C231",
-  "BitcoinDepositAddressBuilder#AuroraSdk": "0x6618a5c133538521969b9A062cFb8E0295B6849d",
-  "BitcoinDepositAddressBuilder#BitcoinDepositAddressBuilder": "0x91454444e71D4c20204Eb4c33e6e5f35efe37DE5"
+  "BitcoinPayloadBuilder#BitcoinPayloadBuilder": "0x49f145214379FEe3F495Deef6a66288451541b5b"
 }

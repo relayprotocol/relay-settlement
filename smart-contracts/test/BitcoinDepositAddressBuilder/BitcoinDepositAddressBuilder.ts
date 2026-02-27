@@ -3,7 +3,7 @@ import * as bitcoin from "bitcoinjs-lib"
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers"
 import { expect } from "chai"
 import hre from "hardhat"
-import { decodeAbiParameters } from "viem"
+import { decodeAbiParameters, encodeAbiParameters } from "viem"
 import {
   BITCOIN_TRANSACTION_ABI,
   txidToBytes32,
@@ -26,100 +26,90 @@ const orderId =
 const orderId2 =
   "0x0000000000000000000000000000000000000000000000000000000000000002" as `0x${string}`
 
-describe("BitcoinDepositAddressBuilder", function () {
-  async function deployBuilder() {
-    const [owner, otherAccount] = await hre.viem.getWalletClients()
-    const publicClient = await hre.viem.getPublicClient()
+const UTXO_ABI = {
+  type: "tuple",
+  components: [
+    { name: "txid", type: "bytes32" },
+    { name: "index", type: "uint32" },
+    { name: "value", type: "uint64" },
+    { name: "scriptPubKey", type: "bytes" },
+  ],
+} as const
 
-    // Deploy libraries
-    const auroraXccUtils = await hre.viem.deployContract("AuroraXccUtils")
-    const codec = await hre.viem.deployContract("Codec")
-    const auroraSdk = await hre.viem.deployContract("AuroraSdk", [], {
-      libraries: {
-        AuroraXccUtils: auroraXccUtils.address,
-        Codec: codec.address,
-      },
-    })
-    const chainSignatures = await hre.viem.deployContract("ChainSignatures", [])
+function encodeSweepData(
+  utxo: {
+    txid: `0x${string}`
+    index: number
+    value: bigint
+    scriptPubKey: `0x${string}`
+  },
+  feeRate: bigint
+): `0x${string}` {
+  return encodeAbiParameters([UTXO_ABI, { type: "uint64" }], [utxo, feeRate])
+}
 
-    // Deploy MockWNEAR
-    const wNEAR = await hre.viem.deployContract("MockWNEAR")
+async function deployBuilder() {
+  const [owner, otherAccount] = await hre.viem.getWalletClients()
+  const publicClient = await hre.viem.getPublicClient()
 
-    // Depository address
-    const depositoryAddress = "1BoatSLRHtKNngkdXEeobR76b53LETtpyT"
-    const depositoryScript = bitcoin.address.toOutputScript(
-      depositoryAddress,
-      bitcoin.networks.bitcoin
-    )
-
-    const maxFeeRate = 100n // 100 sats/byte
-
-    const builder = await hre.viem.deployContract(
-      "BitcoinDepositAddressBuilder",
-      [
-        owner.account.address,
-        depositoryScript.toString("base64"),
-        "v1.signer.test",
-        wNEAR.address,
-        maxFeeRate,
-      ],
-      {
-        libraries: {
-          AuroraSdk: auroraSdk.address,
-          ChainSignatures: chainSignatures.address,
-        },
-      }
-    )
-
-    return {
-      builder,
-      depositoryAddress,
-      depositoryScript,
-      maxFeeRate,
-      otherAccount,
-      owner,
-      publicClient,
-      wNEAR,
-    }
-  }
-
-  describe("derivationPath()", function () {
-    it("should return correct format: hex(address) / hex(orderId)", async () => {
-      const { builder } = await loadFixture(deployBuilder)
-
-      const path = await builder.read.derivationPath([orderId])
-
-      // Strings.toHexString includes 0x prefix
-      const contractAddr = builder.address.toLowerCase()
-      expect(path).to.include(contractAddr)
-
-      // Should contain a separator
-      expect(path).to.include("/")
-
-      // Should end with the hex-encoded orderId (no 0x prefix, from stringifyBytes)
-      const orderIdHex = orderId.slice(2)
-      expect(path).to.include(orderIdHex)
-    })
-
-    it("should return deterministic results for the same orderId", async () => {
-      const { builder } = await loadFixture(deployBuilder)
-
-      const path1 = await builder.read.derivationPath([orderId])
-      const path2 = await builder.read.derivationPath([orderId])
-
-      expect(path1).to.equal(path2)
-    })
-
-    it("should return unique paths for different orderIds", async () => {
-      const { builder } = await loadFixture(deployBuilder)
-
-      const path1 = await builder.read.derivationPath([orderId])
-      const path2 = await builder.read.derivationPath([orderId2])
-
-      expect(path1).to.not.equal(path2)
-    })
+  // Deploy libraries
+  const auroraXccUtils = await hre.viem.deployContract("AuroraXccUtils")
+  const codec = await hre.viem.deployContract("Codec")
+  const auroraSdk = await hre.viem.deployContract("AuroraSdk", [], {
+    libraries: {
+      AuroraXccUtils: auroraXccUtils.address,
+      Codec: codec.address,
+    },
   })
+  const chainSignatures = await hre.viem.deployContract("ChainSignatures", [])
 
+  // Deploy MockWNEAR
+  const wNEAR = await hre.viem.deployContract("MockWNEAR")
+
+  // Depository address
+  const depositoryAddress = "1BoatSLRHtKNngkdXEeobR76b53LETtpyT"
+  const depositoryScript = bitcoin.address.toOutputScript(
+    depositoryAddress,
+    bitcoin.networks.bitcoin
+  )
+
+  const maxFeeRate = 100n // 100 sats/byte
+
+  const builder = await hre.viem.deployContract(
+    "BitcoinDepositSweepBuilder",
+    [owner.account.address, depositoryScript.toString("base64"), maxFeeRate],
+    {
+      libraries: {
+        ChainSignatures: chainSignatures.address,
+      },
+    }
+  )
+
+  const manager = await hre.viem.deployContract(
+    "BitcoinDepositAddress",
+    [owner.account.address, builder.address, "v1.signer.test", wNEAR.address],
+    {
+      libraries: {
+        AuroraSdk: auroraSdk.address,
+        ChainSignatures: chainSignatures.address,
+      },
+    }
+  )
+
+  return {
+    builder,
+    manager,
+    depositoryAddress,
+    depositoryScript,
+    maxFeeRate,
+    otherAccount,
+    owner,
+    publicClient,
+    wNEAR,
+  }
+}
+
+describe("BitcoinDepositSweepBuilder", function () {
   describe("buildSweepPayload()", function () {
     it("should revert if feeRate exceeds maxFeeRate", async () => {
       const { builder, maxFeeRate } = await loadFixture(deployBuilder)
@@ -129,13 +119,15 @@ describe("BitcoinDepositAddressBuilder", function () {
       await expect(
         builder.read.buildSweepPayload([
           orderId,
-          {
-            index: sampleUtxo.vout,
-            scriptPubKey,
-            txid: txidToBytes32(sampleUtxo.txid),
-            value: BigInt(sampleUtxo.value),
-          },
-          excessiveFeeRate,
+          encodeSweepData(
+            {
+              index: sampleUtxo.vout,
+              scriptPubKey,
+              txid: txidToBytes32(sampleUtxo.txid),
+              value: BigInt(sampleUtxo.value),
+            },
+            excessiveFeeRate
+          ),
         ])
       ).to.be.rejectedWith(`FeeRateTooHigh(${excessiveFeeRate}, ${maxFeeRate})`)
     })
@@ -150,13 +142,15 @@ describe("BitcoinDepositAddressBuilder", function () {
       await expect(
         builder.read.buildSweepPayload([
           orderId,
-          {
-            index: sampleUtxo.vout,
-            scriptPubKey,
-            txid: txidToBytes32(sampleUtxo.txid),
-            value: tinyValue,
-          },
-          feeRate,
+          encodeSweepData(
+            {
+              index: sampleUtxo.vout,
+              scriptPubKey,
+              txid: txidToBytes32(sampleUtxo.txid),
+              value: tinyValue,
+            },
+            feeRate
+          ),
         ])
       ).to.be.rejectedWith(
         `InsufficientUTXOValue(${tinyValue}, ${expectedFees})`
@@ -175,13 +169,15 @@ describe("BitcoinDepositAddressBuilder", function () {
       await expect(
         builder.read.buildSweepPayload([
           orderId,
-          {
-            index: sampleUtxo.vout,
-            scriptPubKey,
-            txid: txidToBytes32(sampleUtxo.txid),
-            value: dustValue,
-          },
-          feeRate,
+          encodeSweepData(
+            {
+              index: sampleUtxo.vout,
+              scriptPubKey,
+              txid: txidToBytes32(sampleUtxo.txid),
+              value: dustValue,
+            },
+            feeRate
+          ),
         ])
       ).to.be.rejectedWith("SweepAmountBelowDust(545)")
     })
@@ -189,15 +185,17 @@ describe("BitcoinDepositAddressBuilder", function () {
     it("should produce exactly 2 outputs (depository + OP_RETURN)", async () => {
       const { builder } = await loadFixture(deployBuilder)
 
-      const payload = await builder.read.buildSweepPayload([
+      const [payload] = await builder.read.buildSweepPayload([
         orderId,
-        {
-          index: sampleUtxo.vout,
-          scriptPubKey,
-          txid: txidToBytes32(sampleUtxo.txid),
-          value: BigInt(sampleUtxo.value),
-        },
-        1n,
+        encodeSweepData(
+          {
+            index: sampleUtxo.vout,
+            scriptPubKey,
+            txid: txidToBytes32(sampleUtxo.txid),
+            value: BigInt(sampleUtxo.value),
+          },
+          1n
+        ),
       ])
 
       const [transaction] = decodeAbiParameters(
@@ -217,15 +215,17 @@ describe("BitcoinDepositAddressBuilder", function () {
       const expectedFees = feeRate * 269n
       const expectedSweep = utxoValue - expectedFees
 
-      const payload = await builder.read.buildSweepPayload([
+      const [payload] = await builder.read.buildSweepPayload([
         orderId,
-        {
-          index: sampleUtxo.vout,
-          scriptPubKey,
-          txid: txidToBytes32(sampleUtxo.txid),
-          value: utxoValue,
-        },
-        feeRate,
+        encodeSweepData(
+          {
+            index: sampleUtxo.vout,
+            scriptPubKey,
+            txid: txidToBytes32(sampleUtxo.txid),
+            value: utxoValue,
+          },
+          feeRate
+        ),
       ])
 
       const [transaction] = decodeAbiParameters(
@@ -242,15 +242,17 @@ describe("BitcoinDepositAddressBuilder", function () {
     it("should set depository output script to depositoryScriptBytes", async () => {
       const { builder, depositoryScript } = await loadFixture(deployBuilder)
 
-      const payload = await builder.read.buildSweepPayload([
+      const [payload] = await builder.read.buildSweepPayload([
         orderId,
-        {
-          index: sampleUtxo.vout,
-          scriptPubKey,
-          txid: txidToBytes32(sampleUtxo.txid),
-          value: BigInt(sampleUtxo.value),
-        },
-        1n,
+        encodeSweepData(
+          {
+            index: sampleUtxo.vout,
+            scriptPubKey,
+            txid: txidToBytes32(sampleUtxo.txid),
+            value: BigInt(sampleUtxo.value),
+          },
+          1n
+        ),
       ])
 
       const [transaction] = decodeAbiParameters(
@@ -267,15 +269,17 @@ describe("BitcoinDepositAddressBuilder", function () {
     it("should set OP_RETURN output with zero value and correct script", async () => {
       const { builder } = await loadFixture(deployBuilder)
 
-      const payload = await builder.read.buildSweepPayload([
+      const [payload] = await builder.read.buildSweepPayload([
         orderId,
-        {
-          index: sampleUtxo.vout,
-          scriptPubKey,
-          txid: txidToBytes32(sampleUtxo.txid),
-          value: BigInt(sampleUtxo.value),
-        },
-        1n,
+        encodeSweepData(
+          {
+            index: sampleUtxo.vout,
+            scriptPubKey,
+            txid: txidToBytes32(sampleUtxo.txid),
+            value: BigInt(sampleUtxo.value),
+          },
+          1n
+        ),
       ])
 
       const [transaction] = decodeAbiParameters(
@@ -300,15 +304,17 @@ describe("BitcoinDepositAddressBuilder", function () {
 
       const utxoValue = BigInt(sampleUtxo.value)
 
-      const payload = await builder.read.buildSweepPayload([
+      const [payload] = await builder.read.buildSweepPayload([
         orderId,
-        {
-          index: sampleUtxo.vout,
-          scriptPubKey,
-          txid: txidToBytes32(sampleUtxo.txid),
-          value: utxoValue,
-        },
-        0n,
+        encodeSweepData(
+          {
+            index: sampleUtxo.vout,
+            scriptPubKey,
+            txid: txidToBytes32(sampleUtxo.txid),
+            value: utxoValue,
+          },
+          0n
+        ),
       ])
 
       const [transaction] = decodeAbiParameters(
@@ -330,15 +336,17 @@ describe("BitcoinDepositAddressBuilder", function () {
       const fees = feeRate * 269n
       const sweepAmount = utxoValue - fees
 
-      const payload = await builder.read.buildSweepPayload([
+      const [payload] = await builder.read.buildSweepPayload([
         orderId,
-        {
-          index: sampleUtxo.vout,
-          scriptPubKey,
-          txid: txidToBytes32(sampleUtxo.txid),
-          value: utxoValue,
-        },
-        feeRate,
+        encodeSweepData(
+          {
+            index: sampleUtxo.vout,
+            scriptPubKey,
+            txid: txidToBytes32(sampleUtxo.txid),
+            value: utxoValue,
+          },
+          feeRate
+        ),
       ])
 
       // Build equivalent transaction with bitcoinjs-lib
@@ -411,7 +419,7 @@ describe("BitcoinDepositAddressBuilder", function () {
       const { builder, otherAccount } = await loadFixture(deployBuilder)
 
       const builderAsOther = await hre.viem.getContractAt(
-        "BitcoinDepositAddressBuilder",
+        "BitcoinDepositSweepBuilder",
         builder.address,
         { client: { wallet: otherAccount } }
       )
@@ -421,6 +429,45 @@ describe("BitcoinDepositAddressBuilder", function () {
       ).to.be.rejectedWith("OwnableUnauthorizedAccount")
     })
   })
+})
+
+describe("BitcoinDepositAddress", function () {
+  describe("derivationPath()", function () {
+    it("should return correct format: hex(address) / hex(orderId)", async () => {
+      const { manager } = await loadFixture(deployBuilder)
+
+      const path = await manager.read.derivationPath([orderId])
+
+      // Strings.toHexString includes 0x prefix
+      const contractAddr = manager.address.toLowerCase()
+      expect(path).to.include(contractAddr)
+
+      // Should contain a separator
+      expect(path).to.include("/")
+
+      // Should end with the hex-encoded orderId (no 0x prefix, from stringifyBytes)
+      const orderIdHex = orderId.slice(2)
+      expect(path).to.include(orderIdHex)
+    })
+
+    it("should return deterministic results for the same orderId", async () => {
+      const { manager } = await loadFixture(deployBuilder)
+
+      const path1 = await manager.read.derivationPath([orderId])
+      const path2 = await manager.read.derivationPath([orderId])
+
+      expect(path1).to.equal(path2)
+    })
+
+    it("should return unique paths for different orderIds", async () => {
+      const { manager } = await loadFixture(deployBuilder)
+
+      const path1 = await manager.read.derivationPath([orderId])
+      const path2 = await manager.read.derivationPath([orderId2])
+
+      expect(path1).to.not.equal(path2)
+    })
+  })
 
   describe("sweep()", function () {
     it("should store the payload in sweepPayloads", async () => {
@@ -428,15 +475,17 @@ describe("BitcoinDepositAddressBuilder", function () {
 
       // sweep() calls Aurora precompiles which won't work in unit tests,
       // but buildSweepPayload is a view function we can verify independently
-      const payload = await builder.read.buildSweepPayload([
+      const [payload] = await builder.read.buildSweepPayload([
         orderId,
-        {
-          index: sampleUtxo.vout,
-          scriptPubKey,
-          txid: txidToBytes32(sampleUtxo.txid),
-          value: BigInt(sampleUtxo.value),
-        },
-        1n,
+        encodeSweepData(
+          {
+            index: sampleUtxo.vout,
+            scriptPubKey,
+            txid: txidToBytes32(sampleUtxo.txid),
+            value: BigInt(sampleUtxo.value),
+          },
+          1n
+        ),
       ])
 
       // Verify the payload is valid by decoding it
@@ -451,25 +500,59 @@ describe("BitcoinDepositAddressBuilder", function () {
     it("should produce consistent payloads for the same inputs", async () => {
       const { builder } = await loadFixture(deployBuilder)
 
-      const utxoParam = {
-        index: sampleUtxo.vout,
-        scriptPubKey,
-        txid: txidToBytes32(sampleUtxo.txid),
-        value: BigInt(sampleUtxo.value),
-      }
+      const sweepData = encodeSweepData(
+        {
+          index: sampleUtxo.vout,
+          scriptPubKey,
+          txid: txidToBytes32(sampleUtxo.txid),
+          value: BigInt(sampleUtxo.value),
+        },
+        1n
+      )
 
-      const payload1 = await builder.read.buildSweepPayload([
+      const [payload1] = await builder.read.buildSweepPayload([
         orderId,
-        utxoParam,
-        1n,
+        sweepData,
       ])
-      const payload2 = await builder.read.buildSweepPayload([
+      const [payload2] = await builder.read.buildSweepPayload([
         orderId,
-        utxoParam,
-        1n,
+        sweepData,
       ])
 
       expect(payload1).to.equal(payload2)
+    })
+  })
+
+  describe("setSweepBuilder()", function () {
+    it("should update sweepBuilder when called by owner", async () => {
+      const { manager, builder } = await loadFixture(deployBuilder)
+      const newBuilder = builder.address // just use same address for test
+      await manager.write.setSweepBuilder([newBuilder])
+      const stored = await manager.read.sweepBuilder()
+      expect(stored.toLowerCase()).to.equal(newBuilder.toLowerCase())
+    })
+
+    it("should emit SweepBuilderChanged event", async () => {
+      const { manager, builder, publicClient } =
+        await loadFixture(deployBuilder)
+      const txHash = await manager.write.setSweepBuilder([builder.address])
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+      })
+      expect(receipt.logs.length).to.be.greaterThan(0)
+    })
+
+    it("should revert when called by non-owner", async () => {
+      const { manager, builder, otherAccount } =
+        await loadFixture(deployBuilder)
+      const managerAsOther = await hre.viem.getContractAt(
+        "BitcoinDepositAddress",
+        manager.address,
+        { client: { wallet: otherAccount } }
+      )
+      await expect(
+        managerAsOther.write.setSweepBuilder([builder.address])
+      ).to.be.rejectedWith("OwnableUnauthorizedAccount")
     })
   })
 })

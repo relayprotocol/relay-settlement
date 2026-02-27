@@ -1,7 +1,7 @@
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules"
 
-const BitcoinDepositAddressBuilderModule = buildModule(
-  "BitcoinDepositAddressBuilder",
+const BitcoinDepositAddressModule = buildModule(
+  "BitcoinDepositAddress",
   (m) => {
     const owner = m.getParameter("owner")
     const depositoryScript = m.getParameter("depositoryScript")
@@ -9,9 +9,20 @@ const BitcoinDepositAddressBuilderModule = buildModule(
     const wNEAR = m.getParameter("wNEAR")
     const maxFeeRate = m.getParameter("maxFeeRate")
 
+    const ChainSignatures = m.library("ChainSignatures")
+
+    const bitcoinDepositSweepBuilder = m.contract(
+      "BitcoinDepositSweepBuilder",
+      [owner, depositoryScript, maxFeeRate],
+      {
+        libraries: {
+          ChainSignatures,
+        },
+      }
+    )
+
     const Codec = m.library("Codec")
     const AuroraXccUtils = m.library("AuroraXccUtils")
-    const ChainSignatures = m.library("ChainSignatures")
     const AuroraSdk = m.library("AuroraSdk", {
       libraries: {
         AuroraXccUtils,
@@ -19,9 +30,9 @@ const BitcoinDepositAddressBuilderModule = buildModule(
       },
     })
 
-    const bitcoinDepositAddressBuilder = m.contract(
-      "BitcoinDepositAddressBuilder",
-      [owner, depositoryScript, nearSigner, wNEAR, maxFeeRate],
+    const bitcoinDepositAddress = m.contract(
+      "BitcoinDepositAddress",
+      [owner, bitcoinDepositSweepBuilder, nearSigner, wNEAR],
       {
         libraries: {
           AuroraSdk,
@@ -29,8 +40,9 @@ const BitcoinDepositAddressBuilderModule = buildModule(
         },
       }
     )
-    return { bitcoinDepositAddressBuilder }
+
+    return { bitcoinDepositSweepBuilder, bitcoinDepositAddress }
   }
 )
 
-export default BitcoinDepositAddressBuilderModule
+export default BitcoinDepositAddressModule
