@@ -41,7 +41,7 @@ const BitcoinDepositAddressModule = buildModule(
       }
     )
 
-    return { bitcoinDepositSweepBuilder, bitcoinDepositAddress }
+    return { bitcoinDepositAddress, bitcoinDepositSweepBuilder }
   }
 )
 

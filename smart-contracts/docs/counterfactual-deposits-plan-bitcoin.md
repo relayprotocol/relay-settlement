@@ -51,20 +51,20 @@ User deposits BTC → deterministic address (derived from BitcoinDepositAddress.
 
 ```solidity
 interface IBitcoinDepositSweepBuilder {
-    /// @notice Builds a sweep payload from opaque data
-    /// @param orderId The 32-byte order identifier
-    /// @param data Builder-specific encoded parameters (this builder expects abi.encode(UTXO, uint64 feeRate))
-    /// @return payload ABI-encoded BitcoinTransactionData
-    /// @return sweepAmount The amount being swept to the depository (for event emission by the manager)
-    function buildSweepPayload(
-        bytes32 orderId,
-        bytes calldata data
-    ) external view returns (bytes memory payload, uint64 sweepAmount);
+  /// @notice Builds a sweep payload from opaque data
+  /// @param orderId The 32-byte order identifier
+  /// @param data Builder-specific encoded parameters (this builder expects abi.encode(UTXO, uint64 feeRate))
+  /// @return payload ABI-encoded BitcoinTransactionData
+  /// @return sweepAmount The amount being swept to the depository (for event emission by the manager)
+  function buildSweepPayload(
+    bytes32 orderId,
+    bytes calldata data
+  ) external view returns (bytes memory payload, uint64 sweepAmount);
 
-    /// @notice Returns the hash that needs to be signed for the payload
-    /// @param payload The payload returned by buildSweepPayload
-    /// @return The hash to sign
-    function hashToSign(bytes calldata payload) external pure returns (bytes32);
+  /// @notice Returns the hash that needs to be signed for the payload
+  /// @param payload The payload returned by buildSweepPayload
+  /// @return The hash to sign
+  function hashToSign(bytes calldata payload) external pure returns (bytes32);
 }
 ```
 
@@ -82,10 +82,10 @@ constructor(
 
 ### Storage
 
-| Variable                | Type     | Mutability              | Description                                   |
-| ----------------------- | -------- | ----------------------- | --------------------------------------------- |
-| `depositoryScriptBytes` | `bytes`  | set once in constructor | Decoded depository P2PKH scriptPubKey          |
-| `maxFeeRate`            | `uint64` | owner-configurable      | Maximum allowed fee rate (sats/byte)           |
+| Variable                | Type     | Mutability              | Description                           |
+| ----------------------- | -------- | ----------------------- | ------------------------------------- |
+| `depositoryScriptBytes` | `bytes`  | set once in constructor | Decoded depository P2PKH scriptPubKey |
+| `maxFeeRate`            | `uint64` | owner-configurable      | Maximum allowed fee rate (sats/byte)  |
 
 ### Access Control
 
@@ -120,9 +120,9 @@ Always exactly **1 input** and **2 outputs**, no change:
 | --------------- | -------------------------------------------- |
 | 0: Deposit UTXO | The single UTXO at the deterministic address |
 
-| Output                | Value               | Script                           |
-| --------------------- | ------------------- | -------------------------------- |
-| 0: Depository (P2PKH) | `utxo.value - fees` | `depositoryScriptBytes`          |
+| Output                | Value               | Script                                     |
+| --------------------- | ------------------- | ------------------------------------------ |
+| 0: Depository (P2PKH) | `utxo.value - fees` | `depositoryScriptBytes`                    |
 | 1: OP_RETURN          | 0 sats              | `0x6a 0x42 "0x" <hex(orderId)>` (68 bytes) |
 
 #### OP_RETURN Script
@@ -196,14 +196,14 @@ constructor(
 
 ### Storage
 
-| Variable              | Type                                              | Mutability              | Description                                                  |
-| --------------------- | ------------------------------------------------- | ----------------------- | ------------------------------------------------------------ |
-| `sweepBuilder`        | `IBitcoinDepositSweepBuilder`                     | owner-configurable      | Current sweep payload builder contract                       |
-| `nearSigner`          | `string`                                          | set once in constructor | NEAR MPC signer account                                      |
-| `near`                | `NEAR`                                            | set once in constructor | Aurora SDK instance                                          |
-| `sweepPayloads`       | `mapping(bytes32 => mapping(bytes32 => bytes))`   | mutable                 | orderId → hashToSign → encoded payload                       |
-| `signedPayloads`      | `mapping(bytes32 => mapping(bytes32 => bytes))`   | mutable                 | orderId → hashToSign → signature                             |
-| `pendingSignatures`   | `mapping(bytes32 => mapping(bytes32 => uint256))` | mutable                 | Cooldown tracking                                            |
+| Variable            | Type                                              | Mutability              | Description                            |
+| ------------------- | ------------------------------------------------- | ----------------------- | -------------------------------------- |
+| `sweepBuilder`      | `IBitcoinDepositSweepBuilder`                     | owner-configurable      | Current sweep payload builder contract |
+| `nearSigner`        | `string`                                          | set once in constructor | NEAR MPC signer account                |
+| `near`              | `NEAR`                                            | set once in constructor | Aurora SDK instance                    |
+| `sweepPayloads`     | `mapping(bytes32 => mapping(bytes32 => bytes))`   | mutable                 | orderId → hashToSign → encoded payload |
+| `signedPayloads`    | `mapping(bytes32 => mapping(bytes32 => bytes))`   | mutable                 | orderId → hashToSign → signature       |
+| `pendingSignatures` | `mapping(bytes32 => mapping(bytes32 => uint256))` | mutable                 | Cooldown tracking                      |
 
 ### Access Control
 

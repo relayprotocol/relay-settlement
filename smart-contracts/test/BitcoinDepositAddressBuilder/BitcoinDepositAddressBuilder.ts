@@ -27,13 +27,13 @@ const orderId2 =
   "0x0000000000000000000000000000000000000000000000000000000000000002" as `0x${string}`
 
 const UTXO_ABI = {
-  type: "tuple",
   components: [
     { name: "txid", type: "bytes32" },
     { name: "index", type: "uint32" },
     { name: "value", type: "uint64" },
     { name: "scriptPubKey", type: "bytes" },
   ],
+  type: "tuple",
 } as const
 
 function encodeSweepData(
@@ -98,9 +98,9 @@ async function deployBuilder() {
 
   return {
     builder,
-    manager,
     depositoryAddress,
     depositoryScript,
+    manager,
     maxFeeRate,
     otherAccount,
     owner,
