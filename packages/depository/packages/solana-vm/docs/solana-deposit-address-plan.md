@@ -242,8 +242,8 @@ RUSTUP_TOOLCHAIN=nightly-2025-04-01 anchor test --skip-lint --skip-build -- --te
 ## Status
 
 - [x] Plan reviewed
-- [ ] Plan merged
-- [ ] Contract updated (remove mint from PDA seeds)
-- [ ] 32 test cases passing
-- [ ] Security checklist verified
+- [x] Plan merged
+- [x] Contract updated (remove mint from PDA seeds)
+- [x] 32 test cases passing
+- [x] Security checklist verified
 - [x] Events emitted for all state-changing instructions
