@@ -224,7 +224,7 @@ describe("Relay Depository", () => {
   )
 
   const getEvents = async (signature: string) => {
-    await provider.connection.confirmTransaction(signature)
+    await provider.connection.confirmTransaction(signature, "confirmed")
 
     // Parse the deposit event to verify the recorded amount is correct (should be the amount after fee)
     const depositTxTransaction = await provider.connection.getParsedTransaction(
@@ -248,7 +248,7 @@ describe("Relay Depository", () => {
     return events
   }
 
-  it("Initialize with none-owner should fail", async function () {
+  it("Initialize with non-owner should fail", async function () {
     // Check if already initialized (e.g., by deposit-address tests running first)
     const accountInfo = await provider.connection.getAccountInfo(relayDepositoryPDA);
     if (accountInfo !== null) {

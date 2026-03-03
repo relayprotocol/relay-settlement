@@ -21,7 +21,7 @@ use relay_depository::program::RelayDepository;
 // Constants
 //----------------------------------------
 
-const AUTHORIZED_PUBKEY: Pubkey = pubkey!("7LZXYdDQcRTsXnL9EU2zGkninV3yJsqX43m4RMPbs68u");
+const AUTHORIZED_PUBKEY: Pubkey = pubkey!("GmsYKtgzTJyx5QppbViTAa4QG5D6JJcddcqzzLXbDEGN");
 
 const CONFIG_SEED: &[u8] = b"config";
 
@@ -33,7 +33,7 @@ const ALLOWED_PROGRAM_SEED: &[u8] = b"allowed_program";
 // Program ID
 //----------------------------------------
 
-declare_id!("CMEh4xH7ercsXoyRC2QFTgqEjECCkkS7oSmj7qvPw8MX");
+declare_id!("H2RS2tansewENdGqaPfF4maSjSWJE3KToVsb2tfmehd9");
 
 //----------------------------------------
 // Program Module
