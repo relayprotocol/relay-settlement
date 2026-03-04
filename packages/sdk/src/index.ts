@@ -73,6 +73,14 @@ import {
   OnChainWithdrawalQuery,
   OnchainWithdrawalSignatureRequest,
   OnchainWithdrawalRequest,
+  SubmitWithdrawRequestV2,
+  DenormalizedSubmitWithdrawRequestV2,
+  getSubmitWithdrawRequestHashV2,
+  WithdrawalAddressParamsV2,
+  getWithdrawalAddressV2,
+  OrderAddressParamsV2,
+  getOrderAddressV2,
+  normalizePayloadParamsV2,
 } from "./messages/v2.2/withdrawal-execution"
 
 import {
@@ -158,7 +166,7 @@ export {
   generateAddress,
   generateTokenId,
 
-  // Onchain withdrawals
+  // Onchain withdrawals V1
   SubmitWithdrawRequest,
   getSubmitWithdrawRequestHash,
   getWithdrawalAddress,
@@ -172,7 +180,17 @@ export {
   OnchainWithdrawalSignatureRequest,
   OnchainWithdrawalRequest,
 
-  // networks
+  // Onchain withdrawals V2
+  SubmitWithdrawRequestV2,
+  DenormalizedSubmitWithdrawRequestV2,
+  getSubmitWithdrawRequestHashV2,
+  WithdrawalAddressParamsV2,
+  getWithdrawalAddressV2,
+  OrderAddressParamsV2,
+  getOrderAddressV2,
+  normalizePayloadParamsV2,
+
+  // Networks
   NetworkConfigs,
   ProtocolContracts,
   NetworkConfig,
