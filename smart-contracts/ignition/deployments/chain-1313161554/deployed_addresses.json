@@ -20,5 +20,7 @@
   "BitcoinDepositAddress#Codec": "0x75feB35f856eD643aaa0883A1fAac2aD490ecb0B",
   "BitcoinDepositAddress#AuroraSdk": "0x518f096C3947cDf2694262001d294417ebA77BAA",
   "BitcoinDepositAddress#BitcoinDepositSweepBuilder": "0x06cAB4FFD8f546Def0A570C80dF25C11c36E7dc5",
-  "BitcoinDepositAddress#BitcoinDepositAddress": "0x4b827b79c4bd28Ca77B21B7496CC694268aBa2F2"
+  "BitcoinDepositAddress#BitcoinDepositAddress": "0x4b827b79c4bd28Ca77B21B7496CC694268aBa2F2",
+  "RelayOracleMultisig#RelayOracleMultisig": "0xB307E334f76Ccfe4f2D2618A2dBE7D14Ef3B1bF9",
+  "RelayAllocatorSpender#RelayAllocatorSpender": "0x8Fa0cd280e24E05d493a93Ee8EF4D99c51D44A7e"
 }
