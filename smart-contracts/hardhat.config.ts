@@ -99,7 +99,7 @@ const etherscan = {
 }
 
 // check if protocol onctracts are present in the network config
-const PROTOCOL_CONTRACTS = ["allocator", "oracle"]
+const PROTOCOL_CONTRACTS = ["allocator", "oracle", "multisigSigner"]
 const hasProcotolContracts = (n: NetworkConfig) => {
   return [
     ...Object.keys(n.contracts?.dev || {}),
@@ -108,23 +108,29 @@ const hasProcotolContracts = (n: NetworkConfig) => {
 }
 
 Object.keys(nets)
-  // we only "hub" networks to manage our contracts here
-  .filter(
-    (id: any) =>
-      hasProcotolContracts(nets[id]) || nets[id].slug.includes("testnet")
-  )
+  .filter((id: any) => {
+    const network = nets[id]
+    // Only process by slug (not by chainId key) to avoid duplicates
+    // The nets object has both slug and chainId as keys, we only want slugs
+    return (
+      network &&
+      network.slug === id &&
+      (hasProcotolContracts(network) || network.slug.includes("testnet"))
+    )
+  })
   .forEach((id) => {
-    const { slug, rpc } = nets[id]
+    const network = nets[id]
+    const { slug, rpc, chainId } = network
     let accounts
-    const network = {
-      chainId: Number(id),
+    const networkConfig = {
+      chainId: Number(chainId),
       url: rpc[0],
     }
     if (DEPLOYER_PRIVATE_KEY) {
       accounts = [DEPLOYER_PRIVATE_KEY]
     }
     networks[slug] = {
-      ...network,
+      ...networkConfig,
       accounts,
     }
   })
