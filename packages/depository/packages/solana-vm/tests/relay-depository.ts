@@ -250,11 +250,14 @@ describe("Relay Depository", () => {
 
   it("Initialize with non-owner should fail", async function () {
     // Check if already initialized (e.g., by deposit-address tests running first)
-    const accountInfo = await provider.connection.getAccountInfo(relayDepositoryPDA);
+    const accountInfo =
+      await provider.connection.getAccountInfo(relayDepositoryPDA)
     if (accountInfo !== null) {
       // Already initialized, skip this test
-      console.log("    (skipped - relay_depository already initialized by another test)");
-      this.skip();
+      console.log(
+        "    (skipped - relay_depository already initialized by another test)"
+      )
+      this.skip()
     }
 
     try {
@@ -278,16 +281,16 @@ describe("Relay Depository", () => {
 
   it("Should successfully initialize with correct owner", async function () {
     // Check if already initialized (e.g., by deposit-address tests running first)
-    const accountInfo = await provider.connection.getAccountInfo(relayDepositoryPDA);
+    const accountInfo =
+      await provider.connection.getAccountInfo(relayDepositoryPDA)
     if (accountInfo !== null) {
       // Already initialized, just verify the state
-      console.log("    (skipped init - verifying existing state)");
-      const relayDepositoryAccount = await program.account.relayDepository.fetch(
-        relayDepositoryPDA
-      );
-      assert.ok(relayDepositoryAccount.owner.equals(owner.publicKey));
-      assert.equal(relayDepositoryAccount.vaultBump, vaultBump);
-      this.skip();
+      console.log("    (skipped init - verifying existing state)")
+      const relayDepositoryAccount =
+        await program.account.relayDepository.fetch(relayDepositoryPDA)
+      assert.ok(relayDepositoryAccount.owner.equals(owner.publicKey))
+      assert.equal(relayDepositoryAccount.vaultBump, vaultBump)
+      this.skip()
     }
 
     await program.methods

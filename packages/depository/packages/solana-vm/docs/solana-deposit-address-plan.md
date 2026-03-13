@@ -42,22 +42,22 @@ Single-file Anchor program with all instructions, accounts, events, and errors. 
 
 ### 2. Instructions
 
-| Instruction | Access | Description |
-|---|---|---|
-| `initialize` | `AUTHORIZED_PUBKEY` | Initialize config with relay depository info |
-| `set_owner` | owner | Transfer ownership |
-| `set_depository` | owner | Update relay depository, program ID, and vault |
-| `add_allowed_program` | owner | Add program to execute whitelist |
-| `remove_allowed_program` | owner | Remove program from execute whitelist |
-| `sweep` | permissionless | Sweep funds from deposit PDA to vault via CPI. `mint=Pubkey::default()` for native SOL, actual mint for tokens. Token-specific accounts are `Option<>` (following `ExecuteTransfer` pattern). Closes ATA after token sweep. |
-| `execute` | owner | Execute arbitrary CPI from deposit PDA (whitelisted programs only) |
+| Instruction              | Access              | Description                                                                                                                                                                                                                 |
+| ------------------------ | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `initialize`             | `AUTHORIZED_PUBKEY` | Initialize config with relay depository info                                                                                                                                                                                |
+| `set_owner`              | owner               | Transfer ownership                                                                                                                                                                                                          |
+| `set_depository`         | owner               | Update relay depository, program ID, and vault                                                                                                                                                                              |
+| `add_allowed_program`    | owner               | Add program to execute whitelist                                                                                                                                                                                            |
+| `remove_allowed_program` | owner               | Remove program from execute whitelist                                                                                                                                                                                       |
+| `sweep`                  | permissionless      | Sweep funds from deposit PDA to vault via CPI. `mint=Pubkey::default()` for native SOL, actual mint for tokens. Token-specific accounts are `Option<>` (following `ExecuteTransfer` pattern). Closes ATA after token sweep. |
+| `execute`                | owner               | Execute arbitrary CPI from deposit PDA (whitelisted programs only)                                                                                                                                                          |
 
 ### 3. Account Structures
 
-| Account | Seeds | Size | Description |
-|---|---|---|---|
-| `DepositAddressConfig` | `["config"]` | 8 + 128 (4 Pubkeys) | Stores owner, relay_depository, relay_depository_program, vault |
-| `AllowedProgram` | `["allowed_program", program_id]` | 8 + 32 | Whitelist entry for execute |
+| Account                | Seeds                             | Size                | Description                                                     |
+| ---------------------- | --------------------------------- | ------------------- | --------------------------------------------------------------- |
+| `DepositAddressConfig` | `["config"]`                      | 8 + 128 (4 Pubkeys) | Stores owner, relay_depository, relay_depository_program, vault |
+| `AllowedProgram`       | `["allowed_program", program_id]` | 8 + 32              | Whitelist entry for execute                                     |
 
 ### 4. PDA Seeds
 
@@ -78,16 +78,16 @@ seeds = ["allowed_program", program_id]
 
 ### 5. Events
 
-| Event | Emitted by | Fields |
-|---|---|---|
-| `InitializeEvent` | `initialize` | owner, relay_depository, relay_depository_program, vault |
-| `SetOwnerEvent` | `set_owner` | previous_owner, new_owner |
-| `SetDepositoryEvent` | `set_depository` | previous/new relay_depository, relay_depository_program, vault |
-| `AddAllowedProgramEvent` | `add_allowed_program` | program_id |
-| `RemoveAllowedProgramEvent` | `remove_allowed_program` | program_id |
-| `SweepEvent` | `sweep` | id, depositor, deposit_address, mint, amount |
-| `ExecuteEvent` | `execute` | id, token, depositor, target_program, instruction_data |
-| `DepositEvent` | `sweep` (via relay_depository CPI) | id, depositor, amount, token |
+| Event                       | Emitted by                         | Fields                                                         |
+| --------------------------- | ---------------------------------- | -------------------------------------------------------------- |
+| `InitializeEvent`           | `initialize`                       | owner, relay_depository, relay_depository_program, vault       |
+| `SetOwnerEvent`             | `set_owner`                        | previous_owner, new_owner                                      |
+| `SetDepositoryEvent`        | `set_depository`                   | previous/new relay_depository, relay_depository_program, vault |
+| `AddAllowedProgramEvent`    | `add_allowed_program`              | program_id                                                     |
+| `RemoveAllowedProgramEvent` | `remove_allowed_program`           | program_id                                                     |
+| `SweepEvent`                | `sweep`                            | id, depositor, deposit_address, mint, amount                   |
+| `ExecuteEvent`              | `execute`                          | id, token, depositor, target_program, instruction_data         |
+| `DepositEvent`              | `sweep` (via relay_depository CPI) | id, depositor, amount, token                                   |
 
 ### 6. Custom Errors
 

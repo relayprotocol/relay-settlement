@@ -62,26 +62,14 @@ import {
 
 import {
   SubmitWithdrawRequest,
+  DenormalizedSubmitWithdrawRequest,
   getSubmitWithdrawRequestHash,
-  getWithdrawalAddress,
-  getOrderAddress,
   WithdrawalAddressParams,
-  WithdrawalInitiationMessage,
-  WithdrawalInitiatedMessage,
-  WithdrawalAddressRequest,
-  computeWithdrawerBalanceMessage,
-  OnChainWithdrawalQuery,
-  OnchainWithdrawalSignatureRequest,
-  OnchainWithdrawalRequest,
-  SubmitWithdrawRequestV2,
-  DenormalizedSubmitWithdrawRequestV2,
-  getSubmitWithdrawRequestHashV2,
-  WithdrawalAddressParamsV2,
-  getWithdrawalAddressV2,
-  OrderAddressParamsV2,
-  getOrderAddressV2,
-  normalizePayloadParamsV2,
-} from "./messages/v2.2/withdrawal-execution"
+  getWithdrawalAddress,
+  OrderAddressParams,
+  getOrderAddress,
+  normalizePayloadParams,
+} from "./messages/v2.2/withdrawal"
 
 import {
   TokenIdComponents,
@@ -158,6 +146,16 @@ export {
   encodeAction,
   decodeAction,
 
+  // Withdrawal
+  SubmitWithdrawRequest,
+  DenormalizedSubmitWithdrawRequest,
+  getSubmitWithdrawRequestHash,
+  WithdrawalAddressParams,
+  getWithdrawalAddress,
+  OrderAddressParams,
+  getOrderAddress,
+  normalizePayloadParams,
+
   // Hub utils
   TokenIdComponents,
   VirtualAddressComponents,
@@ -165,30 +163,6 @@ export {
   VirtualAddress,
   generateAddress,
   generateTokenId,
-
-  // Onchain withdrawals V1
-  SubmitWithdrawRequest,
-  getSubmitWithdrawRequestHash,
-  getWithdrawalAddress,
-  getOrderAddress,
-  WithdrawalAddressParams,
-  WithdrawalInitiationMessage,
-  WithdrawalInitiatedMessage,
-  WithdrawalAddressRequest,
-  computeWithdrawerBalanceMessage,
-  OnChainWithdrawalQuery,
-  OnchainWithdrawalSignatureRequest,
-  OnchainWithdrawalRequest,
-
-  // Onchain withdrawals V2
-  SubmitWithdrawRequestV2,
-  DenormalizedSubmitWithdrawRequestV2,
-  getSubmitWithdrawRequestHashV2,
-  WithdrawalAddressParamsV2,
-  getWithdrawalAddressV2,
-  OrderAddressParamsV2,
-  getOrderAddressV2,
-  normalizePayloadParamsV2,
 
   // Networks
   NetworkConfigs,

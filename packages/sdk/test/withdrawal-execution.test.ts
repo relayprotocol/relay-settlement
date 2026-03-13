@@ -5,18 +5,18 @@ import { VmType } from "../src"
 import {
   getSubmitWithdrawRequestHash,
   getWithdrawalAddress,
-} from "../src/messages/v2.2/withdrawal-execution"
+} from "../src/messages/v2.2/withdrawal"
 
 describe("getWithdrawalAddress", () => {
   it("should return a valid withdrawal address", () => {
     const params = {
       depository: "0x1234567890123456789012345678901234567890",
-      depositoryChainId: "ethereum",
-      depositoryVmType: "ethereum-vm" as VmType,
+      chainId: "ethereum",
+      vmType: "ethereum-vm" as VmType,
       currency: "10340230",
       recipient: "0x9876543210987654321098765432109876543210",
-      withdrawerAlias: "0x9876543210987654321098765432109876543210",
-      withdrawalNonce: "0",
+      ownerAlias: "0x9876543210987654321098765432109876543210",
+      nonce: "0",
     }
 
     const address = getWithdrawalAddress(params)
@@ -33,7 +33,7 @@ describe("getSubmitWithdrawRequestHash", () => {
       currency: "0x0000000000000000000000000000000000000000",
       amount: "1688875045157513",
       spender: "0xFD3E80587416B94Ef6D9394b323d8E47699d073E",
-      receiver: "0xfd073a9ccb34f8a13c466eb16dff990d6178a5ef",
+      recipient: "0xfd073a9ccb34f8a13c466eb16dff990d6178a5ef",
       data: "0x",
       nonce:
         "0x9400f1b21cb527d7fa3d3eabba93557a18ebe7a2ca4e471cfe5e4c5b4ca7f767",

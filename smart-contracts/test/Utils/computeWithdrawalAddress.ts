@@ -35,13 +35,13 @@ describe("Utils computeWithdrawalAddress", function () {
 
       // SDK computation
       const sdkWithdrawalAddress = getWithdrawalAddress({
+        chainId: depositoryChainId,
         currency: currency,
         depository: depository,
-        depositoryChainId: depositoryChainId,
-        depositoryVmType: "ethereum-vm",
+        nonce: withdrawalNonce,
+        ownerAlias: withdrawerAlias,
         recipient: recipientAddress,
-        withdrawalNonce: withdrawalNonce,
-        withdrawerAlias: withdrawerAlias,
+        vmType: "ethereum-vm",
       })
 
       // Contract computation
@@ -93,13 +93,13 @@ describe("Utils computeWithdrawalAddress", function () {
 
       // SDK computation
       const sdkWithdrawalAddress = getWithdrawalAddress({
+        chainId: depositoryChainId,
         currency: currency,
         depository: depository,
-        depositoryChainId: depositoryChainId,
-        depositoryVmType: "ethereum-vm",
+        nonce: withdrawalNonce,
+        ownerAlias: withdrawerAlias,
         recipient: recipientAddress,
-        withdrawalNonce: withdrawalNonce,
-        withdrawerAlias: withdrawerAlias,
+        vmType: "ethereum-vm",
       })
 
       // Contract computation
@@ -147,13 +147,13 @@ describe("Utils computeWithdrawalAddress", function () {
 
       // SDK computation
       const sdkWithdrawalAddress = getWithdrawalAddress({
+        chainId: depositoryChainId,
         currency: currency,
         depository: depository,
-        depositoryChainId: depositoryChainId,
-        depositoryVmType: "solana-vm",
+        nonce: withdrawalNonce,
+        ownerAlias: withdrawerAlias,
         recipient: recipientAddress,
-        withdrawalNonce: withdrawalNonce,
-        withdrawerAlias: withdrawerAlias,
+        vmType: "solana-vm",
       })
 
       // Contract computation
@@ -198,13 +198,13 @@ describe("Utils computeWithdrawalAddress", function () {
 
       // SDK computation
       const sdkWithdrawalAddress = getWithdrawalAddress({
+        chainId: depositoryChainId,
         currency: currency,
         depository: depository,
-        depositoryChainId: depositoryChainId,
-        depositoryVmType: "solana-vm",
+        nonce: withdrawalNonce,
+        ownerAlias: withdrawerAlias,
         recipient: recipientAddress,
-        withdrawalNonce: withdrawalNonce,
-        withdrawerAlias: withdrawerAlias,
+        vmType: "solana-vm",
       })
 
       // Contract computation
@@ -252,13 +252,13 @@ describe("Utils computeWithdrawalAddress", function () {
 
       // SDK computation
       const sdkWithdrawalAddress = getWithdrawalAddress({
+        chainId: depositoryChainId,
         currency: currency,
         depository: depository,
-        depositoryChainId: depositoryChainId,
-        depositoryVmType: "bitcoin-vm",
+        nonce: withdrawalNonce,
+        ownerAlias: withdrawerAlias,
         recipient: recipientAddress,
-        withdrawalNonce: withdrawalNonce,
-        withdrawerAlias: withdrawerAlias,
+        vmType: "bitcoin-vm",
       })
 
       // Contract computation
@@ -306,13 +306,13 @@ describe("Utils computeWithdrawalAddress", function () {
 
       // SDK computation
       const sdkWithdrawalAddress = getWithdrawalAddress({
+        chainId: depositoryChainId,
         currency: currency,
         depository: depository,
-        depositoryChainId: depositoryChainId,
-        depositoryVmType: "tron-vm",
+        nonce: withdrawalNonce,
+        ownerAlias: withdrawerAlias,
         recipient: recipientAddress,
-        withdrawalNonce: withdrawalNonce,
-        withdrawerAlias: withdrawerAlias,
+        vmType: "tron-vm",
       })
 
       // Contract computation
@@ -360,13 +360,13 @@ describe("Utils computeWithdrawalAddress", function () {
 
       // SDK computation
       const sdkWithdrawalAddress = getWithdrawalAddress({
+        chainId: depositoryChainId,
         currency: currency,
         depository: depository,
-        depositoryChainId: depositoryChainId,
-        depositoryVmType: "hyperliquid-vm",
+        nonce: withdrawalNonce,
+        ownerAlias: withdrawerAlias,
         recipient: recipientAddress,
-        withdrawalNonce: withdrawalNonce,
-        withdrawerAlias: withdrawerAlias,
+        vmType: "hyperliquid-vm",
       })
 
       // Contract computation
