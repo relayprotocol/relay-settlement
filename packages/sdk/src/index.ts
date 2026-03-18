@@ -51,14 +51,11 @@ import {
 } from "./messages/v2.2/execution"
 
 import {
-  VmType,
-  decodeAddress,
-  decodeTransactionId,
-  encodeAddress,
-  encodeBytes,
-  encodeTransactionId,
-  getVmTypeNativeCurrency,
-} from "./utils"
+  GenericMappingMessage,
+  getGenericMappingMessageId,
+  getNoFillOrRefundMessage,
+  getNonceMappingMessage,
+} from "./messages/v2.2/generic-mapping"
 
 import {
   SubmitWithdrawRequest,
@@ -70,6 +67,16 @@ import {
   getOrderAddress,
   normalizePayloadParams,
 } from "./messages/v2.2/withdrawal"
+
+import {
+  VmType,
+  decodeAddress,
+  decodeTransactionId,
+  encodeAddress,
+  encodeBytes,
+  encodeTransactionId,
+  getVmTypeNativeCurrency,
+} from "./utils"
 
 import {
   TokenIdComponents,
@@ -145,6 +152,12 @@ export {
   getExecutionMessageId,
   encodeAction,
   decodeAction,
+
+  // Generic mapping
+  GenericMappingMessage,
+  getNoFillOrRefundMessage,
+  getNonceMappingMessage,
+  getGenericMappingMessageId,
 
   // Withdrawal
   SubmitWithdrawRequest,

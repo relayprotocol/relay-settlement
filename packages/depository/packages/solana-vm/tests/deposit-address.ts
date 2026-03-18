@@ -143,7 +143,6 @@ describe("Deposit Address", () => {
       [Buffer.from("relay_depository")],
       relayDepositoryProgram.programId
     )
-
     ;[vaultPDA] = PublicKey.findProgramAddressSync(
       [Buffer.from("vault")],
       relayDepositoryProgram.programId

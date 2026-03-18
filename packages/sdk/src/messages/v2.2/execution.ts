@@ -1,4 +1,5 @@
 import {
+  Address,
   decodeAbiParameters,
   encodeAbiParameters,
   hashStruct,
@@ -22,7 +23,7 @@ export type ExecutionMessageMetadata = {
     family: VmType
   }
   oracleChainId: string
-  oracleContract: `0x${string}`
+  oracleContract: Address
 }
 
 export type ExecutionMessage = {
