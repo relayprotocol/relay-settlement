@@ -47,8 +47,8 @@ export const getExecutionMessageId = (message: ExecutionMessage) => {
     },
     primaryType: "Execution",
     data: {
-      idempotencyKey: message.idempotencyKey,
-      actions: message.actions,
+      idempotencyKey: message.idempotencyKey as Hex,
+      actions: message.actions as Hex[],
     },
   })
 }

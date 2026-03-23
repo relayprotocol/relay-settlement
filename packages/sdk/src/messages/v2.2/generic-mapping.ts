@@ -1,5 +1,5 @@
 import crypto from "crypto"
-import { hashStruct } from "viem"
+import { hashStruct, Hex } from "viem"
 
 export type GenericMappingMessage = {
   user: string
@@ -69,10 +69,10 @@ export const getGenericMappingMessageId = (message: GenericMappingMessage) => {
     },
     primaryType: "SetEntry",
     data: {
-      user: message.user,
-      id: message.id,
-      data: message.data,
-      nonce: message.nonce,
+      user: message.user as Hex,
+      id: message.id as Hex,
+      data: message.data as Hex,
+      nonce: message.nonce as Hex,
     },
   })
 }

@@ -48,11 +48,22 @@ export const getVmTypeNativeCurrency = (vmType: VmType) => {
   }
 }
 
+const _toHexString = (arr: Uint8Array): Hex => {
+  return `0x${Buffer.from(arr).toString("hex")}`
+}
+
 // Bytes encoding
+
+export const encodeBytesToHex = (bytes: string) =>
+  _toHexString(encodeBytes(bytes))
 
 export const encodeBytes = (bytes: string) => hexToBytes(bytes as Hex)
 
 // Address encoding
+
+export const encodeAddressToHex = (address: string, vmType: VmType): Hex => {
+  return _toHexString(encodeAddress(address, vmType))
+}
 
 export const encodeAddress = (address: string, vmType: VmType): Uint8Array => {
   switch (vmType) {
@@ -198,6 +209,13 @@ export const decodeAddress = (address: Uint8Array, vmType: VmType): string => {
 }
 
 // Transaction encoding
+
+export const encodeTransactionIdToHex = (
+  transactionId: string,
+  vmType: VmType
+): Hex => {
+  return _toHexString(encodeTransactionId(transactionId, vmType))
+}
 
 export const encodeTransactionId = (
   transactionId: string,

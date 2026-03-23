@@ -11,8 +11,8 @@ import {
 import {
   ChainIdToVmType,
   VmType,
-  encodeAddress,
-  encodeBytes,
+  encodeAddressToHex,
+  encodeBytesToHex,
   getChainVmType,
 } from "../utils"
 
@@ -137,7 +137,7 @@ export const normalizeOrder = (order: Order, chainsConfig: ChainIdToVmType) => {
     inputs: order.inputs.map((input) => ({
       payment: {
         chainId: input.payment.chainId,
-        currency: encodeAddress(
+        currency: encodeAddressToHex(
           input.payment.currency,
           vmType(input.payment.chainId)
         ),
@@ -146,33 +146,39 @@ export const normalizeOrder = (order: Order, chainsConfig: ChainIdToVmType) => {
       },
       refunds: input.refunds.map((refund) => ({
         chainId: refund.chainId,
-        recipient: encodeAddress(refund.recipient, vmType(refund.chainId)),
-        currency: encodeAddress(refund.currency, vmType(refund.chainId)),
+        recipient: encodeAddressToHex(refund.recipient, vmType(refund.chainId)),
+        currency: encodeAddressToHex(refund.currency, vmType(refund.chainId)),
         minimumAmount: refund.minimumAmount,
         deadline: refund.deadline,
-        extraData: encodeBytes(refund.extraData),
+        extraData: encodeBytesToHex(refund.extraData),
       })),
     })),
     output: {
       chainId: order.output.chainId,
       payments: order.output.payments.map((payment) => ({
-        recipient: encodeAddress(
+        recipient: encodeAddressToHex(
           payment.recipient,
           vmType(order.output.chainId)
         ),
-        currency: encodeAddress(payment.currency, vmType(order.output.chainId)),
+        currency: encodeAddressToHex(
+          payment.currency,
+          vmType(order.output.chainId)
+        ),
         minimumAmount: payment.minimumAmount,
         expectedAmount: payment.expectedAmount,
       })),
-      calls: order.output.calls.map(encodeBytes),
+      calls: order.output.calls.map(encodeBytesToHex),
       deadline: order.output.deadline,
-      extraData: encodeBytes(order.output.extraData),
+      extraData: encodeBytesToHex(order.output.extraData),
     },
     fees: order.fees.map((fee) => ({
       recipientChainId: fee.recipientChainId,
-      recipient: encodeAddress(fee.recipient, vmType(fee.recipientChainId)),
+      recipient: encodeAddressToHex(
+        fee.recipient,
+        vmType(fee.recipientChainId)
+      ),
       currencyChainId: fee.currencyChainId,
-      currency: encodeAddress(fee.currency, vmType(fee.currencyChainId)),
+      currency: encodeAddressToHex(fee.currency, vmType(fee.currencyChainId)),
       amount: fee.amount,
     })),
   }

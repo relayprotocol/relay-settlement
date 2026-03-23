@@ -2,9 +2,9 @@ import { bytesToHex, hashStruct } from "viem"
 
 import {
   ChainIdToVmType,
-  encodeAddress,
-  encodeBytes,
-  encodeTransactionId,
+  encodeAddressToHex,
+  encodeBytesToHex,
+  encodeTransactionIdToHex,
   getChainVmType,
 } from "../../utils"
 
@@ -52,27 +52,27 @@ export const getDepositoryDepositMessageId = (
     data: {
       data: {
         chainId: message.data.chainId,
-        transactionId: encodeTransactionId(
+        transactionId: encodeTransactionIdToHex(
           message.data.transactionId,
           vmType(message.data.chainId)
         ),
       },
       result: {
-        onchainId: bytesToHex(encodeBytes(message.result.onchainId)),
-        depository: encodeAddress(
+        onchainId: encodeBytesToHex(message.result.onchainId),
+        depository: encodeAddressToHex(
           message.result.depository,
           vmType(message.data.chainId)
         ),
-        depositId: bytesToHex(encodeBytes(message.result.depositId)),
-        depositor: encodeAddress(
+        depositId: encodeBytesToHex(message.result.depositId),
+        depositor: encodeAddressToHex(
           message.result.depositor,
           vmType(message.data.chainId)
         ),
-        currency: encodeAddress(
+        currency: encodeAddressToHex(
           message.result.currency,
           vmType(message.data.chainId)
         ),
-        amount: message.result.amount,
+        amount: BigInt(message.result.amount),
       },
     },
   })

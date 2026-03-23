@@ -18,8 +18,8 @@ import {
 
 import {
   ChainIdToVmType,
-  encodeAddress,
-  encodeBytes,
+  encodeAddressToHex,
+  encodeBytesToHex,
   getChainVmType,
   getVmTypeNativeCurrency,
   VmType,
@@ -71,11 +71,11 @@ export const getDepositoryWithdrawalMessageId = (
     data: {
       data: {
         chainId: message.data.chainId,
-        withdrawal: encodeBytes(message.data.withdrawal),
+        withdrawal: encodeBytesToHex(message.data.withdrawal),
       },
       result: {
-        withdrawalId: bytesToHex(encodeBytes(message.result.withdrawalId)),
-        depository: encodeAddress(
+        withdrawalId: encodeBytesToHex(message.result.withdrawalId),
+        depository: encodeAddressToHex(
           message.result.depository,
           vmType(message.data.chainId)
         ),
@@ -577,9 +577,14 @@ export const getDecodedWithdrawalId = (
         },
         primaryType: "CallRequest",
         data: {
-          calls: decodedWithdrawal.withdrawal.calls,
-          nonce: decodedWithdrawal.withdrawal.nonce,
-          expiration: decodedWithdrawal.withdrawal.expiration,
+          calls: decodedWithdrawal.withdrawal.calls.map((c) => ({
+            to: c.to as Hex,
+            data: c.data as Hex,
+            value: BigInt(c.value),
+            allowFailure: c.allowFailure,
+          })),
+          nonce: BigInt(decodedWithdrawal.withdrawal.nonce),
+          expiration: BigInt(decodedWithdrawal.withdrawal.expiration),
         },
       })
     }
@@ -689,7 +694,7 @@ export const getDecodedWithdrawalId = (
               hyperliquidChain: parameters.hyperliquidChain,
               destination: parameters.destination,
               amount: parameters.amount,
-              time: parameters.time,
+              time: BigInt(parameters.time),
             },
           })
         }
@@ -717,7 +722,7 @@ export const getDecodedWithdrawalId = (
               token: parameters.token,
               amount: parameters.amount,
               fromSubAccount: parameters.fromSubAccount,
-              nonce: parameters.nonce,
+              nonce: BigInt(parameters.nonce),
             },
           })
         }

@@ -1,6 +1,6 @@
 {
   "name": "@relay-protocol/settlement-sdk",
-  "version": "0.0.91",
+  "version": "0.0.92",
   "description": "Relay protocol SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -28,7 +28,7 @@
     "bs58": "^6.0.0",
     "js-sha256": "^0.11.0",
     "tronweb": "^6.0.4",
-    "viem": "^2.26.3"
+    "viem": "2.47.6"
   },
   "files": [
     "dist/**/*"
