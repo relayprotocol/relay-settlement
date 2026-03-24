@@ -37,9 +37,11 @@ import "./tasks/deployments/allocator"
 import "./tasks/deployments/erc20View"
 import "./tasks/deployments/hub"
 import "./tasks/deployments/oracle"
+import "./tasks/deployments/oracleMultisig"
 import "./tasks/deployments/relayMultisigSigner"
 
 // helpers
+import "./tasks/accounts"
 import "./tasks/allocator/getSignerAddress"
 import "./tasks/computeSignatures"
 import "./tasks/exportAbis"

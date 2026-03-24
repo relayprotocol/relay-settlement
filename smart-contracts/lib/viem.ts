@@ -1,8 +1,8 @@
-import { relay, sovereignTestnet } from "@relay-protocol/settlement-networks"
+import { relay, relayTestnet } from "@relay-protocol/settlement-networks"
 import { defineChain } from "viem"
 import * as viemChains from "viem/chains"
 
-const customChains = [relay, sovereignTestnet].map((chain) =>
+const customChains = [relay, relayTestnet].map((chain) =>
   defineChain({
     id: Number(chain.chainId),
     name: chain.name,
