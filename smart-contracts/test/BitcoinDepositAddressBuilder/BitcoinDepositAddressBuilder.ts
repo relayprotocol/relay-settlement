@@ -17,8 +17,8 @@ const sampleUtxo = {
   vout: 0,
 }
 
-// P2PKH scriptPubKey for the UTXO
-const scriptPubKey = "0x76a914632a250a7f721ae8583ad911950eeeb82c00e54788ac"
+// P2WPKH scriptPubKey for the UTXO
+const scriptPubKey = "0x0014632a250a7f721ae8583ad911950eeeb82c00e547"
 
 // Sample order ID
 const orderId =
@@ -137,7 +137,7 @@ describe("BitcoinDepositSweepBuilder", function () {
 
       const tinyValue = 100n // 100 sats, way below fees at any reasonable rate
       const feeRate = 10n
-      const expectedFees = feeRate * 269n // SWEEP_TX_SIZE = 269
+      const expectedFees = feeRate * 191n // SWEEP_TX_VSIZE = 191
 
       await expect(
         builder.read.buildSweepPayload([
@@ -161,9 +161,9 @@ describe("BitcoinDepositSweepBuilder", function () {
       const { builder } = await loadFixture(deployBuilder)
 
       // Pick a value that after fees leaves less than 546 sats
-      // fees = feeRate * 269, so value = fees + 545 should trigger dust
+      // fees = feeRate * 191, so value = fees + 545 should trigger dust
       const feeRate = 10n
-      const fees = feeRate * 269n
+      const fees = feeRate * 191n
       const dustValue = fees + 545n
 
       await expect(
@@ -212,7 +212,7 @@ describe("BitcoinDepositSweepBuilder", function () {
 
       const feeRate = 5n
       const utxoValue = BigInt(sampleUtxo.value)
-      const expectedFees = feeRate * 269n
+      const expectedFees = feeRate * 191n
       const expectedSweep = utxoValue - expectedFees
 
       const [payload] = await builder.read.buildSweepPayload([
@@ -325,15 +325,38 @@ describe("BitcoinDepositSweepBuilder", function () {
       // With zero fee, full value goes to depository
       expect(decodeUint64LE(transaction.outputs[0].value)).to.equal(utxoValue)
     })
+
+    it("should revert if scriptPubKey is not P2WPKH", async () => {
+      const { builder } = await loadFixture(deployBuilder)
+
+      // P2PKH scriptPubKey (legacy format, not P2WPKH)
+      const legacyScript =
+        "0x76a914632a250a7f721ae8583ad911950eeeb82c00e54788ac"
+
+      await expect(
+        builder.read.buildSweepPayload([
+          orderId,
+          encodeSweepData(
+            {
+              index: sampleUtxo.vout,
+              scriptPubKey: legacyScript,
+              txid: txidToBytes32(sampleUtxo.txid),
+              value: BigInt(sampleUtxo.value),
+            },
+            1n
+          ),
+        ])
+      ).to.be.rejectedWith("InvalidScriptPubKey()")
+    })
   })
 
   describe("hashToSign()", function () {
-    it("should match bitcoinjs-lib SIGHASH_ALL computation", async () => {
+    it("should match bitcoinjs-lib BIP143 SIGHASH_ALL computation", async () => {
       const { builder, depositoryAddress } = await loadFixture(deployBuilder)
 
       const utxoValue = BigInt(sampleUtxo.value)
       const feeRate = 1n
-      const fees = feeRate * 269n
+      const fees = feeRate * 191n
       const sweepAmount = utxoValue - fees
 
       const [payload] = await builder.read.buildSweepPayload([
@@ -375,10 +398,24 @@ describe("BitcoinDepositSweepBuilder", function () {
       ])
       tx.addOutput(opReturnScript, 0)
 
-      // Compute sighash with bitcoinjs-lib
-      const bitcoinjsSighash = tx.hashForSignature(
+      // Compute BIP143 sighash with bitcoinjs-lib
+      // hashForWitnessV0(inputIndex, scriptCode, value, hashType)
+      // For P2WPKH, scriptCode is OP_DUP OP_HASH160 <20-byte-hash> OP_EQUALVERIFY OP_CHECKSIG
+      const pubkeyHash = Buffer.from(
+        scriptPubKey.slice(6), // skip "0x0014" to get the 20-byte hash
+        "hex"
+      )
+      const p2pkhScript = bitcoin.script.compile([
+        bitcoin.opcodes.OP_DUP,
+        bitcoin.opcodes.OP_HASH160,
+        pubkeyHash,
+        bitcoin.opcodes.OP_EQUALVERIFY,
+        bitcoin.opcodes.OP_CHECKSIG,
+      ])
+      const bitcoinjsSighash = tx.hashForWitnessV0(
         0,
-        Buffer.from(scriptPubKey.slice(2), "hex"),
+        p2pkhScript,
+        Number(utxoValue),
         bitcoin.Transaction.SIGHASH_ALL
       )
 
@@ -388,6 +425,46 @@ describe("BitcoinDepositSweepBuilder", function () {
       expect(contractHash.toLowerCase()).to.equal(
         "0x" + bitcoinjsSighash.toString("hex").toLowerCase()
       )
+    })
+
+    it("should produce different hashes for different UTXO values (vulnerability regression)", async () => {
+      const { builder } = await loadFixture(deployBuilder)
+
+      const feeRate = 1n
+      const realValue = BigInt(sampleUtxo.value)
+      const deflatedValue = realValue / 2n
+
+      const [payloadReal] = await builder.read.buildSweepPayload([
+        orderId,
+        encodeSweepData(
+          {
+            index: sampleUtxo.vout,
+            scriptPubKey,
+            txid: txidToBytes32(sampleUtxo.txid),
+            value: realValue,
+          },
+          feeRate
+        ),
+      ])
+
+      const [payloadDeflated] = await builder.read.buildSweepPayload([
+        orderId,
+        encodeSweepData(
+          {
+            index: sampleUtxo.vout,
+            scriptPubKey,
+            txid: txidToBytes32(sampleUtxo.txid),
+            value: deflatedValue,
+          },
+          feeRate
+        ),
+      ])
+
+      const hashReal = await builder.read.hashToSign([payloadReal])
+      const hashDeflated = await builder.read.hashToSign([payloadDeflated])
+
+      // BIP143 commits to value, so different values MUST produce different hashes
+      expect(hashReal).to.not.equal(hashDeflated)
     })
   })
 

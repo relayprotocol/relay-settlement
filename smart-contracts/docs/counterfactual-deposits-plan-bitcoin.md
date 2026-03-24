@@ -76,7 +76,7 @@ The `data` parameter is opaque to the manager. This builder expects `abi.encode(
 constructor(
     address _owner,
     string memory _depositoryScript, // Base64-encoded P2PKH scriptPubKey of depository
-    uint64 _maxFeeRate               // Maximum allowed fee rate (sats/byte)
+    uint64 _maxFeeRate               // Maximum allowed fee rate (sats/vbyte)
 ) Ownable(_owner)
 ```
 
@@ -85,7 +85,7 @@ constructor(
 | Variable                | Type     | Mutability              | Description                           |
 | ----------------------- | -------- | ----------------------- | ------------------------------------- |
 | `depositoryScriptBytes` | `bytes`  | set once in constructor | Decoded depository P2PKH scriptPubKey |
-| `maxFeeRate`            | `uint64` | owner-configurable      | Maximum allowed fee rate (sats/byte)  |
+| `maxFeeRate`            | `uint64` | owner-configurable      | Maximum allowed fee rate (sats/vbyte) |
 
 ### Access Control
 
@@ -100,25 +100,26 @@ Updates the maximum allowed fee rate. Emits `MaxFeeRateChanged(_maxFeeRate)`.
 
 #### `buildSweepPayload(bytes32 orderId, bytes calldata data) → (bytes memory payload, uint64 sweepAmount)` (view)
 
-Decodes `data` as `abi.decode(data, (UTXO, uint64))` to extract the UTXO and fee rate. Builds the sweep transaction payload for a single UTXO. Returns ABI-encoded `BitcoinTransactionData` and the sweep amount (for event emission by the manager).
+Decodes `data` as `abi.decode(data, (UTXO, uint64))` to extract the UTXO and fee rate. Validates the UTXO's scriptPubKey is a valid native P2WPKH witness program (exactly 22 bytes starting with `0x0014`). Builds the sweep transaction payload for a single UTXO. Returns ABI-encoded `BitcoinTransactionData` and the sweep amount (for event emission by the manager).
 
 **Reverts**:
 
+- `InvalidScriptPubKey()` if the UTXO's scriptPubKey is not a valid P2WPKH witness program
 - `FeeRateTooHigh(feeRate, maxFeeRate)` if feeRate exceeds the owner-set cap
 - `InsufficientUTXOValue(totalInput, fees)` if UTXO value doesn't cover fees
 - `SweepAmountBelowDust(sweepAmount)` if depository output would be below 546 sats
 
 #### `hashToSign(bytes calldata payload) → bytes32` (pure)
 
-Returns double-SHA256 of the SIGHASH_ALL preimage for the single input (index 0).
+Returns double-SHA256 of the BIP143 SIGHASH_ALL preimage for the single input (index 0). The BIP143 preimage commits to the input value, preventing value manipulation attacks.
 
 ### Sweep Transaction Structure
 
-Always exactly **1 input** and **2 outputs**, no change:
+Always exactly **1 input** and **2 outputs**, no change. The deposit UTXO must be a native P2WPKH output (`bc1q...` address):
 
-| Input           | Source                                       |
-| --------------- | -------------------------------------------- |
-| 0: Deposit UTXO | The single UTXO at the deterministic address |
+| Input                    | Source                                       |
+| ------------------------ | -------------------------------------------- |
+| 0: Deposit UTXO (P2WPKH) | The single UTXO at the deterministic address |
 
 | Output                | Value               | Script                                     |
 | --------------------- | ------------------- | ------------------------------------------ |
@@ -138,32 +139,52 @@ Total script: 68 bytes. Output is unspendable with value 0.
 
 #### Fee Calculation
 
-With a single input, the transaction size is fixed:
+With a single P2WPKH input, the transaction virtual size is fixed. SegWit uses virtual bytes (vbytes) where witness data is discounted at 1/4 weight:
 
 ```
-txSize = 148 + 121 = 269 bytes
-fees   = feeRate × 269
+fees = feeRate × 191 vbytes
 ```
 
-Breakdown of the `121` constant:
+Weight breakdown:
 
-- 34 bytes — P2PKH output (depository): 8 value + 1 varint + 25 scriptPubKey
-- 77 bytes — OP_RETURN output: 8 value + 1 varint + 68 script
-- 10 bytes — overhead: 4 version + 1 input count varint + 1 output count varint + 4 locktime
+- **Non-witness (×4 weight):** 162 bytes = 4 version + 1 input count + 41 input (32 txid + 4 vout + 1 empty scriptSig length + 4 sequence) + 1 output count + 34 P2PKH output + 77 OP_RETURN output + 4 locktime → 648 weight units
+- **Witness (×1 weight):** 110 bytes = 2 marker+flag + 1 item count + 1 sig length + 72 DER signature + 1 pubkey length + 33 compressed pubkey → 110 weight units
+- **Total weight:** 758 → ceil(758 / 4) = **190 vbytes**
+- **Conservative constant: 191 vbytes** (accounts for 73-byte DER signature variability)
 
-The single P2PKH input is 148 bytes: 32 txid + 4 vout + 1 scriptSig length varint + 107 scriptSig + 4 sequence.
+This is a ~30% fee reduction compared to the legacy 269-byte calculation.
 
-### Internal Functions (duplicated from BitcoinPayloadBuilder)
+### Internal Functions (BIP143 sighash)
 
-These are copied rather than extracted to a shared library, to avoid modifying the deployed `BitcoinPayloadBuilder` contract:
+The sweep builder uses BIP143 (SegWit v0) sighash instead of the legacy algorithm. Unlike the legacy sighash, BIP143 commits to the input value being spent, preventing value manipulation attacks.
 
 - `buildInput(UTXO memory utxo)` — converts a single UTXO to a transaction input
-- `buildPreImageForInput(BitcoinTransactionData memory txData, uint256 whichInput)` — SIGHASH_ALL preimage
+- `buildPreImageForInput(BitcoinTransactionData memory txData, uint256 whichInput)` — BIP143 SIGHASH_ALL preimage
+- `_hashPrevouts(inputs)` — SHA256d of all outpoints concatenated
+- `_hashSequence(inputs)` — SHA256d of all sequences concatenated
+- `_hashOutputs(outputs)` — SHA256d of all serialized outputs
+- `_buildScriptCode(witnessProgram)` — derives P2WPKH scriptCode (`0x1976a914<20-byte-hash>88ac`) from the witness program
 - `encodeVarInt(uint256 value)` — CompactSize varint encoding
+
+#### BIP143 Preimage Structure
+
+```
+nVersion        (4B LE)
+hashPrevouts    SHA256d(all outpoints)                   32B
+hashSequence    SHA256d(all sequences)                   32B
+outpoint        txid (32B) + vout (4B LE)
+scriptCode      0x19 76 a9 14 <20B pubkey hash> 88 ac   26B
+value           input value (8B LE)                      ← commits to value
+nSequence       (4B LE = 0xFFFFFFFD)
+hashOutputs     SHA256d(all serialized outputs)          32B
+nLocktime       (4B LE = 0)
+nHashType       (4B LE = 0x01 SIGHASH_ALL)
+```
 
 ### Custom Errors
 
 ```solidity
+error InvalidScriptPubKey();
 error FeeRateTooHigh(uint64 feeRate, uint64 maxFeeRate);
 error InsufficientUTXOValue(uint64 totalInput, uint256 requiredFees);
 error SweepAmountBelowDust(uint64 sweepAmount);
@@ -212,7 +233,7 @@ constructor(
 - `sweep()` — **permissionless** (anyone can submit; funds always go to the depository)
 - All view/pure functions — **permissionless**
 
-Since the depository is determined by the builder and all sweep outputs always go there, permissionless access is safe — there is no way for a caller to redirect funds.
+Since the depository is determined by the builder and all sweep outputs always go there, permissionless access is safe — there is no way for a caller to redirect funds. The BIP143 sighash commits to the input value, so a caller cannot manipulate the UTXO value to burn funds as excess miner fees.
 
 ### Public / External Functions
 
@@ -238,7 +259,11 @@ Combined submit-and-sign function. The `data` parameter is opaque — passed str
 4. Computes the per-order derivation path
 5. Calls NEAR MPC to sign the hash
 
-Caller must have approved sufficient wNEAR for the NEAR MPC signature fee.
+The caller does not need to approve or transfer wNEAR for `sweep()`. The NEAR MPC
+signature fee is paid from the `BitcoinDepositAddress` contract's own balance via
+the Aurora XCC flow. Each signing request costs only 1 wei, so even if the
+contract holds more than 1 wei, repeated permissionless spam is not expected to be
+a practical drain vector as long as the contract remains funded.
 
 **Reverts**: builder reverts propagate (FeeRateTooHigh, InsufficientUTXOValue, SweepAmountBelowDust), plus:
 
@@ -313,12 +338,14 @@ Used by the builder contract:
 
 The manager contract does NOT import these — it treats builder data as opaque `bytes`.
 
-### Duplicated Internal Functions (in `BitcoinDepositSweepBuilder`)
+### BIP143 Internal Functions (in `BitcoinDepositSweepBuilder`)
 
-Copied from `BitcoinPayloadBuilder` rather than extracted to a shared library, to avoid modifying the deployed contract:
+The sweep builder uses its own BIP143 sighash implementation (not shared with `BitcoinPayloadBuilder` which still uses legacy sighash for the withdrawal path):
 
 - `buildInput(UTXO memory utxo)` — converts a single UTXO to a transaction input
-- `buildPreImageForInput(BitcoinTransactionData memory txData, uint256 whichInput)` — SIGHASH_ALL preimage
+- `buildPreImageForInput(BitcoinTransactionData memory txData, uint256 whichInput)` — BIP143 SIGHASH_ALL preimage
+- `_hashPrevouts`, `_hashSequence`, `_hashOutputs` — BIP143 hash components
+- `_buildScriptCode` — derives P2WPKH scriptCode from witness program
 - `encodeVarInt(uint256 value)` — CompactSize varint encoding
 
 ### Imported Utilities
@@ -342,23 +369,28 @@ Copied from `BitcoinPayloadBuilder` rather than extracted to a shared library, t
 | `lib/bitcoin.ts`                                          | TypeScript ABI definitions, bitcoinjs-lib helpers for testing |
 | `test/Allocator/PayloadBuilders/BitcoinPayloadBuilder.ts` | Test patterns to follow                                       |
 
-## Implementation Steps
+## Implementation History
 
-1. **Create `contracts/BitcoinDepositSweepBuilder.sol`** — the builder contract with `IBitcoinDepositSweepBuilder` interface, `buildSweepPayload(bytes32, bytes)`, `hashToSign`, `setMaxFeeRate`, and all duplicated internal functions. The `buildSweepPayload` decodes its `data` parameter as `abi.decode(data, (UTXO, uint64))`.
-2. **Rename `contracts/BitcoinDepositAddressBuilder.sol` → `contracts/BitcoinDepositAddress.sol`** — refactor into the manager contract:
-   - Remove all payload-building logic (move to builder)
-   - Remove `depositoryScriptBytes` and `maxFeeRate` storage
-   - Remove all Bitcoin transaction internals (`buildInput`, `buildPreImageForInput`, `encodeVarInt`)
-   - Add `sweepBuilder` storage + `setSweepBuilder()` function
-   - Change `sweep()` signature to accept opaque `bytes calldata data` instead of `UTXO calldata utxo, uint64 feeRate`
-   - Update `sweep()` to delegate to `sweepBuilder.buildSweepPayload(orderId, data)` and `sweepBuilder.hashToSign(payload)`
-   - Keep: `derivationPath()`, signing state, `_requestSignature()`, `sweepCallback()`, `init()`
-3. **Update `test/BitcoinDepositAddressBuilder/BitcoinDepositAddressBuilder.ts`** — refactor tests:
-   - Deploy `BitcoinDepositSweepBuilder` first, then `BitcoinDepositAddress` with builder address
-   - Move payload-building tests (fee validation, dust, outputs, hashToSign) to target the builder directly
-   - Keep signing/state tests targeting the manager, encoding `(UTXO, feeRate)` as opaque bytes in test calls
-   - Add tests for `setSweepBuilder()` (only owner, emits event)
-4. **Update `ignition/modules/BitcoinDepositAddressBuilder.ts`** — deploy both contracts: builder first (with depository + maxFeeRate), then manager (with builder address + nearSigner + wNEAR)
+The two-contract architecture was implemented first, followed by a BIP143 sighash migration to fix a value manipulation vulnerability.
+
+### Phase 1: Two-Contract Architecture (completed)
+
+1. Created `contracts/BitcoinDepositSweepBuilder.sol` with `IBitcoinDepositSweepBuilder` interface
+2. Refactored `BitcoinDepositAddress.sol` as the manager contract with opaque data passing
+3. Updated tests and Ignition deployment modules
+
+### Phase 2: BIP143 Sighash Migration (completed)
+
+Migrated the sweep builder from legacy Bitcoin sighash to BIP143 (SegWit v0) to fix a critical vulnerability where the legacy sighash does not commit to input values, allowing an attacker to provide a deflated UTXO value via the permissionless `sweep()` function.
+
+Changes:
+
+1. Replaced legacy `buildPreImageForInput` with BIP143 preimage (commits to input value)
+2. Added P2WPKH scriptPubKey validation (`InvalidScriptPubKey` error)
+3. Updated `SWEEP_TX_SIZE` from 269 bytes to 191 vbytes (SegWit fee discount)
+4. Updated fee rate unit semantics from sats/byte to sats/vbyte
+5. Switched test validation from `hashForSignature` to `hashForWitnessV0`
+6. Added vulnerability regression tests
 
 ## Verification
 

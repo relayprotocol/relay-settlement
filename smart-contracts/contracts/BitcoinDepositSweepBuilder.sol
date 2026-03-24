@@ -21,6 +21,7 @@ contract BitcoinDepositSweepBuilder is Ownable, IBitcoinDepositSweepBuilder {
   error FeeRateTooHigh(uint64 feeRate, uint64 maxFeeRate);
   error InsufficientUTXOValue(uint64 totalInput, uint256 requiredFees);
   error SweepAmountBelowDust(uint64 sweepAmount);
+  error InvalidScriptPubKey();
 
   // ── Events ──────────────────────────────────────────────────────────
 
@@ -32,15 +33,15 @@ contract BitcoinDepositSweepBuilder is Ownable, IBitcoinDepositSweepBuilder {
   /// @dev Minimum UTXO value required by most Bitcoin nodes
   uint64 private constant DUST_THRESHOLD = 546;
 
-  /// @dev Fixed transaction size for single-input sweep: 148 (input) + 121 (outputs + overhead)
-  uint256 private constant SWEEP_TX_SIZE = 269;
+  /// @dev Fixed transaction virtual size for single-input P2WPKH sweep (vbytes)
+  uint256 private constant SWEEP_TX_SIZE = 191;
 
   // ── Storage ─────────────────────────────────────────────────────────
 
   /// @notice Decoded depository P2PKH scriptPubKey
   bytes public depositoryScriptBytes;
 
-  /// @notice Maximum allowed fee rate (sats/byte)
+  /// @notice Maximum allowed fee rate (sats/vbyte)
   uint64 public maxFeeRate;
 
   // ── Constructor ─────────────────────────────────────────────────────
@@ -48,7 +49,7 @@ contract BitcoinDepositSweepBuilder is Ownable, IBitcoinDepositSweepBuilder {
   /// @notice Initializes the contract with depository and fee config
   /// @param _owner Contract owner
   /// @param _depositoryScript Base64-encoded P2PKH scriptPubKey of depository
-  /// @param _maxFeeRate Maximum allowed fee rate (sats/byte)
+  /// @param _maxFeeRate Maximum allowed fee rate (sats/vbyte)
   constructor(
     address _owner,
     string memory _depositoryScript,
@@ -61,7 +62,7 @@ contract BitcoinDepositSweepBuilder is Ownable, IBitcoinDepositSweepBuilder {
   // ── External / Public Functions ─────────────────────────────────────
 
   /// @notice Updates the maximum allowed fee rate
-  /// @param _maxFeeRate New maximum fee rate (sats/byte)
+  /// @param _maxFeeRate New maximum fee rate (sats/vbyte)
   function setMaxFeeRate(uint64 _maxFeeRate) external onlyOwner {
     maxFeeRate = _maxFeeRate;
     emit MaxFeeRateChanged(_maxFeeRate);
@@ -77,6 +78,15 @@ contract BitcoinDepositSweepBuilder is Ownable, IBitcoinDepositSweepBuilder {
     bytes calldata data
   ) external view returns (bytes memory payload, uint64 sweepAmount) {
     (UTXO memory utxo, uint64 feeRate) = abi.decode(data, (UTXO, uint64));
+
+    // Validate P2WPKH scriptPubKey: exactly 22 bytes, starts with 0x0014
+    if (
+      utxo.scriptPubKey.length != 22 ||
+      utxo.scriptPubKey[0] != 0x00 ||
+      utxo.scriptPubKey[1] != 0x14
+    ) {
+      revert InvalidScriptPubKey();
+    }
 
     if (feeRate > maxFeeRate) {
       revert FeeRateTooHigh(feeRate, maxFeeRate);
@@ -136,7 +146,7 @@ contract BitcoinDepositSweepBuilder is Ownable, IBitcoinDepositSweepBuilder {
     return sha256(abi.encodePacked(sha256(pre)));
   }
 
-  // ── Internal Functions (duplicated from BitcoinPayloadBuilder) ──────
+  // ── Internal Functions (BIP143 sighash) ────────────────────────────
 
   /// @notice Converts a single UTXO to a transaction input
   /// @param utxo The UTXO to convert
@@ -153,71 +163,102 @@ contract BitcoinDepositSweepBuilder is Ownable, IBitcoinDepositSweepBuilder {
       });
   }
 
-  /// @notice Builds SIGHASH_ALL preimage for a specific input
+  /// @notice Builds BIP143 SIGHASH_ALL preimage for a P2WPKH input
   /// @param txData The complete transaction data
   /// @param whichInput Index of the input to build preimage for
-  /// @return The preimage bytes for signing
+  /// @return The BIP143 preimage bytes for signing
   function buildPreImageForInput(
     BitcoinTransactionData memory txData,
     uint256 whichInput
   ) internal pure returns (bytes memory) {
-    bytes memory versionLE = Utils.encodeUint32LE(1);
+    BitcoinTransactionDataInput memory input = txData.inputs[whichInput];
 
-    uint256 numInputs = txData.inputs.length;
-    bytes memory inputCountLE = encodeVarInt(numInputs);
+    // outpoint = txid || index of the input being signed
+    bytes memory outpoint = bytes.concat(input.txid, input.index);
 
-    bytes memory allInputs;
-    for (uint256 i = 0; i < numInputs; i++) {
-      bytes memory prevTxidLe = txData.inputs[i].txid;
-      bytes memory prevIndexLe = txData.inputs[i].index;
+    // scriptCode for P2WPKH: 0x19 76 a9 14 <20-byte-hash> 88 ac
+    // Extract the 20-byte pubkey hash from the witness program (bytes 2..22 of scriptPubKey)
+    bytes memory scriptCode = _buildScriptCode(input.script);
 
-      bytes memory scriptSigLen;
-      bytes memory scriptSigBytes;
-      if (i == whichInput) {
-        scriptSigBytes = txData.inputs[i].script;
-        scriptSigLen = encodeVarInt(scriptSigBytes.length);
-      } else {
-        scriptSigLen = hex"00";
-        scriptSigBytes = "";
-      }
-
-      bytes memory sequenceLE = Utils.encodeUint32LE(0xFFFFFFFD);
-
-      allInputs = bytes.concat(
-        allInputs,
-        prevTxidLe,
-        prevIndexLe,
-        scriptSigLen,
-        scriptSigBytes,
-        sequenceLE
-      );
-    }
-
-    uint256 numOutputs = txData.outputs.length;
-    bytes memory outputCountLE = encodeVarInt(numOutputs);
-
-    bytes memory allOutputs;
-    for (uint256 j = 0; j < numOutputs; j++) {
-      bytes memory valueLE = txData.outputs[j].value;
-      bytes memory scriptPubKey = txData.outputs[j].script;
-      bytes memory scriptLenLE = encodeVarInt(scriptPubKey.length);
-
-      allOutputs = bytes.concat(allOutputs, valueLE, scriptLenLE, scriptPubKey);
-    }
-
-    bytes memory locktimeLE = Utils.encodeUint32LE(0);
-    bytes memory hashTypeLE = Utils.encodeUint32LE(0x01);
+    // Split into two halves to avoid stack-too-deep
+    bytes memory firstHalf = bytes.concat(
+      Utils.encodeUint32LE(1), // nVersion
+      _hashPrevouts(txData.inputs),
+      _hashSequence(txData.inputs),
+      outpoint,
+      scriptCode
+    );
 
     return
       bytes.concat(
-        versionLE,
-        inputCountLE,
-        allInputs,
-        outputCountLE,
-        allOutputs,
-        locktimeLE,
-        hashTypeLE
+        firstHalf,
+        input.value, // value of the input being signed (8 bytes LE)
+        Utils.encodeUint32LE(0xFFFFFFFD), // nSequence
+        _hashOutputs(txData.outputs),
+        Utils.encodeUint32LE(0), // nLocktime
+        Utils.encodeUint32LE(0x01) // nHashType (SIGHASH_ALL)
       );
+  }
+
+  /// @notice Computes SHA256d of all outpoints for BIP143 hashPrevouts
+  /// @return The double-SHA256 hash of all outpoints
+  function _hashPrevouts(
+    BitcoinTransactionDataInput[] memory inputs
+  ) private pure returns (bytes32) {
+    bytes memory allOutpoints;
+    for (uint256 i = 0; i < inputs.length; i++) {
+      allOutpoints = bytes.concat(
+        allOutpoints,
+        inputs[i].txid,
+        inputs[i].index
+      );
+    }
+    return sha256(abi.encodePacked(sha256(allOutpoints)));
+  }
+
+  /// @notice Computes SHA256d of all sequences for BIP143 hashSequence
+  /// @return The double-SHA256 hash of all sequences
+  function _hashSequence(
+    BitcoinTransactionDataInput[] memory inputs
+  ) private pure returns (bytes32) {
+    bytes memory allSequences;
+    for (uint256 i = 0; i < inputs.length; i++) {
+      allSequences = bytes.concat(
+        allSequences,
+        Utils.encodeUint32LE(0xFFFFFFFD)
+      );
+    }
+    return sha256(abi.encodePacked(sha256(allSequences)));
+  }
+
+  /// @notice Computes SHA256d of all serialized outputs for BIP143 hashOutputs
+  /// @return The double-SHA256 hash of all serialized outputs
+  function _hashOutputs(
+    BitcoinTransactionDataOutput[] memory outputs
+  ) private pure returns (bytes32) {
+    bytes memory allOutputs;
+    for (uint256 j = 0; j < outputs.length; j++) {
+      bytes memory scriptPubKey = outputs[j].script;
+      allOutputs = bytes.concat(
+        allOutputs,
+        outputs[j].value,
+        encodeVarInt(scriptPubKey.length),
+        scriptPubKey
+      );
+    }
+    return sha256(abi.encodePacked(sha256(allOutputs)));
+  }
+
+  /// @notice Builds P2WPKH scriptCode from witness program
+  /// @return The BIP143 scriptCode bytes
+  function _buildScriptCode(
+    bytes memory witnessProgram
+  ) private pure returns (bytes memory) {
+    bytes memory pubkeyHash = new bytes(20);
+    for (uint256 i = 0; i < 20; i++) {
+      pubkeyHash[i] = witnessProgram[i + 2];
+    }
+    return abi.encodePacked(hex"1976a914", pubkeyHash, hex"88ac");
   }
 
   /// @notice Encodes Bitcoin CompactSize varint

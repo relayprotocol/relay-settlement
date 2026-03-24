@@ -30,6 +30,7 @@ contract BitcoinDepositAddress is Ownable {
   error SignatureAlreadyComplete(bytes32 orderId, bytes32 hashToSign);
   error SignaturePending(bytes32 orderId, uint256 expiration);
   error SignCallbackFailed(bytes32 orderId);
+  error InsufficientGas(uint64 provided, uint64 minimum);
 
   // ── Events ──────────────────────────────────────────────────────────
 
@@ -52,6 +53,12 @@ contract BitcoinDepositAddress is Ownable {
 
   /// @dev Cooldown period for pending MPC signature requests
   uint256 private constant PENDING_SIGNATURE_COOLDOWN = 5 minutes;
+
+  /// @dev Minimum gas for NEAR MPC sign call
+  uint64 private constant MIN_SIGN_GAS = 30_000_000_000_000;
+
+  /// @dev Minimum gas for Aurora callback
+  uint64 private constant MIN_CALLBACK_GAS = 20_000_000_000_000;
 
   // ── Storage ─────────────────────────────────────────────────────────
 
@@ -182,6 +189,14 @@ contract BitcoinDepositAddress is Ownable {
     bytes32 hash,
     GasSettings calldata gasSettings
   ) internal {
+    // Validate minimum gas settings
+    if (gasSettings.signGas < MIN_SIGN_GAS) {
+      revert InsufficientGas(gasSettings.signGas, MIN_SIGN_GAS);
+    }
+    if (gasSettings.callbackGas < MIN_CALLBACK_GAS) {
+      revert InsufficientGas(gasSettings.callbackGas, MIN_CALLBACK_GAS);
+    }
+
     // Check signature state
     if (signedPayloads[orderId][hash].length > 0) {
       revert SignatureAlreadyComplete(orderId, hash);
