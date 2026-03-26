@@ -31,6 +31,7 @@ import "./tasks/hub/add-editors"
 import "./tasks/hub/add-operator"
 import "./tasks/hub/hub-setup"
 import "./tasks/hub/test-oracle"
+import "./tasks/hub/setup-withdrawal-test"
 
 // deployments
 import "./tasks/deployments/allocator"
