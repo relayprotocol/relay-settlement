@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useRef, useEffect } from "react"
-import { useAccount, usePublicClient, useWalletClient } from "wagmi"
+import { useAccount, useWalletClient } from "wagmi"
 import { parseUnits } from "viem"
 import {
   type WithdrawalConfig,
@@ -24,7 +24,7 @@ import {
   updateJobStatus,
   getJob,
 } from "@/lib/core/withdrawal/session"
-import { HUB_CHAIN } from "@/lib/config"
+import { HUB_CHAIN, hubClient } from "@/lib/config"
 
 const INITIAL_STATE: WithdrawalState = { step: "idle" }
 const POLL_INTERVAL = 5_000
@@ -33,8 +33,6 @@ const POLL_TIMEOUT = 30 * 60 * 1000 // 30 minutes max polling
 
 export function useWithdrawal(config: WithdrawalConfig) {
   const { address } = useAccount()
-  const publicClient = usePublicClient()
-  const hubClient = usePublicClient({ chainId: HUB_CHAIN.id })
   const { data: walletClient } = useWalletClient()
 
   const [state, setState] = useState<WithdrawalState>(INITIAL_STATE)
@@ -43,7 +41,7 @@ export function useWithdrawal(config: WithdrawalConfig) {
 
   // Fetch hub balance when address or config changes
   useEffect(() => {
-    if (!address || !hubClient) return
+    if (!address) return
     setHubBalance(null)
     getHubBalance(hubClient, HUB_CHAIN.relayHubAddress, {
       chainSlug: config.chainSlug,
@@ -56,7 +54,6 @@ export function useWithdrawal(config: WithdrawalConfig) {
       .catch(() => setHubBalance(null))
   }, [
     address,
-    hubClient,
     config.chainSlug,
     config.currency,
     config.ownerChainSlug,

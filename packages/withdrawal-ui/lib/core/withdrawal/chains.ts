@@ -16,6 +16,7 @@ export interface ChainInfo {
   vmType: string
   explorerUrl: string
   iconUrl: string | null
+  httpRpcUrl: string
   currency: ChainCurrency
   erc20Currencies: ChainCurrency[]
 }

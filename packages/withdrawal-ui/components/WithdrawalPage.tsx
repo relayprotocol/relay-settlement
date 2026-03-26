@@ -16,8 +16,7 @@ import {
   getAllJobs,
   type StoredJob,
 } from "@/lib/core/withdrawal/session"
-import { usePublicClient } from "wagmi"
-import { HUB_CHAIN } from "@/lib/config"
+import { HUB_CHAIN, hubClient } from "@/lib/config"
 import { type WithdrawalConfig } from "@/lib/core/withdrawal/types"
 import { WithdrawalFlow } from "./WithdrawalFlow"
 import { CopyableAddress } from "./CopyableAddress"
@@ -26,7 +25,6 @@ import { Dropdown } from "./Dropdown"
 
 export function WithdrawalPage() {
   const { address } = useAccount()
-  const hubClient = usePublicClient({ chainId: HUB_CHAIN.id })
 
   const [chains, setChains] = useState<ChainInfo[]>([])
   const [selectedChain, setSelectedChain] = useState<ChainInfo | null>(null)
@@ -77,7 +75,7 @@ export function WithdrawalPage() {
 
   // Fetch hub balance when selection changes, then poll every 10s
   useEffect(() => {
-    if (!selectedChain || !selectedCurrency || !address || !hubClient) {
+    if (!selectedChain || !selectedCurrency || !address) {
       setHubBalance(null)
       return
     }
@@ -96,10 +94,10 @@ export function WithdrawalPage() {
     fetchBalance()
     const interval = setInterval(fetchBalance, 10_000)
     return () => clearInterval(interval)
-  }, [selectedChain, selectedCurrency, address, hubClient])
+  }, [selectedChain, selectedCurrency, address])
 
   const refreshBalance = () => {
-    if (!selectedChain || !selectedCurrency || !address || !hubClient) return
+    if (!selectedChain || !selectedCurrency || !address) return
     setHubBalance(null)
     getHubBalance(hubClient, HUB_CHAIN.relayHubAddress, {
       chainSlug: selectedChain.name,
