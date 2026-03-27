@@ -1,10 +1,15 @@
-import type { WithdrawalParams, EvmTransactionData } from "./types"
+import type {
+  WithdrawalParams,
+  EvmTransactionData,
+  WithdrawalFailReason,
+} from "./types"
 
 const STORAGE_PREFIX = "relay-withdrawal-"
 
 export type JobStatus =
   | "processing"
   | "ready"
+  | "submitted"
   | "executed"
   | "expired"
   | "failed"
@@ -17,6 +22,8 @@ export interface StoredJob {
   nonce?: string
   validatedAmount?: string
   txHash?: string
+  error?: string
+  failReason?: WithdrawalFailReason
   transaction?: EvmTransactionData
   withdrawal?: Record<string, unknown>
 }
@@ -46,6 +53,8 @@ export function updateJobStatus(
   status: JobStatus,
   extra?: {
     txHash?: string
+    error?: string
+    failReason?: WithdrawalFailReason
     transaction?: EvmTransactionData
     withdrawal?: Record<string, unknown>
   }
@@ -56,8 +65,24 @@ export function updateJobStatus(
     const entry: StoredJob = JSON.parse(raw)
     entry.status = status
     if (extra?.txHash) entry.txHash = extra.txHash
+    if (extra?.error) entry.error = extra.error
+    if (extra?.failReason) entry.failReason = extra.failReason
     if (extra?.transaction) entry.transaction = extra.transaction
     if (extra?.withdrawal) entry.withdrawal = extra.withdrawal
+
+    if (status !== "failed" && status !== "expired" && !extra?.error) {
+      delete entry.error
+    }
+    if (status !== "failed" && !extra?.failReason) {
+      delete entry.failReason
+    }
+
+    // Clean up large fields for terminal states to save storage
+    if (status === "executed" || status === "expired" || status === "failed") {
+      delete entry.transaction
+      delete entry.withdrawal
+    }
+
     localStorage.setItem(STORAGE_PREFIX + jobId, JSON.stringify(entry))
   } catch {
     // localStorage unavailable
@@ -92,7 +117,10 @@ export function getAllJobs(): StoredJob[] {
 
 export function getPendingJobs(): StoredJob[] {
   return getAllJobs().filter(
-    (j) => j.status === "processing" || j.status === "ready"
+    (j) =>
+      j.status === "processing" ||
+      j.status === "ready" ||
+      j.status === "submitted"
   )
 }
 

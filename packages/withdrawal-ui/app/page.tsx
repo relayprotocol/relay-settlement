@@ -1,15 +1,18 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useAccount, useConnect, useDisconnect } from "wagmi"
+import { useAccount } from "wagmi"
+import { DynamicWidget } from "@dynamic-labs/sdk-react-core"
 import { WithdrawalPage } from "@/components/WithdrawalPage"
+import { DepositPage } from "@/components/DepositPage"
 import { RelayLogo, RelayIcon } from "@/components/RelayLogo"
 
+type Tab = "withdraw" | "deposit"
+
 export default function Home() {
-  const { address, isConnected } = useAccount()
-  const { connect, connectors } = useConnect()
-  const { disconnect } = useDisconnect()
+  const { isConnected } = useAccount()
   const [mounted, setMounted] = useState(false)
+  const [tab, setTab] = useState<Tab>("withdraw")
 
   useEffect(() => {
     setMounted(true)
@@ -28,38 +31,45 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <RelayIcon size={28} />
             <span className="font-heading font-bold text-xl text-default">
-              Withdraw
+              Relay
             </span>
           </div>
-          {connected ? (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-subtle font-mono">
-                {address?.slice(0, 6)}...{address?.slice(-4)}
-              </span>
-              <button onClick={() => disconnect()} className="btn-white btn-sm">
-                Disconnect
-              </button>
-            </div>
-          ) : mounted ? (
-            <div className="flex items-center gap-2">
-              {connectors.map((connector) => (
-                <button
-                  key={connector.uid}
-                  onClick={() => connect({ connector })}
-                  className="btn-primary btn-sm"
-                >
-                  {connector.name}
-                </button>
-              ))}
-            </div>
-          ) : null}
+          <DynamicWidget />
         </div>
       </header>
 
       {/* Main Content */}
       <div className="max-w-5xl mx-auto px-6 py-8">
         {connected ? (
-          <WithdrawalPage />
+          <>
+            {/* Tabs */}
+            <div className="max-w-lg mx-auto mb-6">
+              <div className="flex gap-1 p-1 bg-gray-100 rounded-xl">
+                <button
+                  className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    tab === "withdraw"
+                      ? "bg-white text-default shadow-sm"
+                      : "text-subtle hover:text-default"
+                  }`}
+                  onClick={() => setTab("withdraw")}
+                >
+                  Withdraw
+                </button>
+                <button
+                  className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    tab === "deposit"
+                      ? "bg-white text-default shadow-sm"
+                      : "text-subtle hover:text-default"
+                  }`}
+                  onClick={() => setTab("deposit")}
+                >
+                  Deposit
+                </button>
+              </div>
+            </div>
+
+            {tab === "withdraw" ? <WithdrawalPage /> : <DepositPage />}
+          </>
         ) : (
           <div className="text-center py-16">
             <div className="mb-6">

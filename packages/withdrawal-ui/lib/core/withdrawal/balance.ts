@@ -3,23 +3,8 @@ import {
   generateTokenId,
   generateAddress,
 } from "@relay-protocol/settlement-sdk"
-import type { VmType } from "@relay-protocol/settlement-sdk"
 import { RelayHubAbi } from "@/lib/abis"
-
-/** Map solver vmType shortcodes to SDK VmType */
-const VM_TYPE_MAP: Record<string, VmType> = {
-  evm: "ethereum-vm",
-  svm: "solana-vm",
-  bvm: "bitcoin-vm",
-  tvm: "tron-vm",
-  hypevm: "hyperliquid-vm",
-  suivm: "sui-vm",
-  tonvm: "ton-vm",
-}
-
-function toSdkVmType(solverVmType: string): VmType {
-  return VM_TYPE_MAP[solverVmType] ?? "ethereum-vm"
-}
+import { toSdkVmType } from "./vmTypes"
 
 const ERC20_DECIMALS_ABI = [
   {
@@ -69,6 +54,57 @@ export async function getHubBalance(
     functionName: "balanceOf",
     args: [virtualAddress, tokenId],
   }) as Promise<bigint>
+}
+
+/**
+ * Read hub balances for multiple currencies in parallel.
+ * Returns a map of currency address → balance.
+ */
+export async function getHubBalances(
+  hubClient: PublicClient,
+  hubAddress: Address,
+  params: {
+    chainSlug: string
+    currencies: string[]
+    owner: string
+    ownerChainSlug: string
+    vmType?: string
+  }
+): Promise<Record<string, bigint>> {
+  const family = toSdkVmType(params.vmType ?? "evm")
+
+  const virtualAddress = generateAddress({
+    family,
+    chainId: params.ownerChainSlug,
+    address: params.owner,
+  })
+
+  const results = await Promise.allSettled(
+    params.currencies.map(
+      (currency) =>
+        hubClient.readContract({
+          address: hubAddress,
+          abi: RelayHubAbi,
+          functionName: "balanceOf",
+          args: [
+            virtualAddress,
+            generateTokenId({
+              family,
+              chainId: params.chainSlug,
+              address: currency,
+            }),
+          ],
+        }) as Promise<bigint>
+    )
+  )
+
+  const balances: Record<string, bigint> = {}
+  for (let i = 0; i < params.currencies.length; i++) {
+    const result = results[i]
+    balances[params.currencies[i]] =
+      result.status === "fulfilled" ? result.value : 0n
+  }
+  return balances
 }
 
 /**

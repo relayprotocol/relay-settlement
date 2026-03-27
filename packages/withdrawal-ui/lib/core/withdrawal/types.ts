@@ -32,6 +32,7 @@ export interface WithdrawalConfig {
   chainSlug: string // chain slug = protocol chain ID (for API calls + hub address, e.g. "ethereum")
   currency: string
   decimals: number // token decimals (for amount conversion)
+  ownerAddress: string // wallet address matching the chain's VM type
   ownerChainId: string // numeric (for wallet)
   ownerChainSlug: string // slug = protocol chain ID (for API + hub address)
   vmType: string // solver vmType shortcode (e.g. "evm")

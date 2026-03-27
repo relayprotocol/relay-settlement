@@ -3,15 +3,7 @@ import type { EvmTransactionData } from "./types"
 
 /**
  * Per-VM transaction submission — dispatches to the correct wallet method.
- *
- * | VM              | Transaction format                                    |
- * |-----------------|-------------------------------------------------------|
- * | EVM             | { from, to, data, value, chainId, gas, ... }          |
- * | Solana          | { instructions, addressLookupTableAddresses }          |
- * | Bitcoin         | { psbt }                                              |
- * | Tron            | { parameter, type }                                   |
- * | Sui             | { data }                                              |
- * | Hyperliquid     | { action, nonce, eip712Types, signer, signature, ... }|
+ * Returns the submitted tx hash.
  */
 export async function submitTransaction(
   vmType: string,
@@ -26,19 +18,19 @@ export async function submitTransaction(
       )
 
     case "svm":
-      // TODO: Solana — build Transaction from instructions, wallet.sendTransaction()
+      // TODO: Solana — build Transaction, wallet.sendTransaction(), confirmTransaction()
       throw new Error("Solana transaction submission not yet supported")
 
     case "bvm":
-      // TODO: Bitcoin — sign PSBT, broadcast
+      // TODO: Bitcoin — sign PSBT, broadcast, wait for confirmation
       throw new Error("Bitcoin transaction submission not yet supported")
 
     case "tvm":
-      // TODO: Tron — tronWeb.trx.sendTransaction()
+      // TODO: Tron — tronWeb.trx.sendTransaction(), wait for confirmation
       throw new Error("Tron transaction submission not yet supported")
 
     case "suivm":
-      // TODO: Sui — wallet.signAndExecuteTransactionBlock()
+      // TODO: Sui — wallet.signAndExecuteTransactionBlock() (includes confirmation)
       throw new Error("Sui transaction submission not yet supported")
 
     case "hypevm":

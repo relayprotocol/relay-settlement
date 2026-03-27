@@ -1,11 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useAccount, useSwitchChain } from "wagmi"
+import { useSwitchChain } from "wagmi"
 import { formatUnits, parseUnits } from "viem"
 import { useWithdrawal } from "@/lib/react/useWithdrawal"
+import { showToast } from "./Toast"
 import { StepTimeline, type StepInfo } from "./StepTimeline"
-import { CopyableAddress } from "./CopyableAddress"
 import {
   getChain,
   findCurrency,
@@ -17,6 +17,34 @@ import {
   type WithdrawalStep,
   FAIL_REASON_MESSAGES,
 } from "@/lib/core/withdrawal/types"
+import { ChainIcon, TokenIcon } from "./ChainTokenIcon"
+import { CheckCircleIcon, ErrorCircleIcon } from "./Icons"
+
+/** A row with label + truncated value that copies on click */
+function CopyRow({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false)
+  const truncated = value ? `${value.slice(0, 6)}...${value.slice(-4)}` : "—"
+
+  const handleCopy = async () => {
+    if (!value) return
+    await navigator.clipboard.writeText(value)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
+  return (
+    <div
+      className="flex justify-between cursor-pointer group"
+      onClick={handleCopy}
+      title={value}
+    >
+      <span className="text-subtle">{label}</span>
+      <span className="font-mono text-xs text-default group-hover:text-primary transition-colors">
+        {copied ? "Copied!" : truncated}
+      </span>
+    </div>
+  )
+}
 
 const STEPS: StepInfo[] = [
   {
@@ -68,11 +96,26 @@ interface WithdrawalFlowProps extends WithdrawalConfig {
 }
 
 export function WithdrawalFlow(props: WithdrawalFlowProps) {
-  const { chainId, currency, ownerChainId, resumeJobId } = props
-  const { address } = useAccount()
+  const { chainId, currency, ownerAddress, vmType, resumeJobId } = props
   const { switchChainAsync } = useSwitchChain()
   const { state, hubBalance, prepare, sign, resume, submit, reset } =
     useWithdrawal(props)
+  const finalError = state.failReason
+    ? FAIL_REASON_MESSAGES[state.failReason]
+    : state.error
+  const doneToastError = state.step === "done" ? finalError : undefined
+  const submittingToastState =
+    state.step === "submitting"
+      ? state.txHash
+        ? "submitted"
+        : "ready"
+      : undefined
+  const toastState =
+    state.step === "polling"
+      ? (state.jobStatus ?? "polling")
+      : state.step === "submitting"
+        ? (submittingToastState ?? "submitting")
+        : state.step
 
   // Resume pending job on mount
   useEffect(() => {
@@ -81,12 +124,89 @@ export function WithdrawalFlow(props: WithdrawalFlowProps) {
     }
   }, [resumeJobId]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Toast on step transitions
+  useEffect(() => {
+    const toasts: Record<
+      string,
+      {
+        title: string
+        description?: string
+        type: "info" | "success" | "error"
+      }
+    > = {
+      preparing: {
+        title: "Preparing",
+        description: "Requesting withdrawal details from solver...",
+        type: "info",
+      },
+      signing: {
+        title: "Signature Required",
+        description: "Please confirm the signature in your wallet.",
+        type: "info",
+      },
+      executing: {
+        title: "Submitting",
+        description: "Sending signed request to solver...",
+        type: "info",
+      },
+      initiating: {
+        title: "Initiating Transfer",
+        description: "The solver is preparing your withdrawal.",
+        type: "info",
+      },
+      attesting: {
+        title: "Waiting for Attestation",
+        description: "The withdrawal is waiting for attestation.",
+        type: "info",
+      },
+      polling: {
+        title: "Processing",
+        description:
+          "Your withdrawal is being processed. This may take a few minutes.",
+        type: "info",
+      },
+      submitting: {
+        title:
+          submittingToastState === "submitted"
+            ? "Transaction Submitted"
+            : "Ready to Submit",
+        description:
+          submittingToastState === "submitted"
+            ? "Waiting for on-chain confirmation."
+            : "Submit the on-chain transaction to receive your funds.",
+        type: submittingToastState === "submitted" ? "info" : "success",
+      },
+      done: doneToastError
+        ? {
+            title: "Withdrawal Failed",
+            description: doneToastError,
+            type: "error",
+          }
+        : {
+            title: "Withdrawal Complete",
+            description: "Your funds have been sent to your wallet.",
+            type: "success",
+          },
+    }
+    const toast = toasts[toastState]
+    if (toast)
+      showToast(toast.title, {
+        description: toast.description,
+        type: toast.type,
+      })
+  }, [doneToastError, submittingToastState, toastState])
+
   const [amount, setAmount] = useState("")
+  const [customRecipient, setCustomRecipient] = useState("")
+  const [showCustomRecipient, setShowCustomRecipient] = useState(false)
   const [chainInfo, setChainInfo] = useState<ChainInfo | null>(null)
   const [currencyInfo, setCurrencyInfo] = useState<ChainCurrency | null>(null)
 
-  // Recipient defaults to connected wallet
-  const recipient = address ?? ""
+  // Recipient: custom or connected wallet
+  const recipient =
+    showCustomRecipient && customRecipient
+      ? customRecipient
+      : (ownerAddress ?? "")
 
   // Fetch chain and currency info from solver API
   useEffect(() => {
@@ -98,15 +218,43 @@ export function WithdrawalFlow(props: WithdrawalFlowProps) {
 
   const currentStepIndex = stepToIndex(state.step)
   const tokenSymbol = currencyInfo?.symbol ?? "tokens"
-  const tokenDecimals = currencyInfo?.decimals ?? 18
-  const [loading, setLoading] = useState(false)
+  const tokenDecimals = currencyInfo?.decimals ?? props.decimals
+  const isRawAmountMode = props.decimals === 0
+  const [actionLoading, setActionLoading] = useState(false)
 
-  // Default amount to max when balance loads
+  // Validate amount — used for both error display and button disable
+  const amountValidation = (() => {
+    if (!amount) return { exceedsBalance: false, invalidFormat: false }
+    try {
+      parseUnits(amount, tokenDecimals)
+      const exceedsBalance =
+        hubBalance !== null && parseUnits(amount, tokenDecimals) > hubBalance
+      return { exceedsBalance, invalidFormat: false }
+    } catch {
+      return { exceedsBalance: false, invalidFormat: true }
+    }
+  })()
+  const hasAmountError =
+    amountValidation.exceedsBalance || amountValidation.invalidFormat
+
+  // Display amount: user input > validated amount from state (for resume)
+  const displayAmount =
+    amount ||
+    (state.validatedAmount
+      ? formatUnits(BigInt(state.validatedAmount), tokenDecimals)
+      : "")
+
+  // Default amount to max when balance loads — only on idle step
   useEffect(() => {
-    if (hubBalance !== null && hubBalance > 0n && !amount) {
+    if (
+      state.step === "idle" &&
+      hubBalance !== null &&
+      hubBalance > 0n &&
+      !amount
+    ) {
       setAmount(formatUnits(hubBalance, tokenDecimals))
     }
-  }, [hubBalance, tokenDecimals]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hubBalance, tokenDecimals, state.step]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleMax = () => {
     if (hubBalance !== null) {
@@ -121,30 +269,61 @@ export function WithdrawalFlow(props: WithdrawalFlowProps) {
 
   const handleSign = async () => {
     if (!amount || !recipient) return
-    setLoading(true)
+    setActionLoading(true)
     await sign(amount, recipient)
-    setLoading(false)
+    setActionLoading(false)
   }
 
   const handleSubmit = async () => {
-    setLoading(true)
-    // Check chain and switch if needed
-    if (state.transaction) {
+    setActionLoading(true)
+    // Chain switch only applies to EVM — abort on any failure to avoid wrong-chain submit
+    if (vmType === "evm" && state.transaction) {
       try {
         await switchChainAsync({ chainId: state.transaction.chainId })
       } catch {
-        // User rejected chain switch — abort to avoid submitting on wrong chain
-        setLoading(false)
+        setActionLoading(false)
         return
       }
     }
     await submit()
-    setLoading(false)
+    setActionLoading(false)
   }
+
+  // Shared withdrawal summary — used in Sign, Processing, Submit, Done steps
+  const withdrawalSummary = (extra?: { txHash?: string }) => (
+    <div className="p-4 bg-gray-50 rounded-xl text-sm space-y-3">
+      {/* Amount — prominent display */}
+      <div className="flex items-center gap-2 pb-2 border-b border-gray-200">
+        <TokenIcon
+          logoURI={currencyInfo?.logoURI}
+          symbol={tokenSymbol}
+          size={24}
+        />
+        <span className="text-lg font-bold text-default">
+          {displayAmount || "—"} {tokenSymbol}
+        </span>
+      </div>
+
+      {/* Details — consistent label:value rows */}
+      <div className="space-y-2 text-sm">
+        <div className="flex justify-between">
+          <span className="text-subtle">Network</span>
+          <span className="inline-flex items-center gap-1.5">
+            <ChainIcon chainId={Number(chainId)} size={14} />
+            <span className="text-default">
+              {chainInfo?.displayName ?? chainId}
+            </span>
+          </span>
+        </div>
+        <CopyRow label="Recipient" value={recipient} />
+        {extra?.txHash && <CopyRow label="Transaction" value={extra.txHash} />}
+      </div>
+    </div>
+  )
 
   const handleReset = () => {
     setAmount("")
-    setLoading(false)
+    setActionLoading(false)
     reset()
   }
 
@@ -155,6 +334,18 @@ export function WithdrawalFlow(props: WithdrawalFlowProps) {
 
       {/* Step Content */}
       <div className="card space-y-4">
+        {/* Error banner — inside card, always visible */}
+        {state.error && state.step !== "done" && (
+          <div className="p-3 rounded-xl border border-red-200 bg-red-50 overflow-hidden">
+            <div className="flex items-start gap-3">
+              <ErrorCircleIcon className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <span className="text-sm text-error break-words min-w-0">
+                {state.error}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Step 1: Input */}
         {state.step === "idle" || state.step === "preparing" ? (
           <>
@@ -166,19 +357,34 @@ export function WithdrawalFlow(props: WithdrawalFlowProps) {
             {/* Hub Balance */}
             {hubBalance !== null && (
               <div className="p-3 bg-gray-50 rounded-xl flex justify-between items-center">
-                <div>
-                  <span className="text-sm text-subtle">Available: </span>
+                <span className="text-sm text-subtle">Available</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <TokenIcon
+                    logoURI={currencyInfo?.logoURI}
+                    symbol={tokenSymbol}
+                    size={16}
+                  />
                   <span className="text-sm font-mono font-medium text-default">
                     {formatUnits(hubBalance, tokenDecimals)} {tokenSymbol}
                   </span>
-                </div>
+                </span>
               </div>
             )}
 
             {/* Amount */}
             <div>
+              {isRawAmountMode && (
+                <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 mb-3">
+                  <p className="text-xs text-amber-800">
+                    Token decimals unknown. Enter the raw amount in smallest
+                    units (e.g. wei).
+                  </p>
+                </div>
+              )}
               <div className="flex justify-between items-center mb-1">
-                <label className="text-sm text-subtle">Amount</label>
+                <label className="text-sm text-subtle">
+                  {isRawAmountMode ? "Raw Amount" : "Amount"}
+                </label>
                 {hubBalance !== null && hubBalance > 0n && (
                   <button
                     type="button"
@@ -189,57 +395,74 @@ export function WithdrawalFlow(props: WithdrawalFlowProps) {
                   </button>
                 )}
               </div>
-              {(() => {
-                let exceedsBalance = false
-                let invalidFormat = false
-                try {
-                  if (amount) {
-                    parseUnits(amount, tokenDecimals) // validate format
-                    if (hubBalance !== null) {
-                      exceedsBalance =
-                        parseUnits(amount, tokenDecimals) > hubBalance
+              <>
+                <div className="relative">
+                  <input
+                    type="text"
+                    className={`input font-mono pr-16 ${hasAmountError ? "border-red-300 focus:border-red-400" : ""}`}
+                    placeholder={
+                      isRawAmountMode ? "1000000000000000000" : "0.00"
                     }
-                  }
-                } catch {
-                  invalidFormat = !!amount
-                }
-                const hasError = exceedsBalance || invalidFormat
-                return (
-                  <>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        className={`input font-mono pr-16 ${hasError ? "border-red-300 focus:border-red-400" : ""}`}
-                        placeholder="0.00"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        disabled={state.step === "preparing"}
-                      />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-subtle">
-                        {tokenSymbol}
-                      </span>
-                    </div>
-                    {exceedsBalance && (
-                      <p className="text-xs text-error mt-1">
-                        Exceeds available balance
-                      </p>
-                    )}
-                    {invalidFormat && (
-                      <p className="text-xs text-error mt-1">Invalid amount</p>
-                    )}
-                  </>
-                )
-              })()}
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    disabled={state.step === "preparing"}
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-subtle">
+                    {tokenSymbol}
+                  </span>
+                </div>
+                {amountValidation.exceedsBalance && (
+                  <p className="text-xs text-error mt-1">
+                    Exceeds available balance
+                  </p>
+                )}
+                {amountValidation.invalidFormat && (
+                  <p className="text-xs text-error mt-1">Invalid amount</p>
+                )}
+              </>
             </div>
 
-            {/* Recipient (read-only, shows connected wallet) */}
+            {/* Recipient */}
             <div>
-              <label className="text-sm text-subtle block mb-1">
-                Withdraw to
-              </label>
-              <div className="p-3 bg-gray-50 rounded-input font-mono text-sm text-default">
-                {recipient}
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-sm text-subtle">Withdraw to</label>
+                <button
+                  type="button"
+                  className="text-xs text-primary font-medium hover:underline"
+                  onClick={() => {
+                    setShowCustomRecipient(!showCustomRecipient)
+                    if (showCustomRecipient) setCustomRecipient("")
+                  }}
+                >
+                  {showCustomRecipient ? "Use my wallet" : "Send to other"}
+                </button>
               </div>
+              {showCustomRecipient ? (
+                <input
+                  type="text"
+                  className="input font-mono text-sm"
+                  placeholder="Enter recipient address"
+                  value={customRecipient}
+                  onChange={(e) => setCustomRecipient(e.target.value)}
+                  disabled={state.step === "preparing"}
+                />
+              ) : (
+                <div className="p-3 bg-gray-50 rounded-xl flex justify-between items-center">
+                  <span className="text-xs text-subtle">Your wallet</span>
+                  <span
+                    className="font-mono text-xs text-default hover:text-primary cursor-pointer transition-colors"
+                    title={ownerAddress}
+                    onClick={async () => {
+                      if (ownerAddress)
+                        await navigator.clipboard.writeText(ownerAddress)
+                    }}
+                  >
+                    {ownerAddress
+                      ? `${ownerAddress.slice(0, 6)}...${ownerAddress.slice(-4)}`
+                      : "—"}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Withdraw Button */}
@@ -250,16 +473,7 @@ export function WithdrawalFlow(props: WithdrawalFlowProps) {
                 state.step === "preparing" ||
                 !amount ||
                 !recipient ||
-                (() => {
-                  try {
-                    return (
-                      hubBalance !== null &&
-                      parseUnits(amount, tokenDecimals) > hubBalance
-                    )
-                  } catch {
-                    return true
-                  }
-                })()
+                hasAmountError
               }
             >
               {state.step === "preparing" ? (
@@ -279,35 +493,19 @@ export function WithdrawalFlow(props: WithdrawalFlowProps) {
           <>
             <h3 className="font-heading font-bold text-lg">Review & Sign</h3>
 
-            <div className="space-y-2 p-3 bg-gray-50 rounded-xl text-sm">
-              <div className="flex justify-between">
-                <span className="text-subtle">Chain</span>
-                <span>{chainInfo?.displayName ?? chainId}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-subtle">Amount</span>
-                <span className="font-mono">
-                  {amount} {tokenSymbol}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-subtle">Recipient</span>
-                <CopyableAddress value={recipient} />
-              </div>
-              {state.nonce && (
-                <div className="flex justify-between">
-                  <span className="text-subtle">Nonce</span>
-                  <CopyableAddress value={state.nonce} />
-                </div>
-              )}
-            </div>
+            {withdrawalSummary()}
+
+            <p className="text-xs text-subtle">
+              You will be asked to sign a message to authorize this withdrawal.
+              This is a free signature — no gas fee required.
+            </p>
 
             <button
               className="btn-primary w-full"
               onClick={handleSign}
-              disabled={loading}
+              disabled={actionLoading}
             >
-              {loading ? (
+              {actionLoading ? (
                 <>
                   <div className="spinner !w-4 !h-4 !border-white/30 !border-t-white" />
                   Signing...
@@ -324,15 +522,22 @@ export function WithdrawalFlow(props: WithdrawalFlowProps) {
           <>
             <h3 className="font-heading font-bold text-lg">Processing</h3>
 
-            <div className="flex items-center gap-3 p-4">
+            {withdrawalSummary()}
+
+            {/* Status progress */}
+            <div className="flex items-center gap-3 p-3">
               <div className="spinner" />
               <div>
                 <p className="text-default font-medium">
                   {state.jobStatus === "initiating"
-                    ? "Initiating withdrawal..."
+                    ? "Initiating transfer..."
                     : state.jobStatus === "attesting"
                       ? "Waiting for attestation..."
-                      : "Processing..."}
+                      : "Processing withdrawal..."}
+                </p>
+                <p className="text-xs text-subtle mt-1">
+                  This may take a few minutes. You can safely close this page
+                  and come back later.
                 </p>
               </div>
             </div>
@@ -346,42 +551,47 @@ export function WithdrawalFlow(props: WithdrawalFlowProps) {
               Submit Transaction
             </h3>
 
-            <div className="space-y-2 p-3 bg-gray-50 rounded-xl text-sm">
-              <div className="flex justify-between">
-                <span className="text-subtle">Chain</span>
-                <span className="font-mono">{state.transaction.chainId}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-subtle">To</span>
-                <CopyableAddress value={state.transaction.to} />
-              </div>
-              <div className="flex justify-between">
-                <span className="text-subtle">Value</span>
-                <span className="font-mono">
-                  {state.transaction.value === "0"
-                    ? "0"
-                    : formatUnits(BigInt(state.transaction.value), 18)}{" "}
-                  {chainInfo?.currency.symbol ?? "ETH"}
-                </span>
-              </div>
-            </div>
+            {withdrawalSummary(
+              state.txHash ? { txHash: state.txHash } : undefined
+            )}
 
-            <button
-              className="btn-primary w-full"
-              onClick={handleSubmit}
-              disabled={!state.transaction || loading}
-            >
-              {loading ? (
-                <>
-                  <div className="spinner !w-4 !h-4 !border-white/30 !border-t-white" />
-                  Submitting...
-                </>
-              ) : state.error ? (
-                "Retry Transaction"
-              ) : (
-                "Submit Transaction"
-              )}
-            </button>
+            {state.txHash ? (
+              <div className="flex items-center gap-3 p-3">
+                <div className="spinner" />
+                <div>
+                  <p className="text-default font-medium">
+                    Transaction submitted
+                  </p>
+                  <p className="text-xs text-subtle mt-1">
+                    Waiting for on-chain confirmation.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-subtle">
+                Your withdrawal is ready. Submit the on-chain transaction to
+                receive your funds. This will require a small gas fee.
+              </p>
+            )}
+
+            {state.txHash ? null : (
+              <button
+                className="btn-primary w-full"
+                onClick={handleSubmit}
+                disabled={!state.transaction || actionLoading}
+              >
+                {actionLoading ? (
+                  <>
+                    <div className="spinner !w-4 !h-4 !border-white/30 !border-t-white" />
+                    Submitting...
+                  </>
+                ) : state.error ? (
+                  "Retry Transaction"
+                ) : (
+                  "Submit Transaction"
+                )}
+              </button>
+            )}
           </>
         ) : null}
 
@@ -391,96 +601,40 @@ export function WithdrawalFlow(props: WithdrawalFlowProps) {
             {state.txHash ? (
               <>
                 <div className="flex items-center gap-3">
-                  <svg
-                    className="w-6 h-6 text-green-500"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
+                  <CheckCircleIcon />
                   <h3 className="font-heading font-bold text-lg text-green-700">
-                    Withdrawal Submitted
+                    Withdrawal Complete
                   </h3>
                 </div>
 
-                <div className="p-3 bg-gray-50 rounded-xl space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-subtle">Tx Hash</span>
-                    <CopyableAddress value={state.txHash} />
-                  </div>
-                </div>
+                {withdrawalSummary({ txHash: state.txHash })}
 
-                {(() => {
-                  const fallbackExplorers: Record<string, string> = {
-                    "1": "https://etherscan.io",
-                    "8453": "https://basescan.org",
-                    "42161": "https://arbiscan.io",
-                    "10": "https://optimistic.etherscan.io",
-                    "137": "https://polygonscan.com",
-                  }
-                  const url =
-                    chainInfo?.explorerUrl ?? fallbackExplorers[chainId]
-                  return url ? (
-                    <a
-                      href={`${url}/tx/${state.txHash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn-secondary w-full text-center"
-                    >
-                      View on {chainInfo?.displayName ?? ""} Explorer
-                    </a>
-                  ) : null
-                })()}
+                {chainInfo?.explorerUrl && (
+                  <a
+                    href={`${chainInfo.explorerUrl}/tx/${state.txHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-secondary w-full text-center"
+                  >
+                    View on {chainInfo.displayName} Explorer
+                  </a>
+                )}
               </>
             ) : state.error || state.failReason ? (
               <>
                 <div className="flex items-center gap-3">
-                  <svg
-                    className="w-6 h-6 text-red-500"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
+                  <ErrorCircleIcon />
                   <h3 className="font-heading font-bold text-lg text-red-700">
                     Withdrawal Failed
                   </h3>
                 </div>
-                <p className="text-sm text-error">
-                  {state.failReason
-                    ? FAIL_REASON_MESSAGES[state.failReason]
-                    : state.error}
-                </p>
+                <p className="text-sm text-error">{finalError}</p>
               </>
             ) : (
               <div className="flex items-center gap-3">
-                <svg
-                  className="w-6 h-6 text-green-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
+                <CheckCircleIcon />
                 <h3 className="font-heading font-bold text-lg text-green-700">
-                  Withdrawal Executed
+                  Withdrawal Complete
                 </h3>
               </div>
             )}
@@ -491,30 +645,6 @@ export function WithdrawalFlow(props: WithdrawalFlowProps) {
           </>
         ) : null}
       </div>
-
-      {/* Error banner */}
-      {state.error && state.step !== "done" && (
-        <div className="card border border-red-200 bg-red-50 overflow-hidden">
-          <div className="flex items-start gap-3">
-            <svg
-              className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <span className="text-sm text-error break-words min-w-0">
-              {state.error}
-            </span>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

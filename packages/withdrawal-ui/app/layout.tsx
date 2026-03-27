@@ -1,7 +1,15 @@
 import type { Metadata } from "next"
 import { Inter, Chivo } from "next/font/google"
+import dynamic from "next/dynamic"
 import "./globals.css"
-import { Providers } from "./providers"
+import { ToastContainer } from "@/components/Toast"
+
+const Providers = dynamic(
+  () => import("./providers").then((m) => m.Providers),
+  {
+    ssr: false,
+  }
+)
 
 const inter = Inter({
   subsets: ["latin"],
@@ -31,6 +39,7 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} ${chivo.variable}`}>
       <body className="font-sans bg-neutral-50 text-neutral-900 antialiased min-h-screen">
         <Providers>{children}</Providers>
+        <ToastContainer />
       </body>
     </html>
   )

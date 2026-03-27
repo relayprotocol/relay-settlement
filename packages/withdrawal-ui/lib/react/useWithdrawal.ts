@@ -1,12 +1,14 @@
 "use client"
 
 import { useState, useCallback, useRef, useEffect } from "react"
-import { useAccount, useWalletClient } from "wagmi"
+import { usePublicClient, useWalletClient } from "wagmi"
+import { useUserWallets } from "@dynamic-labs/sdk-react-core"
 import { parseUnits } from "viem"
 import {
   type WithdrawalConfig,
   type WithdrawalState,
   type WithdrawalStep,
+  FAIL_REASON_MESSAGES,
 } from "@/lib/core/withdrawal/types"
 import {
   prepareWithdrawal,
@@ -25,6 +27,7 @@ import {
   getJob,
 } from "@/lib/core/withdrawal/session"
 import { HUB_CHAIN, hubClient } from "@/lib/config"
+import { toDynamicChain } from "@/lib/core/withdrawal/vmTypes"
 
 const INITIAL_STATE: WithdrawalState = { step: "idle" }
 const POLL_INTERVAL = 5_000
@@ -32,28 +35,49 @@ const POLL_INTERVAL_BACKOFF = 15_000
 const POLL_TIMEOUT = 30 * 60 * 1000 // 30 minutes max polling
 
 export function useWithdrawal(config: WithdrawalConfig) {
-  const { address } = useAccount()
-  const { data: walletClient } = useWalletClient()
+  const withdrawalChainClient = usePublicClient({
+    chainId: Number(config.chainId),
+  })
+  const { data: evmWalletClient } = useWalletClient()
+  const userWallets = useUserWallets()
+
+  // ownerAddress from config — the correct wallet address for this chain's VM type
+  const ownerAddress = config.ownerAddress
+
+  // Get the correct wallet for this VM type
+  // EVM: use wagmi walletClient (bridged from Dynamic)
+  // Non-EVM: use Dynamic wallet directly
+  const activeWallet = (() => {
+    if (config.vmType === "evm" || config.vmType === "hypevm") {
+      return evmWalletClient
+    }
+    const dynamicChain = toDynamicChain(config.vmType)
+    if (!dynamicChain) return null
+    const wallet = userWallets.find(
+      (w) => w.chain === dynamicChain && w.address === ownerAddress
+    )
+    return wallet ?? null
+  })()
 
   const [state, setState] = useState<WithdrawalState>(INITIAL_STATE)
   const [hubBalance, setHubBalance] = useState<bigint | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Fetch hub balance when address or config changes
+  // Fetch hub balance
   useEffect(() => {
-    if (!address) return
+    if (!ownerAddress) return
     setHubBalance(null)
     getHubBalance(hubClient, HUB_CHAIN.relayHubAddress, {
       chainSlug: config.chainSlug,
       currency: config.currency,
-      owner: address,
+      owner: ownerAddress,
       ownerChainSlug: config.ownerChainSlug,
       vmType: config.vmType,
     })
       .then(setHubBalance)
       .catch(() => setHubBalance(null))
   }, [
-    address,
+    ownerAddress,
     config.chainSlug,
     config.currency,
     config.ownerChainSlug,
@@ -71,6 +95,15 @@ export function useWithdrawal(config: WithdrawalConfig) {
     setState((prev) => ({ ...prev, error }))
   }, [])
 
+  const toErrorMessage = useCallback((err: unknown) => {
+    const message = err instanceof Error ? err.message : "Transaction failed"
+    return message.includes("User denied") || message.includes("User rejected")
+      ? "Transaction rejected"
+      : message.length > 100
+        ? message.slice(0, 100) + "..."
+        : message
+  }, [])
+
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
       clearInterval(pollRef.current)
@@ -78,10 +111,41 @@ export function useWithdrawal(config: WithdrawalConfig) {
     }
   }, [])
 
+  const waitForTransactionConfirmation = useCallback(
+    async (txHash: string, jobId?: string) => {
+      if (!withdrawalChainClient) return
+
+      try {
+        const receipt = await withdrawalChainClient.waitForTransactionReceipt({
+          hash: txHash as `0x${string}`,
+        })
+
+        if (receipt.status === "reverted") {
+          const error = "Transaction reverted on-chain"
+          setState((prev) => ({ ...prev, step: "done", txHash, error }))
+          if (jobId) updateJobStatus(jobId, "failed", { txHash, error })
+          return
+        }
+
+        setState((prev) => ({
+          ...prev,
+          step: "done",
+          txHash,
+          error: undefined,
+        }))
+        if (jobId) updateJobStatus(jobId, "executed", { txHash })
+      } catch (err) {
+        const error = toErrorMessage(err)
+        setState((prev) => ({ ...prev, step: "submitting", txHash, error }))
+      }
+    },
+    [toErrorMessage, withdrawalChainClient]
+  )
+
   /** Step 1: Prepare — call API to get nonce */
   const prepare = useCallback(
     async (amount: string, recipient: string) => {
-      if (!address) return
+      if (!ownerAddress) return
       setStep("preparing")
 
       try {
@@ -91,7 +155,7 @@ export function useWithdrawal(config: WithdrawalConfig) {
           currency: config.currency,
           amount: rawAmount,
           ownerChainId: config.ownerChainSlug,
-          owner: address,
+          owner: ownerAddress,
           recipient,
         }
         const result = await prepareWithdrawal(params)
@@ -105,13 +169,18 @@ export function useWithdrawal(config: WithdrawalConfig) {
         setError(err instanceof Error ? err.message : "Prepare failed")
       }
     },
-    [address, config, setStep, setError]
+    [ownerAddress, config, setStep, setError]
   )
 
   /** Step 2: Sign — compute digest, sign with wallet */
   const sign = useCallback(
     async (_amount: string, recipient: string) => {
-      if (!walletClient || !address || !state.nonce || !state.validatedAmount)
+      if (
+        !activeWallet ||
+        !ownerAddress ||
+        !state.nonce ||
+        !state.validatedAmount
+      )
         return
       setStep("signing")
 
@@ -124,7 +193,7 @@ export function useWithdrawal(config: WithdrawalConfig) {
           currency: config.currency,
           amount,
           ownerChainId: config.ownerChainSlug,
-          owner: address,
+          owner: ownerAddress,
           recipient,
           nonce: state.nonce,
           additionalData: state.additionalData,
@@ -133,7 +202,7 @@ export function useWithdrawal(config: WithdrawalConfig) {
         const signature = await signWithdrawalDigest(
           config.vmType,
           digest,
-          walletClient
+          activeWallet
         )
 
         // Step 3: Execute — submit signature
@@ -143,7 +212,7 @@ export function useWithdrawal(config: WithdrawalConfig) {
           currency: config.currency,
           amount,
           ownerChainId: config.ownerChainSlug,
-          owner: address,
+          owner: ownerAddress,
           recipient,
           nonce: state.nonce,
           additionalData: state.additionalData,
@@ -153,7 +222,7 @@ export function useWithdrawal(config: WithdrawalConfig) {
         // Persist job for session recovery
         saveWithdrawalJob(
           result.jobId,
-          { ...config, amount, owner: address, recipient },
+          { ...config, amount, owner: ownerAddress, recipient },
           { nonce: state.nonce, validatedAmount: amount }
         )
 
@@ -165,8 +234,8 @@ export function useWithdrawal(config: WithdrawalConfig) {
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
-      walletClient,
-      address,
+      activeWallet,
+      ownerAddress,
       config,
       state.nonce,
       state.validatedAmount,
@@ -211,30 +280,41 @@ export function useWithdrawal(config: WithdrawalConfig) {
               step: "submitting",
               transaction: result.transaction,
             }))
+            return
           } else if (result.status === "executed") {
             stopPolling()
             updateJobStatus(jobId, "executed")
             setState((prev) => ({ ...prev, step: "done" }))
+            return
           } else if (result.status === "expired") {
             stopPolling()
-            updateJobStatus(jobId, "expired")
+            updateJobStatus(jobId, "expired", {
+              error: "Withdrawal expired",
+            })
             setState((prev) => ({
               ...prev,
               step: "done",
               failReason: "internal_error",
               error: "Withdrawal expired",
             }))
+            return
           } else if (result.status === "failed") {
             stopPolling()
-            updateJobStatus(jobId, "failed")
+            updateJobStatus(jobId, "failed", {
+              error: result.reason
+                ? FAIL_REASON_MESSAGES[result.reason]
+                : "Withdrawal failed",
+              failReason: result.reason,
+            })
             setState((prev) => ({
               ...prev,
               step: "done",
               failReason: result.reason,
               error: result.reason ?? "Withdrawal failed",
             }))
+            return
           }
-          // Reset backoff on success
+          // Still in-progress — reset backoff to normal rate if needed
           if (interval !== POLL_INTERVAL) {
             stopPolling()
             interval = POLL_INTERVAL
@@ -262,71 +342,88 @@ export function useWithdrawal(config: WithdrawalConfig) {
 
   /** Step 5: Submit on-chain transaction — dispatched per VM type */
   const submit = useCallback(async () => {
-    if (!walletClient || !state.transaction) return
+    if (!activeWallet || !state.transaction) return
     setStep("submitting")
 
     try {
       const hash = await submitTransaction(
         config.vmType,
         state.transaction,
-        walletClient
+        activeWallet
       )
-
-      setState((prev) => ({ ...prev, txHash: hash, step: "done" }))
+      setState((prev) => ({
+        ...prev,
+        step: "submitting",
+        txHash: hash,
+        error: undefined,
+      }))
       if (state.jobId)
-        updateJobStatus(state.jobId, "executed", { txHash: hash })
+        updateJobStatus(state.jobId, "submitted", {
+          txHash: hash,
+          transaction: state.transaction,
+        })
+      await waitForTransactionConfirmation(hash, state.jobId)
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Transaction failed"
-      const short =
-        message.includes("User denied") || message.includes("User rejected")
-          ? "Transaction rejected"
-          : message.length > 100
-            ? message.slice(0, 100) + "..."
-            : message
-      setError(short)
+      setError(toErrorMessage(err))
     }
   }, [
-    walletClient,
+    activeWallet,
     config.vmType,
     state.transaction,
     state.jobId,
     setStep,
     setError,
+    toErrorMessage,
+    waitForTransactionConfirmation,
   ])
 
   /** Resume a pending withdrawal by jobId — restore state from session */
   const resume = useCallback(
     (jobId: string) => {
       const stored = getJob(jobId)
-      if (stored?.status === "ready" && stored.txHash) {
-        // Tx already submitted — show done
-        setState({
-          ...INITIAL_STATE,
-          step: "done",
-          jobId,
-          txHash: stored.txHash,
-        })
-      } else if (stored?.status === "ready" && stored.transaction) {
-        // Ready to submit — skip polling, go straight to submit step
+      if (
+        stored?.status === "submitted" ||
+        (stored?.status === "ready" && stored.txHash)
+      ) {
         setState({
           ...INITIAL_STATE,
           step: "submitting",
           jobId,
           transaction: stored.transaction,
+          txHash: stored.txHash,
+          validatedAmount: stored.validatedAmount,
+          error: stored.error,
+        })
+        if (stored.txHash) {
+          void waitForTransactionConfirmation(stored.txHash, jobId)
+        }
+      } else if (stored?.status === "ready" && stored.transaction) {
+        setState({
+          ...INITIAL_STATE,
+          step: "submitting",
+          jobId,
+          transaction: stored.transaction,
+          validatedAmount: stored.validatedAmount,
         })
       } else if (
         stored?.status === "executed" ||
         stored?.status === "expired" ||
         stored?.status === "failed"
       ) {
-        // Already done — show final state
         setState({
           ...INITIAL_STATE,
           step: "done",
           jobId,
           txHash: stored.txHash,
-          error: stored.status === "expired" ? "Withdrawal expired" : undefined,
-          failReason: stored.status === "failed" ? "internal_error" : undefined,
+          validatedAmount: stored.validatedAmount,
+          error:
+            stored.error ??
+            (stored.status === "expired"
+              ? "Withdrawal expired"
+              : stored.status === "failed" && !stored.failReason
+                ? "Withdrawal failed"
+                : undefined),
+          failReason: stored.failReason,
         })
       } else {
         // Still processing — poll
@@ -334,14 +431,33 @@ export function useWithdrawal(config: WithdrawalConfig) {
         startPolling(jobId)
       }
     },
-    [startPolling]
+    [startPolling, waitForTransactionConfirmation]
   )
 
-  /** Reset to initial state */
+  /** Reset to initial state and refresh balance */
   const reset = useCallback(() => {
     stopPolling()
     setState(INITIAL_STATE)
-  }, [stopPolling])
+    setHubBalance(null)
+    if (ownerAddress) {
+      getHubBalance(hubClient, HUB_CHAIN.relayHubAddress, {
+        chainSlug: config.chainSlug,
+        currency: config.currency,
+        owner: ownerAddress,
+        ownerChainSlug: config.ownerChainSlug,
+        vmType: config.vmType,
+      })
+        .then(setHubBalance)
+        .catch(() => setHubBalance(null))
+    }
+  }, [
+    stopPolling,
+    ownerAddress,
+    config.chainSlug,
+    config.currency,
+    config.ownerChainSlug,
+    config.vmType,
+  ])
 
   // Cleanup polling on unmount
   useEffect(() => {
