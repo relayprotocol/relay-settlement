@@ -143,6 +143,9 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
   /// @notice The NEAR signer account address
   string public nearSigner;
 
+  /// @notice The wNEAR token account ID on NEAR (e.g. "wrap.near" or "wrap.testnet")
+  string public wrapNearTokenId;
+
   /// @notice The Aurora SDK NEAR instance
   NEAR public near;
 
@@ -233,11 +236,13 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
   /// @param _delay The global delay for withdrawal requests
   /// @param _signer The NEAR signer account
   /// @param _wNEAR The wNEAR token address
+  /// @param _wrapNearTokenId The wNEAR token account ID on NEAR (e.g. "wrap.near" or "wrap.testnet")
   constructor(
     address _owner,
     uint256 _delay,
     string memory _signer,
-    address _wNEAR
+    address _wNEAR,
+    string memory _wrapNearTokenId
   ) Ownable(_owner) EIP712(SIGNING_DOMAIN, SIGNATURE_VERSION) {
     // roles
     _setRoleAdmin(APPROVED_WITHDRAWER_ROLE, ADMIN_ROLE);
@@ -249,6 +254,7 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
     // set signer and Aurora SDK
     nearSigner = _signer;
     near = AuroraSdk.initNear(IERC20(_wNEAR)); // this does an unlimited approval for wNEAR for the precompile.
+    wrapNearTokenId = _wrapNearTokenId;
 
     // compute path at deployment
     signerPath = Strings.toHexString(uint160(address(this)), 20);
@@ -488,7 +494,7 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
 
   /// @notice withdraws the wNEAR balance of this contract
   /// from the Aurora contract to the NEAR network
-  function withdrawToNear(uint256 amount) external {
+  function withdrawToNear(uint256 amount) external onlyOwner {
     // withdraw wNEAR to the NEAR network
     IEvmERC20(address(near.wNEAR)).withdrawToNear(
       bytes(AuroraSdk.nearRepresentative(address(this))),
@@ -497,7 +503,7 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
 
     // unwrap the wNEAR on the NEAR network
     PromiseCreateArgs memory unwrapCall = near.call(
-      "wrap.testnet",
+      wrapNearTokenId,
       "near_withdraw",
       abi.encodePacked(
         // solhint-disable-next-line quotes

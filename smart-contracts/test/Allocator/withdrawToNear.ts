@@ -24,6 +24,17 @@ describe("Allocator withdrawToNear", function () {
     }
   }
 
+  it("should revert when called by non-owner", async () => {
+    const { otherAccounts, amount, allocator } = await loadFixture(
+      deployAllocatorWithSetup
+    )
+    const [nonOwner] = otherAccounts
+
+    await expect(
+      allocator.write.withdrawToNear([amount], { account: nonOwner.account })
+    ).to.be.rejectedWith("OwnableUnauthorizedAccount")
+  })
+
   it("should withdraw wNEAR to NEAR and emit WithdrawToNear event", async () => {
     const { owner, otherAccounts, amount, allocator, wNEAR, publicClient } =
       await loadFixture(deployAllocatorWithSetup)
@@ -45,8 +56,10 @@ describe("Allocator withdrawToNear", function () {
       account: someone.account,
     })
 
-    // send tx
-    const txHash = await allocator.write.withdrawToNear([amount])
+    // send tx (only owner can call)
+    const txHash = await allocator.write.withdrawToNear([amount], {
+      account: owner.account,
+    })
     const receipt = await publicClient.waitForTransactionReceipt({
       hash: txHash,
     })

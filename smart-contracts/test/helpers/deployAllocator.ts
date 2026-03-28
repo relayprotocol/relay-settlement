@@ -27,6 +27,7 @@ export async function deployAllocator(options?: {
     options?.delay ?? DEFAULT_DELAY, // delay
     "v1.signer.test", // signer
     wNEAR.address,
+    "wrap.testnet", // wrapNearTokenId
   ]
 
   const allocator = await hre.viem.deployContract(

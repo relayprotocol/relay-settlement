@@ -5,6 +5,7 @@ const RelayAllocatorModule = buildModule("RelayAllocator", (m) => {
   const delay = m.getParameter("delay")
   const signer = m.getParameter("signer")
   const wNEAR = m.getParameter("wNEAR")
+  const wrapNearTokenId = m.getParameter("wrapNearTokenId")
   const Codec = m.library("Codec")
   const AuroraXccUtils = m.library("AuroraXccUtils")
   const ChainSignatures = m.library("ChainSignatures")
@@ -19,7 +20,7 @@ const RelayAllocatorModule = buildModule("RelayAllocator", (m) => {
 
   const allocator = m.contract(
     "RelayAllocator",
-    [owner, delay, signer, wNEAR],
+    [owner, delay, signer, wNEAR, wrapNearTokenId],
     {
       libraries: {
         AuroraSdk,
