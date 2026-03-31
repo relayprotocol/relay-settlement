@@ -33,10 +33,18 @@ export function DepositPage() {
       })
       setAttestSuccess(true)
       setTransactionId("")
-    } catch (err) {
-      setAttestError(
-        err instanceof Error ? err.message : "Attest deposit failed"
-      )
+    } catch {
+      // Retry once before showing an error
+      try {
+        await attestDeposit({
+          chainId: selectedChain.id,
+          transactionId: transactionId.trim(),
+        })
+        setAttestSuccess(true)
+        setTransactionId("")
+      } catch {
+        setAttestError("Attestation failed. Please try again.")
+      }
     } finally {
       setAttesting(false)
     }
