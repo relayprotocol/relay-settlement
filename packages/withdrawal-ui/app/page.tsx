@@ -5,14 +5,14 @@ import { useAccount } from "wagmi"
 import { DynamicWidget } from "@dynamic-labs/sdk-react-core"
 import { WithdrawalPage } from "@/components/WithdrawalPage"
 import { DepositPage } from "@/components/DepositPage"
-import { RelayLogo, RelayIcon } from "@/components/RelayLogo"
+import { RelayLogo } from "@/components/RelayLogo"
 
 type Tab = "withdraw" | "deposit"
 
 export default function Home() {
   const { isConnected } = useAccount()
   const [mounted, setMounted] = useState(false)
-  const [tab, setTab] = useState<Tab>("withdraw")
+  const [tab, setTab] = useState<Tab>("deposit")
 
   useEffect(() => {
     setMounted(true)
@@ -28,12 +28,7 @@ export default function Home() {
         style={{ boxShadow: "0px 1px 3px rgba(0, 0, 0, 0.04)" }}
       >
         <div className="max-w-5xl mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <RelayIcon size={28} />
-            <span className="font-heading font-bold text-xl text-default">
-              Relay
-            </span>
-          </div>
+          <RelayLogo height={28} className="text-[#0D0C0D]" />
           <DynamicWidget />
         </div>
       </header>
@@ -47,6 +42,16 @@ export default function Home() {
               <div className="flex gap-1 p-1 bg-gray-100 rounded-xl">
                 <button
                   className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    tab === "deposit"
+                      ? "bg-white text-default shadow-sm"
+                      : "text-subtle hover:text-default"
+                  }`}
+                  onClick={() => setTab("deposit")}
+                >
+                  Attest
+                </button>
+                <button
+                  className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
                     tab === "withdraw"
                       ? "bg-white text-default shadow-sm"
                       : "text-subtle hover:text-default"
@@ -54,16 +59,6 @@ export default function Home() {
                   onClick={() => setTab("withdraw")}
                 >
                   Withdraw
-                </button>
-                <button
-                  className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
-                    tab === "deposit"
-                      ? "bg-white text-default shadow-sm"
-                      : "text-subtle hover:text-default"
-                  }`}
-                  onClick={() => setTab("deposit")}
-                >
-                  Deposit
                 </button>
               </div>
             </div>

@@ -47,8 +47,8 @@ export function DepositPage() {
       <div className="card space-y-4">
         <h3 className="font-heading font-bold text-lg">Attest Deposit</h3>
         <p className="text-sm text-subtle">
-          Submit a deposit transaction for attestation so your Hub balance
-          updates faster.
+          Attest a deposit transaction in order to get your funds available on
+          the Relay chain.
         </p>
 
         {chainsLoading || chainsError ? (

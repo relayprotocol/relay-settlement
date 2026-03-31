@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   title: "Withdraw | Relay",
   description: "Relay Protocol Withdrawal UI",
   icons: {
-    icon: "/relay-logo.svg",
+    icon: "/favicon.ico",
   },
 }
 

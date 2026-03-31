@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { useAccount } from "wagmi"
 import { useUserWallets } from "@dynamic-labs/sdk-react-core"
 import { useDynamicModals } from "@dynamic-labs/sdk-react-core"
@@ -56,6 +57,8 @@ async function lookupToken(
 
 export function WithdrawalPage() {
   const { address } = useAccount()
+  const searchParams = useSearchParams()
+  const overrideWallet = searchParams.get("overrideWallet")
   const { setShowLinkNewWalletModal } = useDynamicModals()
   const { setWalletFilter } = useWalletFilter()
 
@@ -148,12 +151,15 @@ export function WithdrawalPage() {
     return wallet?.address ?? null
   }
 
-  const ownerAddress = selectedChain
-    ? getOwnerAddress(selectedChain.vmType)
-    : null
+  const ownerAddress = overrideWallet
+    ? overrideWallet
+    : selectedChain
+      ? getOwnerAddress(selectedChain.vmType)
+      : null
 
   // Preload hub balances when currencies + owner are available
   // Batches in chunks of 20 to avoid oversized multicalls
+  // Polls every 5 seconds to keep balances up to date
   useEffect(() => {
     setCurrencyBalances({})
     if (!selectedChain || !ownerAddress || currencies.length === 0) return
@@ -165,7 +171,7 @@ export function WithdrawalPage() {
     }
 
     let cancelled = false
-    ;(async () => {
+    const fetchAllBalances = async () => {
       for (const batch of batches) {
         if (cancelled) return
         try {
@@ -187,10 +193,13 @@ export function WithdrawalPage() {
           // continue with next batch
         }
       }
-    })()
+    }
+    fetchAllBalances()
+    const interval = setInterval(fetchAllBalances, 5_000)
 
     return () => {
       cancelled = true
+      clearInterval(interval)
     }
   }, [selectedChain, ownerAddress, currencies])
 
@@ -218,7 +227,7 @@ export function WithdrawalPage() {
         .catch(() => setHubBalance(0n))
     }
     fetchBalance()
-    const interval = setInterval(fetchBalance, 10_000)
+    const interval = setInterval(fetchBalance, 5_000)
     return () => clearInterval(interval)
   }, [selectedChain, selectedCurrency, ownerAddress, isWalletCompatible])
 
