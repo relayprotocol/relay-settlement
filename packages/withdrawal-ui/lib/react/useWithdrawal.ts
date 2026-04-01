@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback, useRef, useEffect } from "react"
+import { Connection } from "@solana/web3.js"
 import { usePublicClient, useWalletClient } from "wagmi"
 import { useUserWallets } from "@dynamic-labs/sdk-react-core"
 import { parseUnits } from "viem"
@@ -19,13 +20,18 @@ import {
   computeWithdrawalDigest,
   signWithdrawalDigest,
 } from "@/lib/core/withdrawal/signing"
-import { submitTransaction } from "@/lib/core/withdrawal/submit"
+import {
+  submitTransaction,
+  pollSolanaConfirmation,
+  pollTronConfirmation,
+} from "@/lib/core/withdrawal/submit"
 import { getHubBalance } from "@/lib/core/withdrawal/balance"
 import {
   saveWithdrawalJob,
   updateJobStatus,
   getJob,
 } from "@/lib/core/withdrawal/session"
+import { getChain } from "@/lib/core/withdrawal/chains"
 import { HUB_CHAIN, hubClient } from "@/lib/config"
 import { toDynamicChain } from "@/lib/core/withdrawal/vmTypes"
 
@@ -34,7 +40,11 @@ const POLL_INTERVAL = 5_000
 const POLL_INTERVAL_BACKOFF = 15_000
 const POLL_TIMEOUT = 30 * 60 * 1000 // 30 minutes max polling
 
-export function useWithdrawal(config: WithdrawalConfig) {
+export function useWithdrawal(
+  config: WithdrawalConfig,
+  options?: { testMode?: boolean }
+) {
+  const testMode = options?.testMode ?? false
   const withdrawalChainClient = usePublicClient({
     chainId: Number(config.chainId),
   })
@@ -63,9 +73,14 @@ export function useWithdrawal(config: WithdrawalConfig) {
   const [hubBalance, setHubBalance] = useState<bigint | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Fetch hub balance
+  // Fetch hub balance (or mock in testMode)
   useEffect(() => {
     if (!ownerAddress) return
+    if (testMode) {
+      // Mock 1 full unit of the token so the UI can proceed
+      setHubBalance(parseUnits("1", config.decimals))
+      return
+    }
     setHubBalance(null)
     getHubBalance(hubClient, HUB_CHAIN.relayHubAddress, {
       chainSlug: config.chainSlug,
@@ -77,9 +92,11 @@ export function useWithdrawal(config: WithdrawalConfig) {
       .then(setHubBalance)
       .catch(() => setHubBalance(null))
   }, [
+    testMode,
     ownerAddress,
     config.chainSlug,
     config.currency,
+    config.decimals,
     config.ownerChainSlug,
     config.vmType,
   ])
@@ -111,38 +128,83 @@ export function useWithdrawal(config: WithdrawalConfig) {
     }
   }, [])
 
+  /** Wait for on-chain confirmation — dispatched per VM type */
   const waitForTransactionConfirmation = useCallback(
     async (txHash: string, jobId?: string) => {
-      if (!withdrawalChainClient) return
+      const markDone = (error?: string) => {
+        setState((prev) => ({ ...prev, step: "done", txHash, error }))
+        if (jobId) {
+          if (error) updateJobStatus(jobId, "failed", { txHash, error })
+          else updateJobStatus(jobId, "executed", { txHash })
+        }
+      }
 
       try {
-        const receipt = await withdrawalChainClient.waitForTransactionReceipt({
-          hash: txHash as `0x${string}`,
-        })
-
-        if (receipt.status === "reverted") {
-          const error = "Transaction reverted on-chain"
-          setState((prev) => ({ ...prev, step: "done", txHash, error }))
-          if (jobId) updateJobStatus(jobId, "failed", { txHash, error })
-          return
+        switch (config.vmType) {
+          case "evm": {
+            if (!withdrawalChainClient) return
+            const receipt =
+              await withdrawalChainClient.waitForTransactionReceipt({
+                hash: txHash as `0x${string}`,
+              })
+            if (receipt.status === "reverted") {
+              markDone("Transaction reverted on-chain")
+              return
+            }
+            markDone()
+            return
+          }
+          case "svm": {
+            const chainInfo = await getChain(Number(config.chainId))
+            if (!chainInfo?.httpRpcUrl)
+              throw new Error("Solana RPC URL not available")
+            const connection = new Connection(chainInfo.httpRpcUrl, "confirmed")
+            try {
+              await pollSolanaConfirmation(connection, txHash)
+            } catch (err) {
+              markDone(
+                err instanceof Error ? err.message : "Transaction failed"
+              )
+              return
+            }
+            markDone()
+            return
+          }
+          case "tvm": {
+            const tronWeb =
+              (activeWallet as any)?.getTronWeb?.() ??
+              (globalThis as any).tronWeb
+            if (!tronWeb) throw new Error("TronWeb not available")
+            try {
+              await pollTronConfirmation(tronWeb, txHash)
+            } catch (err) {
+              markDone(
+                err instanceof Error ? err.message : "Transaction reverted"
+              )
+              return
+            }
+            markDone()
+            return
+          }
+          default:
+            // bvm, hypevm, suivm: solver tracks confirmation
+            markDone()
         }
-
-        setState((prev) => ({
-          ...prev,
-          step: "done",
-          txHash,
-          error: undefined,
-        }))
-        if (jobId) updateJobStatus(jobId, "executed", { txHash })
       } catch (err) {
         const error = toErrorMessage(err)
         setState((prev) => ({ ...prev, step: "submitting", txHash, error }))
       }
     },
-    [toErrorMessage, withdrawalChainClient]
+    [
+      activeWallet,
+      config.vmType,
+      config.chainId,
+      toErrorMessage,
+      withdrawalChainClient,
+    ]
   )
 
-  /** Step 1: Prepare — call API to get nonce */
+  /** Step 1: Prepare — call API to get nonce (or generate locally in testMode) */
   const prepare = useCallback(
     async (amount: string, recipient: string) => {
       if (!ownerAddress) return
@@ -150,6 +212,18 @@ export function useWithdrawal(config: WithdrawalConfig) {
 
       try {
         const rawAmount = parseUnits(amount, config.decimals).toString()
+
+        if (testMode) {
+          // Generate nonce locally — no backend call
+          const nonce = `0x${Array.from(
+            crypto.getRandomValues(new Uint8Array(32))
+          )
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join("")}`
+          setStep("signing", { nonce, validatedAmount: rawAmount })
+          return
+        }
+
         const params = {
           chainId: config.chainSlug,
           currency: config.currency,
@@ -162,14 +236,17 @@ export function useWithdrawal(config: WithdrawalConfig) {
         setStep("signing", {
           nonce: result.nonce,
           additionalData: result.additionalData,
-          // Store the validated amount from solver (may differ from requested)
           validatedAmount: result.amount,
         })
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Prepare failed")
+        setState((prev) => ({
+          ...prev,
+          step: "idle",
+          error: err instanceof Error ? err.message : "Prepare failed",
+        }))
       }
     },
-    [ownerAddress, config, setStep, setError]
+    [testMode, ownerAddress, config, setStep, setError]
   )
 
   /** Step 2: Sign — compute digest, sign with wallet */
@@ -204,6 +281,18 @@ export function useWithdrawal(config: WithdrawalConfig) {
           digest,
           activeWallet
         )
+
+        // testMode: display digest + signature for manual review, skip submission
+        if (testMode) {
+          console.log("[TESTMODE] digest:", digest)
+          console.log("[TESTMODE] signature:", signature)
+          setState((prev) => ({
+            ...prev,
+            step: "signing",
+            testModeResult: { digest, signature },
+          }))
+          return
+        }
 
         // Step 3: Execute — submit signature
         setStep("executing")
@@ -346,10 +435,15 @@ export function useWithdrawal(config: WithdrawalConfig) {
     setStep("submitting")
 
     try {
+      // Get chain RPC URL for non-EVM chains (Solana, Bitcoin need direct RPC access)
+      const chainInfo = await getChain(Number(config.chainId))
+      const rpcUrl = chainInfo?.httpRpcUrl
+
       const hash = await submitTransaction(
         config.vmType,
         state.transaction,
-        activeWallet
+        activeWallet,
+        rpcUrl
       )
       setState((prev) => ({
         ...prev,
@@ -362,6 +456,7 @@ export function useWithdrawal(config: WithdrawalConfig) {
           txHash: hash,
           transaction: state.transaction,
         })
+
       await waitForTransactionConfirmation(hash, state.jobId)
     } catch (err) {
       setError(toErrorMessage(err))
@@ -369,6 +464,7 @@ export function useWithdrawal(config: WithdrawalConfig) {
   }, [
     activeWallet,
     config.vmType,
+    config.chainId,
     state.transaction,
     state.jobId,
     setStep,

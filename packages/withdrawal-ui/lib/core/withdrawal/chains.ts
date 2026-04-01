@@ -42,6 +42,15 @@ function getCurrencyLogoURI(currency: any): string | undefined {
 
 let chainsCache: ChainInfo[] | null = null
 
+/** Parse NEXT_PUBLIC_RPC env var: JSON map of chainId → rpcUrl */
+function getRpcOverrides(): Record<string, string> {
+  try {
+    return JSON.parse(process.env.NEXT_PUBLIC_RPC ?? "{}")
+  } catch {
+    return {}
+  }
+}
+
 /** Fetch supported chains and currencies from solver API */
 export async function getChains(): Promise<ChainInfo[]> {
   if (chainsCache) return chainsCache
@@ -53,8 +62,10 @@ export async function getChains(): Promise<ChainInfo[]> {
   const data = await res.json()
 
   // Normalize currencies to include logoURI
+  const rpcOverrides = getRpcOverrides()
   chainsCache = (data.chains as any[]).map((chain) => ({
     ...chain,
+    httpRpcUrl: rpcOverrides[String(chain.id)] ?? chain.httpRpcUrl,
     currency: {
       ...chain.currency,
       logoURI: getCurrencyLogoURI(chain.currency),

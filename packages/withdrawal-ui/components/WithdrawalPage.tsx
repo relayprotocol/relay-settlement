@@ -17,6 +17,26 @@ import {
   type ChainInfo,
   type ChainCurrency,
 } from "@/lib/core/withdrawal/chains"
+
+// Mock Tron chain injected in testMode (dev oracle has no Tron config)
+const TEST_TRON_CURRENCY: ChainCurrency = {
+  id: "trx",
+  symbol: "TRX",
+  name: "Tron",
+  address: "0x0000000000000000000000000000000000000000",
+  decimals: 6,
+}
+const TEST_TRON_CHAIN: ChainInfo = {
+  id: 728126428,
+  name: "tron",
+  displayName: "Tron (testmode)",
+  vmType: "tvm",
+  explorerUrl: "https://tronscan.org",
+  iconUrl: null,
+  httpRpcUrl: "https://api.trongrid.io",
+  currency: TEST_TRON_CURRENCY,
+  erc20Currencies: [],
+}
 import { useChains } from "@/lib/react/useChains"
 import { ChainSelector, ChainsLoadingState } from "./ChainSelector"
 import {
@@ -56,8 +76,10 @@ async function lookupToken(
 }
 
 export function WithdrawalPage() {
-  const { address } = useAccount()
   const searchParams = useSearchParams()
+  const testMode =
+    searchParams.has("testmode") && process.env.NODE_ENV !== "production"
+  const { address } = useAccount()
   const overrideWallet = searchParams.get("overrideWallet")
   const { setShowLinkNewWalletModal } = useDynamicModals()
   const { setWalletFilter } = useWalletFilter()
@@ -68,9 +90,10 @@ export function WithdrawalPage() {
     error: chainsError,
     retry: retryChains,
   } = useChains()
-  const supportedChains = chains.filter((chain) =>
-    isWithdrawalVmSupported(chain.vmType)
-  )
+  const supportedChains = [
+    ...chains.filter((chain) => isWithdrawalVmSupported(chain.vmType)),
+    ...(testMode ? [TEST_TRON_CHAIN] : []),
+  ]
 
   const [selectedChain, setSelectedChain] = useState<ChainInfo | null>(null)
   const [currencies, setCurrencies] = useState<ChainCurrency[]>([])
@@ -109,6 +132,12 @@ export function WithdrawalPage() {
       setSelectedCurrency(null)
       return
     }
+    // testMode mock chain: use hardcoded currencies, skip API call
+    if (testMode && selectedChain.name === "tron") {
+      setCurrencies([TEST_TRON_CURRENCY])
+      setSelectedCurrency(null)
+      return
+    }
     getChainCurrencies(selectedChain.id).then((c) => {
       setCurrencies(c)
       setSelectedCurrency(null)
@@ -116,7 +145,7 @@ export function WithdrawalPage() {
     setUseCustomCurrency(false)
     setCustomAddress("")
     setCustomLookupFailed(false)
-  }, [selectedChain])
+  }, [testMode, selectedChain])
 
   // Detect connected wallet VM types from Dynamic
   const userWallets = useUserWallets()
@@ -214,6 +243,11 @@ export function WithdrawalPage() {
       setHubBalance(null)
       return
     }
+    // testMode: mock 1 unit so the flow is unlocked without real on-chain balance
+    if (testMode) {
+      setHubBalance(BigInt(10 ** selectedCurrency.decimals))
+      return
+    }
     setHubBalance(null)
     const fetchBalance = () => {
       getHubBalance(hubClient, HUB_CHAIN.relayHubAddress, {
@@ -229,7 +263,13 @@ export function WithdrawalPage() {
     fetchBalance()
     const interval = setInterval(fetchBalance, 5_000)
     return () => clearInterval(interval)
-  }, [selectedChain, selectedCurrency, ownerAddress, isWalletCompatible])
+  }, [
+    testMode,
+    selectedChain,
+    selectedCurrency,
+    ownerAddress,
+    isWalletCompatible,
+  ])
 
   const handleContinue = () => {
     if (!selectedChain || !selectedCurrency || !ownerAddress) return
@@ -285,10 +325,18 @@ export function WithdrawalPage() {
     setResumeJobId(jobId)
   }
 
+  const testModeBanner = testMode ? (
+    <div className="max-w-lg mx-auto px-4 py-2 bg-amber-100 border border-amber-300 rounded-xl text-sm text-amber-800 flex items-center gap-2">
+      <span className="font-bold">⚠ TEST MODE</span>
+      <span>Balance mocked · No backend calls · Signing only</span>
+    </div>
+  ) : null
+
   // Show WithdrawalFlow once chain/currency committed
   if (committed) {
     return (
       <div className="max-w-lg mx-auto space-y-4">
+        {testModeBanner}
         <button onClick={handleBack} className="btn-ghost text-sm">
           &larr; Back
         </button>
@@ -304,6 +352,7 @@ export function WithdrawalPage() {
   // Selection UI
   return (
     <div className="max-w-lg mx-auto space-y-4">
+      {testModeBanner}
       <div className="card space-y-4">
         <h3 className="font-heading font-bold text-lg">Withdraw</h3>
         <p className="text-sm text-subtle">

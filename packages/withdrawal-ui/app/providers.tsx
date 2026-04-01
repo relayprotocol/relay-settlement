@@ -8,14 +8,18 @@ import {
   FilterChain,
   DynamicContextProvider,
 } from "@dynamic-labs/sdk-react-core"
+import { BitcoinWalletConnectors } from "@dynamic-labs/bitcoin"
 import { EthereumWalletConnectors } from "@dynamic-labs/ethereum"
 import { SolanaWalletConnectors } from "@dynamic-labs/solana"
+import { SuiWalletConnectors } from "@dynamic-labs/sui"
+import { TronWalletConnectors } from "@dynamic-labs/tron"
 import { DynamicWagmiConnector } from "@dynamic-labs/wagmi-connector"
 import { getChains, type ChainInfo } from "@/lib/core/withdrawal/chains"
 import {
   WalletFilterProvider,
   useWalletFilter,
 } from "@/lib/react/useWalletFilter"
+import { isWagmiCompatible } from "@/lib/core/withdrawal/vmTypes"
 
 const DYNAMIC_ENV_ID = process.env.NEXT_PUBLIC_DYNAMIC_ENV_ID ?? ""
 
@@ -98,7 +102,9 @@ function ProvidersInner({ children }: { children: ReactNode }) {
     getChains()
       .then((chains) => {
         setSolverChains(chains)
-        setWagmiConfig(buildWagmiConfig(chains))
+        // Only wagmi-compatible chains (EVM RPC) go into wagmi config
+        const evmChains = chains.filter((c) => isWagmiCompatible(c.vmType))
+        setWagmiConfig(buildWagmiConfig(evmChains))
       })
       .catch((err) =>
         setError(err instanceof Error ? err.message : "Failed to load chains")
@@ -137,7 +143,13 @@ function ProvidersInner({ children }: { children: ReactNode }) {
     <DynamicContextProvider
       settings={{
         environmentId: DYNAMIC_ENV_ID,
-        walletConnectors: [EthereumWalletConnectors, SolanaWalletConnectors],
+        walletConnectors: [
+          EthereumWalletConnectors,
+          SolanaWalletConnectors,
+          BitcoinWalletConnectors,
+          SuiWalletConnectors,
+          TronWalletConnectors,
+        ],
         initialAuthenticationMode: "connect-only",
         appName: "Relay Withdraw",
         overrides: {

@@ -70,10 +70,65 @@ export interface EvmTransactionData {
   maxPriorityFeePerGas?: string
 }
 
+/** Solana transaction data — instructions to build a VersionedTransaction */
+export interface SolanaTransactionData {
+  instructions: Array<{
+    keys: Array<{
+      pubkey: string
+      isSigner: boolean
+      isWritable: boolean
+    }>
+    programId: string
+    data: string // hex-encoded instruction data
+  }>
+  addressLookupTableAddresses?: string[]
+}
+
+/** Bitcoin transaction data — PSBT with allocator signature, finalized in submit.ts */
+export interface BitcoinTransactionData {
+  psbt: string // hex-encoded PSBT from solver (allocator already signed)
+}
+
+/** Tron transaction data — smart contract trigger or native transfer */
+export interface TronTransactionData {
+  type: "TriggerSmartContract" | "TransferContract"
+  parameter: {
+    owner_address: string
+    contract_address?: string
+    data?: string
+    call_value?: number
+    to_address?: string
+    amount?: number
+  }
+}
+
+/** Sui transaction data — serialized transaction block */
+export interface SuiTransactionData {
+  data: string // hex-encoded transaction block bytes
+}
+
+/** Hyperliquid transaction data — pre-signed exchange action */
+export interface HyperliquidTransactionData {
+  action: {
+    type: string
+    parameters: Record<string, unknown>
+  }
+  nonce: number
+  eip712Types: Record<string, Array<{ name: string; type: string }>>
+  eip712PrimaryType: string
+  signer: string
+  signature: string // raw hex from allocator, parsed to {r,s,v} in submit.ts
+  signatureChainId?: string
+}
+
+/** VM-specific transaction data — opaque to state machine, dispatched per VM in submit.ts */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type VmTransactionData = any
+
 /** Response from status polling */
 export interface WithdrawalStatusResult {
   status: WithdrawalJobStatus
-  transaction?: EvmTransactionData
+  transaction?: VmTransactionData
   withdrawal?: Record<string, unknown>
   reason?: WithdrawalFailReason
 }
@@ -85,10 +140,12 @@ export interface WithdrawalState {
   nonce?: string
   validatedAmount?: string
   additionalData?: Record<string, unknown>
-  transaction?: EvmTransactionData
+  transaction?: VmTransactionData
   txHash?: string
   error?: string
   failReason?: WithdrawalFailReason
+  /** Populated in testMode — signing result for manual review without submitting */
+  testModeResult?: { digest: string; signature: string }
 }
 
 export const FAIL_REASON_MESSAGES: Record<WithdrawalFailReason, string> = {

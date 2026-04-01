@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { useSwitchChain } from "wagmi"
 import { formatUnits, parseUnits } from "viem"
 import { useWithdrawal } from "@/lib/react/useWithdrawal"
@@ -19,6 +20,7 @@ import {
 } from "@/lib/core/withdrawal/types"
 import { ChainIcon, TokenIcon } from "./ChainTokenIcon"
 import { CheckCircleIcon, ErrorCircleIcon } from "./Icons"
+import { getExplorerTxUrl, isRealTxHash } from "@/lib/core/withdrawal/vmTypes"
 
 /** A row with label + truncated value that copies on click */
 function CopyRow({ label, value }: { label: string; value: string }) {
@@ -97,9 +99,12 @@ interface WithdrawalFlowProps extends WithdrawalConfig {
 
 export function WithdrawalFlow(props: WithdrawalFlowProps) {
   const { chainId, currency, ownerAddress, vmType, resumeJobId } = props
+  const searchParams = useSearchParams()
+  const testMode =
+    searchParams.has("testmode") && process.env.NODE_ENV !== "production"
   const { switchChainAsync } = useSwitchChain()
   const { state, hubBalance, prepare, sign, resume, submit, reset } =
-    useWithdrawal(props)
+    useWithdrawal(props, { testMode })
   const finalError = state.failReason
     ? FAIL_REASON_MESSAGES[state.failReason]
     : state.error
@@ -276,8 +281,9 @@ export function WithdrawalFlow(props: WithdrawalFlowProps) {
 
   const handleSubmit = async () => {
     setActionLoading(true)
-    // Chain switch only applies to EVM — abort on any failure to avoid wrong-chain submit
-    if (vmType === "evm" && state.transaction) {
+    // Chain switch only applies to EVM — non-EVM chains don't use wagmi chain management
+    // Chain switch only for EVM — Hyperliquid submits via API, not wallet tx
+    if (vmType === "evm" && state.transaction?.chainId) {
       try {
         await switchChainAsync({ chainId: state.transaction.chainId })
       } catch {
@@ -316,7 +322,9 @@ export function WithdrawalFlow(props: WithdrawalFlowProps) {
           </span>
         </div>
         <CopyRow label="Recipient" value={recipient} />
-        {extra?.txHash && <CopyRow label="Transaction" value={extra.txHash} />}
+        {extra?.txHash && isRealTxHash(extra.txHash) && (
+          <CopyRow label="Transaction" value={extra.txHash} />
+        )}
       </div>
     </div>
   )
@@ -495,25 +503,64 @@ export function WithdrawalFlow(props: WithdrawalFlowProps) {
 
             {withdrawalSummary()}
 
-            <p className="text-xs text-subtle">
-              You will be asked to sign a message to authorize this withdrawal.
-              This is a free signature — no gas fee required.
-            </p>
+            {/* testMode result — shown after signing instead of submitting */}
+            {state.testModeResult ? (
+              <div className="space-y-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs font-mono">
+                <p className="text-amber-800 font-sans font-medium text-sm">
+                  ✅ Signing complete — review the output below
+                </p>
+                <div>
+                  <p className="text-subtle font-sans mb-1">
+                    Digest (SHA-256 of withdrawal params):
+                  </p>
+                  <textarea
+                    readOnly
+                    className="w-full bg-white border border-amber-200 rounded p-2 text-xs font-mono resize-none"
+                    rows={2}
+                    value={state.testModeResult.digest}
+                    onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+                  />
+                </div>
+                <div>
+                  <p className="text-subtle font-sans mb-1">
+                    Signature (0x-hex):
+                  </p>
+                  <textarea
+                    readOnly
+                    className="w-full bg-white border border-amber-200 rounded p-2 text-xs font-mono resize-none"
+                    rows={3}
+                    value={state.testModeResult.signature}
+                    onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+                  />
+                </div>
+                <p className="text-amber-700 font-sans">
+                  Copy these values and share for review.
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-subtle">
+                  {testMode
+                    ? "TEST MODE: hub balance is mocked. Signing will not submit to the solver."
+                    : "You will be asked to sign a message to authorize this withdrawal. This is a free signature — no gas fee required."}
+                </p>
 
-            <button
-              className="btn-primary w-full"
-              onClick={handleSign}
-              disabled={actionLoading}
-            >
-              {actionLoading ? (
-                <>
-                  <div className="spinner !w-4 !h-4 !border-white/30 !border-t-white" />
-                  Signing...
-                </>
-              ) : (
-                "Sign with Wallet"
-              )}
-            </button>
+                <button
+                  className="btn-primary w-full"
+                  onClick={handleSign}
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? (
+                    <>
+                      <div className="spinner !w-4 !h-4 !border-white/30 !border-t-white" />
+                      Signing...
+                    </>
+                  ) : (
+                    "Sign with Wallet"
+                  )}
+                </button>
+              </>
+            )}
           </>
         ) : null}
 
@@ -609,16 +656,22 @@ export function WithdrawalFlow(props: WithdrawalFlowProps) {
 
                 {withdrawalSummary({ txHash: state.txHash })}
 
-                {chainInfo?.explorerUrl && (
-                  <a
-                    href={`${chainInfo.explorerUrl}/tx/${state.txHash}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-secondary w-full text-center"
-                  >
-                    View on {chainInfo.displayName} Explorer
-                  </a>
-                )}
+                {chainInfo?.explorerUrl &&
+                  state.txHash &&
+                  isRealTxHash(state.txHash) && (
+                    <a
+                      href={getExplorerTxUrl(
+                        chainInfo.explorerUrl,
+                        state.txHash,
+                        vmType
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-secondary w-full text-center"
+                    >
+                      View on {chainInfo.displayName} Explorer
+                    </a>
+                  )}
               </>
             ) : state.error || state.failReason ? (
               <>

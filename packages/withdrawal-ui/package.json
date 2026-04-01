@@ -8,12 +8,18 @@
     "start": "next start"
   },
   "dependencies": {
+    "@dynamic-labs/bitcoin": "^4.40.2",
     "@dynamic-labs/ethereum": "^4.40.2",
     "@dynamic-labs/sdk-react-core": "^4.40.2",
     "@dynamic-labs/solana": "^4.40.2",
+    "@dynamic-labs/sui": "^4.40.2",
+    "@dynamic-labs/tron": "^4.40.2",
     "@dynamic-labs/wagmi-connector": "^4.40.2",
+    "@mysten/sui": "^1.21.0",
     "@relay-protocol/settlement-sdk": "workspace:*",
+    "@solana/web3.js": "^1.95.8",
     "@tanstack/react-query": "^5.0.0",
+    "bitcoinjs-lib": "^6.1.7",
     "json-stable-stringify": "^1.1.1",
     "next": "^14.2.0",
     "react": "^18.3.0",
