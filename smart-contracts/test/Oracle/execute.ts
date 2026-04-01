@@ -7,7 +7,7 @@ import { ActionType } from "@relay-protocol/settlement-sdk"
 import { expect } from "chai"
 import { randomBytes } from "crypto"
 import hre from "hardhat"
-import { Hex } from "viem"
+import { encodeAbiParameters, Hex } from "viem"
 
 import { deployOracle } from "../helpers/deployOracle"
 
@@ -508,6 +508,31 @@ describe("execute", function () {
         signature,
       ])
     ).to.be.rejectedWith("AlreadyExecuted")
+  })
+
+  it("should revert with InvalidActionType for unknown action type", async () => {
+    const { oracle, oracleWallet } = await loadFixture(setup)
+
+    // Encode an action with an unknown type (99)
+    const unknownAction = encodeAbiParameters(
+      [{ name: "actionType", type: "uint8" }],
+      [99]
+    )
+    const idempotencyKey = `0x${randomBytes(32).toString("hex")}` as Hex
+    const signature = await signExecution(
+      idempotencyKey,
+      [unknownAction],
+      oracle.address,
+      oracleWallet
+    )
+
+    await expect(
+      oracle.write.execute([
+        { actions: [unknownAction], idempotencyKey },
+        oracleWallet.account.address,
+        signature,
+      ])
+    ).to.be.rejectedWith("InvalidActionType")
   })
 
   it("should fail to execute if the signature is invalid", async () => {

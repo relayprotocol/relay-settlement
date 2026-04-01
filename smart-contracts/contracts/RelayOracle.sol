@@ -38,6 +38,7 @@ contract RelayOracle is AccessControl, EIP712 {
   error AlreadyExecuted(bytes32 idempotencyKey);
   error UnauthorizedOracle(address oracle);
   error InvalidSignature(address oracle);
+  error InvalidActionType(uint8 actionType);
 
   // Roles
 
@@ -126,18 +127,18 @@ contract RelayOracle is AccessControl, EIP712 {
     // Extract the action type from the first byte of the encoded action data
     uint8 actionType = abi.decode(action, (uint8));
 
-    if (ActionType(actionType) == ActionType.MINT) {
+    if (actionType == uint8(ActionType.MINT)) {
       (, address hubToAddress, uint256 hubTokenId, uint256 amount) = abi.decode(
         action,
         (uint8, address, uint256, uint256)
       );
       HUB.mint(hubToAddress, hubTokenId, amount);
-    } else if (ActionType(actionType) == ActionType.BURN) {
+    } else if (actionType == uint8(ActionType.BURN)) {
       (, address hubFromAddress, uint256 hubTokenId, uint256 amount) = abi
         .decode(action, (uint8, address, uint256, uint256));
 
       HUB.burn(hubFromAddress, hubTokenId, amount);
-    } else if (ActionType(actionType) == ActionType.TRANSFER) {
+    } else if (actionType == uint8(ActionType.TRANSFER)) {
       (
         ,
         address hubFromAddress,
@@ -147,6 +148,8 @@ contract RelayOracle is AccessControl, EIP712 {
       ) = abi.decode(action, (uint8, address, address, uint256, uint256));
 
       HUB.transferFrom(hubFromAddress, hubToAddress, hubTokenId, amount);
+    } else {
+      revert InvalidActionType(actionType);
     }
   }
 
