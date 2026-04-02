@@ -1,8 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useAccount } from "wagmi"
-import { DynamicWidget } from "@dynamic-labs/sdk-react-core"
+import { DynamicWidget, useUserWallets } from "@dynamic-labs/sdk-react-core"
 import { WithdrawalPage } from "@/components/WithdrawalPage"
 import { DepositPage } from "@/components/DepositPage"
 import { RelayLogo } from "@/components/RelayLogo"
@@ -10,7 +9,7 @@ import { RelayLogo } from "@/components/RelayLogo"
 type Tab = "withdraw" | "deposit"
 
 export default function Home() {
-  const { isConnected } = useAccount()
+  const userWallets = useUserWallets()
   const [mounted, setMounted] = useState(false)
   const [tab, setTab] = useState<Tab>("deposit")
 
@@ -18,7 +17,7 @@ export default function Home() {
     setMounted(true)
   }, [])
 
-  const connected = mounted && isConnected
+  const connected = mounted && userWallets.length > 0
 
   return (
     <main className="min-h-screen">
