@@ -78,6 +78,10 @@ export type WithdrawalAddressParams = {
   nonce: string
 }
 
+/**
+ * Computes a deterministic withdrawal address using encodePacked.
+ * Kept for backwards compatibility — new integrations should use getWithdrawalAddressSafe.
+ */
 export function getWithdrawalAddress(
   withdrawalParams: WithdrawalAddressParams
 ): Address {
@@ -106,6 +110,46 @@ export function getWithdrawalAddress(
   return `0x${withdrawalAddress}`
 }
 
+export type WithdrawalAddressSafeParams = WithdrawalAddressParams & {
+  additionalData: string
+}
+
+/**
+ * Computes a deterministic withdrawal address using abi.encode (V2).
+ * Uses encodeAbiParameters instead of encodePacked to prevent hash collisions
+ * with variable-length arguments (VIG-SP-014). Also includes the data field.
+ */
+export function getWithdrawalAddressSafe(
+  withdrawalParams: WithdrawalAddressSafeParams
+): Address {
+  const hash = keccak256(
+    encodeAbiParameters(
+      parseAbiParameters(
+        "string, bytes, bytes, bytes, address, bytes32, bytes"
+      ),
+      [
+        withdrawalParams.chainId,
+        arrayToHex(
+          encodeAddress(withdrawalParams.depository, withdrawalParams.vmType)
+        ),
+        arrayToHex(
+          encodeAddress(withdrawalParams.currency, withdrawalParams.vmType)
+        ),
+        arrayToHex(
+          encodeAddress(withdrawalParams.recipient, withdrawalParams.vmType)
+        ),
+        withdrawalParams.ownerAlias as Address,
+        `0x${BigInt(withdrawalParams.nonce).toString(16).padStart(64, "0")}`,
+        withdrawalParams.additionalData as Hex,
+      ]
+    )
+  )
+
+  // Get 40 bytes for an address
+  const withdrawalAddress = hash.slice(2).slice(-40).toLowerCase()
+  return `0x${withdrawalAddress}`
+}
+
 export type OrderAddressParams = {
   vmType: VmType
   chainId: string
@@ -114,6 +158,10 @@ export type OrderAddressParams = {
   depositId: string
 }
 
+/**
+ * Computes a deterministic order address using encodePacked.
+ * Kept for backwards compatibility — new integrations should use getOrderAddressSafe.
+ */
 export function getOrderAddress(orderParams: OrderAddressParams): Address {
   const hash = keccak256(
     encodePacked(
@@ -125,6 +173,26 @@ export function getOrderAddress(orderParams: OrderAddressParams): Address {
         orderParams.depositId as Hex,
       ]
     )
+  )
+
+  // Get 40 bytes for an address
+  const orderAddress = hash.slice(2).slice(-40)
+  return `0x${orderAddress}`
+}
+
+/**
+ * Computes a deterministic order address using abi.encode (V2).
+ * Uses encodeAbiParameters instead of encodePacked to prevent hash collisions
+ * with variable-length arguments (VIG-SP-014).
+ */
+export function getOrderAddressSafe(orderParams: OrderAddressParams): Address {
+  const hash = keccak256(
+    encodeAbiParameters(parseAbiParameters("string, bytes, uint256, bytes32"), [
+      orderParams.chainId,
+      arrayToHex(encodeAddress(orderParams.depositor, orderParams.vmType)),
+      orderParams.timestamp,
+      orderParams.depositId as Hex,
+    ])
   )
 
   // Get 40 bytes for an address

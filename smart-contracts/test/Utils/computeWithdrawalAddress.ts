@@ -4,12 +4,13 @@ import hre from "hardhat"
 import { keccak256, encodePacked, toHex } from "viem"
 import {
   getWithdrawalAddress,
+  getWithdrawalAddressSafe,
   encodeAddress,
 } from "@relay-protocol/settlement-sdk"
 
 /**
- * Unit test for Utils.computeWithdrawalAddress vs SDK's getWithdrawalAddress
- * Verifies contract and SDK produce the same withdrawal address for different VM types
+ * Unit tests for Utils.computeWithdrawalAddress (V1, encodePacked) and
+ * Utils.computeWithdrawalAddressSafe (V2, abi.encode + data field)
  */
 describe("Utils computeWithdrawalAddress", function () {
   async function deployUtils() {
@@ -17,23 +18,21 @@ describe("Utils computeWithdrawalAddress", function () {
     return { utils }
   }
 
-  describe("EVM addresses (ethereum-vm)", function () {
-    it("should match SDK for EVM address inputs (ForcedExit use case)", async function () {
+  describe("V1 — computeWithdrawalAddress (encodePacked, no data)", function () {
+    it("should match SDK getWithdrawalAddress for EVM addresses", async function () {
       const { utils } = await loadFixture(deployUtils)
 
-      // Use EVM-style addresses (like in ForcedExit)
       const depository = "0x1234567890123456789012345678901234567890"
       const depositoryChainId = "1"
       const currency = "0x0000000000000000000000000000000000000000"
       const recipientAddress =
         "0xAD8ed3fF56cc4c09B9BB12EdC435d40c8F285a25" as `0x${string}`
       const withdrawerAlias = recipientAddress
-      // ForcedExit computes nonce as keccak256 hash, resulting in a hex string
       const withdrawalNonce = keccak256(
         encodePacked(["string"], ["test-nonce"])
       ) as `0x${string}`
 
-      // SDK computation
+      // SDK computation (V1)
       const sdkWithdrawalAddress = getWithdrawalAddress({
         chainId: depositoryChainId,
         currency: currency,
@@ -44,7 +43,7 @@ describe("Utils computeWithdrawalAddress", function () {
         vmType: "ethereum-vm",
       })
 
-      // Contract computation
+      // Contract computation (V1 — 6 args, no data)
       const depositoryBytes = toHex(
         encodeAddress(depository, "ethereum-vm")
       ) as `0x${string}`
@@ -63,6 +62,108 @@ describe("Utils computeWithdrawalAddress", function () {
           recipientBytes,
           withdrawerAlias,
           withdrawalNonce,
+        ])
+
+      expect(sdkWithdrawalAddress.toLowerCase()).to.equal(
+        contractWithdrawalAddress.toLowerCase()
+      )
+    })
+
+    it("should match SDK for Solana address inputs", async function () {
+      const { utils } = await loadFixture(deployUtils)
+
+      const depository = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"
+      const depositoryChainId = "1399811149"
+      const currency = "11111111111111111111111111111111"
+      const recipientAddress = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"
+      const withdrawerAlias =
+        "0xAD8ed3fF56cc4c09B9BB12EdC435d40c8F285a25" as `0x${string}`
+      const withdrawalNonce = keccak256(
+        encodePacked(["string"], ["solana-test-nonce"])
+      ) as `0x${string}`
+
+      const sdkWithdrawalAddress = getWithdrawalAddress({
+        chainId: depositoryChainId,
+        currency: currency,
+        depository: depository,
+        nonce: withdrawalNonce,
+        ownerAlias: withdrawerAlias,
+        recipient: recipientAddress,
+        vmType: "solana-vm",
+      })
+
+      const depositoryBytes = toHex(
+        encodeAddress(depository, "solana-vm")
+      ) as `0x${string}`
+      const currencyBytes = toHex(
+        encodeAddress(currency, "solana-vm")
+      ) as `0x${string}`
+      const recipientBytes = toHex(
+        encodeAddress(recipientAddress, "solana-vm")
+      ) as `0x${string}`
+
+      const contractWithdrawalAddress =
+        await utils.read.computeWithdrawalAddress([
+          depositoryChainId,
+          depositoryBytes,
+          currencyBytes,
+          recipientBytes,
+          withdrawerAlias,
+          withdrawalNonce,
+        ])
+
+      expect(sdkWithdrawalAddress.toLowerCase()).to.equal(
+        contractWithdrawalAddress.toLowerCase()
+      )
+    })
+  })
+
+  describe("V2 — computeWithdrawalAddressSafe (abi.encode + data)", function () {
+    it("should match SDK getWithdrawalAddressSafe for EVM addresses", async function () {
+      const { utils } = await loadFixture(deployUtils)
+
+      const depository = "0x1234567890123456789012345678901234567890"
+      const depositoryChainId = "1"
+      const currency = "0x0000000000000000000000000000000000000000"
+      const recipientAddress =
+        "0xAD8ed3fF56cc4c09B9BB12EdC435d40c8F285a25" as `0x${string}`
+      const withdrawerAlias = recipientAddress
+      const withdrawalNonce = keccak256(
+        encodePacked(["string"], ["test-nonce"])
+      ) as `0x${string}`
+
+      // SDK computation (V2)
+      const sdkWithdrawalAddress = getWithdrawalAddressSafe({
+        additionalData: "0x",
+        chainId: depositoryChainId,
+        currency: currency,
+        depository: depository,
+        nonce: withdrawalNonce,
+        ownerAlias: withdrawerAlias,
+        recipient: recipientAddress,
+        vmType: "ethereum-vm",
+      })
+
+      // Contract computation (V2 — 7 args, with data)
+      const depositoryBytes = toHex(
+        encodeAddress(depository, "ethereum-vm")
+      ) as `0x${string}`
+      const currencyBytes = toHex(
+        encodeAddress(currency, "ethereum-vm")
+      ) as `0x${string}`
+      const recipientBytes = toHex(
+        encodeAddress(recipientAddress, "ethereum-vm")
+      ) as `0x${string}`
+
+      const contractWithdrawalAddress =
+        await utils.read.computeWithdrawalAddressSafe([
+          depositoryChainId,
+          depositoryBytes,
+          currencyBytes,
+          recipientBytes,
+          withdrawerAlias,
+          withdrawalNonce,
+          "0x",
         ])
 
       expect(sdkWithdrawalAddress.toLowerCase()).to.equal(
@@ -91,8 +192,8 @@ describe("Utils computeWithdrawalAddress", function () {
         )
       ) as `0x${string}`
 
-      // SDK computation
-      const sdkWithdrawalAddress = getWithdrawalAddress({
+      const sdkWithdrawalAddress = getWithdrawalAddressSafe({
+        additionalData: "0x",
         chainId: depositoryChainId,
         currency: currency,
         depository: depository,
@@ -102,7 +203,6 @@ describe("Utils computeWithdrawalAddress", function () {
         vmType: "ethereum-vm",
       })
 
-      // Contract computation
       const depositoryBytes = toHex(
         encodeAddress(depository, "ethereum-vm")
       ) as `0x${string}`
@@ -114,30 +214,27 @@ describe("Utils computeWithdrawalAddress", function () {
       ) as `0x${string}`
 
       const contractWithdrawalAddress =
-        await utils.read.computeWithdrawalAddress([
+        await utils.read.computeWithdrawalAddressSafe([
           depositoryChainId,
           depositoryBytes,
           currencyBytes,
           recipientBytes,
           withdrawerAlias,
           withdrawalNonce,
+          "0x",
         ])
 
       expect(sdkWithdrawalAddress.toLowerCase()).to.equal(
         contractWithdrawalAddress.toLowerCase()
       )
     })
-  })
 
-  describe("Solana addresses (solana-vm)", function () {
     it("should match SDK for Solana address inputs", async function () {
       const { utils } = await loadFixture(deployUtils)
 
       const depository = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"
       const depositoryChainId = "1399811149"
-      // Native SOL token
       const currency = "11111111111111111111111111111111"
-      // Solana pubkey (base58)
       const recipientAddress = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"
       const withdrawerAlias =
         "0xAD8ed3fF56cc4c09B9BB12EdC435d40c8F285a25" as `0x${string}`
@@ -145,8 +242,8 @@ describe("Utils computeWithdrawalAddress", function () {
         encodePacked(["string"], ["solana-test-nonce"])
       ) as `0x${string}`
 
-      // SDK computation
-      const sdkWithdrawalAddress = getWithdrawalAddress({
+      const sdkWithdrawalAddress = getWithdrawalAddressSafe({
+        additionalData: "0x",
         chainId: depositoryChainId,
         currency: currency,
         depository: depository,
@@ -156,7 +253,6 @@ describe("Utils computeWithdrawalAddress", function () {
         vmType: "solana-vm",
       })
 
-      // Contract computation
       const depositoryBytes = toHex(
         encodeAddress(depository, "solana-vm")
       ) as `0x${string}`
@@ -168,13 +264,14 @@ describe("Utils computeWithdrawalAddress", function () {
       ) as `0x${string}`
 
       const contractWithdrawalAddress =
-        await utils.read.computeWithdrawalAddress([
+        await utils.read.computeWithdrawalAddressSafe([
           depositoryChainId,
           depositoryBytes,
           currencyBytes,
           recipientBytes,
           withdrawerAlias,
           withdrawalNonce,
+          "0x",
         ])
 
       expect(sdkWithdrawalAddress.toLowerCase()).to.equal(
@@ -187,7 +284,6 @@ describe("Utils computeWithdrawalAddress", function () {
 
       const depository = "DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK"
       const depositoryChainId = "1399811149"
-      // USDC SPL token on Solana
       const currency = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
       const recipientAddress = "DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK"
       const withdrawerAlias =
@@ -196,8 +292,8 @@ describe("Utils computeWithdrawalAddress", function () {
         encodePacked(["string"], ["solana-spl-nonce"])
       ) as `0x${string}`
 
-      // SDK computation
-      const sdkWithdrawalAddress = getWithdrawalAddress({
+      const sdkWithdrawalAddress = getWithdrawalAddressSafe({
+        additionalData: "0x",
         chainId: depositoryChainId,
         currency: currency,
         depository: depository,
@@ -207,7 +303,6 @@ describe("Utils computeWithdrawalAddress", function () {
         vmType: "solana-vm",
       })
 
-      // Contract computation
       const depositoryBytes = toHex(
         encodeAddress(depository, "solana-vm")
       ) as `0x${string}`
@@ -219,30 +314,27 @@ describe("Utils computeWithdrawalAddress", function () {
       ) as `0x${string}`
 
       const contractWithdrawalAddress =
-        await utils.read.computeWithdrawalAddress([
+        await utils.read.computeWithdrawalAddressSafe([
           depositoryChainId,
           depositoryBytes,
           currencyBytes,
           recipientBytes,
           withdrawerAlias,
           withdrawalNonce,
+          "0x",
         ])
 
       expect(sdkWithdrawalAddress.toLowerCase()).to.equal(
         contractWithdrawalAddress.toLowerCase()
       )
     })
-  })
 
-  describe("Bitcoin addresses (bitcoin-vm)", function () {
     it("should match SDK for Bitcoin bech32 address inputs", async function () {
       const { utils } = await loadFixture(deployUtils)
 
       const depository = "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq"
       const depositoryChainId = "0"
-      // Native Bitcoin currency
       const currency = "bc1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqmql8k8"
-      // Bitcoin bech32 address
       const recipientAddress = "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq"
       const withdrawerAlias =
         "0xAD8ed3fF56cc4c09B9BB12EdC435d40c8F285a25" as `0x${string}`
@@ -250,8 +342,8 @@ describe("Utils computeWithdrawalAddress", function () {
         encodePacked(["string"], ["bitcoin-test-nonce"])
       ) as `0x${string}`
 
-      // SDK computation
-      const sdkWithdrawalAddress = getWithdrawalAddress({
+      const sdkWithdrawalAddress = getWithdrawalAddressSafe({
+        additionalData: "0x",
         chainId: depositoryChainId,
         currency: currency,
         depository: depository,
@@ -261,7 +353,6 @@ describe("Utils computeWithdrawalAddress", function () {
         vmType: "bitcoin-vm",
       })
 
-      // Contract computation
       const depositoryBytes = toHex(
         encodeAddress(depository, "bitcoin-vm")
       ) as `0x${string}`
@@ -273,30 +364,27 @@ describe("Utils computeWithdrawalAddress", function () {
       ) as `0x${string}`
 
       const contractWithdrawalAddress =
-        await utils.read.computeWithdrawalAddress([
+        await utils.read.computeWithdrawalAddressSafe([
           depositoryChainId,
           depositoryBytes,
           currencyBytes,
           recipientBytes,
           withdrawerAlias,
           withdrawalNonce,
+          "0x",
         ])
 
       expect(sdkWithdrawalAddress.toLowerCase()).to.equal(
         contractWithdrawalAddress.toLowerCase()
       )
     })
-  })
 
-  describe("Tron addresses (tron-vm)", function () {
     it("should match SDK for Tron address inputs", async function () {
       const { utils } = await loadFixture(deployUtils)
 
       const depository = "TJCnKsPa7y5okkXvQAidZBzqx3QyQ6sxMW"
       const depositoryChainId = "728126428"
-      // Native TRX (zero address in Tron format)
       const currency = "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb"
-      // Tron address
       const recipientAddress = "TJCnKsPa7y5okkXvQAidZBzqx3QyQ6sxMW"
       const withdrawerAlias =
         "0xAD8ed3fF56cc4c09B9BB12EdC435d40c8F285a25" as `0x${string}`
@@ -304,8 +392,8 @@ describe("Utils computeWithdrawalAddress", function () {
         encodePacked(["string"], ["tron-test-nonce"])
       ) as `0x${string}`
 
-      // SDK computation
-      const sdkWithdrawalAddress = getWithdrawalAddress({
+      const sdkWithdrawalAddress = getWithdrawalAddressSafe({
+        additionalData: "0x",
         chainId: depositoryChainId,
         currency: currency,
         depository: depository,
@@ -315,7 +403,6 @@ describe("Utils computeWithdrawalAddress", function () {
         vmType: "tron-vm",
       })
 
-      // Contract computation
       const depositoryBytes = toHex(
         encodeAddress(depository, "tron-vm")
       ) as `0x${string}`
@@ -327,30 +414,27 @@ describe("Utils computeWithdrawalAddress", function () {
       ) as `0x${string}`
 
       const contractWithdrawalAddress =
-        await utils.read.computeWithdrawalAddress([
+        await utils.read.computeWithdrawalAddressSafe([
           depositoryChainId,
           depositoryBytes,
           currencyBytes,
           recipientBytes,
           withdrawerAlias,
           withdrawalNonce,
+          "0x",
         ])
 
       expect(sdkWithdrawalAddress.toLowerCase()).to.equal(
         contractWithdrawalAddress.toLowerCase()
       )
     })
-  })
 
-  describe("Hyperliquid addresses (hyperliquid-vm)", function () {
     it("should match SDK for Hyperliquid address inputs", async function () {
       const { utils } = await loadFixture(deployUtils)
 
       const depository = "0x1234567890123456789012345678901234567890"
       const depositoryChainId = "998"
-      // Native USDC on Hyperliquid
       const currency = "0x00000000000000000000000000000000"
-      // Hyperliquid address (EVM-style)
       const recipientAddress = "0xAD8ed3fF56cc4c09B9BB12EdC435d40c8F285a25"
       const withdrawerAlias =
         "0xAD8ed3fF56cc4c09B9BB12EdC435d40c8F285a25" as `0x${string}`
@@ -358,8 +442,8 @@ describe("Utils computeWithdrawalAddress", function () {
         encodePacked(["string"], ["hyperliquid-test-nonce"])
       ) as `0x${string}`
 
-      // SDK computation
-      const sdkWithdrawalAddress = getWithdrawalAddress({
+      const sdkWithdrawalAddress = getWithdrawalAddressSafe({
+        additionalData: "0x",
         chainId: depositoryChainId,
         currency: currency,
         depository: depository,
@@ -369,7 +453,6 @@ describe("Utils computeWithdrawalAddress", function () {
         vmType: "hyperliquid-vm",
       })
 
-      // Contract computation
       const depositoryBytes = toHex(
         encodeAddress(depository, "hyperliquid-vm")
       ) as `0x${string}`
@@ -381,18 +464,64 @@ describe("Utils computeWithdrawalAddress", function () {
       ) as `0x${string}`
 
       const contractWithdrawalAddress =
-        await utils.read.computeWithdrawalAddress([
+        await utils.read.computeWithdrawalAddressSafe([
           depositoryChainId,
           depositoryBytes,
           currencyBytes,
           recipientBytes,
           withdrawerAlias,
           withdrawalNonce,
+          "0x",
         ])
 
       expect(sdkWithdrawalAddress.toLowerCase()).to.equal(
         contractWithdrawalAddress.toLowerCase()
       )
+    })
+
+    it("should produce different addresses than V1 for the same inputs", async function () {
+      const { utils } = await loadFixture(deployUtils)
+
+      const depository = "0x1234567890123456789012345678901234567890"
+      const depositoryChainId = "1"
+      const currency = "0x0000000000000000000000000000000000000000"
+      const recipientAddress =
+        "0xAD8ed3fF56cc4c09B9BB12EdC435d40c8F285a25" as `0x${string}`
+      const withdrawerAlias = recipientAddress
+      const withdrawalNonce = keccak256(
+        encodePacked(["string"], ["test-nonce"])
+      ) as `0x${string}`
+
+      const depositoryBytes = toHex(
+        encodeAddress(depository, "ethereum-vm")
+      ) as `0x${string}`
+      const currencyBytes = toHex(
+        encodeAddress(currency, "ethereum-vm")
+      ) as `0x${string}`
+      const recipientBytes = toHex(
+        encodeAddress(recipientAddress, "ethereum-vm")
+      ) as `0x${string}`
+
+      const v1Address = await utils.read.computeWithdrawalAddress([
+        depositoryChainId,
+        depositoryBytes,
+        currencyBytes,
+        recipientBytes,
+        withdrawerAlias,
+        withdrawalNonce,
+      ])
+
+      const v2Address = await utils.read.computeWithdrawalAddressSafe([
+        depositoryChainId,
+        depositoryBytes,
+        currencyBytes,
+        recipientBytes,
+        withdrawerAlias,
+        withdrawalNonce,
+        "0x",
+      ])
+
+      expect(v1Address.toLowerCase()).to.not.equal(v2Address.toLowerCase())
     })
   })
 })

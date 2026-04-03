@@ -63,8 +63,11 @@ import {
   getSubmitWithdrawRequestHash,
   WithdrawalAddressParams,
   getWithdrawalAddress,
+  WithdrawalAddressSafeParams,
+  getWithdrawalAddressSafe,
   OrderAddressParams,
   getOrderAddress,
+  getOrderAddressSafe,
   normalizePayloadParams,
 } from "./messages/v2.2/withdrawal"
 
@@ -165,8 +168,11 @@ export {
   getSubmitWithdrawRequestHash,
   WithdrawalAddressParams,
   getWithdrawalAddress,
+  WithdrawalAddressSafeParams,
+  getWithdrawalAddressSafe,
   OrderAddressParams,
   getOrderAddress,
+  getOrderAddressSafe,
   normalizePayloadParams,
 
   // Hub utils

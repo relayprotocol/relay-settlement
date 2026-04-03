@@ -155,6 +155,8 @@ library Utils {
   /// @param withdrawerAlias The withdrawer alias (owner of balance before withdrawal)
   /// @param withdrawalNonce The nonce to prevent collisions
   /// @return The computed withdrawal address
+  /// @dev Uses abi.encodePacked — kept for backwards compatibility.
+  /// New integrations should use computeWithdrawalAddressSafe.
   function computeWithdrawalAddress(
     string memory depositoryChainId,
     bytes memory depository,
@@ -171,6 +173,42 @@ library Utils {
         recipient,
         withdrawerAlias,
         withdrawalNonce
+      )
+    );
+
+    // Return last 20 bytes as address
+    return address(uint160(uint256(hash)));
+  }
+
+  /// @notice Computes a deterministic withdrawal address from withdrawal parameters (V2)
+  /// @param depositoryChainId The chain ID of the depository as string
+  /// @param depository The depository contract address as pre-encoded bytes (via encodeAddress)
+  /// @param currency The currency as pre-encoded bytes (via encodeAddress)
+  /// @param recipient The recipient as pre-encoded bytes (via encodeAddress)
+  /// @param withdrawerAlias The withdrawer alias (owner of balance before withdrawal)
+  /// @param withdrawalNonce The nonce to prevent collisions
+  /// @param data Additional data included in the withdrawal
+  /// @return The computed withdrawal address
+  /// @dev Uses abi.encode instead of abi.encodePacked to prevent hash collisions
+  /// with variable-length arguments (VIG-SP-014). Also includes the data field.
+  function computeWithdrawalAddressSafe(
+    string memory depositoryChainId,
+    bytes memory depository,
+    bytes memory currency,
+    bytes memory recipient,
+    address withdrawerAlias,
+    bytes32 withdrawalNonce,
+    bytes memory data
+  ) external pure returns (address) {
+    bytes32 hash = keccak256(
+      abi.encode(
+        depositoryChainId,
+        depository,
+        currency,
+        recipient,
+        withdrawerAlias,
+        withdrawalNonce,
+        data
       )
     );
 

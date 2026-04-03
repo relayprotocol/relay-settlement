@@ -5,9 +5,10 @@ import { VmType } from "../src"
 import {
   getSubmitWithdrawRequestHash,
   getWithdrawalAddress,
+  getWithdrawalAddressSafe,
 } from "../src/messages/v2.2/withdrawal"
 
-describe("getWithdrawalAddress", () => {
+describe("getWithdrawalAddress (V1)", () => {
   it("should return a valid withdrawal address", () => {
     const params = {
       depository: "0x1234567890123456789012345678901234567890",
@@ -23,6 +24,45 @@ describe("getWithdrawalAddress", () => {
     expect(address).toMatch(/^0x[0-9a-f]{40}$/i)
     expect(address).toBe("0x1c1b40f43b18c2ff894a1bd8f1d13e0b1e92af0a")
     expect(getAddress(address).toLowerCase()).toMatch(address)
+  })
+})
+
+describe("getWithdrawalAddressSafe", () => {
+  it("should return a valid withdrawal address", () => {
+    const params = {
+      depository: "0x1234567890123456789012345678901234567890",
+      chainId: "ethereum",
+      vmType: "ethereum-vm" as VmType,
+      currency: "10340230",
+      recipient: "0x9876543210987654321098765432109876543210",
+      ownerAlias: "0x9876543210987654321098765432109876543210",
+      nonce: "0",
+      additionalData: "0x",
+    }
+
+    const address = getWithdrawalAddressSafe(params)
+    expect(address).toMatch(/^0x[0-9a-f]{40}$/i)
+    expect(address).toBe("0x33c0f512a96421f8c90368768733b3541e0aa9b6")
+    expect(getAddress(address).toLowerCase()).toMatch(address)
+  })
+
+  it("should produce a different address than V1 for the same inputs", () => {
+    const baseParams = {
+      depository: "0x1234567890123456789012345678901234567890",
+      chainId: "ethereum",
+      vmType: "ethereum-vm" as VmType,
+      currency: "10340230",
+      recipient: "0x9876543210987654321098765432109876543210",
+      ownerAlias: "0x9876543210987654321098765432109876543210",
+      nonce: "0",
+    }
+
+    const v1Address = getWithdrawalAddress(baseParams)
+    const v2Address = getWithdrawalAddressSafe({
+      ...baseParams,
+      additionalData: "0x",
+    })
+    expect(v1Address).not.toBe(v2Address)
   })
 })
 describe("getSubmitWithdrawRequestHash", () => {
