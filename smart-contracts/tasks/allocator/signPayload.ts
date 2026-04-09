@@ -93,14 +93,15 @@ task("allocator:sign-payload", "Sign payload on allocator")
         })
       }
 
-      const txHash = await allocator.write.signWithdrawPayload(
+      const txHash = await allocator.write.signWithdrawPayloadHash(
         [
           submitWithdrawRequestParams,
           "0x",
           {
             callbackGas: 50_000_000_000_000n,
-            signGas: 10_000_000_000_000n,
+            signGas: 20_000_000_000_000n,
           },
+          0, // hashIndex — 0 for single-hash payloads
         ],
         {
           account: signer.account,

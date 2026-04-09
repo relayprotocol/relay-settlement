@@ -3,7 +3,7 @@ import { networks } from "@relay-protocol/settlement-networks"
 import { fromHex } from "viem"
 
 // default values are Aurora testnet
-const { near: nearNetwork } = networks["1313161555"]
+const { near: nearNetwork } = networks["1313161554"]
 
 export async function derivePublicKey(
   path: string,

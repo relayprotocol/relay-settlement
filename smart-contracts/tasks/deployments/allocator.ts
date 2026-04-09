@@ -42,11 +42,15 @@ task("deploy:allocator", "Deploy the Allocator contract")
           ? "v1.signer-prod.testnet"
           : "v1.signer"
       }
+      const wrapNearTokenId = networkConfig.isTestnet
+        ? "wrap.testnet"
+        : "wrap.near"
       const params = {
         delay: delay || DEFAULT_DELAY,
         owner,
         signer,
         wNEAR,
+        wrapNearTokenId,
       }
       const { allocator } = await ignition.deploy(AllocatorModule, {
         parameters: {

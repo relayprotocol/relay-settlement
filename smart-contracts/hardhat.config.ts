@@ -23,6 +23,7 @@ import "./tasks/depository/checkOwners"
 import "./tasks/allocator/full/bitcoin"
 import "./tasks/allocator/full/evm"
 import "./tasks/allocator/full/hyperliquid"
+import "./tasks/allocator/full/lighter"
 import "./tasks/allocator/full/solana"
 import "./tasks/allocator/full/sui"
 
