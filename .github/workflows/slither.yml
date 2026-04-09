@@ -1,0 +1,182 @@
+name: Slither Analysis
+
+on:
+  pull_request:
+    paths:
+      - "smart-contracts/**"
+      - "packages/depository/**"
+      - ".github/workflows/slither.yml"
+      - ".github/scripts/slither_comment.py"
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      smart-contracts: ${{ steps.filter.outputs.smart-contracts }}
+      depository: ${{ steps.filter.outputs.depository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            smart-contracts:
+              - 'smart-contracts/**'
+            depository:
+              - 'packages/depository/**'
+
+  smart-contracts:
+    name: Slither — smart-contracts (Hardhat)
+    needs: changes
+    if: needs.changes.outputs.smart-contracts == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Symlink solady for Slither source resolution
+        run: ln -sf ../../node_modules/solady/src smart-contracts/node_modules/solady
+
+      - name: Build
+        run: |
+          yarn build
+          yarn workspace @relay-settlement/smart-contracts build
+
+      - name: Run Slither
+        uses: crytic/slither-action@v0.4.2
+        id: slither
+        with:
+          target: smart-contracts/
+          slither-config: smart-contracts/slither.config.json
+          fail-on: high
+          ignore-compile: true
+          slither-args: --compile-force-framework hardhat --json slither-results.json
+
+      - name: Post PR comment
+        if: github.event_name == 'pull_request' && always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ ! -f slither-results.json ]; then
+            echo "No Slither results file found"
+            exit 0
+          fi
+
+          python3 .github/scripts/slither_comment.py \
+            "${{ github.repository }}" \
+            "${{ github.event.pull_request.head.sha }}" \
+            "${{ github.run_id }}" \
+            "${{ github.server_url }}" \
+            "smart-contracts" \
+            "smart-contracts/" \
+            > comment.md
+
+          MARKER="<!-- slither:smart-contracts -->"
+          PR=${{ github.event.pull_request.number }}
+
+          COMMENT_ID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" --paginate \
+            --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | tail -1)
+
+          BODY="$(printf '%s\n%s' "$MARKER" "$(cat comment.md)")"
+
+          if [ -n "$COMMENT_ID" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$COMMENT_ID" \
+              -f body="$BODY"
+          else
+            gh api "repos/${{ github.repository }}/issues/$PR/comments" \
+              -f body="$BODY"
+          fi
+
+  depository:
+    name: Slither — depository (Foundry)
+    needs: changes
+    if: needs.changes.outputs.depository == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install forge dependencies
+        working-directory: packages/depository/packages/ethereum-vm
+        run: |
+          git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std
+          git clone --depth 1 https://github.com/Vectorized/solady lib/solady
+
+      - name: Build with Forge (build-info for Slither)
+        working-directory: packages/depository/packages/ethereum-vm
+        run: forge build --build-info --force
+
+      - name: Run Slither
+        uses: crytic/slither-action@v0.4.2
+        id: slither
+        with:
+          target: packages/depository/packages/ethereum-vm/
+          slither-config: packages/depository/packages/ethereum-vm/slither.config.json
+          fail-on: high
+          ignore-compile: true
+          slither-args: --compile-force-framework foundry --json slither-results.json
+
+      - name: Post PR comment
+        if: github.event_name == 'pull_request' && always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ ! -f slither-results.json ]; then
+            echo "No Slither results file found"
+            exit 0
+          fi
+
+          python3 .github/scripts/slither_comment.py \
+            "${{ github.repository }}" \
+            "${{ github.event.pull_request.head.sha }}" \
+            "${{ github.run_id }}" \
+            "${{ github.server_url }}" \
+            "depository" \
+            "packages/depository/packages/ethereum-vm/" \
+            > comment.md
+
+          MARKER="<!-- slither:depository -->"
+          PR=${{ github.event.pull_request.number }}
+
+          COMMENT_ID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" --paginate \
+            --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | tail -1)
+
+          BODY="$(printf '%s\n%s' "$MARKER" "$(cat comment.md)")"
+
+          if [ -n "$COMMENT_ID" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$COMMENT_ID" \
+              -f body="$BODY"
+          else
+            gh api "repos/${{ github.repository }}/issues/$PR/comments" \
+              -f body="$BODY"
+          fi

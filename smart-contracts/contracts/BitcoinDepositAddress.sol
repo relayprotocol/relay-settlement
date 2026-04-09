@@ -102,6 +102,7 @@ contract BitcoinDepositAddress is Ownable {
 
   /// @notice Bootstrap XCC sub-account on NEAR (costs 2 wNEAR)
   function init() external onlyOwner {
+    // slither-disable-next-line unchecked-transfer
     near.wNEAR.transferFrom(
       msg.sender,
       address(this),

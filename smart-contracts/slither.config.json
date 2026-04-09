@@ -1,0 +1,4 @@
+{
+  "detectors_to_exclude": "uninitialized-local,encode-packed-collision",
+  "filter_paths": "node_modules,contracts/mocks,contracts/test-utils,contracts/interfaces,contracts/aurora-xcc,DummyPayloadBuilder"
+}

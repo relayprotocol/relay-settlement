@@ -214,6 +214,7 @@ contract ERC20View {
             value
           );
         }
+        // slither-disable-next-line unused-return
         hub.approveFor(from, msg.sender, tokenId, currentAllowance - value);
       }
     }

@@ -132,11 +132,13 @@ contract RelayOracle is AccessControl, EIP712 {
         action,
         (uint8, address, uint256, uint256)
       );
+      // slither-disable-next-line unused-return,calls-loop
       HUB.mint(hubToAddress, hubTokenId, amount);
     } else if (actionType == uint8(ActionType.BURN)) {
       (, address hubFromAddress, uint256 hubTokenId, uint256 amount) = abi
         .decode(action, (uint8, address, uint256, uint256));
 
+      // slither-disable-next-line unused-return,calls-loop
       HUB.burn(hubFromAddress, hubTokenId, amount);
     } else if (actionType == uint8(ActionType.TRANSFER)) {
       (
@@ -147,6 +149,7 @@ contract RelayOracle is AccessControl, EIP712 {
         uint256 amount
       ) = abi.decode(action, (uint8, address, address, uint256, uint256));
 
+      // slither-disable-next-line unused-return,calls-loop
       HUB.transferFrom(hubFromAddress, hubToAddress, hubTokenId, amount);
     } else {
       revert InvalidActionType(actionType);

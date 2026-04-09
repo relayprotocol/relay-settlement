@@ -194,6 +194,7 @@ contract RelayDepository is Ownable, EIP712 {
         Call memory c = calls[i];
 
         // Execute the call
+        // slither-disable-next-line arbitrary-send-eth,calls-loop
         (bool success, bytes memory data) = c.to.call{value: c.value}(c.data);
 
         // Revert if the call failed and failure is not allowed

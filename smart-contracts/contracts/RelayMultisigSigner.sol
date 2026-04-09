@@ -79,6 +79,7 @@ contract RelayMultisigSigner is Ownable {
   /// You need to approve 2 wNEAR for the CS Signer to init the sub-account
   /// @notice This calls the simplest possible contract on NEAR to bootstrap itself and initialize the XCC subaccount.
   function init() public onlyOwner {
+    // slither-disable-next-line unchecked-transfer
     near.wNEAR.transferFrom(
       msg.sender,
       address(this),

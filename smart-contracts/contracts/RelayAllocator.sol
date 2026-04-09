@@ -275,6 +275,7 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
   function init() public onlyOwner {
     // this will initialize the XCC sub-account on NEAR
     // 2 Near are required for storage staking
+    // slither-disable-next-line unchecked-transfer
     near.wNEAR.transferFrom(
       msg.sender,
       address(this),
@@ -454,6 +455,7 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
   ) public {
     if (signatureFee > 0) {
       // We capture the fee for ourselves first
+      // slither-disable-next-line unchecked-transfer
       near.wNEAR.transferFrom(msg.sender, address(this), signatureFee);
     }
 
@@ -645,6 +647,7 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
     }
 
     // Actually perform the transfer
+    // slither-disable-next-line unused-return
     RelayHub(hub).transferFrom(
       params.spender,
       address(this),
