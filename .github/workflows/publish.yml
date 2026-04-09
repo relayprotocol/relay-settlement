@@ -29,9 +29,21 @@ jobs:
         run: yarn
 
       - name: Build packages
-        run: yarn build
+        run: |
+          yarn workspace @relay-protocol/settlement-sdk build
+          yarn workspace @relay-protocol/settlement-networks build
 
       - name: Publish to npm
         run: |
-          cd packages/networks
-          npm publish
+          for pkg in packages/networks packages/sdk; do
+            cd "$GITHUB_WORKSPACE/$pkg"
+            NAME=$(node -p "require('./package.json').name")
+            VERSION=$(node -p "require('./package.json').version")
+            if npm view "$NAME@$VERSION" version 2>/dev/null; then
+              echo "$NAME@$VERSION already published, skipping"
+            else
+              npm publish --provenance --access public
+            fi
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
