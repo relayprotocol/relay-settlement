@@ -136,7 +136,7 @@ contract BitcoinPayloadBuilder is IPayloadBuilder {
     if (change > 0) {
       // Ensure the change output is higher than the minimum UTXO value
       if (change < MIN_UTXO_VALUE) {
-        revert OutputBelowMinThreshold(receiverValue);
+        revert OutputBelowMinThreshold(change);
       }
 
       outputs[1] = BitcoinTransactionDataOutput({
