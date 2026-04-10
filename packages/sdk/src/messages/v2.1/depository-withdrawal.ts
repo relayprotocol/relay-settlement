@@ -12,8 +12,10 @@ import {
   encodeAbiParameters,
   hashStruct,
   Hex,
+  keccak256,
   parseAbiParameters,
   parseUnits,
+  stringToHex,
 } from "viem"
 
 import {
@@ -172,6 +174,29 @@ export type DecodedHyperliquidVmWithdrawal = {
   }
 }
 
+export type LighterTransferParams = {
+  type: "Transfer"
+  nonce: string
+  fromAccountIndex: string
+  fromRouteType: string
+  apiKeyIndex: string
+  toAccountIndex: string
+  toRouteType: string
+  assetIndex: string
+  amount: string
+  usdcFee: string
+  lighterChainId: string
+  memo: string
+}
+
+export type DecodedLighterVmWithdrawal = {
+  vmType: "lighter-vm"
+  withdrawal: {
+    actionType: number
+    parameters: LighterTransferParams
+  }
+}
+
 type DecodedWithdrawal =
   | DecodedEthereumVmWithdrawal
   | DecodedSolanaVmWithdrawal
@@ -179,6 +204,7 @@ type DecodedWithdrawal =
   | DecodedBitcoinVmWithdrawal
   | DecodedTronVmWithdrawal
   | DecodedHyperliquidVmWithdrawal
+  | DecodedLighterVmWithdrawal
 
 export const encodeWithdrawal = (
   decodedWithdrawal: DecodedWithdrawal
@@ -344,6 +370,41 @@ export const encodeWithdrawal = (
         [
           {
             txType,
+            parameters: encodedParameters as Hex,
+          },
+        ]
+      )
+    }
+
+    case "lighter-vm": {
+      const { actionType, parameters } = decodedWithdrawal.withdrawal
+
+      const encodedParameters = encodeAbiParameters(
+        parseAbiParameters([
+          "(uint64 nonce, uint64 fromAccountIndex, uint64 fromRouteType, uint64 apiKeyIndex, uint64 toAccountIndex, uint64 toRouteType, uint64 assetIndex, uint64 amount, uint64 usdcFee, uint64 lighterChainId, bytes32 memo)",
+        ]),
+        [
+          {
+            nonce: BigInt(parameters.nonce),
+            fromAccountIndex: BigInt(parameters.fromAccountIndex),
+            fromRouteType: BigInt(parameters.fromRouteType),
+            apiKeyIndex: BigInt(parameters.apiKeyIndex),
+            toAccountIndex: BigInt(parameters.toAccountIndex),
+            toRouteType: BigInt(parameters.toRouteType),
+            assetIndex: BigInt(parameters.assetIndex),
+            amount: BigInt(parameters.amount),
+            usdcFee: BigInt(parameters.usdcFee),
+            lighterChainId: BigInt(parameters.lighterChainId),
+            memo: `0x${parameters.memo.padEnd(64, "0")}` as Hex,
+          },
+        ]
+      )
+
+      return encodeAbiParameters(
+        parseAbiParameters(["(uint8 actionType, bytes parameters)"]),
+        [
+          {
+            actionType,
             parameters: encodedParameters as Hex,
           },
         ]
@@ -551,6 +612,49 @@ export const decodeWithdrawal = (
       }
     }
 
+    case "lighter-vm": {
+      const result = decodeAbiParameters(
+        parseAbiParameters(["(uint8 actionType, bytes parameters)"]),
+        encodedWithdrawal as Hex
+      )
+
+      const { actionType, parameters } = result[0]
+
+      if (actionType !== 0) {
+        throw new Error(`Unsupported Lighter action type: ${actionType}`)
+      }
+
+      const paramResult = decodeAbiParameters(
+        parseAbiParameters([
+          "(uint64 nonce, uint64 fromAccountIndex, uint64 fromRouteType, uint64 apiKeyIndex, uint64 toAccountIndex, uint64 toRouteType, uint64 assetIndex, uint64 amount, uint64 usdcFee, uint64 lighterChainId, bytes32 memo)",
+        ]),
+        parameters
+      )
+
+      const r = paramResult[0]
+
+      return {
+        vmType: "lighter-vm",
+        withdrawal: {
+          actionType: Number(actionType),
+          parameters: {
+            type: "Transfer" as const,
+            nonce: r.nonce.toString(),
+            fromAccountIndex: r.fromAccountIndex.toString(),
+            fromRouteType: r.fromRouteType.toString(),
+            apiKeyIndex: r.apiKeyIndex.toString(),
+            toAccountIndex: r.toAccountIndex.toString(),
+            toRouteType: r.toRouteType.toString(),
+            assetIndex: r.assetIndex.toString(),
+            amount: r.amount.toString(),
+            usdcFee: r.usdcFee.toString(),
+            lighterChainId: r.lighterChainId.toString(),
+            memo: (r.memo as string).slice(2),
+          },
+        },
+      }
+    }
+
     default:
       throw new Error("Unsupported vm type")
   }
@@ -737,6 +841,14 @@ export const getDecodedWithdrawalId = (
       }
     }
 
+    case "lighter-vm": {
+      return keccak256(
+        stringToHex(
+          buildLighterTransferL1Message(decodedWithdrawal.withdrawal.parameters)
+        )
+      )
+    }
+
     default:
       throw new Error("Unsupported vm type")
   }
@@ -805,6 +917,10 @@ export const getDecodedWithdrawalCurrency = (
           )
       }
     }
+
+    case "lighter-vm": {
+      return decodedWithdrawal.withdrawal.parameters.assetIndex
+    }
   }
 }
 
@@ -871,6 +987,10 @@ export const getDecodedWithdrawalAmount = (
       ).toString()
     }
 
+    case "lighter-vm": {
+      return decodedWithdrawal.withdrawal.parameters.amount
+    }
+
     default:
       throw new Error("Unsupported vm type")
   }
@@ -918,7 +1038,41 @@ export const getDecodedWithdrawalRecipient = (
       return decodedWithdrawal.withdrawal.parameters.destination
     }
 
+    case "lighter-vm": {
+      return decodedWithdrawal.withdrawal.parameters.toAccountIndex
+    }
+
     default:
       throw new Error("Unsupported vm type")
   }
+}
+
+// ====== Lighter L1 message helpers ======
+
+const lighterToHex16 = (val: string): string =>
+  "0x" + BigInt(val).toString(16).padStart(16, "0")
+
+/**
+ * Reconstructs the Lighter L1 message text for a Transfer operation.
+ * Must exactly match lighter-ts SDK wasm-signer-client.ts transfer() format.
+ */
+export const buildLighterTransferL1Message = (
+  w: LighterTransferParams
+): string => {
+  const memo = w.memo.padEnd(64, "0")
+
+  return [
+    "Transfer",
+    "",
+    `nonce: ${lighterToHex16(w.nonce)}`,
+    `from: ${lighterToHex16(w.fromAccountIndex)} (route ${lighterToHex16(w.fromRouteType)})`,
+    `api key: ${lighterToHex16(w.apiKeyIndex)}`,
+    `to: ${lighterToHex16(w.toAccountIndex)} (route ${lighterToHex16(w.toRouteType)})`,
+    `asset: ${lighterToHex16(w.assetIndex)}`,
+    `amount: ${lighterToHex16(w.amount)}`,
+    `fee: ${lighterToHex16(w.usdcFee)}`,
+    `chainId: ${lighterToHex16(w.lighterChainId)}`,
+    `memo: ${memo}`,
+    "Only sign this message for a trusted client!",
+  ].join("\n")
 }

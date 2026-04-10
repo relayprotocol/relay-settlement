@@ -18,6 +18,8 @@ import {
   DecodedSolanaVmWithdrawal,
   DecodedSuiVmWithdrawal,
   DecodedHyperliquidVmWithdrawal,
+  DecodedLighterVmWithdrawal,
+  LighterTransferParams,
   DepositoryWithdrawalMessage,
   DepositoryWithdrawalStatus,
   getDepositoryWithdrawalMessageId,
@@ -27,6 +29,7 @@ import {
   getDecodedWithdrawalCurrency,
   getDecodedWithdrawalAmount,
   getDecodedWithdrawalRecipient,
+  buildLighterTransferL1Message,
 } from "./messages/v2.1/depository-withdrawal"
 
 import {
@@ -126,6 +129,8 @@ export {
   DecodedSolanaVmWithdrawal,
   DecodedSuiVmWithdrawal,
   DecodedHyperliquidVmWithdrawal,
+  DecodedLighterVmWithdrawal,
+  LighterTransferParams,
   DepositoryWithdrawalMessage,
   DepositoryWithdrawalStatus,
   getDepositoryWithdrawalMessageId,
@@ -134,6 +139,7 @@ export {
   getDecodedWithdrawalId,
   getDecodedWithdrawalCurrency,
   getDecodedWithdrawalAmount,
+  buildLighterTransferL1Message,
   getDecodedWithdrawalRecipient,
 
   // SolverRefund
