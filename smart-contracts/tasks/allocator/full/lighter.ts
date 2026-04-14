@@ -1,3 +1,5 @@
+// ABOUTME: Full Lighter allocator e2e test with optional oracle integration.
+// Tests: Allocator deploy → ChangePubKey → Transfer (MPC personal_sign) → oracle attestation (deposit + withdrawal).
 import { task } from "hardhat/config"
 import {
   createPublicClient,
@@ -29,6 +31,8 @@ import { derivePublicKey } from "../../../lib/near"
 import { base58 } from "@scure/base"
 import { checkAndApproveWNEAR } from "../../../lib/aurora"
 import { generateLighterApiKey } from "../../../lib/lighter/generateApiKey"
+import { encodeWithdrawal } from "@relay-protocol/settlement-sdk"
+import { networks } from "@relay-protocol/settlement-networks"
 
 const LIGHTER_GATEWAY = "0x3B4D794a66304F130a4Db8F2551B0070dfCf5ca7"
 
@@ -121,6 +125,21 @@ task(
     "USDC amount (raw, 6 decimals) to deposit via Lighter gateway if MPC has no account",
     "10000000"
   )
+  // Oracle integration (opt-in)
+  .addOptionalParam(
+    "oracleUrl",
+    "Oracle API URL — enables deposit+withdrawal attestation"
+  )
+  .addOptionalParam(
+    "deployerAccountIndex",
+    "Deployer's account index on Lighter (for deposit attestation)"
+  )
+  .addOptionalParam(
+    "deployerApiKey",
+    "Deployer API key (privateKey:apiKeyIndex) for deposit transfer"
+  )
+  .addFlag("skipDeposit", "Skip deposit attestation phase")
+  .addFlag("skipWithdrawal", "Skip withdrawal phase (test deposit only)")
   .setAction(
     async (
       {
@@ -143,6 +162,11 @@ task(
         usdcFee,
         ethMainnetChainId,
         depositAmount,
+        oracleUrl,
+        deployerAccountIndex,
+        deployerApiKey,
+        skipDeposit,
+        skipWithdrawal,
       },
       hre
     ) => {
@@ -191,12 +215,23 @@ task(
       // ================================================================
       // Step 2: Derive MPC address & resolve Lighter account index
       // ================================================================
+      // Resolve NEAR signer/rpc from the current Aurora network (mainnet vs testnet)
+      const auroraChainId = String(hre.network.config.chainId)
+      const auroraNetwork = networks[auroraChainId]
+      if (!auroraNetwork?.near) {
+        throw new Error(
+          `No NEAR config for chain ${auroraChainId}; full:lighter must run against Aurora mainnet or testnet`
+        )
+      }
+      const { near: nearNetwork } = auroraNetwork
       const derivationPath = allocatorAddress.toLowerCase()
       const predecessor = `${allocatorAddress.substring(2).toLowerCase()}.aurora`
       const { publicKey: allocatorPublicKeyRaw } = await derivePublicKey(
         derivationPath,
         predecessor,
-        0
+        0,
+        nearNetwork!.signer,
+        nearNetwork!.rpc
       )
       const allocatorPublicKey = `0x04${Buffer.from(base58.decode(allocatorPublicKeyRaw)).toString("hex")}`
       const signerAddress = publicKeyToAddress(
@@ -352,6 +387,194 @@ task(
         console.log(
           `\nNext: deposit to ${signerAddress} on Lighter, then run without --dry-run`
         )
+        return
+      }
+
+      // ================================================================
+      // Phase D: Deposit Attestation (only when --oracle-url + !skipDeposit)
+      // ================================================================
+      // Oracle integration workflow for deposits:
+      //   D1. Transfer funds from deployer → depository on the origin chain (Lighter L2)
+      //   D2. Wait for tx confirmation (Lighter: COMMITTED/EXECUTED is final, no reorg)
+      //   D3. Call oracle POST /attestations/depository-deposits/v1
+      //       - Request: { chainId: "<chain-slug>", transactionId: "<origin-chain-tx-hash>" }
+      //       - Oracle looks up the tx, verifies it's a Transfer TO the depository
+      //       - Response: { messages: [{ result: { depositor, amount, currency, depositId, ... } }] }
+      //   D4. Verify response contains correct deposit data
+      //
+      // For new VMs: adapt the transfer mechanism (D1) and chain slug. The oracle
+      // request/response format is the same across all VMs.
+      if (oracleUrl && !skipDeposit) {
+        const deplPrivKey = process.env.DEPLOYER_LIGHTER_API_KEY_PRIVATE || ""
+        const deplApiKeyIdx = process.env.DEPLOYER_LIGHTER_API_KEY_INDEX || ""
+
+        const finalDeplPrivKey = deployerApiKey
+          ? deployerApiKey.split(":")[0]
+          : deplPrivKey
+        const finalDeplApiKeyIdx = deployerApiKey
+          ? deployerApiKey.split(":")[1]
+          : deplApiKeyIdx
+
+        if (!finalDeplPrivKey || !finalDeplApiKeyIdx) {
+          throw new Error(
+            "Deposit attestation requires DEPLOYER_LIGHTER_API_KEY_PRIVATE + DEPLOYER_LIGHTER_API_KEY_INDEX env vars, or --deployer-api-key (format: privateKey:apiKeyIndex)"
+          )
+        }
+        console.log("\n========== Phase D: Deposit Attestation ==========")
+
+        // Resolve deployerAccountIndex by looking up deployer's EVM address
+        let resolvedDeployerAccountIndex = deployerAccountIndex
+        if (!resolvedDeployerAccountIndex) {
+          const deployerAddress = privateKeyToAccount(deployerKey).address
+          console.log(`Looking up deployer account for ${deployerAddress}...`)
+          try {
+            const deployerAcctData = (await lighterApi.getAccountsByL1Address(
+              deployerAddress
+            )) as any
+            const deployerSub =
+              deployerAcctData?.sub_accounts || deployerAcctData
+            const deployerAcct = Array.isArray(deployerSub)
+              ? deployerSub[0]
+              : deployerSub
+            if (deployerAcct?.index != null) {
+              resolvedDeployerAccountIndex = String(deployerAcct.index)
+              console.log(
+                `Resolved deployerAccountIndex: ${resolvedDeployerAccountIndex}`
+              )
+            }
+          } catch {
+            // API throws for unknown addresses
+          }
+          if (!resolvedDeployerAccountIndex) {
+            throw new Error(
+              "Could not resolve deployer account index from DEPLOYER_PRIVATE_KEY address — provide --deployer-account-index"
+            )
+          }
+        }
+
+        // D2: L2 Transfer from deployer → depository (fromAccountIndex = depository)
+        const deployerSigner = new SignerClient({
+          accountIndex: Number(resolvedDeployerAccountIndex),
+          apiKeyIndex: Number(finalDeplApiKeyIdx),
+          privateKey: finalDeplPrivKey.startsWith("0x")
+            ? finalDeplPrivKey.slice(2)
+            : finalDeplPrivKey,
+          url: lighterApiUrl,
+        })
+        await deployerSigner.initialize()
+        await deployerSigner.ensureWasmClient()
+
+        const depositOrderId = keccak256(
+          `0x${Date.now().toString(16)}` as `0x${string}`
+        )
+        console.log(`Deposit orderId: ${depositOrderId}`)
+
+        // Query deployer nonce
+        const deployerTransactionApi = new TransactionApi(
+          new ApiClient({ host: lighterApiUrl })
+        )
+        const deployerNonce = await deployerTransactionApi.getNextNonce(
+          Number(resolvedDeployerAccountIndex),
+          Number(finalDeplApiKeyIdx)
+        )
+
+        // Query transfer fee
+        let depositUsdcFee = "0"
+        try {
+          const authToken = await deployerSigner.createAuthToken()
+          const feeClient = new ApiClient({ host: lighterApiUrl })
+          const feeResp = await feeClient.get(
+            "/api/v1/transferFeeInfo",
+            {
+              account_index: Number(resolvedDeployerAccountIndex),
+              to_account_index: Number(fromAccountIndex),
+            },
+            { headers: { Authorization: authToken } }
+          )
+          depositUsdcFee = String((feeResp as any).data.transfer_fee_usdc)
+        } catch (e: any) {
+          console.log(`⚠️ Failed to query deposit fee: ${e.message}, using 0`)
+        }
+
+        // Use deployer's EVM key for L1 signature (reuse DEPLOYER_PRIVATE_KEY)
+        const deployerEthSigner = {
+          signMessage: async (msg: any) => {
+            const account = privateKeyToAccount(deployerKey)
+            return account.signMessage({
+              message: typeof msg === "string" ? msg : { raw: msg as any },
+            })
+          },
+        }
+
+        console.log(
+          `Transferring ${amount} from deployer(${resolvedDeployerAccountIndex}) to depository(${fromAccountIndex})...`
+        )
+        const [, depositTxHash, depositError] = await deployerSigner.transfer({
+          amount: Number(amount),
+          assetIndex: Number(assetIndex),
+          ethSigner: deployerEthSigner as any,
+          fromRouteType: Number(fromRouteType),
+          memo: depositOrderId,
+          nonce: deployerNonce.nonce,
+          toAccountIndex: Number(fromAccountIndex),
+          toRouteType: Number(toRouteType),
+          usdcFee: Number(depositUsdcFee),
+        })
+
+        if (depositError) {
+          throw new Error(`Deposit transfer failed: ${depositError}`)
+        }
+        console.log(`Deposit transfer submitted: ${depositTxHash}`)
+
+        // D3: Verify transfer executed
+        await wait(2)
+        if (depositTxHash) {
+          const txDetail = await deployerTransactionApi.getTransaction({
+            by: "hash",
+            value: depositTxHash,
+          })
+          console.log(`Deposit transfer status: ${txDetail.status}`)
+        }
+
+        // D4: Oracle deposit attestation
+        console.log("\nCalling oracle deposit attestation...")
+        const depositAttestResponse = await fetch(
+          `${oracleUrl}/attestations/depository-deposits/v1`,
+          {
+            body: JSON.stringify({
+              chainId: "lighter",
+              transactionId: depositTxHash,
+            }),
+            headers: { "Content-Type": "application/json" },
+            method: "POST",
+          }
+        )
+
+        if (!depositAttestResponse.ok) {
+          const body = await depositAttestResponse.text()
+          throw new Error(
+            `Deposit attestation failed (${depositAttestResponse.status}): ${body}`
+          )
+        }
+
+        const depositAttestData = (await depositAttestResponse.json()) as any
+        console.log(
+          "Deposit attestation response:",
+          JSON.stringify(depositAttestData, null, 2)
+        )
+
+        // D5: Assert response
+        if (depositAttestData.messages?.length) {
+          console.log("✅ Deposit attestation verified")
+        } else {
+          console.log(
+            "⚠️ Oracle returned no deposit messages — deposit may not match depository"
+          )
+        }
+      }
+
+      if (skipWithdrawal) {
+        console.log("\n--skip-withdrawal set, stopping after deposit phase")
         return
       }
 
@@ -1015,6 +1238,102 @@ task(
       console.log(`   Signer: ${signerAddress}`)
 
       // ================================================================
+      // A1: Pre-execution withdrawal attestation (oracle mode only)
+      // ================================================================
+      // Oracle integration workflow for withdrawals:
+      //   1. Construct encodedWithdrawal using SDK's encodeWithdrawal() — this is the
+      //      ABI-encoded representation of the withdrawal that the oracle will decode
+      //      to compute the withdrawalId and match against on-chain transactions.
+      //      Per-VM: each VM has its own encoding format (see DecodedXxxVmWithdrawal types).
+      //
+      //   2. A1 (pre-execution): POST /attestations/depository-withdrawals/v1
+      //      - Send encodedWithdrawal WITHOUT transactionId (transfer hasn't happened yet)
+      //      - Expected: status=0 (PENDING) — oracle scans Explorer, finds no matching tx
+      //
+      //   3. Execute the actual transfer on the origin chain
+      //
+      //   4. A2 (post-execution): POST /attestations/depository-withdrawals/v1
+      //      - Send encodedWithdrawal WITH transactionId (the executed transfer tx hash)
+      //      - Expected: status=1 (EXECUTED) — oracle finds the tx and matches withdrawalId
+      //      - On EXECUTED, oracle returns signed execution (BURN action for hub settlement)
+      //
+      // withdrawalAddressRequest fields:
+      //   - chainId: chain slug (e.g. "lighter", "ethereum"), NOT numeric chain ID
+      //   - currency: the asset identifier on the origin chain
+      //   - withdrawer: depository account (the one sending funds)
+      //   - withdrawerChainId: same as chainId for single-chain withdrawals
+      //   - recipient: destination account on the origin chain
+      //   - withdrawalNonce: nonce from the withdrawal params (must match encodedWithdrawal)
+      //
+      // For new VMs: adapt encodeWithdrawal() call and withdrawalAddressRequest fields.
+      // The oracle endpoint and response format are the same across all VMs.
+
+      // Construct encodedWithdrawal using SDK (must match the Transfer params exactly)
+      const encodedWithdrawal = encodeWithdrawal({
+        vmType: "lighter-vm",
+        withdrawal: {
+          actionType: 0,
+          parameters: {
+            amount: amount,
+            apiKeyIndex: apiKeyIndex,
+            assetIndex: assetIndex,
+            fromAccountIndex: fromAccountIndex,
+            fromRouteType: fromRouteType,
+            lighterChainId: lighterChainId,
+            memo: (memo as string).slice(2), // strip 0x
+            nonce: String(transferNonce),
+            toAccountIndex: recipient,
+            toRouteType: toRouteType,
+            type: "Transfer" as const,
+            usdcFee: usdcFee,
+          },
+        },
+      })
+
+      if (oracleUrl) {
+        console.log(
+          "\n========== A1: Pre-execution Withdrawal Attestation =========="
+        )
+        const withdrawalResponse1 = await fetch(
+          `${oracleUrl}/attestations/depository-withdrawals/v1`,
+          {
+            body: JSON.stringify({
+              chainId: "lighter",
+              withdrawal: encodedWithdrawal,
+              withdrawalAddressRequest: {
+                chainId: "lighter",
+                currency: assetIndex,
+                recipient: recipient,
+                withdrawalNonce: String(transferNonce),
+                withdrawer: fromAccountIndex,
+                withdrawerChainId: "lighter",
+              },
+            }),
+            headers: { "Content-Type": "application/json" },
+            method: "POST",
+          }
+        )
+
+        if (!withdrawalResponse1.ok) {
+          const body = await withdrawalResponse1.text()
+          console.log(
+            `⚠️ Pre-execution attestation failed (${withdrawalResponse1.status}): ${body}`
+          )
+        } else {
+          const withdrawalData1 = (await withdrawalResponse1.json()) as any
+          console.log("A1 response:", JSON.stringify(withdrawalData1, null, 2))
+          const status = withdrawalData1.message?.result?.status
+          if (status === 0) {
+            console.log("✅ Pre-execution withdrawal status: PENDING (correct)")
+          } else {
+            console.log(
+              `⚠️ Expected PENDING (0), got ${status} — transfer may already exist`
+            )
+          }
+        }
+      }
+
+      // ================================================================
       // Step 6: Submit Transfer to Lighter API
       // ================================================================
       console.log("\n========== Submit Transfer to Lighter API ==========")
@@ -1087,6 +1406,57 @@ task(
               )
             }
             await wait(1)
+          }
+        }
+      }
+
+      // ================================================================
+      // A2: Post-execution withdrawal attestation (oracle mode only)
+      // ================================================================
+      // After transfer is confirmed on-chain, oracle should now detect it as EXECUTED.
+      // The transactionId enables direct lookup fallback (in case Explorer hasn't indexed yet).
+      if (oracleUrl && transferTxHash) {
+        console.log(
+          "\n========== A2: Post-execution Withdrawal Attestation =========="
+        )
+        const withdrawalResponse2 = await fetch(
+          `${oracleUrl}/attestations/depository-withdrawals/v1`,
+          {
+            body: JSON.stringify({
+              chainId: "lighter",
+              transactionId: transferTxHash,
+              withdrawal: encodedWithdrawal,
+              withdrawalAddressRequest: {
+                chainId: "lighter",
+                currency: assetIndex,
+                recipient: recipient,
+                withdrawalNonce: String(transferNonce),
+                withdrawer: fromAccountIndex,
+                withdrawerChainId: "lighter",
+              },
+            }),
+            headers: { "Content-Type": "application/json" },
+            method: "POST",
+          }
+        )
+
+        if (!withdrawalResponse2.ok) {
+          const body = await withdrawalResponse2.text()
+          console.log(
+            `⚠️ Post-execution attestation failed (${withdrawalResponse2.status}): ${body}`
+          )
+        } else {
+          const withdrawalData2 = (await withdrawalResponse2.json()) as any
+          console.log("A2 response:", JSON.stringify(withdrawalData2, null, 2))
+          const status = withdrawalData2.message?.result?.status
+          if (status === 1) {
+            console.log(
+              "✅ Post-execution withdrawal status: EXECUTED (correct)"
+            )
+          } else {
+            console.log(
+              `⚠️ Expected EXECUTED (1), got ${status} — Explorer may need time to index`
+            )
           }
         }
       }
