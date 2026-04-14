@@ -110,6 +110,8 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
   );
   /// @notice Emitted when the hub contract is set
   event HubSet(address hub);
+  /// @notice Emitted when the NEAR signer account is changed
+  event NearSignerChanged(string signer);
   /// @notice Emitted when the signature fee is changed
   event SignatureFeeChanged(uint256 fee);
 
@@ -316,6 +318,13 @@ contract RelayAllocator is AccessControl, Ownable, EIP712 {
   /// @param withdrawer Address to prevent from withdrawing
   function suspend(address withdrawer) public onlyMultisigOwner {
     _revokeRole(APPROVED_WITHDRAWER_ROLE, withdrawer);
+  }
+
+  /// @notice Updates the NEAR Chain Signatures signer account
+  /// @param _signer New NEAR signer account ID
+  function setNearSigner(string calldata _signer) external onlyOwner {
+    nearSigner = _signer;
+    emit NearSignerChanged(_signer);
   }
 
   /// @notice Sets the hub contract address
