@@ -660,7 +660,7 @@ pub struct MigrateDomainSeparator<'info> {
     pub system_program: Program<'info, System>,
 
     /// The instruction sysvar for reentrancy protection
-    /// CHECK: The instruction sysvar for reentrancy protection
+    #[account(address = sysvar::instructions::ID)]
     pub ix_sysvar: AccountInfo<'info>,
 }
 
@@ -814,7 +814,7 @@ pub struct ExecuteTransfer<'info> {
     pub used_request: Account<'info, UsedRequest>,
 
     /// The instruction sysvar for ed25519 verification
-    /// CHECK: The instruction sysvar for ed25519 verification
+    #[account(address = sysvar::instructions::ID)]
     pub ix_sysvar: AccountInfo<'info>,
 
     /// The token program
