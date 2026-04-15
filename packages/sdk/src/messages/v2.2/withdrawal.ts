@@ -41,6 +41,14 @@ export type DenormalizedSubmitWithdrawRequest = Omit<
       currencyHyperliquidSymbol: string
       currentTime: number
     }
+    "lighter-vm"?: {
+      nonce: number
+      fromRouteType: number
+      toRouteType: number
+      apiKeyIndex: number
+      usdcFee: number
+      memo: string
+    }
   }
 }
 
@@ -349,6 +357,48 @@ export function normalizePayloadParams(
           : `${
               hyperliquidAdditionalData.currencyHyperliquidSymbol
             }:${request.currency.toLowerCase()}`,
+        data,
+      }
+    }
+
+    case "lighter-vm": {
+      const lighterAdditionalData = request.additionalData?.["lighter-vm"]
+      if (!lighterAdditionalData) {
+        throw new Error("Additional data is required for lighter-vm")
+      }
+
+      const memoHex = lighterAdditionalData.memo.startsWith("0x")
+        ? lighterAdditionalData.memo.slice(2)
+        : lighterAdditionalData.memo
+      if (memoHex.length > 64) {
+        throw new Error(
+          `Lighter memo exceeds 32 bytes: got ${memoHex.length / 2} bytes`
+        )
+      }
+
+      const data = encodeAbiParameters(
+        [
+          { type: "uint8" },
+          { type: "uint64" },
+          { type: "uint64" },
+          { type: "uint64" },
+          { type: "uint64" },
+          { type: "uint64" },
+          { type: "bytes32" },
+        ],
+        [
+          0, // actionType = Transfer
+          BigInt(lighterAdditionalData.nonce),
+          BigInt(lighterAdditionalData.fromRouteType),
+          BigInt(lighterAdditionalData.toRouteType),
+          BigInt(lighterAdditionalData.apiKeyIndex),
+          BigInt(lighterAdditionalData.usdcFee),
+          `0x${memoHex.padEnd(64, "0")}` as Hex,
+        ]
+      )
+
+      return {
+        ...defaultParams,
         data,
       }
     }
