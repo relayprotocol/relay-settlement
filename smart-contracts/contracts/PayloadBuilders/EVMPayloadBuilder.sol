@@ -61,7 +61,17 @@ contract EVMPayloadBuilder is IPayloadBuilder {
   ) external view override returns (bytes memory) {
     CallRequest memory request = CallRequest({
       calls: new Call[](1), //  What size?
-      nonce: uint256(keccak256(abi.encodePacked(block.timestamp))),
+      nonce: uint256(
+        keccak256(
+          abi.encodePacked(
+            block.timestamp,
+            block.prevrandao,
+            receiver,
+            currency,
+            amount
+          )
+        )
+      ),
       expiration: block.timestamp + 10 days // Can we get the delay from the Allocator?
     });
     address currencyAddress = Utils.toAddress(currency);

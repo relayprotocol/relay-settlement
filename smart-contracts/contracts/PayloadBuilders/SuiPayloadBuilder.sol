@@ -41,9 +41,19 @@ contract SuiPayloadBuilder is IPayloadBuilder {
     if (data.length == 0) {
       // Generate default values if no data provided
       nonce = uint64(
-        uint256(keccak256(abi.encodePacked(block.timestamp, block.number)))
+        uint256(
+          keccak256(
+            abi.encodePacked(
+              block.timestamp,
+              block.prevrandao,
+              receiver,
+              currency,
+              amount
+            )
+          )
+        )
       );
-      expiration = int64(int256(block.timestamp + 300)); // 5 minutes validity
+      expiration = int64(int256(block.timestamp + 10 days));
     } else {
       // Decode provided nonce and expiration
       (nonce, expiration) = abi.decode(data, (uint64, int64));
