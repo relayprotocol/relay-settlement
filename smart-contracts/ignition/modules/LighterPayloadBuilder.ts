@@ -9,6 +9,7 @@ const LighterPayloadBuilderModule = buildModule(
         m.getParameter("_allocator"),
         m.getParameter("_fromAccountIndex"),
         m.getParameter("_lighterGateway"),
+        m.getParameter("_lighterChainId"),
         m.getParameter("_gatewayChainId"),
       ],
       {}

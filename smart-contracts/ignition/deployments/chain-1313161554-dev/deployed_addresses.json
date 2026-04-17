@@ -17,5 +17,5 @@
   "BitcoinDepositAddress#AuroraSdk": "0x7d6CD3036D9dFE8A47dbEF35fbEc0d968bB7E370",
   "BitcoinDepositAddress#BitcoinDepositSweepBuilder": "0xA7D4eBD14BDb9C89EA438bDdd1866A8409bAD499",
   "BitcoinDepositAddress#BitcoinDepositAddress": "0x9356Fc7557b46B9b34FD9223eb170CcfdbdF9E87",
-  "LighterPayloadBuilder#LighterPayloadBuilder": "0x30C9f3934C680D084f0b5e4518A0da171110053D"
+  "LighterPayloadBuilder#LighterPayloadBuilder": "0xB1FEEdE9C3a704A2824d466F8f0b32E202d21e41"
 }

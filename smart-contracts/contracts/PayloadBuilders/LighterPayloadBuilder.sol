@@ -81,6 +81,9 @@ contract LighterPayloadBuilder is IPayloadBuilder {
   /// @notice Lighter gateway contract on Ethereum mainnet (deposit, withdraw, changePubKey)
   address public immutable LIGHTER_GATEWAY;
 
+  /// @notice Lighter chain ID used in Transfer payloads and L1 message construction
+  uint64 public immutable LIGHTER_CHAIN_ID;
+
   /// @notice Gateway chain ID (Ethereum mainnet = 1) for ChangePubKey EIP-155 signing
   uint256 public immutable GATEWAY_CHAIN_ID;
 
@@ -101,11 +104,13 @@ contract LighterPayloadBuilder is IPayloadBuilder {
   /// @param _allocator The RelayAllocator contract
   /// @param _fromAccountIndex Lighter account index (must fit uint48)
   /// @param _lighterGateway Lighter gateway contract on Ethereum mainnet
+  /// @param _lighterChainId Lighter chain ID used in Transfer payloads and L1 messages
   /// @param _gatewayChainId Chain ID for ChangePubKey EIP-155 signing (e.g. 1 for mainnet)
   constructor(
     IRelayAllocator _allocator,
     uint64 _fromAccountIndex,
     address _lighterGateway,
+    uint64 _lighterChainId,
     uint256 _gatewayChainId
   ) {
     if (address(_allocator) == address(0) || _lighterGateway == address(0))
@@ -114,6 +119,7 @@ contract LighterPayloadBuilder is IPayloadBuilder {
     ALLOCATOR = _allocator;
     FROM_ACCOUNT_INDEX = _fromAccountIndex;
     LIGHTER_GATEWAY = _lighterGateway;
+    LIGHTER_CHAIN_ID = _lighterChainId;
     GATEWAY_CHAIN_ID = _gatewayChainId;
   }
 
@@ -143,14 +149,13 @@ contract LighterPayloadBuilder is IPayloadBuilder {
   /// @notice Builds a payload for Lighter operations
   /// @dev Transfer:     data = abi.encode(uint8(0), uint64 nonce, uint64 fromRouteType, uint64 toRouteType, uint64 apiKeyIndex, uint64 usdcFee, bytes32 memo)
   ///      ChangePubKey: data = abi.encode(uint8(1), bytes pubkey, uint64 apiKeyIndex, uint256 txNonce, uint256 gasPrice, uint256 gasLimit)
-  /// @param chainId Chain ID — used as lighterChainId in Transfer payloads
   /// @param currency Asset index as decimal string
   /// @param amount Transfer amount (must fit uint64)
   /// @param receiver Destination account index as decimal string
   /// @param data ABI-encoded action parameters (first byte = actionType)
   /// @return Encoded LighterPayload
   function buildPayload(
-    uint256 chainId,
+    uint256 /* chainId */,
     string calldata /* depository */,
     string calldata currency,
     uint256 amount,
@@ -162,7 +167,7 @@ contract LighterPayloadBuilder is IPayloadBuilder {
     uint8 actionType = abi.decode(data, (uint8));
 
     if (actionType == uint8(LighterActionType.Transfer)) {
-      return _buildTransferPayload(chainId, currency, amount, receiver, data);
+      return _buildTransferPayload(currency, amount, receiver, data);
     } else if (actionType == uint8(LighterActionType.ChangePubKey)) {
       return _buildChangePubKeyPayload(data);
     } else {
@@ -213,14 +218,12 @@ contract LighterPayloadBuilder is IPayloadBuilder {
   // ====== Internal: Transfer ======
 
   /// @notice Builds an encoded Transfer payload from input parameters
-  /// @param chainId Lighter chain ID for the L1 message
   /// @param currency Asset index as decimal string
   /// @param amount Transfer amount
   /// @param receiver Destination account index as decimal string
   /// @param data ABI-encoded transfer data
   /// @return Encoded LighterPayload
   function _buildTransferPayload(
-    uint256 chainId,
     string calldata currency,
     uint256 amount,
     string calldata receiver,
@@ -235,8 +238,7 @@ contract LighterPayloadBuilder is IPayloadBuilder {
     req.assetIndex = _parseUint64(currency);
     req.amount = uint64(amount);
     req.fromAccountIndex = FROM_ACCOUNT_INDEX;
-    if (chainId > type(uint64).max) revert Uint64Overflow();
-    req.lighterChainId = uint64(chainId);
+    req.lighterChainId = LIGHTER_CHAIN_ID;
 
     return
       abi.encode(LighterPayload(LighterActionType.Transfer, abi.encode(req)));

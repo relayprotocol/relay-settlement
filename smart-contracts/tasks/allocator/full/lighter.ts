@@ -632,6 +632,7 @@ task(
             allocatorAddress,
             BigInt(fromAccountIndex),
             LIGHTER_GATEWAY,
+            BigInt(lighterChainId),
             BigInt(ethMainnetChainId), // gatewayChainId for ChangePubKey EIP-155
           ]
         )

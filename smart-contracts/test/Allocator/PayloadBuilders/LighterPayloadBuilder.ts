@@ -124,7 +124,13 @@ describe("Allocator LighterPayloadBuilder", function () {
 
     const payloadBuilder = await hre.viem.deployContract(
       "LighterPayloadBuilder",
-      [allocator.address, FROM_ACCOUNT_INDEX, LIGHTER_GATEWAY, GATEWAY_CHAIN_ID]
+      [
+        allocator.address,
+        FROM_ACCOUNT_INDEX,
+        LIGHTER_GATEWAY,
+        LIGHTER_CHAIN_ID,
+        GATEWAY_CHAIN_ID,
+      ]
     )
 
     await payloadBuilder.write.setRouteTypeWhitelisted([0n, true], {
@@ -146,6 +152,9 @@ describe("Allocator LighterPayloadBuilder", function () {
       expect(
         (await payloadBuilder.read.LIGHTER_GATEWAY()).toLowerCase()
       ).to.equal(LIGHTER_GATEWAY.toLowerCase())
+      expect(await payloadBuilder.read.LIGHTER_CHAIN_ID()).to.equal(
+        LIGHTER_CHAIN_ID
+      )
       expect(await payloadBuilder.read.GATEWAY_CHAIN_ID()).to.equal(
         GATEWAY_CHAIN_ID
       )
@@ -237,7 +246,7 @@ describe("Allocator LighterPayloadBuilder", function () {
       })
 
       const payload = await payloadBuilder.read.buildPayload([
-        LIGHTER_CHAIN_ID,
+        999999n,
         depository.account.address,
         "0",
         1000000n,
