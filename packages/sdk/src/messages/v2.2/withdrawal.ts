@@ -48,6 +48,7 @@ export type DenormalizedSubmitWithdrawRequest = Omit<
       apiKeyIndex: number
       usdcFee: number
       memo: string
+      assetIndex: number
     }
   }
 }
@@ -366,6 +367,9 @@ export function normalizePayloadParams(
       if (!lighterAdditionalData) {
         throw new Error("Additional data is required for lighter-vm")
       }
+      if (lighterAdditionalData.assetIndex === undefined) {
+        throw new Error("assetIndex is required in lighter-vm additionalData")
+      }
 
       const memoHex = lighterAdditionalData.memo.startsWith("0x")
         ? lighterAdditionalData.memo.slice(2)
@@ -399,6 +403,7 @@ export function normalizePayloadParams(
 
       return {
         ...defaultParams,
+        currency: lighterAdditionalData.assetIndex.toString(),
         data,
       }
     }

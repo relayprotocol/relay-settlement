@@ -71,7 +71,7 @@ describe("normalizePayloadParams (lighter-vm)", () => {
     const result = normalizePayloadParams({
       chainId: "304",
       depository: "42",
-      currency: "3",
+      currency: "ignored-hub-currency",
       amount: "2000000",
       spender: "0xFD3E80587416B94Ef6D9394b323d8E47699d073E",
       recipient: "99",
@@ -86,9 +86,13 @@ describe("normalizePayloadParams (lighter-vm)", () => {
           apiKeyIndex: 5,
           usdcFee: 100,
           memo: "abcd1234",
+          assetIndex: 3,
         },
       },
     })
+
+    // currency is overridden with assetIndex.toString()
+    expect(result.currency).toBe("3")
 
     // Decode data to verify it matches PayloadBuilder._decodeTransferData ABI:
     // (uint8, uint64, uint64, uint64, uint64, uint64, bytes32)
@@ -115,7 +119,7 @@ describe("normalizePayloadParams (lighter-vm)", () => {
     const result = normalizePayloadParams({
       chainId: "304",
       depository: "42",
-      currency: "3",
+      currency: "ignored-hub-currency",
       amount: "1000000",
       spender: "0xFD3E80587416B94Ef6D9394b323d8E47699d073E",
       recipient: "99",
@@ -129,6 +133,7 @@ describe("normalizePayloadParams (lighter-vm)", () => {
           apiKeyIndex: 4,
           usdcFee: 0,
           memo: "0xdeadbeef",
+          assetIndex: 3,
         },
       },
     })
@@ -149,7 +154,7 @@ describe("normalizePayloadParams (lighter-vm)", () => {
     const result = normalizePayloadParams({
       chainId: "304",
       depository: "42",
-      currency: "3",
+      currency: "ignored-hub-currency",
       amount: "1000000",
       spender: "0xFD3E80587416B94Ef6D9394b323d8E47699d073E",
       recipient: "99",
@@ -163,6 +168,7 @@ describe("normalizePayloadParams (lighter-vm)", () => {
           apiKeyIndex: 5,
           usdcFee: 0,
           memo: "",
+          assetIndex: 3,
         },
       },
     })
@@ -184,7 +190,7 @@ describe("normalizePayloadParams (lighter-vm)", () => {
       normalizePayloadParams({
         chainId: "304",
         depository: "42",
-        currency: "3",
+        currency: "ignored-hub-currency",
         amount: "1000000",
         spender: "0xFD3E80587416B94Ef6D9394b323d8E47699d073E",
         recipient: "99",
@@ -198,10 +204,36 @@ describe("normalizePayloadParams (lighter-vm)", () => {
             apiKeyIndex: 5,
             usdcFee: 0,
             memo: "a".repeat(66), // 33 bytes > 32
+            assetIndex: 3,
           },
         },
       })
     ).toThrow("Lighter memo exceeds 32 bytes")
+  })
+
+  it("should throw when assetIndex is missing in lighter-vm additionalData", () => {
+    expect(() =>
+      normalizePayloadParams({
+        chainId: "304",
+        depository: "42",
+        currency: "ignored-hub-currency",
+        amount: "1000000",
+        spender: "0xFD3E80587416B94Ef6D9394b323d8E47699d073E",
+        recipient: "99",
+        nonce: "0x01",
+        vmType: "lighter-vm" as VmType,
+        additionalData: {
+          "lighter-vm": {
+            nonce: 1,
+            fromRouteType: 0,
+            toRouteType: 0,
+            apiKeyIndex: 5,
+            usdcFee: 0,
+            memo: "",
+          } as any,
+        },
+      })
+    ).toThrow("assetIndex is required in lighter-vm additionalData")
   })
 
   it("should throw when lighter-vm additionalData is missing", () => {
