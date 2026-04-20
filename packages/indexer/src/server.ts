@@ -1,21 +1,45 @@
 import express from "express"
+import { createApiKeyMiddleware } from "./auth.js"
+import { type RuntimeState } from "./runtimeState.js"
 
-export const createServer = () => {
+export const createServer = (
+  runtimeState: RuntimeState,
+  expectedApiKey?: string
+) => {
   const app = express()
 
-  app.get("/healthz", (_req, res) => {
-    res.json({ ok: true, service: "indexer-shell" })
+  app.use(express.json())
+
+  app.get("/health", (_req, res) => {
+    res.json(runtimeState.getLiveness())
   })
 
-  app.get("/readyz", (_req, res) => {
-    res.json({ ok: true, service: "indexer-shell" })
+  app.get("/ready", (_req, res) => {
+    const readiness = runtimeState.getReadiness()
+    res.status(readiness.ok ? 200 : 503).json(readiness)
   })
 
   app.get("/", (_req, res) => {
     res.json({
       message:
-        "Indexer shell is running. Background indexing is not enabled in this foundation build.",
+        "Indexer runtime shell is running. External integrations are not enabled in this build.",
       ok: true,
+      roles: runtimeState.roles,
+    })
+  })
+
+  if (!runtimeState.enableApi) {
+    return app
+  }
+
+  app.use(createApiKeyMiddleware(expectedApiKey))
+
+  app.get("/api/config", (_req, res) => {
+    res.json({
+      authEnabled: Boolean(expectedApiKey),
+      doBackgroundWork: runtimeState.doBackgroundWork,
+      enableApi: runtimeState.enableApi,
+      mode: "runtime-shell",
     })
   })
 
