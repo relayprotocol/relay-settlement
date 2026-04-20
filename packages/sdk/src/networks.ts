@@ -11,6 +11,7 @@ export type StackType =
 export interface ProtocolContracts {
   depository?: string
   oracle?: string
+  hub?: string
   allocator?: string
   multisigSigner?: string
 }

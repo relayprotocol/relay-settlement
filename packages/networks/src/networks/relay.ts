@@ -13,12 +13,15 @@ export const relay: NetworkConfig = {
   chainId: 537713n,
   contracts: {
     dev: {
+      hub: "",
       oracle: "",
     },
     prod: {
-      oracle: "",
+      hub: "0xDDD361727C22A01EB137880678A20b0BEaE69318",
+      oracle: "0xd4b9fdB83C723c096d7fBE72da252aa23f1387aa",
     },
   },
+  earliestBlock: 1215200,
   family: "ethereum-vm",
   isTestnet: true,
   name: "Relay Chain",

@@ -16,7 +16,7 @@
     "start": "tsc --watch",
     "lint": "lint",
     "clean": "rm -rf ./dist",
-    "build": "tsup src/index.ts --dts --format esm,cjs",
+    "build": "yarn clean && tsup src/index.ts --dts --format esm,cjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
