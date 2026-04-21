@@ -37,6 +37,7 @@ test("validateRuntimeConfig requires an api key by default", () => {
       validateRuntimeConfig({
         allowUnauthenticatedApi: false,
         authApiKey: undefined,
+        databaseUrl: undefined,
         doBackgroundWork: true,
         enableApi: true,
         port: 3001,
@@ -53,6 +54,7 @@ test("validateRuntimeConfig allows explicit unauthenticated api mode", () => {
     validateRuntimeConfig({
       allowUnauthenticatedApi: true,
       authApiKey: undefined,
+      databaseUrl: undefined,
       doBackgroundWork: true,
       enableApi: true,
       port: 3001,

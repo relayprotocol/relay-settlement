@@ -8,12 +8,19 @@
     "clean": "rm -rf dist",
     "lint": "lint",
     "build": "tsc -p tsconfig.json",
+    "migrate": "node dist/scripts/run-migrations.js -m ./src/migrations --no-check-order",
     "start": "node dist/index.js",
     "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
+    "@aws-sdk/credential-providers": "3.1027.0",
+    "@aws-sdk/rds-signer": "3.1027.0",
     "dotenv": "16.4.5",
-    "express": "4.19.2"
+    "express": "4.19.2",
+    "node-pg-migrate": "8.0.4",
+    "pg": "8.16.3",
+    "pg-promise": "12.3.0",
+    "pg-query-stream": "4.10.3"
   },
   "devDependencies": {
     "@relay-settlement/eslint-config": "workspace:*",

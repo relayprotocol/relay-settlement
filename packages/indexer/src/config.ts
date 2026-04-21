@@ -5,6 +5,7 @@ dotenv.config()
 export type RuntimeConfig = {
   allowUnauthenticatedApi: boolean
   authApiKey: string | undefined
+  databaseUrl: string | undefined
   doBackgroundWork: boolean
   enableApi: boolean
   port: number
@@ -58,6 +59,7 @@ export const config: RuntimeConfig = {
     false
   ),
   authApiKey: process.env.AUTH_API_KEY,
+  databaseUrl: process.env.DATABASE_URL,
   doBackgroundWork: resolveBoolean(process.env.DO_BACKGROUND_WORK, true),
   enableApi: resolveBoolean(process.env.ENABLE_API, true),
   port: resolvePort(process.env.PORT),
