@@ -7,14 +7,15 @@
     "dev": "tsx watch src/index.ts",
     "clean": "rm -rf dist",
     "lint": "lint",
-    "build": "tsc -p tsconfig.json",
+    "build": "yarn workspace @relay-protocol/settlement-sdk build && yarn workspace @relay-protocol/settlement-networks build && tsc -p tsconfig.json",
     "migrate": "node dist/scripts/run-migrations.js -m ./src/migrations --no-check-order",
     "start": "node dist/index.js",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "yarn workspace @relay-protocol/settlement-sdk build && yarn workspace @relay-protocol/settlement-networks build && tsx --test src/**/*.test.ts"
   },
   "dependencies": {
     "@aws-sdk/credential-providers": "3.1027.0",
     "@aws-sdk/rds-signer": "3.1027.0",
+    "@relay-protocol/settlement-networks": "workspace:*",
     "dotenv": "16.4.5",
     "express": "4.19.2",
     "node-pg-migrate": "8.0.4",

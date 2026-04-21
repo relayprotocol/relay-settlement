@@ -4889,7 +4889,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@relay-protocol/settlement-networks@workspace:packages/networks":
+"@relay-protocol/settlement-networks@workspace:*, @relay-protocol/settlement-networks@workspace:packages/networks":
   version: 0.0.0-use.local
   resolution: "@relay-protocol/settlement-networks@workspace:packages/networks"
   dependencies:
@@ -4985,6 +4985,7 @@ __metadata:
   dependencies:
     "@aws-sdk/credential-providers": "npm:3.1027.0"
     "@aws-sdk/rds-signer": "npm:3.1027.0"
+    "@relay-protocol/settlement-networks": "workspace:*"
     "@relay-settlement/eslint-config": "workspace:*"
     "@relay-settlement/tsconfig": "workspace:*"
     "@types/express": "npm:4.17.21"

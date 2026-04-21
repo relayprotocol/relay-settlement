@@ -1,4 +1,5 @@
 import dotenv from "dotenv"
+import { relay } from "@relay-protocol/settlement-networks"
 
 dotenv.config()
 
@@ -8,7 +9,30 @@ export type RuntimeConfig = {
   databaseUrl: string | undefined
   doBackgroundWork: boolean
   enableApi: boolean
+  hubContractAddress: string
+  hubStartBlock: number
+  oracleContractAddress: string
+  oracleStartBlock: number
   port: number
+  startBlock: number
+}
+
+const relayProdContracts = relay.contracts?.prod
+
+if (
+  relayProdContracts?.hub == null ||
+  relayProdContracts.oracle == null ||
+  relay.earliestBlock == null
+) {
+  throw new Error(
+    "Relay network metadata is missing required deployment fields"
+  )
+}
+
+export const relayNetworkDefaults = {
+  hubContractAddress: relayProdContracts.hub.toLowerCase(),
+  oracleContractAddress: relayProdContracts.oracle.toLowerCase(),
+  startBlock: relay.earliestBlock,
 }
 
 export const resolvePort = (value: string | undefined) => {
@@ -41,6 +65,18 @@ export const resolveBoolean = (
   throw new Error(`Invalid boolean env value: ${value}`)
 }
 
+export const resolveAddress = (value: string | undefined, fallback: string) =>
+  value ? value.toLowerCase() : fallback
+
+export const resolveNumber = (value: string | undefined, fallback: number) => {
+  if (!value) {
+    return fallback
+  }
+
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
 export const validateRuntimeConfig = (config: RuntimeConfig) => {
   if (
     config.enableApi &&
@@ -62,5 +98,25 @@ export const config: RuntimeConfig = {
   databaseUrl: process.env.DATABASE_URL,
   doBackgroundWork: resolveBoolean(process.env.DO_BACKGROUND_WORK, true),
   enableApi: resolveBoolean(process.env.ENABLE_API, true),
+  hubContractAddress: resolveAddress(
+    process.env.HUB_CONTRACT_ADDRESS,
+    relayNetworkDefaults.hubContractAddress
+  ),
+  hubStartBlock: resolveNumber(
+    process.env.HUB_START_BLOCK,
+    resolveNumber(process.env.START_BLOCK, relayNetworkDefaults.startBlock)
+  ),
+  oracleContractAddress: resolveAddress(
+    process.env.ORACLE_CONTRACT_ADDRESS,
+    relayNetworkDefaults.oracleContractAddress
+  ),
+  oracleStartBlock: resolveNumber(
+    process.env.ORACLE_START_BLOCK,
+    resolveNumber(process.env.START_BLOCK, relayNetworkDefaults.startBlock)
+  ),
   port: resolvePort(process.env.PORT),
+  startBlock: resolveNumber(
+    process.env.START_BLOCK,
+    relayNetworkDefaults.startBlock
+  ),
 }

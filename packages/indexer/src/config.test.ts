@@ -1,6 +1,13 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { resolveBoolean, resolvePort, validateRuntimeConfig } from "./config.js"
+import {
+  relayNetworkDefaults,
+  resolveAddress,
+  resolveBoolean,
+  resolveNumber,
+  resolvePort,
+  validateRuntimeConfig,
+} from "./config.js"
 
 test("resolvePort falls back to default when unset", () => {
   assert.equal(resolvePort(undefined), 3001)
@@ -8,6 +15,15 @@ test("resolvePort falls back to default when unset", () => {
 
 test("resolvePort accepts a numeric env value", () => {
   assert.equal(resolvePort("4100"), 4100)
+})
+
+test("resolveNumber falls back when unset or invalid", () => {
+  assert.equal(resolveNumber(undefined, 10), 10)
+  assert.equal(resolveNumber("nope", 10), 10)
+})
+
+test("resolveNumber accepts a numeric env value", () => {
+  assert.equal(resolveNumber("42", 10), 42)
 })
 
 test("resolveBoolean falls back when unset", () => {
@@ -31,6 +47,20 @@ test("resolveBoolean rejects unrecognized values", () => {
   })
 })
 
+test("resolveAddress uses normalized relay metadata defaults", () => {
+  assert.equal(
+    resolveAddress(undefined, relayNetworkDefaults.hubContractAddress),
+    relayNetworkDefaults.hubContractAddress
+  )
+})
+
+test("resolveAddress normalizes explicit overrides", () => {
+  assert.equal(
+    resolveAddress("0xDDD361727C22A01EB137880678A20b0BEaE69318", "fallback"),
+    relayNetworkDefaults.hubContractAddress
+  )
+})
+
 test("validateRuntimeConfig requires an api key by default", () => {
   assert.throws(
     () =>
@@ -40,7 +70,12 @@ test("validateRuntimeConfig requires an api key by default", () => {
         databaseUrl: undefined,
         doBackgroundWork: true,
         enableApi: true,
+        hubContractAddress: relayNetworkDefaults.hubContractAddress,
+        hubStartBlock: relayNetworkDefaults.startBlock,
+        oracleContractAddress: relayNetworkDefaults.oracleContractAddress,
+        oracleStartBlock: relayNetworkDefaults.startBlock,
         port: 3001,
+        startBlock: relayNetworkDefaults.startBlock,
       }),
     {
       message:
@@ -57,7 +92,12 @@ test("validateRuntimeConfig allows explicit unauthenticated api mode", () => {
       databaseUrl: undefined,
       doBackgroundWork: true,
       enableApi: true,
+      hubContractAddress: relayNetworkDefaults.hubContractAddress,
+      hubStartBlock: relayNetworkDefaults.startBlock,
+      oracleContractAddress: relayNetworkDefaults.oracleContractAddress,
+      oracleStartBlock: relayNetworkDefaults.startBlock,
       port: 3001,
+      startBlock: relayNetworkDefaults.startBlock,
     })
   )
 })
