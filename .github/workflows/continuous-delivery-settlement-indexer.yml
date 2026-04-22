@@ -1,0 +1,146 @@
+name: Continuous Delivery settlement indexer
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - ".github/workflows/indexer-image.yml"
+      - ".dockerignore"
+      - ".yarn/**"
+      - ".yarnrc.yml"
+      - "package.json"
+      - "yarn.lock"
+      - "packages/indexer/**"
+      - "packages/networks/**"
+      - "packages/sdk/**"
+      - "packages/tsconfig/**"
+      - "smart-contracts/**"
+
+env:
+  NODE_VERSION: "24.12.0"
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  build:
+    name: Build
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Blacksmith Builder
+        uses: useblacksmith/setup-docker-builder@v1
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: useblacksmith/build-push-action@v2
+        with:
+          context: .
+          file: ./packages/indexer/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/relayprotocol/settlement-protocol:latest
+            ghcr.io/relayprotocol/settlement-protocol:${{ github.sha }}
+            ghcr.io/relayprotocol/settlement-protocol:${{ github.ref_name }}-${{ github.sha }}
+          build-args: |
+            TAG=${{ github.ref_name }}
+
+  deploy-dev:
+    name: Deploy to Development
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 15
+    needs: [build]
+    environment: dev
+    if: github.ref == 'refs/heads/dev'
+    steps:
+      - name: Checkout repository k8s-configs
+        uses: actions/checkout@v3
+        with:
+          repository: unevenlabs/k8s-configs
+          token: ${{ secrets.DEVOPSBOT_TOKEN }}
+          path: k8s-configs
+
+      - name: Deploy to Dev Environment
+        working-directory: k8s-configs
+        env:
+          DEVOPSBOT_GPG_PRIVATE_KEY: ${{ secrets.DEVOPSBOT_GPG_PRIVATE_KEY }}
+        run: |
+          ./utils/version_update_batch.sh settlement-indexer ${{ github.sha }} $(grep -rlE 'application: settlement-indexer-(api|worker)' dev/platform/ | tr '\n' ' ')
+
+      - name: Post to Slack
+        if: ${{ always() }}
+        uses: unevenlabs/slack-github-action@v1.0.2
+        with:
+          channel-id: "ci"
+          payload: |
+            {
+              "text": "GitHub deploy dev result: <status-${{ job.status }}-status>\nAuthor: <author-${{ github.actor }}-author>\n${{ github.event.head_commit.url }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "GitHub deploy dev result: <status-${{ job.status }}-status>\nAuthor: <author-${{ github.actor }}-author>\n${{ github.event.head_commit.url }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 15
+    needs: [build]
+    environment: prod
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout repository k8s-configs
+        uses: actions/checkout@v3
+        with:
+          repository: unevenlabs/k8s-configs
+          token: ${{ secrets.DEVOPSBOT_TOKEN }}
+          path: k8s-configs
+
+      - name: Deploy to Production Environments
+        working-directory: k8s-configs
+        env:
+          DEVOPSBOT_GPG_PRIVATE_KEY: ${{ secrets.DEVOPSBOT_GPG_PRIVATE_KEY }}
+        run: |
+          ./utils/version_update_batch.sh settlement-indexer ${{ github.sha }} $(grep -rlE 'application: settlement-indexer-(api|worker)' stag/platform/ | tr '\n' ' ')
+          ./utils/version_update_batch.sh settlement-indexer ${{ github.sha }} $(grep -rlE 'application: settlement-indexer-(api|worker)' prod/platform/ | tr '\n' ' ')
+
+      - name: Post to Slack
+        if: ${{ always() }}
+        uses: unevenlabs/slack-github-action@v1.0.2
+        with:
+          channel-id: "ci"
+          payload: |
+            {
+              "text": "GitHub deploy prod result: <status-${{ job.status }}-status>\nAuthor: <author-${{ github.actor }}-author>\n${{ github.event.head_commit.url }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "GitHub deploy prod result: <status-${{ job.status }}-status>\nAuthor: <author-${{ github.actor }}-author>\n${{ github.event.head_commit.url }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
