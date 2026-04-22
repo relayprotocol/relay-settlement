@@ -1,6 +1,10 @@
-import { createRuntimeState } from "./runtimeState.js"
+import { RelayOracle } from "@relay-protocol/settlement-abis"
+import { Contract, JsonRpcProvider, WebSocketProvider } from "ethers"
+import { openDb } from "./db/connection.js"
+import { backfillAndWatch } from "./indexer.js"
 import { createServer } from "./server.js"
 import { config, validateRuntimeConfig } from "./config.js"
+import { createRuntimeState } from "./runtimeState.js"
 import { logger } from "./logger.js"
 
 const start = async () => {
@@ -23,24 +27,48 @@ const start = async () => {
     enableApi: config.enableApi,
   })
 
-  if (config.enableApi) {
-    runtimeState.markApiReady()
-  }
-  if (config.doBackgroundWork) {
-    runtimeState.markBackgroundWorkReady()
-  }
-
   const app = createServer(runtimeState, config.authApiKey)
   app.listen(config.port, () => {
-    logger.info("app", "Indexer runtime shell listening", {
+    if (config.enableApi) {
+      runtimeState.markApiReady()
+    }
+
+    logger.info("app", "Indexer listening", {
       doBackgroundWork: config.doBackgroundWork,
       enableApi: config.enableApi,
       port: config.port,
     })
   })
+
+  if (!config.doBackgroundWork) {
+    return
+  }
+
+  const db = await openDb()
+  const provider = config.rpcHttpUrl
+    ? new JsonRpcProvider(config.rpcHttpUrl)
+    : new WebSocketProvider(config.rpcWsUrl as string)
+  const oracleContract = new Contract(
+    config.oracleContractAddress,
+    RelayOracle,
+    provider
+  )
+  const linkedHub = String(await oracleContract.HUB()).toLowerCase()
+
+  if (linkedHub !== config.hubContractAddress) {
+    throw new Error(
+      `Configured hub ${config.hubContractAddress} does not match oracle.HUB() ${linkedHub}`
+    )
+  }
+
+  runtimeState.markBackgroundWorkReady()
+  backfillAndWatch(db).catch((error) => {
+    runtimeState.markBackgroundWorkUnready(error)
+    logger.error("indexer", "Indexer stopped", { error })
+  })
 }
 
 start().catch((error) => {
-  logger.error("app", "Failed to start indexer runtime shell", { error })
+  logger.error("app", "Failed to start indexer", { error })
   process.exit(1)
 })

@@ -4985,6 +4985,7 @@ __metadata:
   dependencies:
     "@aws-sdk/credential-providers": "npm:3.1027.0"
     "@aws-sdk/rds-signer": "npm:3.1027.0"
+    "@relay-protocol/settlement-abis": "workspace:*"
     "@relay-protocol/settlement-networks": "workspace:*"
     "@relay-settlement/eslint-config": "workspace:*"
     "@relay-settlement/tsconfig": "workspace:*"
@@ -4992,6 +4993,7 @@ __metadata:
     "@types/node": "npm:24.6.1"
     dotenv: "npm:16.4.5"
     eslint: "npm:9.36.0"
+    ethers: "npm:6.12.1"
     express: "npm:4.19.2"
     node-pg-migrate: "npm:8.0.4"
     pg: "npm:8.16.3"
@@ -13000,6 +13002,21 @@ __metadata:
     ethereum-cryptography: "npm:^0.1.3"
     rlp: "npm:^2.2.4"
   checksum: 10c0/8b9487f35ecaa078bf9af6858eba6855fc61c73cc2b90c8c37486fcf94faf4fc1c5cda9758e6769f9ef2658daedaf2c18b366312ac461f8c8a122b392e3041eb
+  languageName: node
+  linkType: hard
+
+"ethers@npm:6.12.1":
+  version: 6.12.1
+  resolution: "ethers@npm:6.12.1"
+  dependencies:
+    "@adraffy/ens-normalize": "npm:1.10.1"
+    "@noble/curves": "npm:1.2.0"
+    "@noble/hashes": "npm:1.3.2"
+    "@types/node": "npm:18.15.13"
+    aes-js: "npm:4.0.0-beta.5"
+    tslib: "npm:2.4.0"
+    ws: "npm:8.5.0"
+  checksum: 10c0/7686e1efdb0a831578f35d69188783c225de5a6fbb1b422327bc45cee04d49a2707e73c9342a6a5eb2870ce35668c71372737439ec3993d31d83f4a0e2446cc7
   languageName: node
   linkType: hard
 

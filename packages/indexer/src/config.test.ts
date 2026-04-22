@@ -67,6 +67,7 @@ test("validateRuntimeConfig requires an api key by default", () => {
       validateRuntimeConfig({
         allowUnauthenticatedApi: false,
         authApiKey: undefined,
+        batchSize: 2000,
         databaseUrl: undefined,
         doBackgroundWork: true,
         enableApi: true,
@@ -74,7 +75,10 @@ test("validateRuntimeConfig requires an api key by default", () => {
         hubStartBlock: relayNetworkDefaults.startBlock,
         oracleContractAddress: relayNetworkDefaults.oracleContractAddress,
         oracleStartBlock: relayNetworkDefaults.startBlock,
+        pollIntervalMs: 5000,
         port: 3001,
+        rpcHttpUrl: undefined,
+        rpcWsUrl: "wss://rpc.chain.relay.link/rpc",
         startBlock: relayNetworkDefaults.startBlock,
       }),
     {
@@ -89,15 +93,71 @@ test("validateRuntimeConfig allows explicit unauthenticated api mode", () => {
     validateRuntimeConfig({
       allowUnauthenticatedApi: true,
       authApiKey: undefined,
+      batchSize: 2000,
       databaseUrl: undefined,
-      doBackgroundWork: true,
+      doBackgroundWork: false,
       enableApi: true,
       hubContractAddress: relayNetworkDefaults.hubContractAddress,
       hubStartBlock: relayNetworkDefaults.startBlock,
       oracleContractAddress: relayNetworkDefaults.oracleContractAddress,
       oracleStartBlock: relayNetworkDefaults.startBlock,
+      pollIntervalMs: 5000,
       port: 3001,
+      rpcHttpUrl: undefined,
+      rpcWsUrl: undefined,
       startBlock: relayNetworkDefaults.startBlock,
     })
+  )
+})
+
+test("validateRuntimeConfig requires a database url for background work", () => {
+  assert.throws(
+    () =>
+      validateRuntimeConfig({
+        allowUnauthenticatedApi: true,
+        authApiKey: undefined,
+        batchSize: 2000,
+        databaseUrl: undefined,
+        doBackgroundWork: true,
+        enableApi: false,
+        hubContractAddress: relayNetworkDefaults.hubContractAddress,
+        hubStartBlock: relayNetworkDefaults.startBlock,
+        oracleContractAddress: relayNetworkDefaults.oracleContractAddress,
+        oracleStartBlock: relayNetworkDefaults.startBlock,
+        pollIntervalMs: 5000,
+        port: 3001,
+        rpcHttpUrl: undefined,
+        rpcWsUrl: "wss://rpc.chain.relay.link/rpc",
+        startBlock: relayNetworkDefaults.startBlock,
+      }),
+    {
+      message: "DATABASE_URL is required when DO_BACKGROUND_WORK=1",
+    }
+  )
+})
+
+test("validateRuntimeConfig requires an rpc ws url for background work", () => {
+  assert.throws(
+    () =>
+      validateRuntimeConfig({
+        allowUnauthenticatedApi: true,
+        authApiKey: undefined,
+        batchSize: 2000,
+        databaseUrl: "postgresql://postgres:postgres@127.0.0.1:54329/indexer",
+        doBackgroundWork: true,
+        enableApi: false,
+        hubContractAddress: relayNetworkDefaults.hubContractAddress,
+        hubStartBlock: relayNetworkDefaults.startBlock,
+        oracleContractAddress: relayNetworkDefaults.oracleContractAddress,
+        oracleStartBlock: relayNetworkDefaults.startBlock,
+        pollIntervalMs: 5000,
+        port: 3001,
+        rpcHttpUrl: undefined,
+        rpcWsUrl: undefined,
+        startBlock: relayNetworkDefaults.startBlock,
+      }),
+    {
+      message: "RPC_WS_URL is required when DO_BACKGROUND_WORK=1",
+    }
   )
 })

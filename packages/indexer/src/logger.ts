@@ -9,7 +9,7 @@ const serialize = (data: Record<string, unknown> | undefined) => {
 }
 
 const log = (
-  level: "error" | "info" | "warn",
+  level: "debug" | "error" | "info" | "warn",
   scope: string,
   message: string,
   data?: Record<string, unknown>
@@ -28,10 +28,17 @@ const log = (
     return
   }
 
+  if (level === "debug") {
+    console.debug(output)
+    return
+  }
+
   console.info(output)
 }
 
 export const logger = {
+  debug: (scope: string, message: string, data?: Record<string, unknown>) =>
+    log("debug", scope, message, data),
   error: (scope: string, message: string, data?: Record<string, unknown>) =>
     log("error", scope, message, data),
   info: (scope: string, message: string, data?: Record<string, unknown>) =>

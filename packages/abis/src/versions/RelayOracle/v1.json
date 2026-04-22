@@ -49,18 +49,34 @@
   },
   {
     "inputs": [],
-    "name": "InvalidShortString",
+    "name": "ECDSAInvalidSignature",
     "type": "error"
   },
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "oracle",
-        "type": "address"
+        "internalType": "uint256",
+        "name": "length",
+        "type": "uint256"
       }
     ],
-    "name": "InvalidSignature",
+    "name": "ECDSAInvalidSignatureLength",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "s",
+        "type": "bytes32"
+      }
+    ],
+    "name": "ECDSAInvalidSignatureS",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidShortString",
     "type": "error"
   },
   {
@@ -319,11 +335,6 @@
         "type": "tuple"
       },
       {
-        "internalType": "address",
-        "name": "oracle",
-        "type": "address"
-      },
-      {
         "internalType": "bytes",
         "name": "signature",
         "type": "bytes"
@@ -352,11 +363,6 @@
         "internalType": "struct RelayOracle.Execution[]",
         "name": "executions",
         "type": "tuple[]"
-      },
-      {
-        "internalType": "address",
-        "name": "oracle",
-        "type": "address"
       },
       {
         "internalType": "bytes[]",

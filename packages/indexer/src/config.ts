@@ -6,6 +6,7 @@ dotenv.config()
 export type RuntimeConfig = {
   allowUnauthenticatedApi: boolean
   authApiKey: string | undefined
+  batchSize: number
   databaseUrl: string | undefined
   doBackgroundWork: boolean
   enableApi: boolean
@@ -14,6 +15,9 @@ export type RuntimeConfig = {
   oracleContractAddress: string
   oracleStartBlock: number
   port: number
+  pollIntervalMs: number
+  rpcHttpUrl: string | undefined
+  rpcWsUrl: string | undefined
   startBlock: number
 }
 
@@ -87,6 +91,14 @@ export const validateRuntimeConfig = (config: RuntimeConfig) => {
       "AUTH_API_KEY is required when ENABLE_API=1 unless ALLOW_UNAUTHENTICATED_API=1"
     )
   }
+
+  if (config.doBackgroundWork && !config.databaseUrl) {
+    throw new Error("DATABASE_URL is required when DO_BACKGROUND_WORK=1")
+  }
+
+  if (config.doBackgroundWork && !config.rpcWsUrl) {
+    throw new Error("RPC_WS_URL is required when DO_BACKGROUND_WORK=1")
+  }
 }
 
 export const config: RuntimeConfig = {
@@ -95,6 +107,7 @@ export const config: RuntimeConfig = {
     false
   ),
   authApiKey: process.env.AUTH_API_KEY,
+  batchSize: resolveNumber(process.env.BATCH_SIZE, 2000),
   databaseUrl: process.env.DATABASE_URL,
   doBackgroundWork: resolveBoolean(process.env.DO_BACKGROUND_WORK, true),
   enableApi: resolveBoolean(process.env.ENABLE_API, true),
@@ -114,7 +127,10 @@ export const config: RuntimeConfig = {
     process.env.ORACLE_START_BLOCK,
     resolveNumber(process.env.START_BLOCK, relayNetworkDefaults.startBlock)
   ),
+  pollIntervalMs: resolveNumber(process.env.POLL_INTERVAL_MS, 5000),
   port: resolvePort(process.env.PORT),
+  rpcHttpUrl: process.env.RPC_HTTP_URL,
+  rpcWsUrl: process.env.RPC_WS_URL,
   startBlock: resolveNumber(
     process.env.START_BLOCK,
     relayNetworkDefaults.startBlock

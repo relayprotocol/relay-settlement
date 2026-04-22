@@ -21,8 +21,7 @@ export const createServer = (
 
   app.get("/", (_req, res) => {
     res.json({
-      message:
-        "Indexer runtime shell is running. External integrations are not enabled in this build.",
+      message: "Indexer event ingestion core is running.",
       ok: true,
       roles: runtimeState.roles,
     })
@@ -39,7 +38,7 @@ export const createServer = (
       authEnabled: Boolean(expectedApiKey),
       doBackgroundWork: runtimeState.doBackgroundWork,
       enableApi: runtimeState.enableApi,
-      mode: "runtime-shell",
+      mode: "event-ingestion-core",
     })
   })
 

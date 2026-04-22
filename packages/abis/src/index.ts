@@ -18,7 +18,6 @@ import RelayAllocator from "./abis/RelayAllocator.sol/RelayAllocator.json"
 import IERC20View from "./abis/RelayHub.sol/IERC20View.json"
 import RelayHub from "./abis/RelayHub.sol/RelayHub.json"
 import RelayMultisigSigner from "./abis/RelayMultisigSigner.sol/RelayMultisigSigner.json"
-import RelayOracle from "./abis/RelayOracle.sol/RelayOracle.json"
 import Utils from "./abis/Utils.sol/Utils.json"
 import AuroraSdk from "./abis/aurora-xcc/AuroraSdk.sol/AuroraSdk.json"
 import AuroraXccUtils from "./abis/aurora-xcc/AuroraXccUtils.sol/AuroraXccUtils.json"
@@ -30,6 +29,7 @@ import RelayMultisigSignerHarness from "./abis/mocks/RelayMultisigSignerHarness.
 import Base64 from "./abis/solady/src/utils/Base64.sol/Base64.json"
 import JSONParserLib from "./abis/solady/src/utils/JSONParserLib.sol/JSONParserLib.json"
 import MyToken from "./abis/test-utils/MyToken.sol/MyToken.json"
+import { RelayOracle } from "./versions/index.js"
 
 // exports
 export { ChainSignatures }
