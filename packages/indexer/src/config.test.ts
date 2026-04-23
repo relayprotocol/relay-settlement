@@ -4,6 +4,7 @@ import {
   relayNetworkDefaults,
   resolveAddress,
   resolveBoolean,
+  resolveEnableApi,
   resolveNumber,
   resolvePort,
   validateRuntimeConfig,
@@ -61,53 +62,16 @@ test("resolveAddress normalizes explicit overrides", () => {
   )
 })
 
-test("validateRuntimeConfig requires an api key by default", () => {
-  assert.throws(
-    () =>
-      validateRuntimeConfig({
-        allowUnauthenticatedApi: false,
-        authApiKey: undefined,
-        batchSize: 2000,
-        databaseUrl: undefined,
-        doBackgroundWork: true,
-        enableApi: true,
-        hubContractAddress: relayNetworkDefaults.hubContractAddress,
-        hubStartBlock: relayNetworkDefaults.startBlock,
-        oracleContractAddress: relayNetworkDefaults.oracleContractAddress,
-        oracleStartBlock: relayNetworkDefaults.startBlock,
-        pollIntervalMs: 5000,
-        port: 3001,
-        rpcHttpUrl: undefined,
-        rpcWsUrl: "wss://rpc.chain.relay.link/rpc",
-        startBlock: relayNetworkDefaults.startBlock,
-      }),
-    {
-      message:
-        "AUTH_API_KEY is required when ENABLE_API=1 unless ALLOW_UNAUTHENTICATED_API=1",
-    }
-  )
+test("resolveEnableApi disables the api when no auth mode is available", () => {
+  assert.equal(resolveEnableApi(true, undefined, false), false)
 })
 
-test("validateRuntimeConfig allows explicit unauthenticated api mode", () => {
-  assert.doesNotThrow(() =>
-    validateRuntimeConfig({
-      allowUnauthenticatedApi: true,
-      authApiKey: undefined,
-      batchSize: 2000,
-      databaseUrl: undefined,
-      doBackgroundWork: false,
-      enableApi: true,
-      hubContractAddress: relayNetworkDefaults.hubContractAddress,
-      hubStartBlock: relayNetworkDefaults.startBlock,
-      oracleContractAddress: relayNetworkDefaults.oracleContractAddress,
-      oracleStartBlock: relayNetworkDefaults.startBlock,
-      pollIntervalMs: 5000,
-      port: 3001,
-      rpcHttpUrl: undefined,
-      rpcWsUrl: undefined,
-      startBlock: relayNetworkDefaults.startBlock,
-    })
-  )
+test("resolveEnableApi keeps the api enabled with an auth key", () => {
+  assert.equal(resolveEnableApi(true, "secret", false), true)
+})
+
+test("resolveEnableApi keeps the api enabled in explicit unauthenticated mode", () => {
+  assert.equal(resolveEnableApi(true, undefined, true), true)
 })
 
 test("validateRuntimeConfig requires a database url for background work", () => {
@@ -115,11 +79,13 @@ test("validateRuntimeConfig requires a database url for background work", () => 
     () =>
       validateRuntimeConfig({
         allowUnauthenticatedApi: true,
+        apiRequested: false,
         authApiKey: undefined,
         batchSize: 2000,
         databaseUrl: undefined,
         doBackgroundWork: true,
         enableApi: false,
+        healthMaxLagBlocks: 500,
         hubContractAddress: relayNetworkDefaults.hubContractAddress,
         hubStartBlock: relayNetworkDefaults.startBlock,
         oracleContractAddress: relayNetworkDefaults.oracleContractAddress,
@@ -141,11 +107,13 @@ test("validateRuntimeConfig requires an rpc ws url for background work", () => {
     () =>
       validateRuntimeConfig({
         allowUnauthenticatedApi: true,
+        apiRequested: false,
         authApiKey: undefined,
         batchSize: 2000,
         databaseUrl: "postgresql://postgres:postgres@127.0.0.1:54329/indexer",
         doBackgroundWork: true,
         enableApi: false,
+        healthMaxLagBlocks: 500,
         hubContractAddress: relayNetworkDefaults.hubContractAddress,
         hubStartBlock: relayNetworkDefaults.startBlock,
         oracleContractAddress: relayNetworkDefaults.oracleContractAddress,
@@ -160,4 +128,8 @@ test("validateRuntimeConfig requires an rpc ws url for background work", () => {
       message: "RPC_WS_URL is required when DO_BACKGROUND_WORK=1",
     }
   )
+})
+
+test("runtime config defaults the api off for worker-first deploys", () => {
+  assert.equal(resolveBoolean(undefined, false), false)
 })

@@ -4,12 +4,14 @@ import { relay } from "@relay-protocol/settlement-networks"
 dotenv.config()
 
 export type RuntimeConfig = {
+  apiRequested: boolean
   allowUnauthenticatedApi: boolean
   authApiKey: string | undefined
   batchSize: number
   databaseUrl: string | undefined
   doBackgroundWork: boolean
   enableApi: boolean
+  healthMaxLagBlocks: number
   hubContractAddress: string
   hubStartBlock: number
   oracleContractAddress: string
@@ -72,6 +74,12 @@ export const resolveBoolean = (
 export const resolveAddress = (value: string | undefined, fallback: string) =>
   value ? value.toLowerCase() : fallback
 
+export const resolveEnableApi = (
+  requested: boolean,
+  authApiKey: string | undefined,
+  allowUnauthenticatedApi: boolean
+) => requested && (Boolean(authApiKey) || allowUnauthenticatedApi)
+
 export const resolveNumber = (value: string | undefined, fallback: number) => {
   if (!value) {
     return fallback
@@ -82,16 +90,6 @@ export const resolveNumber = (value: string | undefined, fallback: number) => {
 }
 
 export const validateRuntimeConfig = (config: RuntimeConfig) => {
-  if (
-    config.enableApi &&
-    !config.authApiKey &&
-    !config.allowUnauthenticatedApi
-  ) {
-    throw new Error(
-      "AUTH_API_KEY is required when ENABLE_API=1 unless ALLOW_UNAUTHENTICATED_API=1"
-    )
-  }
-
   if (config.doBackgroundWork && !config.databaseUrl) {
     throw new Error("DATABASE_URL is required when DO_BACKGROUND_WORK=1")
   }
@@ -101,16 +99,26 @@ export const validateRuntimeConfig = (config: RuntimeConfig) => {
   }
 }
 
+const allowUnauthenticatedApi = resolveBoolean(
+  process.env.ALLOW_UNAUTHENTICATED_API,
+  false
+)
+const authApiKey = process.env.AUTH_API_KEY
+const apiRequested = resolveBoolean(process.env.ENABLE_API, false)
+
 export const config: RuntimeConfig = {
-  allowUnauthenticatedApi: resolveBoolean(
-    process.env.ALLOW_UNAUTHENTICATED_API,
-    false
-  ),
-  authApiKey: process.env.AUTH_API_KEY,
+  allowUnauthenticatedApi,
+  apiRequested,
+  authApiKey,
   batchSize: resolveNumber(process.env.BATCH_SIZE, 2000),
   databaseUrl: process.env.DATABASE_URL,
   doBackgroundWork: resolveBoolean(process.env.DO_BACKGROUND_WORK, true),
-  enableApi: resolveBoolean(process.env.ENABLE_API, true),
+  enableApi: resolveEnableApi(
+    apiRequested,
+    authApiKey,
+    allowUnauthenticatedApi
+  ),
+  healthMaxLagBlocks: resolveNumber(process.env.HEALTH_MAX_LAG_BLOCKS, 500),
   hubContractAddress: resolveAddress(
     process.env.HUB_CONTRACT_ADDRESS,
     relayNetworkDefaults.hubContractAddress

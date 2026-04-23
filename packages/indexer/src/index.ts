@@ -1,11 +1,13 @@
-import { RelayOracle } from "@relay-protocol/settlement-abis"
+import { RelayHub, RelayOracle } from "@relay-protocol/settlement-abis"
 import { Contract, JsonRpcProvider, WebSocketProvider } from "ethers"
+import { config, validateRuntimeConfig } from "./config.js"
 import { openDb } from "./db/connection.js"
 import { backfillAndWatch } from "./indexer.js"
-import { createServer } from "./server.js"
-import { config, validateRuntimeConfig } from "./config.js"
-import { createRuntimeState } from "./runtimeState.js"
+import { startFailedEventRetry } from "./jobs/failedEventRetry.js"
+import { startReconciler } from "./jobs/reconciler.js"
 import { logger } from "./logger.js"
+import { createRuntimeState } from "./runtimeState.js"
+import { createServer } from "./server.js"
 
 const start = async () => {
   validateRuntimeConfig(config)
@@ -16,18 +18,54 @@ const start = async () => {
     )
   }
 
-  if (config.enableApi && !config.authApiKey) {
+  if (config.apiRequested && !config.enableApi) {
+    logger.warn("app", "API requested but disabled because auth is not set", {
+      allowUnauthenticatedApi: config.allowUnauthenticatedApi,
+      hasAuthApiKey: Boolean(config.authApiKey),
+    })
+  } else if (config.enableApi && !config.authApiKey) {
     logger.warn("app", "API auth is disabled by explicit configuration", {
       allowUnauthenticatedApi: config.allowUnauthenticatedApi,
     })
   }
+
+  logger.info("app", "Runtime roles", {
+    doBackgroundWork: config.doBackgroundWork,
+    enableApi: config.enableApi,
+  })
 
   const runtimeState = createRuntimeState({
     doBackgroundWork: config.doBackgroundWork,
     enableApi: config.enableApi,
   })
 
-  const app = createServer(runtimeState, config.authApiKey)
+  const db = config.doBackgroundWork ? await openDb() : undefined
+  const provider = config.doBackgroundWork
+    ? config.rpcHttpUrl
+      ? new JsonRpcProvider(config.rpcHttpUrl)
+      : new WebSocketProvider(config.rpcWsUrl as string)
+    : undefined
+
+  if (provider) {
+    const oracleContract = new Contract(
+      config.oracleContractAddress,
+      RelayOracle,
+      provider
+    )
+    const linkedHub = String(await oracleContract.HUB()).toLowerCase()
+
+    if (linkedHub !== config.hubContractAddress) {
+      throw new Error(
+        `Configured hub ${config.hubContractAddress} does not match oracle.HUB() ${linkedHub}`
+      )
+    }
+  }
+
+  const app = createServer(runtimeState, {
+    db,
+    expectedApiKey: config.authApiKey,
+    healthProvider: provider,
+  })
   app.listen(config.port, () => {
     if (config.enableApi) {
       runtimeState.markApiReady()
@@ -44,28 +82,48 @@ const start = async () => {
     return
   }
 
-  const db = await openDb()
-  const provider = config.rpcHttpUrl
-    ? new JsonRpcProvider(config.rpcHttpUrl)
-    : new WebSocketProvider(config.rpcWsUrl as string)
+  if (!db || !provider) {
+    throw new Error("Background work requires a database and rpc provider")
+  }
+
   const oracleContract = new Contract(
     config.oracleContractAddress,
     RelayOracle,
     provider
   )
-  const linkedHub = String(await oracleContract.HUB()).toLowerCase()
 
-  if (linkedHub !== config.hubContractAddress) {
-    throw new Error(
-      `Configured hub ${config.hubContractAddress} does not match oracle.HUB() ${linkedHub}`
+  try {
+    backfillAndWatch(db).catch((error) => {
+      runtimeState.markBackgroundWorkUnready(error)
+      logger.error("indexer", "Indexer stopped", { error })
+    })
+    startReconciler(db)
+    const retryContract = new Contract(
+      config.hubContractAddress,
+      RelayHub,
+      provider
     )
+    startFailedEventRetry(
+      db,
+      provider,
+      {
+        hubContract: retryContract,
+        hubContractAddress: config.hubContractAddress,
+        oracleContract,
+        oracleContractAddress: config.oracleContractAddress,
+        oracleExecutionContext: {
+          oracleContractAddress: config.oracleContractAddress,
+          provider,
+          transactionCache: new Map(),
+        },
+      },
+      new Map()
+    )
+    runtimeState.markBackgroundWorkReady()
+  } catch (error) {
+    runtimeState.markBackgroundWorkUnready(error as Error)
+    throw error
   }
-
-  runtimeState.markBackgroundWorkReady()
-  backfillAndWatch(db).catch((error) => {
-    runtimeState.markBackgroundWorkUnready(error)
-    logger.error("indexer", "Indexer stopped", { error })
-  })
 }
 
 start().catch((error) => {
