@@ -90,8 +90,10 @@ export const resolveNumber = (value: string | undefined, fallback: number) => {
 }
 
 export const validateRuntimeConfig = (config: RuntimeConfig) => {
-  if (config.doBackgroundWork && !config.databaseUrl) {
-    throw new Error("DATABASE_URL is required when DO_BACKGROUND_WORK=1")
+  if ((config.doBackgroundWork || config.enableApi) && !config.databaseUrl) {
+    throw new Error(
+      "DATABASE_URL is required when ENABLE_API=1 or DO_BACKGROUND_WORK=1"
+    )
   }
 
   if (config.doBackgroundWork && !config.rpcWsUrl) {

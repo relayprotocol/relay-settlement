@@ -9,7 +9,7 @@
     "lint": "lint",
     "build": "yarn workspace @relay-protocol/settlement-sdk build && yarn workspace @relay-protocol/settlement-networks build && yarn workspace @relay-protocol/settlement-abis clean && yarn workspace @relay-protocol/settlement-abis build && tsc -p tsconfig.json",
     "migrate": "node dist/scripts/run-migrations.js -m ./src/migrations --no-check-order",
-    "start": "node dist/index.js",
+    "start": "yarn migrate up 2>/dev/null && node dist/index.js",
     "test": "yarn workspace @relay-protocol/settlement-sdk build && yarn workspace @relay-protocol/settlement-networks build && yarn workspace @relay-protocol/settlement-abis clean && yarn workspace @relay-protocol/settlement-abis build && tsx --test src/**/*.test.ts"
   },
   "dependencies": {

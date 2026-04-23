@@ -39,7 +39,8 @@ const start = async () => {
     enableApi: config.enableApi,
   })
 
-  const db = config.doBackgroundWork ? await openDb() : undefined
+  const db =
+    config.doBackgroundWork || config.enableApi ? await openDb() : undefined
   const provider = config.doBackgroundWork
     ? config.rpcHttpUrl
       ? new JsonRpcProvider(config.rpcHttpUrl)

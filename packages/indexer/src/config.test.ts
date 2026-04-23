@@ -74,7 +74,7 @@ test("resolveEnableApi keeps the api enabled in explicit unauthenticated mode", 
   assert.equal(resolveEnableApi(true, undefined, true), true)
 })
 
-test("validateRuntimeConfig requires a database url for background work", () => {
+test("validateRuntimeConfig requires a database url for api or background work", () => {
   assert.throws(
     () =>
       validateRuntimeConfig({
@@ -97,7 +97,8 @@ test("validateRuntimeConfig requires a database url for background work", () => 
         startBlock: relayNetworkDefaults.startBlock,
       }),
     {
-      message: "DATABASE_URL is required when DO_BACKGROUND_WORK=1",
+      message:
+        "DATABASE_URL is required when ENABLE_API=1 or DO_BACKGROUND_WORK=1",
     }
   )
 })

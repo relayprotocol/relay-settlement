@@ -28,15 +28,16 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 COPY --chown=root:root --chmod=755 packages/indexer/entrypoint.sh /entrypoint.sh
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn ./.yarn
 COPY packages/indexer/package.json ./packages/indexer/package.json
 COPY packages/abis/package.json ./packages/abis/package.json
 COPY packages/networks/package.json ./packages/networks/package.json
 COPY --from=builder /app/packages/abis/dist ./packages/abis/dist
 COPY --from=builder /app/packages/indexer/dist ./packages/indexer/dist
+COPY packages/indexer/src/migrations ./packages/indexer/src/migrations
 COPY --from=builder /app/packages/networks/dist ./packages/networks/dist
 COPY --from=prod-deps /app/node_modules ./node_modules
-
-WORKDIR /app/packages/indexer
 
 ENV NODE_ENV=production
 ENV PORT=3000
@@ -44,4 +45,4 @@ ENV PORT=3000
 EXPOSE 3000
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["node", "dist/index.js"]
+CMD ["node", ".yarn/releases/yarn-4.9.1.cjs", "workspace", "@relay-settlement/indexer", "start"]
