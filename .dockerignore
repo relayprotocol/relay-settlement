@@ -7,5 +7,4 @@ smart-contracts/ignition
 smart-contracts/artifacts
 smart-contracts/cache
 .pnp.*
-.yarn/install-state.gz
 .yarn/unplugged

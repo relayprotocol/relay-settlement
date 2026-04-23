@@ -4,6 +4,9 @@ WORKDIR /app
 
 RUN apk add --no-cache g++ make python3
 
+ENV YARN_HTTP_TIMEOUT=120000
+ENV YARN_NETWORK_CONCURRENCY=8
+
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn ./.yarn
 COPY packages ./packages
@@ -24,6 +27,7 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 
+COPY --chown=root:root --chmod=755 packages/indexer/entrypoint.sh /entrypoint.sh
 COPY packages/indexer/package.json ./packages/indexer/package.json
 COPY packages/abis/package.json ./packages/abis/package.json
 COPY packages/networks/package.json ./packages/networks/package.json
@@ -39,4 +43,5 @@ ENV PORT=3000
 
 EXPOSE 3000
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", "dist/index.js"]
