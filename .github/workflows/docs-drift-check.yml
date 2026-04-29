@@ -1,0 +1,30 @@
+name: Docs Drift Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  docs-drift-check:
+    uses: relayprotocol/agents-config/.github/workflows/reusable-docs-drift-check.yml@main
+    with:
+      runner: blacksmith-4vcpu-ubuntu-2404
+      is_public_repo: false
+      docs_scope: "references/protocol/**"
+      source_surface: |
+        - Solidity contracts under `smart-contracts/contracts/` — public/external function signatures, events, errors, storage layout, and access-control rules on `RelayHub.sol`, `RelayAllocator.sol`, `RelayAllocatorSpender.sol`, `RelayOracle.sol`, `RelayOracleMultisig.sol`, `RelayMultisigSigner.sol`, `DepositAddress.sol`, `DepositAddressFactory.sol`, `BitcoinDepositAddress.sol`, `BitcoinDepositSweepBuilder.sol`, `ChainSignatures.sol`, `OrderTypes.sol`, and the `PayloadBuilders/` family.
+        - Depository contracts under `smart-contracts/contracts/depository/` and any cross-chain bridge helpers under `smart-contracts/contracts/aurora-xcc/`.
+        - Public TypeScript SDK under `packages/sdk/src/` — exported types, hub helpers, order helpers, network metadata in `networks.ts`, message builders.
+        - Public hub client under `packages/hub-client/` — RPC method names, request/response shapes, error codes.
+        - Indexer GraphQL schema and event handlers under `packages/indexer/` where they define integrator-observable surfaces (subgraph entities, query fields).
+        - ABIs published from `packages/abis/` — additions, removals, or shape changes.
+        - Network registry / supported-chain list in `packages/networks/`.
+        - Root `README.md` and any integrator-facing notes under `docs/`.
+        - Changes that are NOT doc-relevant: internal contract refactors with identical external behavior, test-only changes, indexer infra config, build/CI plumbing, audit fixes that don't alter interfaces — unless they change an integrator-observable surface.
+    secrets: inherit
