@@ -17,6 +17,7 @@ import ISafe from "./abis/RelayAllocator.sol/ISafe.json"
 import RelayAllocator from "./abis/RelayAllocator.sol/RelayAllocator.json"
 import IERC20View from "./abis/RelayHub.sol/IERC20View.json"
 import RelayHub from "./abis/RelayHub.sol/RelayHub.json"
+import RelayOracleMultisig from "./abis/RelayOracleMultisig.sol/RelayOracleMultisig.json"
 import RelayMultisigSigner from "./abis/RelayMultisigSigner.sol/RelayMultisigSigner.json"
 import Utils from "./abis/Utils.sol/Utils.json"
 import AuroraSdk from "./abis/aurora-xcc/AuroraSdk.sol/AuroraSdk.json"
@@ -48,6 +49,7 @@ export { ISafe }
 export { RelayAllocator }
 export { IERC20View }
 export { RelayHub }
+export { RelayOracleMultisig }
 export { RelayMultisigSigner }
 export { RelayOracle }
 export { Utils }

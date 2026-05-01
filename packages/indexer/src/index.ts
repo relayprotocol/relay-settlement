@@ -41,11 +41,14 @@ const start = async () => {
 
   const db =
     config.doBackgroundWork || config.enableApi ? await openDb() : undefined
-  const provider = config.doBackgroundWork
-    ? config.rpcHttpUrl
-      ? new JsonRpcProvider(config.rpcHttpUrl)
-      : new WebSocketProvider(config.rpcWsUrl as string)
-    : undefined
+  const provider =
+    config.doBackgroundWork || config.enableApi
+      ? config.rpcHttpUrl
+        ? new JsonRpcProvider(config.rpcHttpUrl)
+        : config.rpcWsUrl
+          ? new WebSocketProvider(config.rpcWsUrl)
+          : undefined
+      : undefined
 
   if (provider) {
     const oracleContract = new Contract(
@@ -66,6 +69,8 @@ const start = async () => {
     db,
     expectedApiKey: config.authApiKey,
     healthProvider: provider,
+    oracleContractAddress: config.oracleContractAddress,
+    oracleProvider: provider,
   })
   app.listen(config.port, () => {
     if (config.enableApi) {

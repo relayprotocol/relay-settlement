@@ -6,6 +6,7 @@ import type { Database } from "./db/connection.js"
 import { listBalancesForAddress } from "./queries/balances.js"
 import { listEvents, transferStats } from "./queries/events.js"
 import { listHolders } from "./queries/holders.js"
+import { getApprovedOracleInstances } from "./queries/oracles.js"
 import { getProtocolTransactionsByHash } from "./queries/protocolTransactions.js"
 import {
   getRoleAdmin,
@@ -64,10 +65,18 @@ export const createServer = (
     db?: Database
     expectedApiKey?: string
     healthProvider?: Provider
+    oracleContractAddress?: string
+    oracleProvider?: Provider
   } = {}
 ) => {
   const app = express()
-  const { db, expectedApiKey, healthProvider } = options
+  const {
+    db,
+    expectedApiKey,
+    healthProvider,
+    oracleContractAddress,
+    oracleProvider,
+  } = options
 
   app.use(express.json())
 
@@ -271,6 +280,25 @@ export const createServer = (
 
       const data = await getProtocolTransactionsByHash(db, normalizedTxHashes)
       return res.json({ data })
+    })
+  )
+
+  app.get(
+    "/api/oracles/approved",
+    asyncHandler(async (_req, res) => {
+      if (!oracleProvider || !oracleContractAddress) {
+        return res.status(503).json({
+          error: "Oracle provider unavailable",
+        })
+      }
+
+      return res.json(
+        await getApprovedOracleInstances(
+          db,
+          oracleProvider,
+          oracleContractAddress
+        )
+      )
     })
   )
 
