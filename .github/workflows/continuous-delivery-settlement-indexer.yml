@@ -71,7 +71,7 @@ jobs:
           GH_TOKEN: ${{ secrets.DEVOPSBOT_TOKEN }}
           VERSION: ${{ github.sha }}
         run: |
-          payload=$(printf '{"event_type":"deploy","client_payload":{"app":"settlement-indexer","version":"%s","environment":"dev"}}' "$VERSION")
+          payload=$(printf '{"event_type":"deploy","client_payload":{"app":"settlement-indexer","version":"%s","environment":"dev","actor":"%s"}}' "$VERSION" "${{ github.actor }}")
           gh api repos/unevenlabs/k8s-configs/dispatches --method POST --input - <<< "$payload"
 
       - name: Summary
@@ -105,7 +105,7 @@ jobs:
           GH_TOKEN: ${{ secrets.DEVOPSBOT_TOKEN }}
           VERSION: ${{ github.sha }}
         run: |
-          payload=$(printf '{"event_type":"deploy","client_payload":{"app":"settlement-indexer","version":"%s","environment":"stag+prod"}}' "$VERSION")
+          payload=$(printf '{"event_type":"deploy","client_payload":{"app":"settlement-indexer","version":"%s","environment":"stag+prod","actor":"%s"}}' "$VERSION" "${{ github.actor }}")
           gh api repos/unevenlabs/k8s-configs/dispatches --method POST --input - <<< "$payload"
 
       - name: Summary
