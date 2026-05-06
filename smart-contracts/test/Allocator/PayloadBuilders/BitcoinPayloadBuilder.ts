@@ -301,6 +301,78 @@ describe("Allocator BitcoinPayloadBuilder", function () {
         ])
       ).to.be.rejectedWith(`FeesTooHigh(${utxosTotalValue}, 340000)`)
     })
+
+    it("should revert OutputBelowMinThreshold with the receiverValue when amount-fees is below the dust threshold", async () => {
+      const { payloadBuilder, receiverScript } =
+        await loadFixture(deployPayloadBuilder)
+
+      // 2 inputs + 2 outputs (because change>0): fees = 1 * (2*148 + 2*34 + 10) = 374
+      // receiverValue = 600 - 374 = 226 < 546 → revert
+      const amount = 600n
+      const feeRate = 1n
+      const expectedReceiverValue = 226n
+
+      await expect(
+        payloadBuilder.read.buildPayload([
+          1n,
+          zeroAddress,
+          "",
+          amount,
+          receiverScript,
+          encodeAbiParameters(
+            [BITCOIN_TRANSACTION_PARAMS_ABI],
+            [
+              {
+                feeRate,
+                utxos: utxos.map((utxo) => ({
+                  index: utxo.vout,
+                  scriptPubKey,
+                  txid: txidToBytes32(utxo.txid),
+                  value: BigInt(utxo.value),
+                })),
+              },
+            ]
+          ),
+        ])
+      ).to.be.rejectedWith(`OutputBelowMinThreshold(${expectedReceiverValue})`)
+    })
+
+    it("should revert OutputBelowMinThreshold with the exact change value when change is below the dust threshold", async () => {
+      const { payloadBuilder, receiverScript } =
+        await loadFixture(deployPayloadBuilder)
+
+      const utxosTotalValue = utxos.reduce(
+        (total, utxo) => total + BigInt(utxo.value),
+        0n
+      )
+      // change = totalInput - amount = 100; receiverValue (with feeRate=0) is well above dust
+      const expectedChange = 100n
+      const amount = utxosTotalValue - expectedChange
+
+      await expect(
+        payloadBuilder.read.buildPayload([
+          1n,
+          zeroAddress,
+          "",
+          amount,
+          receiverScript,
+          encodeAbiParameters(
+            [BITCOIN_TRANSACTION_PARAMS_ABI],
+            [
+              {
+                feeRate: 0n,
+                utxos: utxos.map((utxo) => ({
+                  index: utxo.vout,
+                  scriptPubKey,
+                  txid: txidToBytes32(utxo.txid),
+                  value: BigInt(utxo.value),
+                })),
+              },
+            ]
+          ),
+        ])
+      ).to.be.rejectedWith(`OutputBelowMinThreshold(${expectedChange})`)
+    })
   })
 
   describe("hashToSign()", function () {
@@ -385,6 +457,146 @@ describe("Allocator BitcoinPayloadBuilder", function () {
           "0x" + sighash.toString("hex").toLowerCase()
         )
       }
+    })
+
+    it("should produce a degenerate sighash (not equal to any valid input's sighash) when hashIndex is out of bounds", async () => {
+      // The preimage loop only specializes scriptSig when `i == whichInput`. If
+      // hashIndex >= inputs.length, no input gets its scriptSig populated, so the
+      // returned sighash is a function of empty-scriptSig inputs only. This test
+      // locks down that behavior: callers passing an OOB index do NOT receive any
+      // valid input's sighash by accident.
+      const { payloadBuilder, receiverScript } =
+        await loadFixture(deployPayloadBuilder)
+
+      const amount = 50000n
+      const payload = await payloadBuilder.read.buildPayload([
+        1n,
+        zeroAddress,
+        "",
+        amount,
+        receiverScript,
+        encodeAbiParameters(
+          [BITCOIN_TRANSACTION_PARAMS_ABI],
+          [
+            {
+              feeRate: 0n,
+              utxos: utxos.map((utxo) => ({
+                index: utxo.vout,
+                scriptPubKey,
+                txid: txidToBytes32(utxo.txid),
+                value: BigInt(utxo.value),
+              })),
+            },
+          ]
+        ),
+      ])
+
+      const validHashes: `0x${string}`[] = []
+      for (let i = 0; i < utxos.length; i++) {
+        validHashes.push(
+          await payloadBuilder.read.hashToSign([1n, zeroAddress, payload, i])
+        )
+      }
+
+      // hashIndex == inputs.length and a much larger index both yield the same
+      // empty-scriptSig sighash, and that sighash is distinct from every valid one
+      const oobHashAtN = await payloadBuilder.read.hashToSign([
+        1n,
+        zeroAddress,
+        payload,
+        utxos.length,
+      ])
+      const oobHashAtMax = await payloadBuilder.read.hashToSign([
+        1n,
+        zeroAddress,
+        payload,
+        0xffffffff,
+      ])
+
+      expect(oobHashAtN).to.equal(oobHashAtMax)
+      for (const h of validHashes) {
+        expect(oobHashAtN).to.not.equal(h)
+      }
+    })
+
+    it("should match bitcoinjs sighash for the single-UTXO path (no change output)", async () => {
+      const { bitcoinRecipientAddress, payloadBuilder, receiverScript } =
+        await loadFixture(deployPayloadBuilder)
+
+      // Single UTXO; amount == value so change == 0 → only 1 output, no change script
+      const singleUtxo = utxos[0]
+      const amount = BigInt(singleUtxo.value)
+
+      const payload = await payloadBuilder.read.buildPayload([
+        1n,
+        zeroAddress,
+        "",
+        amount,
+        receiverScript,
+        encodeAbiParameters(
+          [BITCOIN_TRANSACTION_PARAMS_ABI],
+          [
+            {
+              feeRate: 0n,
+              utxos: [
+                {
+                  index: singleUtxo.vout,
+                  scriptPubKey,
+                  txid: txidToBytes32(singleUtxo.txid),
+                  value: amount,
+                },
+              ],
+            },
+          ]
+        ),
+      ])
+
+      const [transaction] = decodeAbiParameters(
+        BITCOIN_TRANSACTION_ABI,
+        payload
+      )
+      expect(transaction.inputs.length).to.equal(1)
+      expect(transaction.outputs.length).to.equal(1)
+
+      // Cross-check sighash with bitcoinjs
+      const tx = new bitcoin.Transaction()
+      tx.version = 1
+      tx.addInput(
+        Buffer.from(singleUtxo.txid, "hex").reverse(),
+        singleUtxo.vout,
+        0xfffffffd
+      )
+      const outputScript = bitcoin.address.toOutputScript(
+        bitcoinRecipientAddress
+      )
+      tx.addOutput(outputScript, Number(amount))
+
+      const expected = tx.hashForSignature(
+        0,
+        Buffer.from(scriptPubKey.slice(2), "hex"),
+        bitcoin.Transaction.SIGHASH_ALL
+      )
+      const got = await payloadBuilder.read.hashToSign([
+        1n,
+        zeroAddress,
+        payload,
+        0,
+      ])
+      expect(got.toLowerCase()).to.equal(
+        "0x" + expected.toString("hex").toLowerCase()
+      )
+    })
+  })
+
+  describe("interface metadata", function () {
+    it("should report family() == 'bitcoin-vm'", async () => {
+      const { payloadBuilder } = await loadFixture(deployPayloadBuilder)
+      expect(await payloadBuilder.read.family()).to.equal("bitcoin-vm")
+    })
+
+    it("should report curve() == 'Ecdsa'", async () => {
+      const { payloadBuilder } = await loadFixture(deployPayloadBuilder)
+      expect(await payloadBuilder.read.curve()).to.equal("Ecdsa")
     })
   })
 })
