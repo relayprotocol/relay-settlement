@@ -36,6 +36,7 @@ import "./tasks/hub/setup-withdrawal-test"
 
 // deployments
 import "./tasks/deployments/allocator"
+import "./tasks/deployments/bitcoinDepositAddress"
 import "./tasks/deployments/erc20View"
 import "./tasks/deployments/hub"
 import "./tasks/deployments/oracle"
