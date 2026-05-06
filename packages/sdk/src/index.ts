@@ -75,6 +75,13 @@ import {
 } from "./messages/v2.2/withdrawal"
 
 import {
+  WithdrawRequest,
+  DenormalizedWithdrawRequest,
+  getWithdrawRequestHash,
+  normalizeWithdrawRequest,
+} from "./messages/v2.3/withdrawal"
+
+import {
   VmType,
   decodeAddress,
   decodeTransactionId,
@@ -180,6 +187,16 @@ export {
   getOrderAddress,
   getOrderAddressSafe,
   normalizePayloadParams,
+
+  // Messages v2.3
+
+  // Withdrawal
+  WithdrawRequest,
+  DenormalizedWithdrawRequest,
+  getWithdrawRequestHash,
+  normalizeWithdrawRequest,
+
+  // Misc
 
   // Hub utils
   TokenIdComponents,

@@ -4877,6 +4877,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@relay-protocol/lit-actions@workspace:packages/lit-actions":
+  version: 0.0.0-use.local
+  resolution: "@relay-protocol/lit-actions@workspace:packages/lit-actions"
+  dependencies:
+    "@relay-protocol/settlement-sdk": "npm:0.0.97"
+    "@relay-settlement/tsconfig": "workspace:*"
+    eslint: "npm:9.36.0"
+    typescript: "npm:5.9.3"
+  languageName: unknown
+  linkType: soft
+
 "@relay-protocol/settlement-abis@workspace:*, @relay-protocol/settlement-abis@workspace:packages/abis":
   version: 0.0.0-use.local
   resolution: "@relay-protocol/settlement-abis@workspace:packages/abis"
@@ -4904,7 +4915,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@relay-protocol/settlement-sdk@workspace:*, @relay-protocol/settlement-sdk@workspace:./packages/sdk, @relay-protocol/settlement-sdk@workspace:packages/sdk":
+"@relay-protocol/settlement-sdk@npm:0.0.97, @relay-protocol/settlement-sdk@workspace:*, @relay-protocol/settlement-sdk@workspace:./packages/sdk, @relay-protocol/settlement-sdk@workspace:packages/sdk":
   version: 0.0.0-use.local
   resolution: "@relay-protocol/settlement-sdk@workspace:packages/sdk"
   dependencies:
