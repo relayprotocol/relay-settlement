@@ -1,10 +1,10 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import type { EventRow, OracleExecutionRow } from "../models/db.js"
+import type { OracleExecutionRow } from "../models/db.js"
 import { projectProtocolTransactions } from "./protocolTransactions.js"
 
 test("projectProtocolTransactions groups by tx hash and preserves first-seen hash order", () => {
-  const transferRows: EventRow[] = [
+  const transferRows = [
     {
       amount: "5",
       block_number: 11,
@@ -24,7 +24,10 @@ test("projectProtocolTransactions groups by tx hash and preserves first-seen has
       operator: "0xop1",
       timestamp: 1710000000,
       to_addr: "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+      token_decimals: 6,
       token_id: "token-1",
+      token_name: "USD Coin on Relay",
+      token_symbol: "USDC",
       tx_hash: "0xone",
     },
     {
@@ -81,6 +84,16 @@ test("projectProtocolTransactions groups by tx hash and preserves first-seen has
     transactions[0].transfers.map((transfer) => transfer.logIndex),
     [2, 4]
   )
+  assert.deepEqual(transactions[0].transfers[1].tokenMetadata, {
+    decimals: 6,
+    name: "USD Coin on Relay",
+    symbol: "USDC",
+  })
+  assert.deepEqual(transactions[1].transfers[0].tokenMetadata, {
+    decimals: null,
+    name: null,
+    symbol: null,
+  })
   assert.deepEqual(
     transactions[0].oracleExecutions.map((execution) => execution.logIndex),
     [1, 9]
@@ -95,7 +108,7 @@ test("projectProtocolTransactions groups by tx hash and preserves first-seen has
 })
 
 test("projectProtocolTransactions throws when oracle actions_json is invalid", () => {
-  const transferRows: EventRow[] = [
+  const transferRows = [
     {
       amount: "10",
       block_number: 10,

@@ -7,6 +7,18 @@ import {
   type RelayOperation,
 } from "../protocol/transferSemantics.js"
 
+export type ProtocolTokenMetadata = {
+  decimals: number | null
+  name: string | null
+  symbol: string | null
+}
+
+type ProtocolTransferRow = EventRow & {
+  token_decimals?: number | null
+  token_name?: string | null
+  token_symbol?: string | null
+}
+
 export type ProtocolTransfer = {
   amount: string
   from: string
@@ -14,6 +26,7 @@ export type ProtocolTransfer = {
   operator: string
   to: string
   tokenId: string
+  tokenMetadata: ProtocolTokenMetadata
   type: ProtocolTransferType
 }
 
@@ -61,7 +74,7 @@ export const projectProtocolTransactions = ({
   txHashes,
 }: {
   oracleRows: OracleExecutionRow[]
-  transferRows: EventRow[]
+  transferRows: ProtocolTransferRow[]
   txHashes: string[]
 }): ProtocolTransaction[] => {
   const transfersByTxHash = new Map<string, ProtocolTransfer[]>()
@@ -79,6 +92,11 @@ export const projectProtocolTransactions = ({
       operator: row.operator,
       to: row.to_addr,
       tokenId: row.token_id,
+      tokenMetadata: {
+        decimals: row.token_decimals ?? null,
+        name: row.token_name ?? null,
+        symbol: row.token_symbol ?? null,
+      },
       type: getProtocolTransferType(row.from_addr, row.to_addr),
     })
     transfersByTxHash.set(row.tx_hash, transfers)
@@ -149,11 +167,24 @@ export const getProtocolTransactionsByHash = async (
     return []
   }
 
-  const transferRows = await db.manyOrNone<EventRow>(
-    `SELECT block_number, tx_hash, log_index, operator, from_addr, to_addr, token_id, amount, timestamp
+  const transferRows = await db.manyOrNone<ProtocolTransferRow>(
+    `SELECT
+       events.block_number,
+       events.tx_hash,
+       events.log_index,
+       events.operator,
+       events.from_addr,
+       events.to_addr,
+       events.token_id,
+       events.amount,
+       events.timestamp,
+       tokens.name AS token_name,
+       tokens.symbol AS token_symbol,
+       tokens.decimals AS token_decimals
      FROM events
-     WHERE tx_hash IN ($1:csv)
-     ORDER BY block_number ASC, log_index ASC`,
+     LEFT JOIN tokens ON tokens.token_id = events.token_id
+     WHERE events.tx_hash IN ($1:csv)
+     ORDER BY events.block_number ASC, events.log_index ASC`,
     [txHashes]
   )
 
