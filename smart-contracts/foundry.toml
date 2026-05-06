@@ -1,5 +1,20 @@
-# ABOUTME: Minimal Foundry config for hardhat-foundry plugin.
-# ABOUTME: Provides remappings so Hardhat can compile the canonical depository source.
+# ABOUTME: Foundry config matching Hardhat's solc settings.
+# ABOUTME: Provides remappings so Hardhat (via hardhat-foundry) can compile sources,
+# ABOUTME: and configures forge build/test/coverage for an eventual Foundry test suite.
 [profile.default]
 src = "contracts"
-libs = ["node_modules"]
+test = "test-foundry"
+out = "forge-out"
+libs = ["node_modules", "lib"]
+solc_version = "0.8.28"
+optimizer = true
+optimizer_runs = 200
+bytecode_hash = "none"
+cbor_metadata = false
+
+[profile.default.fuzz]
+runs = 256
+
+[profile.default.invariant]
+runs = 256
+depth = 15

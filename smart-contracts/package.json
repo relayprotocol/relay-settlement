@@ -5,6 +5,8 @@
     "build:abis": "yarn hardhat export:abis",
     "test": "hardhat test",
     "coverage": "SOLIDITY_COVERAGE=true hardhat coverage",
+    "coverage:diff": "ts-node tools/coverage-diff.ts coverage/lcov.info",
+    "forge:coverage": "forge coverage --report lcov --report-file forge-out/lcov.info",
     "lint:solidity": "yarn solhint 'contracts/**/*.sol'",
     "lint": "yarn lint:solidity && lint"
   },
