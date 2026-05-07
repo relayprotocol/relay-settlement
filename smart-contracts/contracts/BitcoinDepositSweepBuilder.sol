@@ -5,13 +5,35 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Base64} from "solady/src/utils/Base64.sol";
 import {ChainSignatures} from "./ChainSignatures.sol";
 import {Utils} from "./Utils.sol";
-import {
-  UTXO,
-  BitcoinTransactionDataInput,
-  BitcoinTransactionDataOutput,
-  BitcoinTransactionData
-} from "./PayloadBuilders/BitcoinPayloadBuilder.sol";
 import {IBitcoinDepositSweepBuilder} from "./interfaces/IBitcoinDepositSweepBuilder.sol";
+
+/// @notice Bitcoin UTXO structure
+struct UTXO {
+  bytes32 txid;
+  uint32 index;
+  uint64 value;
+  bytes scriptPubKey;
+}
+
+/// @notice Bitcoin transaction input data
+struct BitcoinTransactionDataInput {
+  bytes txid;
+  bytes index;
+  bytes script;
+  bytes value;
+}
+
+/// @notice Bitcoin transaction output data
+struct BitcoinTransactionDataOutput {
+  bytes value;
+  bytes script;
+}
+
+/// @notice Complete Bitcoin transaction data
+struct BitcoinTransactionData {
+  BitcoinTransactionDataInput[] inputs;
+  BitcoinTransactionDataOutput[] outputs;
+}
 
 /// @title BitcoinDepositSweepBuilder
 /// @author Relay Protocol

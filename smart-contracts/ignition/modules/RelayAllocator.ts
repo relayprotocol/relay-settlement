@@ -2,34 +2,18 @@ import { buildModule } from "@nomicfoundation/hardhat-ignition/modules"
 
 const RelayAllocatorModule = buildModule("RelayAllocator", (m) => {
   const owner = m.getParameter("owner")
-  const delay = m.getParameter("delay")
-  const signer = m.getParameter("signer")
-  const wNEAR = m.getParameter("wNEAR")
-  const wrapNearTokenId = m.getParameter("wrapNearTokenId")
-  const Codec = m.library("Codec")
-  const AuroraXccUtils = m.library("AuroraXccUtils")
-  const ChainSignatures = m.library("ChainSignatures")
-  const AuroraSdk = m.library("AuroraSdk", {
+  const hub = m.getParameter("hub")
+
+  const Utils = m.library("Utils")
+  const relayAllocator = m.contract("RelayAllocator", [owner, hub], {
     libraries: {
-      AuroraXccUtils,
-      Codec,
+      Utils,
     },
   })
 
-  const Utils = m.library("Utils")
-
-  const allocator = m.contract(
-    "RelayAllocator",
-    [owner, delay, signer, wNEAR, wrapNearTokenId],
-    {
-      libraries: {
-        AuroraSdk,
-        ChainSignatures,
-        Utils,
-      },
-    }
-  )
-  return { allocator }
+  return {
+    relayAllocator,
+  }
 })
 
 export default RelayAllocatorModule

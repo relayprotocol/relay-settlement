@@ -129,7 +129,7 @@ task(
       // Verify that the signatures match
       // get the payload hashes that are to be signed
       const payloadBuilder = await viem.getContractAt(
-        "EVMPayloadBuilder",
+        "EthereumVmPayloadBuilder",
         payloadBuilderAddress
       )
       const payloadHashes = await payloadBuilder.read.hashesToSign([

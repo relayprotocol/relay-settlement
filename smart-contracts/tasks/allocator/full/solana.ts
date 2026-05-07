@@ -71,7 +71,7 @@ task(
         console.log("PayloadBuilder not set, deploying a new one...")
 
         payloadBuilderAddress = await run("deploy:payload-builder", {
-          payloadBuilder: "SolanaPayloadBuilder",
+          payloadBuilder: "SolanaVmPayloadBuilder",
         })
 
         const tx = await allocator.write.setPayloadBuilder([
@@ -129,7 +129,7 @@ task(
 
       // Verify that the signatures match
       const payloadBuilder = await viem.getContractAt(
-        "EVMPayloadBuilder",
+        "EthereumVmPayloadBuilder",
         payloadBuilderAddress
       )
       const payloadHashes = await payloadBuilder.read.hashesToSign([

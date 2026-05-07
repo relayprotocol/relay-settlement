@@ -13,8 +13,12 @@ import {
   PromiseWithCallback
 } from "./aurora-xcc/AuroraSdk.sol";
 import {ChainSignatures} from "./ChainSignatures.sol";
-import {GasSettings} from "./RelayAllocator.sol";
 import {IBitcoinDepositSweepBuilder} from "./interfaces/IBitcoinDepositSweepBuilder.sol";
+
+struct GasSettings {
+  uint64 signGas;
+  uint64 callbackGas;
+}
 
 /// @title BitcoinDepositAddress
 /// @author Relay Protocol

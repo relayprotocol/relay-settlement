@@ -1,710 +1,377 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {
-  AuroraSdk,
-  NEAR,
-  PromiseCreateArgs,
-  PromiseResult,
-  PromiseResultStatus,
-  PromiseWithCallback
-} from "./aurora-xcc/AuroraSdk.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+
 import {RelayHub} from "./RelayHub.sol";
 import {Utils} from "./Utils.sol";
-import {ChainSignatures} from "./ChainSignatures.sol";
 
-/// @title IEvmERC20
-/// @notice Interface for EVM ERC20 tokens that support withdrawal to NEAR
-// solhint-disable-next-line use-natspec
-interface IEvmERC20 is IERC20 {
-  /// @notice Withdraws tokens to NEAR network
-  /// @param recipient The recipient address on NEAR
-  /// @param amount The amount to withdraw
-  function withdrawToNear(bytes memory recipient, uint256 amount) external;
-}
-
-/// @title ISafe
-/// @notice Interface for Safe multisig contract
-// solhint-disable-next-line use-natspec
-interface ISafe {
-  /// @notice Checks if an address is an owner of the Safe
-  /// @param owner The address to check
-  /// @return True if the address is an owner
-  function isOwner(address owner) external view returns (bool);
+/// @notice Parameters passed to a payload builder for constructing a withdrawal payload
+struct BuildPayloadParams {
+  bytes currency; /// @notice Encoded currency address
+  uint256 amount; /// @notice Amount to withdraw
+  bytes receiver; /// @notice Encoded receiver address
+  uint256 nonce; /// @notice Request nonce
+  bytes data; /// @notice Additional payload builder data
 }
 
 /// @title IPayloadBuilder
 /// @author Relay Protocol
 /// @notice Interface for payload builders that create withdrawal payloads for different chains
 interface IPayloadBuilder {
-  error InsufficientAmount(uint256 amount);
-
   /// @notice Builds a withdrawal payload for the specified parameters
-  /// @param chainId The destination chain ID
+  /// @param chainId The destination chain id
   /// @param depository The depository address
-  /// @param currency The currency address
-  /// @param amount The amount to withdraw
-  /// @param receiver The receiver address
-  /// @param data Additional data
-  /// @return The built payload
+  /// @param params Payload builder parameters
+  /// @return payload The built payload
   function buildPayload(
-    uint256 chainId,
-    string calldata depository,
-    string calldata currency,
-    uint256 amount,
-    string calldata receiver,
-    bytes calldata data
-  ) external view returns (bytes memory);
+    string calldata chainId,
+    bytes calldata depository,
+    BuildPayloadParams calldata params
+  ) external view returns (bytes memory payload);
 
-  /// @notice Returns the hashes that need to be signed for the payload
-  /// @param chainId The destination chain ID
+  /// @notice Returns an array of hashes that need to be signed for the payload
+  /// @param chainId The destination chain id
   /// @param depository The depository address
-  /// @param payload The payload to sign
-  /// @return Array of hashes to sign
-  function hashToSign(
-    uint256 chainId,
-    string calldata depository,
-    bytes calldata payload,
-    uint32 hashIndex
-  ) external view returns (bytes32);
+  /// @param payload The corresponding payload
+  /// @return hashes Array of hashes to be signed
+  function hashesToSign(
+    string calldata chainId,
+    bytes calldata depository,
+    bytes calldata payload
+  ) external view returns (bytes32[] memory hashes);
 
   /// @notice Returns the curve used for signing
-  /// @return The curve name
-  function curve() external pure returns (string memory);
+  /// @return name The curve name
+  function curve() external pure returns (string memory name);
 
   /// @notice Returns the family of the payload builder
-  /// @return The family name
-  function family() external pure returns (string memory);
+  /// @return name The family name
+  function family() external pure returns (string memory name);
 }
 
-// NEAR gas settings
-struct GasSettings {
-  uint64 signGas;
-  uint64 callbackGas;
-}
-
-/// @title Allocator
+/// @title RelayAllocator
 /// @author Relay Protocol
-/// @notice Manages cross-chain withdrawal requests and payload signing using NEAR MPC signer
-contract RelayAllocator is AccessControl, Ownable, EIP712 {
-  using AuroraSdk for NEAR;
-  using AuroraSdk for PromiseCreateArgs;
-  using AuroraSdk for PromiseWithCallback;
-  using AuroraSdk for PromiseResult;
-  using Strings for uint256;
+/// @notice Manages cross-chain withdrawal requests and payload signing
+contract RelayAllocator is Ownable, EIP712 {
   using ECDSA for bytes32;
 
-  /// @notice Emitted when the global delay is changed
-  event DelayChanged(uint256 delay);
-  /// @notice Emitted when a depository-specific delay is changed
-  event DepositoryDelayChanged(
-    uint256 chainId,
-    string depository,
-    uint256 delay
-  );
-  /// @notice Emitted when the hub contract is set
-  event HubSet(address hub);
-  /// @notice Emitted when the NEAR signer account is changed
-  event NearSignerChanged(string signer);
-  /// @notice Emitted when the signature fee is changed
-  event SignatureFeeChanged(uint256 fee);
+  /// --- Fields ---
 
-  // EIP712
-  /// @notice The signing domain for EIP712
+  /// @notice The signing domain for EIP-712 receiver-authorized withdrawals
   string public constant SIGNING_DOMAIN = "RelayAllocator";
-  /// @notice The signature version for EIP712
+
+  /// @notice The signature version for EIP-712 receiver-authorized withdrawals
   string public constant SIGNATURE_VERSION = "1";
-  /// @notice The type hash for SubmitWithdrawRequest
+
+  /// @notice The type hash for WithdrawRequest receiver signatures
   bytes32 public constant PAYLOAD_TYPEHASH =
     keccak256(
-      "SubmitWithdrawRequest(uint256 chainId,string depository,string currency,uint256 amount,address spender,string receiver,bytes data,bytes32 nonce)"
+      "WithdrawRequest(string chainId,bytes depository,bytes currency,uint256 amount,string spenderChainId,bytes spender,bytes receiver,bytes data,bytes32 nonce)"
     );
 
-  // roles
-  /// @notice Role for approved withdrawers
-  bytes32 public constant APPROVED_WITHDRAWER_ROLE =
-    keccak256("APPROVED_WITHDRAWER_ROLE");
-  /// @notice Role for administrators
-  bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
-
-  /// @notice Precompute the hash of the curve
-  bytes32 private constant ECDSA_HASH = keccak256("Ecdsa");
-
-  /// @notice Preventing concurrent signature requests for the same payload
-  uint256 private constant PENDING_SIGNATURE_COOLDOWN = 60 minutes;
-
-  /// @notice Gas for withdrawals to NEAR
-  uint64 public immutable NEAR_WITHDRAW_GAS = 2_000_000_000_000;
-
-  /// @notice The NEAR signer account address
-  string public nearSigner;
-
-  /// @notice The wNEAR token account ID on NEAR (e.g. "wrap.near" or "wrap.testnet")
-  string public wrapNearTokenId;
-
-  /// @notice The Aurora SDK NEAR instance
-  NEAR public near;
-
-  /// @notice Global delay for withdrawal requests
-  uint256 public delay;
-
-  /// @notice Path used by the MPC signer to sign the payload
-  string public signerPath;
-
-  /// @notice Fee in wNEAR to cover gas on NEAR
-  uint256 public signatureFee;
-
-  /// @notice Delay configuration struct
-  struct DelayConfig {
-    uint256 delay;
-    bool isSet;
-  }
-
-  /// @notice Mapping of delays per-depository : chain ID => depository => delay
-  mapping(uint256 => mapping(string => DelayConfig)) public depositoryDelays;
-
   /// @notice Address of the hub contract
-  address public hub;
+  address public immutable HUB;
 
-  /// @notice Mapping of payload builders: chain ID => depository => payload builder address
-  mapping(uint256 => mapping(string => address)) public payloadBuilders;
-
-  /// @notice Signed payloads: withdrawal request hash => hash to sign => signed payload
-  mapping(bytes32 => mapping(bytes32 => bytes)) public signedPayloads;
-
-  /// @notice Pending signatures: withdrawal request hash => hash to sign => expiration timestamp
-  mapping(bytes32 => mapping(bytes32 => uint256)) public pendingSignatures;
-
-  /// @notice Payload timestamps: withdrawal request hash => timestamp when payload becomes ready
-  mapping(bytes32 => uint256) public payloadTimestamps;
+  /// @notice Mapping of payload builders: chain id => depository => payload builder address
+  mapping(string => mapping(bytes => address)) public payloadBuilders;
 
   /// @notice Unsigned payloads: withdrawal request hash => payload
   mapping(bytes32 => bytes) public payloads;
 
-  /// @notice Used nonces for replay protection: sender => nonce => whether it has been used
+  /// @notice Signed payloads: withdrawal request hash => hash index => hash to be signed
+  mapping(bytes32 => mapping(uint256 => bytes32)) public hashesToSign;
+
+  /// @notice Used nonces for replay protection: signer => nonce => whether it has been used
   mapping(address => mapping(bytes32 => bool)) public usedNonces;
 
+  /// @notice Tracks spender aliases that have been suspended by the owner
+  mapping(address => bool) public suspended;
+
+  /// @notice Emitted when the hub contract is set
+  /// @param hub Hub contract address
+  event HubSet(address indexed hub);
+
+  // --- Events ---
+
   /// @notice Emitted when a payload builder is set for a chain and depository
+  /// @param chainId Chain id
+  /// @param depository Encoded depository address
+  /// @param builder Payload builder address
   event PayloadBuilderSet(
-    uint256 indexed chainId,
-    string indexed depository,
+    string indexed chainId,
+    bytes indexed depository,
     address indexed builder
   );
 
   /// @notice Emitted when a payload is built
+  /// @param withdrawRequestHash Withdrawal request hash
+  /// @param payload Encoded withdrawal payload
+  /// @param hashesToSign Hashes that must be signed for the payload
   event PayloadBuilt(
     bytes32 indexed withdrawRequestHash,
     bytes payload,
-    uint256 timestamp
+    bytes32[] hashesToSign
   );
 
-  /// @notice Emitted when a payload is signed
-  event PayloadWithdrawSigned(
-    bytes32 indexed withdrawRequestHash,
-    bytes32 indexed hashToSign,
-    bytes signedPayload
-  );
+  /// @notice Emitted when a spender alias is suspended
+  /// @param spender Spender alias address
+  event Suspended(address indexed spender);
 
-  // errors
-  error NotMultisigOwner(address account);
+  /// @notice Emitted when a spender alias is unsuspended
+  /// @param spender Spender alias address
+  event Unsuspended(address indexed spender);
+
+  // --- Errors ---
+
+  /// @notice Thrown when the caller is neither the spender nor an approved operator
+  /// @param account Caller address
   error CallerIsNotApproved(address account);
-  error NoPayloadBuilder(uint256 chainId, string depository);
-  error PayloadNotReady(bytes32 withdrawRequestHash);
-  error PayloadAlreadyBuilt(bytes32 withdrawRequestHash);
-  error PayloadAlreadySigned(bytes32 withdrawRequestHash);
-  error SignaturePending(bytes32 withdrawRequestHash, uint256 expiration);
-  error SignCallbackFailed(bytes32 withdrawRequestHash);
-  error WithdrawalRequestFailed();
 
-  struct SubmitWithdrawRequest {
-    uint256 chainId; // ChainId of the destination chain on which the user will withdraw
-    string depository; // Address of the depository account as a string so we can support non EVM
-    string currency; // Address of the currency to be withdrawn, as a string so we can support non EVM. Use zero address for native.
-    uint256 amount; // Amount to withdraw
-    address spender; // Address of the account that owns the balance in the Hub contract (can be an alias)
-    string receiver; // Address of the account on the destination chain as a string so we can support non EVM
-    bytes data; // Additional data to be passed to the payload builder
-    bytes32 nonce; // Nonce for replay protection
+  /// @notice Thrown when no payload builder is configured for a chain and depository pair
+  /// @param chainId Chain id
+  /// @param depository Encoded depository address
+  error NoPayloadBuilder(string chainId, bytes depository);
+
+  /// @notice Thrown when a withdrawal request hash has already been processed
+  /// @param withdrawRequestHash Withdrawal request hash
+  error WithdrawRequestAlreadyProcessed(bytes32 withdrawRequestHash);
+
+  /// @notice Thrown when burning funds in the hub unexpectedly returns false
+  /// @param from Spender alias whose balance was targeted
+  /// @param tokenId Token id burned from the hub
+  /// @param amount Amount attempted to burn
+  error WithdrawRequestTransferFailed(
+    address from,
+    uint256 tokenId,
+    uint256 amount
+  );
+
+  /// @notice Thrown when a withdrawal is attempted for a suspended spender alias
+  /// @param spender Suspended spender alias address
+  error SpenderSuspended(address spender);
+
+  /// @notice Thrown when a payload builder returns an empty payload
+  error EmptyPayload();
+
+  // --- Structs ---
+
+  /// @notice Parameters for a withdrawal request
+  struct WithdrawRequest {
+    string chainId; /// @notice Chain id of the withdrawal chain
+    bytes depository; /// @notice Encoded address of the depository on the withdrawal chain
+    bytes currency; /// @notice Encoded address of the currency to be withdrawn
+    uint256 amount; /// @notice Amount to withdraw
+    string spenderChainId; /// @notice Chain id of the spender
+    bytes spender; /// @notice Encoded address of the spender
+    bytes receiver; /// @notice Encoded address of the receiver of the withdrawn funds
+    bytes data; /// @notice Additional data to be passed to the payload builder
+    bytes32 nonce; /// @notice Nonce for replay protection
   }
 
-  /// @notice Constructor for RelayAllocator contract
-  /// @param _owner The owner of the contract
-  /// @param _delay The global delay for withdrawal requests
-  /// @param _signer The NEAR signer account
-  /// @param _wNEAR The wNEAR token address
-  /// @param _wrapNearTokenId The wNEAR token account ID on NEAR (e.g. "wrap.near" or "wrap.testnet")
+  /// @notice Creates a new RelayAllocator contract
+  /// @param _owner Owner of the contract
+  /// @param _hub Hub contract address
   constructor(
     address _owner,
-    uint256 _delay,
-    string memory _signer,
-    address _wNEAR,
-    string memory _wrapNearTokenId
+    address _hub
   ) Ownable(_owner) EIP712(SIGNING_DOMAIN, SIGNATURE_VERSION) {
-    // roles
-    _setRoleAdmin(APPROVED_WITHDRAWER_ROLE, ADMIN_ROLE);
-    _grantRole(ADMIN_ROLE, _owner);
-
-    // delay
-    delay = _delay;
-
-    // set signer and Aurora SDK
-    nearSigner = _signer;
-    near = AuroraSdk.initNear(IERC20(_wNEAR)); // this does an unlimited approval for wNEAR for the precompile.
-    wrapNearTokenId = _wrapNearTokenId;
-
-    // compute path at deployment
-    signerPath = Strings.toHexString(uint160(address(this)), 20);
-
-    // Fee - default to 0
-    signatureFee = 0;
+    HUB = _hub;
+    emit HubSet(_hub);
   }
 
-  modifier onlyMultisigOwner() {
-    if (!ISafe(owner()).isOwner(msg.sender))
-      revert NotMultisigOwner(msg.sender);
-    _;
-  }
-
-  /// @notice initializes XCC sub-account for the contract
-  /// You need to approve 2 wNEAR for the CS Signer to init the sub-account
-  /// @notice This calls the simplest possible contract on NEAR to bootstrap itself and initialize the XCC subaccount.
-  function init() public onlyOwner {
-    // this will initialize the XCC sub-account on NEAR
-    // 2 Near are required for storage staking
-    // slither-disable-next-line unchecked-transfer
-    near.wNEAR.transferFrom(
-      msg.sender,
-      address(this),
-      uint256(2_000_000_000_000_000_000_000_000)
-    );
-
-    // Make a cross-contract call to trigger sub-account creation.
-    // we are calling the "system" account with empty data on NEAR to trigger sub-account creation
-    // as "system" is a special account that is not part of the chain state.
-    PromiseCreateArgs memory initCall = near.call(
-      "system",
-      "",
-      "",
-      0,
-      500_000_000_000
-    );
-    initCall.transact();
-  }
-
-  /// @notice Grants a role to an address
-  /// @param role The role to grant
-  /// @param newOwner The address to grant the role to
-  function grantRole(bytes32 role, address newOwner) public override onlyOwner {
-    _grantRole(role, newOwner);
-  }
-
-  /// @notice Revokes a role from an address
-  /// @param role The role to revoke
-  /// @param newOwner The address to revoke the role from
-  function revokeRole(
-    bytes32 role,
-    address newOwner
-  ) public override onlyOwner {
-    _revokeRole(role, newOwner);
-  }
-
-  /// @notice prevents a withdrawer from withdrawing
-  /// @param withdrawer Address to prevent from withdrawing
-  function suspend(address withdrawer) public onlyMultisigOwner {
-    _revokeRole(APPROVED_WITHDRAWER_ROLE, withdrawer);
-  }
-
-  /// @notice Updates the NEAR Chain Signatures signer account
-  /// @param _signer New NEAR signer account ID
-  function setNearSigner(string calldata _signer) external onlyOwner {
-    nearSigner = _signer;
-    emit NearSignerChanged(_signer);
-  }
-
-  /// @notice Sets the hub contract address
-  /// @param _fee Signature fee in wNEAR
-  function setSignatureFee(uint256 _fee) external onlyOwner {
-    signatureFee = _fee;
-    emit SignatureFeeChanged(signatureFee);
-  }
-
-  /// @notice Sets the hub contract address
-  /// @param _hub Hub contract address
-  function setHub(address _hub) external onlyOwner {
-    hub = _hub;
-    emit HubSet(hub);
-  }
-
-  /// @notice Sets the global delay for withdrawal requests
-  /// @param _delay Delay in seconds
-  function setDelay(uint256 _delay) public onlyOwner {
-    delay = _delay;
-    emit DelayChanged(delay);
-  }
-
-  /// @notice sets or updates the delay for a specific chain and depository
-  /// @param chainId chain ID
-  /// @param depository address of the depository contract as string
-  /// @param _delay delay in seconds
-  function setDepositoryDelay(
-    uint256 chainId,
-    string calldata depository,
-    uint256 _delay
-  ) external onlyOwner {
-    depositoryDelays[chainId][depository].delay = _delay;
-    depositoryDelays[chainId][depository].isSet = true;
-    emit DepositoryDelayChanged(chainId, depository, _delay);
-  }
-
-  /// @notice sets or updates the payload builder for a specific chain
-  /// @param chainId chain ID
-  /// @param builder address of the payload builder contract
+  /// @notice Sets or updates the payload builder for a specific chain and depository
+  /// @param chainId Chain id
+  /// @param depository Encoded depository address
+  /// @param builder Address of the payload builder contract
   function setPayloadBuilder(
-    uint256 chainId,
-    string calldata depository,
+    string calldata chainId,
+    bytes calldata depository,
     address builder
   ) external onlyOwner {
     payloadBuilders[chainId][depository] = builder;
     emit PayloadBuilderSet(chainId, depository, builder);
   }
 
-  /// @notice submits a withdraw request to the payload builder, stores the returned payload, and triggers its signature immediately. This will only work for payloads that require a single signature (including Bitcoin, which is now supported via the hashIndex parameter).
-  /// @param params The withdraw request parameters
-  /// @param signature The signature of the withdraw request, if sent on behalf of a recipient
-  function submitAndSignWithdrawRequest(
-    SubmitWithdrawRequest calldata params,
-    bytes memory signature,
-    GasSettings memory gasSettings
-  ) public {
-    _submitWithdrawRequest(params);
-    signWithdrawPayloadHash(params, signature, gasSettings, 0);
+  /// @notice Suspends a spender alias from submitting future withdrawals
+  /// @param spender Spender alias address derived from the request spender fields
+  function suspend(address spender) external onlyOwner {
+    suspended[spender] = true;
+    emit Suspended(spender);
   }
 
-  /// @notice submits a withdraw request to the payload builder, store the returned payload
+  /// @notice Unsuspends a spender alias so withdrawals can resume
+  /// @param spender Spender alias address derived from the request spender fields
+  function unsuspend(address spender) external onlyOwner {
+    suspended[spender] = false;
+    emit Unsuspended(spender);
+  }
+
+  /// @notice Submits a withdraw request to the payload builder
   /// @param params The withdraw request parameters
   /// @return withdrawRequestHash The hash of the withdrawal request
   function submitWithdrawRequest(
-    SubmitWithdrawRequest calldata params
+    WithdrawRequest calldata params
   ) public returns (bytes32 withdrawRequestHash) {
-    return _submitWithdrawRequest(params);
+    return _submitWithdrawRequest(params, bytes(""));
   }
 
-  /// @notice submits a withdraw request to the payload builder, store the returned payload
+  /// @notice Submits a withdraw request using a receiver signature when the spender is the receiver alias
   /// @param params The withdraw request parameters
+  /// @param signature EIP-712 signature produced by the receiver
+  /// @return withdrawRequestHash The hash of the withdrawal request
+  function submitWithdrawRequestWithSignature(
+    WithdrawRequest calldata params,
+    bytes calldata signature
+  ) public returns (bytes32 withdrawRequestHash) {
+    return _submitWithdrawRequest(params, signature);
+  }
+
+  /// @notice Internal implementation shared by signed and unsigned withdrawal submissions
+  /// @param params The withdraw request parameters
+  /// @param signature Optional receiver signature
   /// @return withdrawRequestHash The hash of the withdrawal request
   function _submitWithdrawRequest(
-    SubmitWithdrawRequest calldata params
+    WithdrawRequest calldata params,
+    bytes memory signature
   ) internal returns (bytes32 withdrawRequestHash) {
-    // check if the payload builder is set
+    // Check if the payload builder is set
     address builder = payloadBuilders[params.chainId][params.depository];
-
     if (builder == address(0)) {
       revert NoPayloadBuilder(params.chainId, params.depository);
     }
 
-    // build payload
-    bytes memory payload = IPayloadBuilder(builder).buildPayload(
-      params.chainId,
-      params.depository,
-      params.currency,
-      params.amount,
-      params.receiver,
-      params.data
-    );
-
-    // Store the hash of the request for deduplication and verification
-    withdrawRequestHash = keccak256(abi.encode(params));
-    payloads[withdrawRequestHash] = payload;
-
-    // Use depository-specific delay if set, otherwise fall back to global delay
-    uint256 depositoryDelay = depositoryDelays[params.chainId][
-      params.depository
-    ].delay;
-    uint256 effectiveDelay = depositoryDelays[params.chainId][params.depository]
-      .isSet
-      ? depositoryDelay
-      : delay;
-
-    // Only set timestamp if it hasn't been set before to prevent timestamp manipulation
-    if (payloadTimestamps[withdrawRequestHash] != 0) {
-      revert PayloadAlreadyBuilt(withdrawRequestHash);
-    }
-
-    payloadTimestamps[withdrawRequestHash] = block.timestamp + effectiveDelay;
-
-    emit PayloadBuilt(
-      withdrawRequestHash,
-      payload,
-      payloadTimestamps[withdrawRequestHash]
-    );
-    return withdrawRequestHash;
-  }
-
-  /// @notice triggers the signing of a previously submitted withdraw request
-  /// @param params The withdraw request parameters (must match the stored hash)
-  /// @param signature The signature of the withdraw request, if sent on behalf of a recipient
-  /// @param gasSettings struct containing gas settings for NEAR operations
-  /// @param hashIndex index of the hash to sign for this request
-  /// @dev This function is called by the NEAR signer account to sign the payload.
-  /// It checks if the payload is ready to be signed (i.e. the delay has passed) and
-  /// if the payload has not already been signed. If the payload is ready, it calls
-  /// the NEAR signer account to sign the payload and then calls the signWithdrawCallback
-  /// function to handle the result of the signing.
-  function signWithdrawPayloadHash(
-    SubmitWithdrawRequest calldata params,
-    bytes memory signature,
-    GasSettings memory gasSettings,
-    uint32 hashIndex
-  ) public {
-    if (signatureFee > 0) {
-      // We capture the fee for ourselves first
-      // slither-disable-next-line unchecked-transfer
-      near.wNEAR.transferFrom(msg.sender, address(this), signatureFee);
-    }
-
-    bytes32 withdrawRequestHash = keccak256(abi.encode(params));
-
-    // make sure the payload exists
-    bytes memory payload = payloads[withdrawRequestHash];
-    if (payload.length == 0) {
-      revert PayloadNotReady(withdrawRequestHash);
-    }
-
-    // check if the payload is ready to be signed
-    if (payloadTimestamps[withdrawRequestHash] > block.timestamp) {
-      revert PayloadNotReady(withdrawRequestHash);
-    }
-
-    address builder = payloadBuilders[params.chainId][params.depository];
-    IPayloadBuilder payloadBuilder = IPayloadBuilder(builder);
-
-    // verify the withdrawal can be achieved
-    verifyWithdrawal(params, payloadBuilder, signature);
-
-    // get the hash to sign
-    bytes32 hashToSign = payloadBuilder.hashToSign(
-      params.chainId,
-      params.depository,
-      payload,
-      hashIndex
-    );
-
-    _signUsingChainSignatures(
-      withdrawRequestHash,
-      hashToSign,
-      payloadBuilder,
-      gasSettings
-    );
-  }
-
-  /// @notice withdraws the wNEAR balance of this contract
-  /// from the Aurora contract to the NEAR network
-  function withdrawToNear(uint256 amount) external onlyOwner {
-    // withdraw wNEAR to the NEAR network
-    IEvmERC20(address(near.wNEAR)).withdrawToNear(
-      bytes(AuroraSdk.nearRepresentative(address(this))),
-      amount
-    );
-
-    // unwrap the wNEAR on the NEAR network
-    PromiseCreateArgs memory unwrapCall = near.call(
-      wrapNearTokenId,
-      "near_withdraw",
-      abi.encodePacked(
-        // solhint-disable-next-line quotes
-        '{"amount": "',
-        Strings.toString(amount),
-        // solhint-disable-next-line quotes
-        '"}'
-      ),
-      1, // requires attached deposit of exactly 1 yoctoNEAR
-      NEAR_WITHDRAW_GAS // nearGas
-    );
-
-    unwrapCall.transact();
-  }
-
-  /// @notice Signs a hash using chain signatures
-  /// @param withdrawRequestHash The withdrawal request hash
-  /// @param hashToSign The hash to sign
-  /// @param payloadBuilder The payload builder
-  /// @param gasSettings The gas settings for NEAR operations
-  function _signUsingChainSignatures(
-    bytes32 withdrawRequestHash,
-    bytes32 hashToSign,
-    IPayloadBuilder payloadBuilder,
-    GasSettings memory gasSettings
-  ) internal {
-    if (signedPayloads[withdrawRequestHash][hashToSign].length > 0) {
-      revert PayloadAlreadySigned(withdrawRequestHash);
-    }
-
-    uint256 expiration = pendingSignatures[withdrawRequestHash][hashToSign];
-    if (block.timestamp < expiration) {
-      revert SignaturePending(withdrawRequestHash, expiration);
-    }
-
-    pendingSignatures[withdrawRequestHash][hashToSign] =
-      block.timestamp + PENDING_SIGNATURE_COOLDOWN;
-
-    // Encode the JSON request for the signer
-    bytes memory data = ChainSignatures.encodeJSONRequest(
-      ChainSignatures.stringifyBytes(abi.encodePacked(hashToSign)),
-      payloadBuilder.curve(),
-      signerPath,
-      keccak256(abi.encodePacked(payloadBuilder.curve())) == ECDSA_HASH
-        ? "0"
-        : "1"
-    );
-    // Now get NEAR to sign the payload!
-    PromiseCreateArgs memory callSign = near.call(
-      nearSigner,
-      "sign",
-      data,
-      // the docs here https://github.com/aurora-is-near/chain-signatures-signer/tree/main?tab=readme-ov-file#signing-the-payload
-      // states that 1 yoctoNEAR is usually enough to sign the call successfully
-      1, // attachedNear
-      gasSettings.signGas
-    );
-    PromiseCreateArgs memory callback = near.auroraCall(
-      address(this),
-      abi.encodeWithSelector(
-        this.signWithdrawCallback.selector,
-        withdrawRequestHash,
-        hashToSign
-      ),
-      0,
-      gasSettings.callbackGas
-    );
-    callSign.then(callback).transact();
-  }
-
-  /// @notice callback function to handle the result of the signing
-  /// @param withdrawRequestHash hash of the requested withdrawal payload that was signed
-  /// @dev This function is called by the NEAR signer account after the signing is complete.
-  /// It checks if the signing was successful and if so, stores the signed payload in the
-  /// signedPayloads mapping. It also emits an event to notify that the payload has been signed.
-  function signWithdrawCallback(
-    bytes32 withdrawRequestHash,
-    bytes32 hashToSign
-  ) public {
-    if (
-      msg.sender != AuroraSdk.nearRepresentitiveImplicitAddress(address(this))
-    ) {
-      revert AccessControlUnauthorizedAccount(
-        msg.sender,
-        keccak256("SIGNATURE_CALLBACK_ROLE")
-      );
-    }
-
-    // triggering this function requires Aurora precompiles and therefore has no unit tests
-    PromiseResult memory result = AuroraSdk.promiseResult(0);
-
-    if (result.status != PromiseResultStatus.Successful) {
-      revert SignCallbackFailed(withdrawRequestHash);
-    }
-
-    signedPayloads[withdrawRequestHash][hashToSign] = result.output;
-    emit PayloadWithdrawSigned(withdrawRequestHash, hashToSign, result.output);
-  }
-
-  /// @notice Verifies if the withdrawal request can be achieved.
-  /// @dev The withdrawal can be achieved if the caller is an approved withdrawer, or,
-  /// if the hub is set, it will first transfer the user's token to this contract's balance.
-  /// @param params The withdrawal request parameters
-  /// @param payloadBuilder The payload builder containing the withdrawal details
-  /// @param signature A signature for the withdrawal request, if sent on behalf of a recipient
-  function verifyWithdrawal(
-    SubmitWithdrawRequest calldata params,
-    IPayloadBuilder payloadBuilder,
-    bytes memory signature
-  ) internal {
-    // Implementation for verifying the withdrawal
-    if (hasRole(APPROVED_WITHDRAWER_ROLE, msg.sender)) {
-      return;
-    }
-
-    string memory family = payloadBuilder.family();
-
-    // Generate the tokenId
-    uint256 tokenId = Utils.generateTokenId(
-      family,
-      params.chainId,
-      params.currency
-    );
-
     address spenderAlias = Utils.generateAddress(
-      family,
-      params.chainId,
-      params.receiver
+      params.spenderChainId,
+      params.spender
     );
 
-    // Only an operator for the spender can trigger withdrawals or a valid signature by the recipient must be provided.
-    if (
-      !(params.spender == msg.sender ||
-        RelayHub(hub).isOperator(params.spender, msg.sender) ||
-        (spenderAlias == params.spender &&
-          signatureMatchesReceiver(params, signature)))
-    ) {
+    bool callerIsSpender = params.spender.length == 20 &&
+      address(bytes20(params.spender)) == msg.sender;
+    bool callerIsOperator = RelayHub(HUB).isOperator(spenderAlias, msg.sender);
+
+    if (suspended[spenderAlias]) {
+      revert SpenderSuspended(spenderAlias);
+    }
+
+    bool callerAuthorized = callerIsSpender || callerIsOperator;
+    if (!callerAuthorized) {
+      callerAuthorized = consumeSpenderSignature(params, signature);
+    }
+
+    // Only the spender itself, an operator, or the spender via signature can trigger withdrawals
+    if (!callerAuthorized) {
       revert CallerIsNotApproved(msg.sender);
     }
 
-    // Actually perform the transfer
-    // slither-disable-next-line unused-return
-    RelayHub(hub).transferFrom(
-      params.spender,
-      address(this),
-      tokenId,
-      params.amount
+    // Ensure the request wasn't already processed
+    withdrawRequestHash = keccak256(abi.encode(params));
+    if (payloads[withdrawRequestHash].length > 0) {
+      revert WithdrawRequestAlreadyProcessed(withdrawRequestHash);
+    }
+
+    // Build payload
+    bytes memory payload = _buildPayload(builder, params);
+    if (payload.length == 0) {
+      revert EmptyPayload();
+    }
+
+    // Mark the request as processed
+    payloads[withdrawRequestHash] = payload;
+
+    // Burn the funds from the spender. RelayHub.burn currently either reverts or returns true,
+    // so the false branch below is retained only as a defensive guard against future hub changes.
+    uint256 tokenId = Utils.generateTokenId(params.chainId, params.currency);
+    bool result = RelayHub(HUB).burn(spenderAlias, tokenId, params.amount);
+    if (!result) {
+      revert WithdrawRequestTransferFailed(
+        spenderAlias,
+        tokenId,
+        params.amount
+      );
+    }
+
+    // Store the hashes to be signed in contract storage
+    bytes32[] memory _hashesToSign = IPayloadBuilder(builder).hashesToSign(
+      params.chainId,
+      params.depository,
+      payload
     );
+    for (uint256 i; i < _hashesToSign.length; ++i) {
+      hashesToSign[withdrawRequestHash][i] = _hashesToSign[i];
+    }
+
+    emit PayloadBuilt(withdrawRequestHash, payload, _hashesToSign);
   }
 
-  /// @notice Checks if the signature matches the receiver's address (for EVM destination chains)
+  /// @notice Verifies and consumes a spender signature for a withdrawal request
+  /// @dev Signature-based authorization is only available for 20-byte EVM spenders.
   /// @param params The withdrawal request parameters
   /// @param signature The signature to verify
-  /// @return True if the signature matches the receiver
-  function signatureMatchesReceiver(
-    SubmitWithdrawRequest memory params,
+  /// @return matched True if the signature matches the spender and the nonce was unused
+  function consumeSpenderSignature(
+    WithdrawRequest calldata params,
     bytes memory signature
-  ) internal returns (bool) {
-    if (signature.length == 0) return false;
+  ) internal returns (bool matched) {
+    if (signature.length == 0 || params.spender.length != 20) {
+      return false;
+    }
 
-    address signer = Utils.toAddress(params.receiver);
-
-    // Check if nonce has been used before for this sender
+    address signer = address(bytes20(params.spender));
     if (usedNonces[signer][params.nonce]) {
       return false;
     }
 
-    // Create the digest using EIP712
     bytes32 digest = _hashTypedDataV4(
       keccak256(
         abi.encode(
           PAYLOAD_TYPEHASH,
-          params.chainId,
-          keccak256(bytes(params.depository)),
-          keccak256(bytes(params.currency)),
+          keccak256(bytes(params.chainId)),
+          keccak256(params.depository),
+          keccak256(params.currency),
           params.amount,
-          params.spender,
-          keccak256(bytes(params.receiver)),
+          keccak256(bytes(params.spenderChainId)),
+          keccak256(params.spender),
+          keccak256(params.receiver),
           keccak256(params.data),
           params.nonce
         )
       )
     );
 
-    if (digest.recover(signature) != signer) {
+    (address recovered, ECDSA.RecoverError recoverError, ) = ECDSA.tryRecover(
+      digest,
+      signature
+    );
+    if (recoverError != ECDSA.RecoverError.NoError || recovered != signer) {
       return false;
     }
 
-    // Mark nonce as used to prevent replay for this sender
     usedNonces[signer][params.nonce] = true;
     return true;
+  }
+
+  /// @notice Builds a payload using the configured builder for the given request
+  /// @param builder Payload builder address
+  /// @param params Withdrawal request parameters
+  /// @return payload Encoded withdrawal payload
+  function _buildPayload(
+    address builder,
+    WithdrawRequest calldata params
+  ) internal view returns (bytes memory payload) {
+    return
+      IPayloadBuilder(builder).buildPayload(
+        params.chainId,
+        params.depository,
+        BuildPayloadParams({
+          currency: params.currency,
+          amount: params.amount,
+          receiver: params.receiver,
+          nonce: uint256(params.nonce),
+          data: params.data
+        })
+      );
   }
 }

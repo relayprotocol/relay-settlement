@@ -18,8 +18,8 @@ task("depository:withdraw", "Withdraw from depository")
   .addParam("withdrawRequestHash", "The withdrawRequestHash to use")
   .addOptionalParam(
     "payloadBuilderType",
-    "The type of the payload builder. (EVMPayloadBuilder, ...)",
-    "EVMPayloadBuilder"
+    "The type of the payload builder. (EthereumVmPayloadBuilder, ...)",
+    "EthereumVmPayloadBuilder"
   )
 
   .setAction(
@@ -66,7 +66,7 @@ task("depository:withdraw", "Withdraw from depository")
         signedPayloads[hash] = extractNearSignature(signature)
       }
 
-      if (payloadBuilderType === "EVMPayloadBuilder") {
+      if (payloadBuilderType === "EthereumVmPayloadBuilder") {
         // On EVM, we have a single hash and a single signature
         const { r, s, v } = signedPayloads[payloadHashes[0]]
         const signature =

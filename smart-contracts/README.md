@@ -5,12 +5,20 @@
 Deploy, set up and use the allocator. Multiple tasks exist to set things up:
 
 ```sh
-# Deploy the main Allocator contract
-# (will deploy 3 libraires + 1 contract Allocator)
-yarn hardhat deploy:allocator --owner <multisig-address> --delay 1
+# Deploy the main RelayAllocator contract
+yarn hardhat deploy:allocator --owner <multisig-address> --hub <relay-hub-address>
 
-# deploy the EVM payload builder (you can deploy other types as well)
-yarn run hardhat ignition deploy ignition/modules/EVMPayloadBuilder.ts
+# deploy the Config contract for the allocator
+yarn hardhat deploy:allocator-config --allocator <allocator-contract-address>
+
+# deploy the EVM payload builder
+yarn hardhat deploy:ethereum-vm-payload-builder --config-address <config-contract-address>
+
+# deploy the Solana VM payload builder
+yarn hardhat deploy:solana-vm-payload-builder --config-address <config-contract-address>
+
+# alternatively, you can deploy the raw ignition modules directly
+yarn run hardhat ignition deploy ignition/modules/EthereumVmPayloadBuilder.ts
 
 # verify contracts
 yarn hardhat ignition verify chain-1313161555

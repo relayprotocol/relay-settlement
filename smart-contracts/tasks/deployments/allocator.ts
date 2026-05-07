@@ -1,199 +1,101 @@
-import networks from "@relay-protocol/settlement-networks"
-import * as bitcoin from "bitcoinjs-lib"
 import { task } from "hardhat/config"
-import AllocatorModule from "../../ignition/modules/RelayAllocator"
-import { bitcoinAddressfromHexPublicKey } from "../../lib/bitcoin"
-import EVMPayloadBuilderModule from "../../ignition/modules/EVMPayloadBuilder"
-import SolanaPayloadBuilderModule from "../../ignition/modules/SolanaPayloadBuilder"
-import HyperliquidPayloadBuilderModule from "../../ignition/modules/HyperliquidPayloadBuilder"
+import ConfigModule from "../../ignition/modules/Config"
+import EthereumVmPayloadBuilderModule from "../../ignition/modules/EthereumVmPayloadBuilder"
+import RelayAllocatorModule from "../../ignition/modules/RelayAllocator"
+import SolanaVmPayloadBuilderModule from "../../ignition/modules/SolanaVmPayloadBuilder"
 
-const DEFAULT_DELAY = "1"
-
-task("deploy:allocator", "Deploy the Allocator contract")
+task("deploy:allocator", "Deploy the RelayAllocator contract")
   .addOptionalParam("owner", "The address of the owner")
-  .addOptionalParam("signer", "The address of the signer")
-  .addOptionalParam("wnear", "The address of the wNEAR token")
-  .addOptionalParam("delay", "The delay in seconds", DEFAULT_DELAY)
-  .setAction(
-    async (
-      { owner, signer, wnear: wNEAR, delay },
-      { ignition, run, network, viem }
-    ) => {
-      // recompile before deploying
-      await run("compile")
+  .addParam("hub", "The address of the RelayHub contract")
+  .setAction(async ({ owner, hub }, { ignition, network, run, viem }) => {
+    await run("compile")
 
-      const [user] = await viem.getWalletClients()
-
-      if (!owner) {
-        owner = user.account.address
-      }
-      const { chainId } = network.config as { chainId: bigint }
-      const networkConfig = networks[chainId.toString()]
-      if (networkConfig && networkConfig.assets) {
-        if (!wNEAR) {
-          wNEAR = networkConfig.assets.wNEAR
-        }
-        if (!wNEAR) {
-          throw new Error(`No wNEAR address configured for chain ID ${chainId}`)
-        }
-      }
-      if (!signer) {
-        signer = networkConfig.isTestnet
-          ? "v1.signer-prod.testnet"
-          : "v1.signer"
-      }
-      const wrapNearTokenId = networkConfig.isTestnet
-        ? "wrap.testnet"
-        : "wrap.near"
-      const params = {
-        delay: delay || DEFAULT_DELAY,
-        owner,
-        signer,
-        wNEAR,
-        wrapNearTokenId,
-      }
-      const { allocator } = await ignition.deploy(AllocatorModule, {
-        parameters: {
-          RelayAllocator: params,
-        },
-      })
-
-      try {
-        await run(
-          { scope: "ignition", task: "verify" },
-          { deploymentId: `chain-${chainId}` }
-        )
-      } catch (error) {
-        console.error("Verification failed", error)
-      }
-
-      console.log(`Allocator deployed to: ${allocator.address}`)
-
-      // initialize allocator
-      await run("allocator:init", {
-        allocator: allocator.address,
-        wNEAR,
-      })
-
-      return allocator.address
+    if (!owner) {
+      const [deployer] = await viem.getWalletClients()
+      owner = deployer.account.address
     }
-  )
 
-task("deploy:solana-payload-builder", "Deploys a SolanaPayloadBuilder contract")
-  .addOptionalParam("allocator", "The address of the allocator")
-  .setAction(async ({ allocator }, { ignition, run }) => {
-    // Let's now deploy the payload builder contract
-    const { solanaPayloadBuilder } = await ignition.deploy(
-      SolanaPayloadBuilderModule,
-      {
-        deploymentId: "chain-1313161554-solana",
-        parameters: {
-          SolanaPayloadBuilderModule: {
-            _allocator: allocator,
-          },
+    const { relayAllocator } = await ignition.deploy(RelayAllocatorModule, {
+      parameters: {
+        RelayAllocator: {
+          hub,
+          owner,
         },
-      }
-    )
+      },
+    })
+
+    const { chainId } = network.config as { chainId: bigint }
 
     try {
-      await run("verify:verify", {
-        address: solanaPayloadBuilder.address,
-        constructorArguments: [],
-      })
+      await run(
+        { scope: "ignition", task: "verify" },
+        { deploymentId: `chain-${chainId}` }
+      )
     } catch (error) {
       console.error("Verification failed", error)
     }
 
-    console.log(
-      `SolanaPayloadBuilder deployed to: ${solanaPayloadBuilder.address}`
-    )
-    return solanaPayloadBuilder.address
+    console.log(`RelayAllocator deployed to: ${relayAllocator.address}`)
+    return relayAllocator.address
+  })
+
+task("deploy:allocator-config", "Deploy the Config contract")
+  .addParam("allocator", "The address of the RelayAllocator contract")
+  .setAction(async ({ allocator }, { ignition }) => {
+    const { config } = await ignition.deploy(ConfigModule, {
+      parameters: {
+        Config: {
+          allocator,
+        },
+      },
+    })
+
+    console.log(`Config deployed to: ${config.address}`)
+    return config.address
   })
 
 task(
-  "deploy:hyperliquid-payload-builder",
-  "Deploys a HyperLiquidPayloadBuilder contract"
+  "deploy:ethereum-vm-payload-builder",
+  "Deploy the EthereumVmPayloadBuilder contract"
 )
-  .addOptionalParam("allocator", "The address of the allocator")
-  .setAction(async ({ allocator }, { ignition, run }) => {
-    // Let's now deploy the payload builder contract
-    const { hyperliquidPayloadBuilder } = await ignition.deploy(
-      HyperliquidPayloadBuilderModule,
+  .addParam("configAddress", "The address of the Config contract")
+  .setAction(async ({ configAddress }, { ignition }) => {
+    const { ethereumVmPayloadBuilder } = await ignition.deploy(
+      EthereumVmPayloadBuilderModule,
       {
         parameters: {
-          HyperLiquidPayloadBuilderModule: {
-            _allocator: allocator,
-            _hyperliquidChain: "Mainnet",
+          EthereumVmPayloadBuilder: {
+            config: configAddress,
           },
         },
       }
     )
 
-    try {
-      await run("verify:verify", {
-        address: hyperliquidPayloadBuilder.address,
-        constructorArguments: [],
-      })
-    } catch (error) {
-      console.error("Verification failed", error)
-    }
-
     console.log(
-      `HyperliquidPayloadBuilder deployed to: ${hyperliquidPayloadBuilder.address}`
+      `EthereumVmPayloadBuilder deployed to: ${ethereumVmPayloadBuilder.address}`
     )
-    return hyperliquidPayloadBuilder.address
+    return ethereumVmPayloadBuilder.address
   })
 
 task(
-  "deploy:evm-payload-builder",
-  "Deploys an EVM Payload Builder contract"
-).setAction(async (_, { ignition, network, run }) => {
-  const { chainId } = network.config as { chainId: bigint }
-
-  // Let's now deploy the payload builder contract
-  const { evmPayloadBuilder } = await ignition.deploy(EVMPayloadBuilderModule, {
-    parameters: {},
-  })
-
-  try {
-    await run(
-      { scope: "ignition", task: "verify" },
-      { deploymentId: `chain-${chainId}` }
+  "deploy:solana-vm-payload-builder",
+  "Deploy the SolanaVmPayloadBuilder contract"
+)
+  .addParam("configAddress", "The address of the Config contract")
+  .setAction(async ({ configAddress }, { ignition }) => {
+    const { solanaVmPayloadBuilder } = await ignition.deploy(
+      SolanaVmPayloadBuilderModule,
+      {
+        parameters: {
+          SolanaVmPayloadBuilder: {
+            config: configAddress,
+          },
+        },
+      }
     )
-  } catch (error) {
-    console.error("Verification failed", error)
-  }
 
-  console.log(`EvmPayloadBuilder deployed to: ${evmPayloadBuilder.address}`)
-  return evmPayloadBuilder.address
-})
-
-task("deploy:bitcoin-payload-builder", "Deploys a PayloadBuilder contract")
-  .addParam("allocatorPublicKey", "The ethereum public key of the allocator")
-  .addParam(
-    "bitcoinNetwork",
-    "The bitcoin network for which to deploy (bitcoin addresses are network specific)",
-    "bitcoin"
-  )
-  .setAction(async ({ allocatorPublicKey, bitcoinNetwork }, { viem }) => {
-    const bitcoinAddress = bitcoinAddressfromHexPublicKey(allocatorPublicKey)
-    console.log("Allocator Bitcoin address:", bitcoinAddress)
-
-    const changeScript = bitcoin.address
-      .toOutputScript(bitcoinAddress, bitcoin.networks[bitcoinNetwork])
-      .toString("base64")
-
-    // Let's now deploy the BitcoinPayloadBuilder contract
-    const payloadBuilder = await viem.deployContract("BitcoinPayloadBuilder", [
-      changeScript,
-    ])
-
-    console.log(`PayloadBuilder deployed to: ${payloadBuilder.address}`)
-
-    // await run("verify:verify", {
-    //   address: payloadBuilder.address,
-    //   constructorArguments: [changeScript],
-    // })
-
-    return payloadBuilder.address
+    console.log(
+      `SolanaVmPayloadBuilder deployed to: ${solanaVmPayloadBuilder.address}`
+    )
+    return solanaVmPayloadBuilder.address
   })
