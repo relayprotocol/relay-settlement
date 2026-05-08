@@ -214,12 +214,14 @@ contract ERC20View {
             value
           );
         }
+        // Allowance is decremented before the transfer. This is safe because
+        // Hub.transferFrom always reverts on insufficient balance (Solidity 0.8
+        // checked arithmetic), so it can never return false and silently succeed.
         // slither-disable-next-line unused-return
         hub.approveFor(from, msg.sender, tokenId, currentAllowance - value);
       }
     }
 
-    // Execute the transfer on the Hub
     bool success = hub.transferFrom(from, to, tokenId, value);
     if (success) {
       emit Transfer(from, to, value);
