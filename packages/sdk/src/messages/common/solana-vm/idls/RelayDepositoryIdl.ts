@@ -785,7 +785,10 @@ export const RelayDepositoryIdl = {
           {
             name: "domain_separator",
             docs: [
-              "Expected domain separator hash for this deployment (Optional for upgrade compatibility)",
+              "Expected domain separator hash for this deployment.",
+              "Wrapped in `Option` only to preserve the on-chain layout of accounts",
+              "migrated from the pre-`domain_separator` version; `execute_transfer`",
+              "hard-requires this to be `Some`.",
             ],
             type: {
               option: {

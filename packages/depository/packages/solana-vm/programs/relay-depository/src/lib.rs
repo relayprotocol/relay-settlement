@@ -429,13 +429,14 @@ pub mod relay_depository {
             &request,
         )?;
 
-        // Validate domain separator (if set)
-        if let Some(expected_domain) = relay_depository.domain_separator {
-            require!(
-                request.domain == expected_domain,
-                CustomError::InvalidDomainSeparator
-            );
-        }
+        // Validate domain separator (hard-required: reject if unset)
+        let expected_domain = relay_depository
+            .domain_separator
+            .ok_or(CustomError::InvalidDomainSeparator)?;
+        require!(
+            request.domain == expected_domain,
+            CustomError::InvalidDomainSeparator
+        );
 
         used_request.is_used = true;
 
@@ -555,7 +556,10 @@ pub struct RelayDepository {
     pub allocator: Pubkey,
     /// The bump seed for the vault PDA, used for deriving the vault address
     pub vault_bump: u8,
-    /// Expected domain separator hash for this deployment (Optional for upgrade compatibility)
+    /// Expected domain separator hash for this deployment.
+    /// Wrapped in `Option` only to preserve the on-chain layout of accounts
+    /// migrated from the pre-`domain_separator` version; `execute_transfer`
+    /// hard-requires this to be `Some`.
     pub domain_separator: Option<[u8; 32]>,
 }
 
