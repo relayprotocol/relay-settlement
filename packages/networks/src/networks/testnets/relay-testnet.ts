@@ -4,7 +4,8 @@ export const relayTestnet: NetworkConfig = {
   chainId: 537724n,
   contracts: {
     prod: {
-      oracle: "",
+      hub: "0xf98D7ADA874D53a75BbDfB05D2A96C1525d426A7",
+      oracle: "0x259813B665C8f6074391028ef782e27B65840d89",
     },
   },
   family: "ethereum-vm",
