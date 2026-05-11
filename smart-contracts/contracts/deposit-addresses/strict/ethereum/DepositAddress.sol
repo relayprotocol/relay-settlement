@@ -4,7 +4,7 @@
 pragma solidity ^0.8.28;
 
 import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
-import {RelayDepository} from "./depository/RelayDepository.sol";
+import {RelayDepository} from "../../../depository/RelayDepository.sol";
 
 /// @title DepositAddress
 /// @author Relay Protocol

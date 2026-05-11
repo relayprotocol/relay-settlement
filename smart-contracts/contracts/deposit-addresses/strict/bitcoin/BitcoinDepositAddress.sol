@@ -11,9 +11,9 @@ import {
   PromiseResult,
   PromiseResultStatus,
   PromiseWithCallback
-} from "./aurora-xcc/AuroraSdk.sol";
-import {ChainSignatures} from "./ChainSignatures.sol";
-import {IBitcoinDepositSweepBuilder} from "./interfaces/IBitcoinDepositSweepBuilder.sol";
+} from "../../../aurora-xcc/AuroraSdk.sol";
+import {ChainSignatures} from "../../../ChainSignatures.sol";
+import {IBitcoinDepositSweepBuilder} from "./IBitcoinDepositSweepBuilder.sol";
 
 struct GasSettings {
   uint64 signGas;

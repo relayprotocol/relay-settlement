@@ -4,7 +4,7 @@
 pragma solidity ^0.8.28;
 
 import {LibClone} from "solady/utils/LibClone.sol";
-import {IDepositAddressFactory} from "./interfaces/IDepositAddressFactory.sol";
+import {IDepositAddressFactory} from "./IDepositAddressFactory.sol";
 import {DepositAddress} from "./DepositAddress.sol";
 
 /// @title DepositAddressFactory

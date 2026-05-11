@@ -3,7 +3,10 @@
 // ABOUTME: Used by test/BitcoinDepositAddressBuilder/sweepStateMachine.ts.
 pragma solidity ^0.8.28;
 
-import {BitcoinDepositAddress, GasSettings} from "../BitcoinDepositAddress.sol";
+import {
+  BitcoinDepositAddress,
+  GasSettings
+} from "../deposit-addresses/strict/bitcoin/BitcoinDepositAddress.sol";
 
 /// @title TestableBitcoinDepositAddress
 /// @notice Replays the validation block of `_requestSignature` (gas floor + signature

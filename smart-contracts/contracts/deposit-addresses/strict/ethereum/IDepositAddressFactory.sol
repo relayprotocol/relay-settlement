@@ -4,6 +4,7 @@
 pragma solidity ^0.8.28;
 
 /// @title IDepositAddressFactory
+/// @author Relay Protocol
 /// @notice Interface for deterministic deposit address computation and fund sweeping
 interface IDepositAddressFactory {
   /// @notice Emitted when a new proxy is deployed for an order
