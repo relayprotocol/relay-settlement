@@ -46,6 +46,7 @@ export interface NetworkConfig {
   hubChainId?: string
   contracts?: {
     dev?: ProtocolContracts
+    stag?: ProtocolContracts
     prod?: ProtocolContracts
   }
   stack?: StackType // for ethereum-vm chains

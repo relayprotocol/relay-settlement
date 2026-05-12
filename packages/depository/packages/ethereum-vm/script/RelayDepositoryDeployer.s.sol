@@ -9,29 +9,44 @@ contract RelayDepositoryDeployer is Script {
   // Thrown when the predicted address doesn't match the deployed address
   error IncorrectContractAddress(address predicted, address actual);
 
-  // Modify for vanity address generation
-  bytes32 public constant SALT = bytes32(uint256(1));
+  // Default salt when DEPOSITORY_SALT is not provided
+  uint256 public constant DEFAULT_SALT = 1;
 
   function setUp() public {}
 
   function run() public {
-    vm.createSelectFork(vm.envString("CHAIN"));
+    // Optional fork selection — when running via `forge script --rpc-url ...`
+    // the broadcast target is already set, so CHAIN can be left unset.
+    string memory chain = vm.envOr("CHAIN", string(""));
+    if (bytes(chain).length > 0) {
+      vm.createSelectFork(chain);
+    }
 
     vm.startBroadcast();
 
     address allocator = vm.envAddress("ALLOCATOR");
+    address owner = vm.envOr("DEPOSITORY_OWNER", msg.sender);
+    bytes32 salt = bytes32(vm.envOr("DEPOSITORY_SALT", DEFAULT_SALT));
 
     RelayDepository relayDepository = RelayDepository(
-      payable(deployRelayDepository(allocator))
+      payable(deployRelayDepository(owner, allocator, salt))
     );
 
     assert(relayDepository.allocator() == allocator);
+    assert(relayDepository.owner() == owner);
 
     vm.stopBroadcast();
   }
 
-  function deployRelayDepository(address allocator) public returns (address) {
+  function deployRelayDepository(
+    address owner,
+    address allocator,
+    bytes32 salt
+  ) public returns (address) {
     console2.log("Deploying RelayDepository");
+    console2.log("  owner:    ", owner);
+    console2.log("  allocator:", allocator);
+    console2.logBytes32(salt);
 
     address create2Factory = vm.envAddress("CREATE2_FACTORY");
 
@@ -43,11 +58,11 @@ contract RelayDepositoryDeployer is Script {
             abi.encodePacked(
               bytes1(0xff),
               create2Factory,
-              SALT,
+              salt,
               keccak256(
                 abi.encodePacked(
                   type(RelayDepository).creationCode,
-                  abi.encode(msg.sender, allocator)
+                  abi.encode(owner, allocator)
                 )
               )
             )
@@ -65,8 +80,8 @@ contract RelayDepositoryDeployer is Script {
     }
 
     // Deploy
-    RelayDepository relayDepository = new RelayDepository{salt: SALT}(
-      msg.sender,
+    RelayDepository relayDepository = new RelayDepository{salt: salt}(
+      owner,
       allocator
     );
 

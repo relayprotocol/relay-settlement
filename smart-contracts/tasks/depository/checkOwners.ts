@@ -37,8 +37,8 @@ task(
   for (const [chainId, config] of Object.entries(networks)) {
     const networkName = config.name || config.slug
 
-    // Check both dev and prod environments
-    for (const env of ["dev", "prod"] as const) {
+    // Check dev, stag, and prod environments
+    for (const env of ["dev", "stag", "prod"] as const) {
       const contracts = config.contracts?.[env]
       const depositoryAddress = contracts?.depository
 

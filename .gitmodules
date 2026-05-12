@@ -1,0 +1,3 @@
+[submodule "packages/depository/packages/ethereum-vm/lib/forge-std"]
+	path = packages/depository/packages/ethereum-vm/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std

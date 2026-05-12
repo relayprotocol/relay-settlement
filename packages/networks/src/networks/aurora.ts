@@ -17,10 +17,15 @@ export const aurora: NetworkConfig = {
   contracts: {
     dev: {
       allocator: "0xFA2347546aeA769073643b32A10Fb4f3297B3d59",
+      multisigSigner: "0x15334fe6F1cb0e286E1F9e1268B44E4221E169B7",
     },
     prod: {
       allocator: "0xE12Bc514e90E136CAD10413669a6CcDeb9E3aDB7",
       multisigSigner: "0xb538ee6515F9d16eBD0BACD0503733815c9b070c",
+    },
+    stag: {
+      allocator: "0x910F56Fb797D9c7a978a08e73D7280e67eb81372",
+      multisigSigner: "0x71d8bE89D9f2339F0FE9cBA39496C6C9cbFF9da6",
     },
   },
   family: "ethereum-vm",

@@ -37,6 +37,7 @@ import "./tasks/hub/setup-withdrawal-test"
 // deployments
 import "./tasks/deployments/allocator"
 import "./tasks/deployments/bitcoinDepositAddress"
+import "./tasks/deployments/depositAddressFactory"
 import "./tasks/deployments/erc20View"
 import "./tasks/deployments/hub"
 import "./tasks/deployments/oracle"
@@ -112,6 +113,13 @@ const hasProcotolContracts = (n: NetworkConfig) => {
   ].some((contract) => PROTOCOL_CONTRACTS.includes(contract))
 }
 
+const hasDepository = (n: NetworkConfig) =>
+  !!(
+    n.contracts?.dev?.depository ||
+    n.contracts?.stag?.depository ||
+    n.contracts?.prod?.depository
+  )
+
 Object.keys(nets)
   .filter((id: any) => {
     const network = nets[id]
@@ -120,7 +128,9 @@ Object.keys(nets)
     return (
       network &&
       network.slug === id &&
-      (hasProcotolContracts(network) || network.slug.includes("testnet"))
+      (hasProcotolContracts(network) ||
+        network.slug.includes("testnet") ||
+        (network.family === "ethereum-vm" && hasDepository(network)))
     )
   })
   .forEach((id) => {

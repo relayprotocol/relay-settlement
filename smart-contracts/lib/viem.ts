@@ -1,8 +1,43 @@
-import { relay, relayTestnet } from "@relay-protocol/settlement-networks"
+import {
+  anime,
+  appchain,
+  doma,
+  ethereal,
+  gensyn,
+  megaeth,
+  monad,
+  mythos,
+  perennial,
+  rari,
+  relay,
+  relayTestnet,
+  somnia,
+  stable,
+  syndicate,
+  tempo,
+} from "@relay-protocol/settlement-networks"
 import { defineChain } from "viem"
 import * as viemChains from "viem/chains"
 
-const customChains = [relay, relayTestnet].map((chain) =>
+// Chains not yet shipped in viem/chains
+const customChains = [
+  anime,
+  appchain,
+  doma,
+  ethereal,
+  gensyn,
+  megaeth,
+  monad,
+  mythos,
+  perennial,
+  rari,
+  relay,
+  relayTestnet,
+  somnia,
+  stable,
+  syndicate,
+  tempo,
+].map((chain) =>
   defineChain({
     id: Number(chain.chainId),
     name: chain.name,
