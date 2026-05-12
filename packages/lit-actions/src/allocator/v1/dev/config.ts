@@ -9,7 +9,6 @@ const config: AllocatorActionConfig = {
     "0xf24a399259f47c6360d00da3793eca9cc6ad1caa",
   ],
   oracleSignatureThreshold: 2,
-  storageProofMethod: "canonical",
 }
 
 export default config

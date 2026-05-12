@@ -4,7 +4,6 @@ import * as allocatorV1 from "./allocator/v1"
 
 export type AllocatorActionEnvironment = "dev"
 export type AllocatorActionVersion = "v1"
-export type StorageProofMethod = "canonical" | "sovereign"
 
 export interface AllocatorActionConfig {
   name: AllocatorActionEnvironment
@@ -12,7 +11,6 @@ export interface AllocatorActionConfig {
   hubEvmChainId: number
   allowedOracles: string[]
   oracleSignatureThreshold: number
-  storageProofMethod: StorageProofMethod
 }
 
 export interface AllocatorAction {

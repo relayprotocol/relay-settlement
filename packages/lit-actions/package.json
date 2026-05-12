@@ -1,12 +1,12 @@
 {
   "name": "@relay-protocol/lit-actions",
-  "version": "0.0.2",
+  "version": "0.0.6",
   "description": "Definitions and helpers for tracking Relay Lit Actions",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "license": "MIT",
   "scripts": {
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "prepublishOnly": "yarn clean && yarn build",
     "build": "tsc -b"
   },
