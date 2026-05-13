@@ -82,8 +82,30 @@ export type ProtocolTransaction = {
   oracleExecutions: ProtocolOracleExecution[]
 }
 
+declare global {
+  interface Window {
+    __INDEXER_UI_CONFIG__?: {
+      indexerApiUrl?: string
+    }
+  }
+}
+
+const apiBaseUrl = (
+  window.__INDEXER_UI_CONFIG__?.indexerApiUrl ??
+  import.meta.env.VITE_INDEXER_API_URL ??
+  ""
+).replace(/\/$/, "")
+
+const withApiBaseUrl = (url: string) => {
+  if (/^https?:\/\//i.test(url)) {
+    return url
+  }
+
+  return `${apiBaseUrl}${url}`
+}
+
 const getJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
-  const res = await fetch(url, init)
+  const res = await fetch(withApiBaseUrl(url), init)
   if (!res.ok) {
     throw new Error(`Request failed: ${res.status}`)
   }
