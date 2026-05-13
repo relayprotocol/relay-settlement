@@ -65,6 +65,7 @@ export const createServer = (
     db?: Database
     expectedApiKey?: string
     healthProvider?: Provider
+    hubContractAddress?: string
     oracleContractAddress?: string
     oracleProvider?: Provider
   } = {}
@@ -74,6 +75,7 @@ export const createServer = (
     db,
     expectedApiKey,
     healthProvider,
+    hubContractAddress,
     oracleContractAddress,
     oracleProvider,
   } = options
@@ -155,7 +157,9 @@ export const createServer = (
       authEnabled: Boolean(expectedApiKey),
       doBackgroundWork: runtimeState.doBackgroundWork,
       enableApi: runtimeState.enableApi,
+      hubContractAddress,
       mode: "query-api",
+      oracleContractAddress,
     })
   })
 

@@ -69,6 +69,7 @@ const start = async () => {
     db,
     expectedApiKey: config.authApiKey,
     healthProvider: provider,
+    hubContractAddress: config.hubContractAddress,
     oracleContractAddress: config.oracleContractAddress,
     oracleProvider: provider,
   })

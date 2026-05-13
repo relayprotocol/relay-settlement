@@ -6,7 +6,6 @@ import {
   fetchBalancesForAddress,
   fetchEvents,
   fetchToken,
-  refreshAddressBalances,
 } from "../api"
 import {
   displayTokenLabel,
@@ -39,7 +38,6 @@ export default function AddressPage() {
   const [eventsNextCursor, setEventsNextCursor] = useState<string | null>(null)
   const [hasTransfers, setHasTransfers] = useState<boolean>(false)
   const [error, setError] = useState<string>("")
-  const [refreshingBalances, setRefreshingBalances] = useState<boolean>(false)
   const [tokenDetails, setTokenDetails] = useState<Record<string, Token>>({})
 
   const EVENTS_PER_PAGE = 20
@@ -159,21 +157,6 @@ export default function AddressPage() {
     })
   }
 
-  const handleRefreshBalances = async () => {
-    if (!wallet || refreshingBalances) return
-    try {
-      setRefreshingBalances(true)
-      await refreshAddressBalances(wallet)
-      await loadBalances()
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to refresh balances"
-      )
-    } finally {
-      setRefreshingBalances(false)
-    }
-  }
-
   return (
     <div className="app">
       <header className="hero">
@@ -200,13 +183,6 @@ export default function AddressPage() {
             ) : null}
           </p>
         </div>
-        <button
-          className="btn"
-          onClick={handleRefreshBalances}
-          disabled={!wallet || refreshingBalances}
-        >
-          {refreshingBalances ? "Refreshing..." : "Refresh balances"}
-        </button>
       </header>
 
       {error ? <div className="banner">{error}</div> : null}

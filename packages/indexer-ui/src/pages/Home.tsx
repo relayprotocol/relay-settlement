@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import {
+  AppConfig,
+  ApprovedOracleInstancesResponse,
   Event,
   Holder,
   RoleConfig,
   Token,
+  fetchApprovedOracles,
   fetchEvents,
   fetchGlobalTransferStats,
   fetchConfig,
@@ -26,6 +29,7 @@ import {
   tokenPath,
   txUrl,
   ZERO_ADDRESS,
+  addressUrl,
 } from "../utils"
 
 export default function Home() {
@@ -48,10 +52,15 @@ export default function Home() {
     null
   )
   const [holdersError, setHoldersError] = useState<string>("")
-  const [roleConfig, setRoleConfig] = useState<RoleConfig[]>([])
+  const [roleConfig, setRoleConfig] = useState<
+    Array<{ address: string; label: string; roles: RoleConfig[] }>
+  >([])
   const [roleConfigError, setRoleConfigError] = useState<string>("")
-  const [configAddress, setConfigAddress] = useState<string>("")
+  const [appConfig, setAppConfig] = useState<AppConfig | null>(null)
   const [configError, setConfigError] = useState<string>("")
+  const [approvedOracles, setApprovedOracles] =
+    useState<ApprovedOracleInstancesResponse | null>(null)
+  const [approvedOraclesError, setApprovedOraclesError] = useState<string>("")
   const [error, setError] = useState<string>("")
   const [tokenDetails, setTokenDetails] = useState<Record<string, Token>>({})
 
@@ -274,12 +283,34 @@ export default function Home() {
   }
 
   const loadRoleConfig = async () => {
-    if (!configAddress) {
+    if (!appConfig) {
       return
     }
+
+    const contracts = [
+      appConfig.hubContractAddress
+        ? { address: appConfig.hubContractAddress, label: "Relay Hub" }
+        : null,
+      appConfig.oracleContractAddress
+        ? { address: appConfig.oracleContractAddress, label: "Relay Oracle" }
+        : null,
+    ].filter((contract): contract is { address: string; label: string } =>
+      Boolean(contract)
+    )
+
+    if (!contracts.length) {
+      setRoleConfig([])
+      return
+    }
+
     try {
-      const data = await fetchRoleConfig(configAddress)
-      setRoleConfig(data.data)
+      const data = await Promise.all(
+        contracts.map(async (contract) => ({
+          ...contract,
+          roles: (await fetchRoleConfig(contract.address)).data,
+        }))
+      )
+      setRoleConfig(data)
       setRoleConfigError("")
     } catch (err) {
       setRoleConfig([])
@@ -292,12 +323,25 @@ export default function Home() {
   const loadConfig = async () => {
     try {
       const data = await fetchConfig()
-      setConfigAddress(data.contractAddress ?? "")
+      setAppConfig(data)
       setConfigError("")
     } catch (err) {
-      setConfigAddress("")
+      setAppConfig(null)
       setConfigError(
         err instanceof Error ? err.message : "Failed to load config"
+      )
+    }
+  }
+
+  const loadApprovedOracles = async () => {
+    try {
+      const data = await fetchApprovedOracles()
+      setApprovedOracles(data)
+      setApprovedOraclesError("")
+    } catch (err) {
+      setApprovedOracles(null)
+      setApprovedOraclesError(
+        err instanceof Error ? err.message : "Failed to load approved oracles"
       )
     }
   }
@@ -318,8 +362,10 @@ export default function Home() {
 
   useEffect(() => {
     void loadConfig()
+    void loadApprovedOracles()
     const interval = setInterval(() => {
       void loadConfig()
+      void loadApprovedOracles()
     }, 5000)
     return () => clearInterval(interval)
   }, [])
@@ -330,7 +376,7 @@ export default function Home() {
       void loadRoleConfig()
     }, 5000)
     return () => clearInterval(interval)
-  }, [configAddress])
+  }, [appConfig?.hubContractAddress, appConfig?.oracleContractAddress])
 
   const handleTokensNext = () => {
     if (!tokenNextCursor) return
@@ -552,35 +598,157 @@ export default function Home() {
         <div className="panel-header">
           <h2>Configuration</h2>
         </div>
+        <div className="stat config-grid">
+          <div>
+            <p className="label">Mode</p>
+            <p className="value">{appConfig?.mode ?? "-"}</p>
+          </div>
+          <div>
+            <p className="label">API auth</p>
+            <p className="value">
+              {appConfig
+                ? appConfig.authEnabled
+                  ? "Enabled"
+                  : "Disabled"
+                : "-"}
+            </p>
+          </div>
+          <div>
+            <p className="label">Background work</p>
+            <p className="value">
+              {appConfig
+                ? appConfig.doBackgroundWork
+                  ? "Enabled"
+                  : "Disabled"
+                : "-"}
+            </p>
+          </div>
+        </div>
+        {appConfig?.hubContractAddress || appConfig?.oracleContractAddress ? (
+          <div className="table config-table">
+            <div className="table-row header">
+              <span>Contract</span>
+              <span>Address</span>
+            </div>
+            {appConfig.hubContractAddress ? (
+              <div className="table-row">
+                <span>Relay Hub</span>
+                <span>
+                  <a
+                    href={addressUrl(appConfig.hubContractAddress)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {appConfig.hubContractAddress}
+                  </a>
+                </span>
+              </div>
+            ) : null}
+            {appConfig.oracleContractAddress ? (
+              <div className="table-row">
+                <span>Relay Oracle</span>
+                <span>
+                  <a
+                    href={addressUrl(appConfig.oracleContractAddress)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {appConfig.oracleContractAddress}
+                  </a>
+                </span>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <div className="table">
           <div className="table-row header">
+            <span>Contract</span>
             <span>Role</span>
             <span>Members</span>
           </div>
-          {roleConfig.map((role) => (
-            <div key={role.role} className="table-row">
-              <span>{displayRole(role.role)}</span>
-              <span className="row-list">
-                {role.members.length
-                  ? role.members.map((member) => (
-                      <Link
-                        key={member}
-                        className="token-link"
-                        to={`/address/${member}`}
-                      >
-                        {member}
-                      </Link>
-                    ))
-                  : "No members"}
-              </span>
-            </div>
-          ))}
+          {roleConfig.flatMap((contract) =>
+            contract.roles.map((role) => (
+              <div
+                key={`${contract.address}-${role.role}`}
+                className="table-row"
+              >
+                <span>
+                  {contract.label}
+                  <br />
+                  <span className="muted">{shortHash(contract.address)}</span>
+                </span>
+                <span>{displayRole(role.role)}</span>
+                <span className="row-list">
+                  {role.members.length
+                    ? role.members.map((member) => (
+                        <Link
+                          key={member}
+                          className="token-link"
+                          to={`/address/${member}`}
+                        >
+                          {member}
+                        </Link>
+                      ))
+                    : "No members"}
+                </span>
+              </div>
+            ))
+          )}
           {configError ? (
             <div className="empty">{configError}</div>
           ) : roleConfigError ? (
             <div className="empty">{roleConfigError}</div>
-          ) : !roleConfig.length ? (
+          ) : !roleConfig.some((contract) => contract.roles.length) ? (
             <div className="empty">No roles indexed yet.</div>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <h2>Approved oracle instances</h2>
+          <span className="muted">
+            {approvedOracles ? `${approvedOracles.count} signers` : ""}
+          </span>
+        </div>
+        <div className="table oracle-table">
+          <div className="table-row header">
+            <span>Signer</span>
+            <span>Approved oracle</span>
+            <span>Type</span>
+          </div>
+          {approvedOracles?.data.map((oracle) => (
+            <div
+              key={`${oracle.approvedOracle.address}-${oracle.address}-${oracle.type}`}
+              className="table-row"
+            >
+              <span>
+                <Link className="token-link" to={`/address/${oracle.address}`}>
+                  {oracle.label ?? oracle.address}
+                </Link>
+              </span>
+              <span>
+                <Link
+                  className="token-link"
+                  to={`/address/${oracle.approvedOracle.address}`}
+                >
+                  {oracle.approvedOracle.label ?? oracle.approvedOracle.address}
+                </Link>
+                <span className="muted">
+                  {" "}
+                  {oracle.approvedOracle.threshold}/
+                  {oracle.approvedOracle.signerCount}
+                </span>
+              </span>
+              <span>{oracle.type.replaceAll("-", " ")}</span>
+            </div>
+          ))}
+          {approvedOraclesError ? (
+            <div className="empty">{approvedOraclesError}</div>
+          ) : !approvedOracles?.data.length ? (
+            <div className="empty">
+              No approved oracle instances indexed yet.
+            </div>
           ) : null}
         </div>
       </section>

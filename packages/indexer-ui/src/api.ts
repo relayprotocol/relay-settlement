@@ -49,9 +49,44 @@ export type RoleConfig = {
 }
 
 export type AppConfig = {
-  contractAddress: string
-  hubContractAddress: string
-  oracleContractAddress: string
+  authEnabled: boolean
+  doBackgroundWork: boolean
+  enableApi: boolean
+  hubContractAddress?: string
+  mode: string
+  oracleContractAddress?: string
+}
+
+export type ApprovedOracleSummary = {
+  address: string
+  label: string | null
+  signerCount: number
+  threshold: number
+  type: "contract" | "direct" | "multisig"
+}
+
+export type ApprovedOracleInstance = {
+  address: string
+  approvedOracle: ApprovedOracleSummary
+  label: string | null
+  type: "contract-role-member" | "direct-role-member" | "multisig-signer"
+}
+
+export type ApprovedOracle = ApprovedOracleSummary & {
+  signers: ApprovedOracleInstance[]
+}
+
+export type ApprovedOracleInstancesResponse = {
+  approvedOracles: ApprovedOracle[]
+  count: number
+  data: ApprovedOracleInstance[]
+  oracleRole: string
+  relayOracleAddress: string
+  source: {
+    fromBlock: number
+    roleMembers: "indexed-role-members"
+    verifiedAtBlock: number
+  }
 }
 
 export type ProtocolTransfer = {
@@ -128,9 +163,6 @@ export const fetchTokens = (limit = 20, cursor?: string, query?: string) => {
 export const fetchToken = (tokenId: string) =>
   getJson<Token>(`/api/tokens/${tokenId}`)
 
-export const refreshToken = (tokenId: string) =>
-  getJson<Token>(`/api/tokens/${tokenId}/refresh`, { method: "POST" })
-
 export const fetchTokenBalances = (
   tokenId: string,
   limit = 100,
@@ -197,12 +229,6 @@ export const fetchHolders = (limit = 100, cursor?: string) => {
   return getJson<CursorPage<Holder>>(`/api/holders?${params.toString()}`)
 }
 
-export const refreshAddressBalances = (address: string) =>
-  getJson<{ address: string; refreshed: number; updated: number }>(
-    `/api/addresses/${address}/refresh-balances`,
-    { method: "POST" }
-  )
-
 export const fetchRoleConfig = (contractAddress: string) => {
   const params = new URLSearchParams()
   params.set("contract", contractAddress)
@@ -210,6 +236,9 @@ export const fetchRoleConfig = (contractAddress: string) => {
 }
 
 export const fetchConfig = () => getJson<AppConfig>("/api/config")
+
+export const fetchApprovedOracles = () =>
+  getJson<ApprovedOracleInstancesResponse>("/api/oracles/approved")
 
 export const fetchProtocolTransactionsByHash = (txHashes: string[]) =>
   getJson<{ data: ProtocolTransaction[] }>(
