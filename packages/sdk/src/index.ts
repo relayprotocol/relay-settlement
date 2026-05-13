@@ -75,6 +75,15 @@ import {
 } from "./messages/v2.2/withdrawal"
 
 import {
+  DepositAddressTrigger,
+  DepositAddressTriggerCurrency,
+  DepositAddressTriggerDerivationFields,
+  DepositAddressTriggerInput,
+  DepositAddressTriggerPrice,
+  getDepositAddressTriggerHash,
+} from "./messages/v2.3/deposit-address"
+
+import {
   WithdrawRequest,
   DenormalizedWithdrawRequest,
   getWithdrawRequestHash,
@@ -189,6 +198,14 @@ export {
   normalizePayloadParams,
 
   // Messages v2.3
+
+  // Deposit address
+  DepositAddressTrigger,
+  DepositAddressTriggerCurrency,
+  DepositAddressTriggerDerivationFields,
+  DepositAddressTriggerInput,
+  DepositAddressTriggerPrice,
+  getDepositAddressTriggerHash,
 
   // Withdrawal
   WithdrawRequest,
