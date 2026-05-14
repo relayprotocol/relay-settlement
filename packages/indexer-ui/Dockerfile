@@ -18,7 +18,7 @@ RUN node .yarn/releases/yarn-4.9.1.cjs workspace @relay-settlement/indexer-ui bu
 FROM nginx:1.27-alpine AS runner
 
 COPY --chown=root:root --chmod=755 packages/indexer-ui/entrypoint.sh /entrypoint.sh
-COPY packages/indexer-ui/nginx.conf /etc/nginx/conf.d/default.conf
+COPY packages/indexer-ui/nginx.conf /etc/nginx/templates/default.conf.template
 COPY packages/indexer-ui/config.template.js /usr/share/nginx/html/config.template.js
 COPY --from=builder /app/packages/indexer-ui/dist /usr/share/nginx/html
 
