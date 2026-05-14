@@ -4,5 +4,7 @@
   "RelayAllocator#RelayAllocator": "0x357dFbEC07a628e934bdB3642056FD72F10a7902",
   "Config#Config": "0x3ce69C8Da146ee33B9F0BF64a1e2398fbc8214c7",
   "EthereumVmPayloadBuilder#EthereumVmPayloadBuilder": "0xD187D50a1314cC8fe0E0F5548587b4a827105976",
-  "SolanaVmPayloadBuilder#SolanaVmPayloadBuilder": "0xDDd90bF49ab76221B750B317B30a43B944813318"
+  "SolanaVmPayloadBuilder#SolanaVmPayloadBuilder": "0xDDd90bF49ab76221B750B317B30a43B944813318",
+  "RelayDepositAddressManager#RelayDepositAddressManager": "0x1bFf267AA51674fa536dA3873188A41a9c05CF44",
+  "BasicPricingOracle#BasicPricingOracle": "0x331F90567b293887F907A9566657d7Da60EaE62F"
 }
