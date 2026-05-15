@@ -117,6 +117,43 @@ export type ProtocolTransaction = {
   oracleExecutions: ProtocolOracleExecution[]
 }
 
+export type TransferReplayRequest = {
+  batchSize: number
+  fromBlock: number
+  reconcileChunkSize: number
+  toBlock: number
+}
+
+export type TransferReplayProgress = {
+  blocksPerSecond: number | null
+  currentBlock: number | null
+  decoded: number
+  elapsedMs: number
+  estimatedRemainingSeconds: number | null
+  fromBlock: number
+  inserted: number
+  lastBatchFromBlock: number | null
+  lastBatchToBlock: number | null
+  percentComplete: number
+  processedBlocks: number
+  reconciledAddresses: number
+  remainingBlocks: number
+  skipped: number
+  toBlock: number
+  totalBlocks: number
+  updatedAt: string
+}
+
+export type TransferReplayJob = {
+  completedAt: string | null
+  error: string | null
+  id: string
+  progress: TransferReplayProgress | null
+  request: TransferReplayRequest
+  startedAt: string
+  state: "failed" | "running" | "succeeded"
+}
+
 declare global {
   interface Window {
     __INDEXER_UI_CONFIG__?: {
@@ -251,3 +288,20 @@ export const fetchProtocolTransactionsByHash = (txHashes: string[]) =>
       body: JSON.stringify({ txHashes }),
     }
   )
+
+export const startTransferReplay = (request: {
+  batchSize?: number
+  fromBlock: number
+  reconcileChunkSize?: number
+  toBlock: number
+}) =>
+  getJson<TransferReplayJob>("/api/admin/replay/transfers", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  })
+
+export const fetchTransferReplayJob = (jobId: string) =>
+  getJson<TransferReplayJob>(`/api/admin/replay/transfers/${jobId}`)

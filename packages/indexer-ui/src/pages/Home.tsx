@@ -432,9 +432,14 @@ export default function Home() {
         <div>
           <h1>Relay Settlement Indexer</h1>
         </div>
-        <button className="btn" onClick={loadTokens}>
-          Refresh
-        </button>
+        <div className="hero-actions">
+          <Link className="btn ghost" to="/admin/replay">
+            Admin replay
+          </Link>
+          <button className="btn" onClick={loadTokens}>
+            Refresh
+          </button>
+        </div>
       </header>
 
       {error ? <div className="banner">{error}</div> : null}
