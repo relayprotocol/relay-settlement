@@ -4,11 +4,7 @@ pragma solidity ^0.8.28;
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 
-import {
-  Currency,
-  IPricingOracle,
-  Price
-} from "../deposit-addresses/open/oracle/IPricingOracle.sol";
+import {Currency, IPricingOracle, Price} from "./IPricingOracle.sol";
 
 /// @title SignedPricingOracle
 /// @author Relay Protocol
@@ -32,21 +28,23 @@ contract SignedPricingOracle is IPricingOracle, EIP712 {
   ///         is verification metadata, not part of the signed payload.
   bytes32 public constant SIGNED_PRICE_TYPEHASH =
     keccak256(
-      "SignedPrice(string chainId,bytes currency,uint256 amount,uint8 decimals,uint256 expiration)"
+      "SignedPrice(string chainId,bytes currency,uint256 usdPrice,uint8 usdPriceDecimals,uint8 currencyDecimals,uint256 expiration)"
     );
 
   /// @notice A USD price signed by `SOLVER`.
   /// @param chainId Identifier of the chain the priced currency lives on; must equal the corresponding `currencies[i].chainId`
   /// @param currency Opaque encoding of the priced currency; must equal the corresponding `currencies[i].currency`
-  /// @param amount USD price expressed in units of `10 ** -decimals` dollars
-  /// @param decimals Number of decimals used to scale `amount`
+  /// @param usdPrice USD price of one whole unit of the currency, scaled by `10 ** usdPriceDecimals`
+  /// @param usdPriceDecimals Fixed-point precision of `usdPrice`
+  /// @param currencyDecimals Number of decimals the currency itself uses
   /// @param expiration Unix timestamp after which this price is no longer valid
   /// @param signature EIP-712 signature over the above fields by `SOLVER`
   struct SignedPrice {
     string chainId;
     bytes currency;
-    uint256 amount;
-    uint8 decimals;
+    uint256 usdPrice;
+    uint8 usdPriceDecimals;
+    uint8 currencyDecimals;
     uint256 expiration;
     bytes signature;
   }
@@ -116,8 +114,9 @@ contract SignedPricingOracle is IPricingOracle, EIP712 {
       }
 
       prices[i] = Price({
-        amount: s.amount,
-        decimals: s.decimals,
+        usdPrice: s.usdPrice,
+        usdPriceDecimals: s.usdPriceDecimals,
+        currencyDecimals: s.currencyDecimals,
         expiration: s.expiration
       });
     }
@@ -148,8 +147,9 @@ contract SignedPricingOracle is IPricingOracle, EIP712 {
             SIGNED_PRICE_TYPEHASH,
             keccak256(bytes(price.chainId)),
             keccak256(price.currency),
-            price.amount,
-            price.decimals,
+            price.usdPrice,
+            price.usdPriceDecimals,
+            price.currencyDecimals,
             price.expiration
           )
         )

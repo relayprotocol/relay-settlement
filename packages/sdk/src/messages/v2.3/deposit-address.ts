@@ -26,8 +26,9 @@ export interface DepositAddressTriggerCurrency {
 }
 
 export interface DepositAddressTriggerPrice {
-  amount: string
-  decimals: number
+  usdPrice: string
+  usdPriceDecimals: number
+  currencyDecimals: number
   expiration: string
 }
 
@@ -77,8 +78,9 @@ const TRIGGER_HASH_ABI = [
   },
   {
     components: [
-      { name: "amount", type: "uint256" },
-      { name: "decimals", type: "uint8" },
+      { name: "usdPrice", type: "uint256" },
+      { name: "usdPriceDecimals", type: "uint8" },
+      { name: "currencyDecimals", type: "uint8" },
       { name: "expiration", type: "uint256" },
     ],
     type: "tuple[]",
@@ -115,8 +117,9 @@ export const getDepositAddressTriggerHash = (
       currency: currency.currency as Hex,
     })),
     trigger.prices.map((price) => ({
-      amount: BigInt(price.amount),
-      decimals: price.decimals,
+      usdPrice: BigInt(price.usdPrice),
+      usdPriceDecimals: price.usdPriceDecimals,
+      currencyDecimals: price.currencyDecimals,
       expiration: BigInt(price.expiration),
     })),
     trigger.extraData as Hex,

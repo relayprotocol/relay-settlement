@@ -9,13 +9,32 @@ struct Currency {
   bytes currency;
 }
 
-/// @notice A USD price together with its fixed-point precision and expiration.
-/// @param amount USD price expressed in units of `10 ** -decimals` dollars
-/// @param decimals Number of decimals used to scale `amount`
-/// @param expiration Unix timestamp after which this price should no longer be used
+/// @notice A USD price for one whole unit of a currency, together with the
+///         currency's own decimals and the price's expiration.
+///
+///         Two independent decimal scales are tracked, and they must not be
+///         confused:
+///
+///         - `currencyDecimals` describes the *currency* itself (eg. 18 for
+///           ETH, 6 for USDC). It is used to interpret raw on-chain balances
+///           as fractional units of the currency.
+///         - `usdPriceDecimals` describes the *fixed-point precision* of
+///           `usdPrice` (eg. 8 means `usdPrice` is expressed in 1e-8 USD).
+///
+///         To convert a raw currency amount `rawAmount` into USD scaled by
+///         `10 ** usdPriceDecimals`:
+///
+///             usd = rawAmount * usdPrice / (10 ** currencyDecimals)
+///
+/// @param usdPrice         USD price of one whole unit of the currency,
+///                         scaled by `10 ** usdPriceDecimals`
+/// @param usdPriceDecimals Fixed-point precision of `usdPrice`
+/// @param currencyDecimals Number of decimals the currency itself uses
+/// @param expiration       Unix timestamp after which this price must not be used
 struct Price {
-  uint256 amount;
-  uint8 decimals;
+  uint256 usdPrice;
+  uint8 usdPriceDecimals;
+  uint8 currencyDecimals;
   uint256 expiration;
 }
 

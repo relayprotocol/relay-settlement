@@ -48,24 +48,32 @@ const OUTPUT_CURRENCY = {
   currency: BASE_DERIVATION_FIELDS.outputCurrency,
 } as const
 
-const PRICE_DECIMALS = 8
+const USD_PRICE_DECIMALS = 8
 const PRICE_EXPIRATION = 1_900_000_000n
 const INPUT_PRICE = {
-  amount: 123_456n,
-  decimals: PRICE_DECIMALS,
+  currencyDecimals: 18,
   expiration: PRICE_EXPIRATION,
+  usdPrice: 123_456n,
+  usdPriceDecimals: USD_PRICE_DECIMALS,
 } as const
 const OUTPUT_PRICE = {
-  amount: 789_012n,
-  decimals: PRICE_DECIMALS,
+  currencyDecimals: 6,
   expiration: PRICE_EXPIRATION,
+  usdPrice: 789_012n,
+  usdPriceDecimals: USD_PRICE_DECIMALS,
 } as const
-const ZERO_PRICE = { amount: 0n, decimals: 0, expiration: 0n } as const
+const ZERO_PRICE = {
+  currencyDecimals: 0,
+  expiration: 0n,
+  usdPrice: 0n,
+  usdPriceDecimals: 0,
+} as const
 const PRICE_ARRAY_ABI = [
   {
     components: [
-      { name: "amount", type: "uint256" },
-      { name: "decimals", type: "uint8" },
+      { name: "usdPrice", type: "uint256" },
+      { name: "usdPriceDecimals", type: "uint8" },
+      { name: "currencyDecimals", type: "uint8" },
       { name: "expiration", type: "uint256" },
     ],
     type: "tuple[]",
@@ -107,8 +115,9 @@ const TRIGGER_HASH_ABI = [
   },
   {
     components: [
-      { name: "amount", type: "uint256" },
-      { name: "decimals", type: "uint8" },
+      { name: "usdPrice", type: "uint256" },
+      { name: "usdPriceDecimals", type: "uint8" },
+      { name: "currencyDecimals", type: "uint8" },
       { name: "expiration", type: "uint256" },
     ],
     type: "tuple[]",
@@ -118,8 +127,9 @@ const TRIGGER_HASH_ABI = [
 
 type Currency = { readonly chainId: string; readonly currency: string }
 type Price = {
-  readonly amount: bigint
-  readonly decimals: number
+  readonly usdPrice: bigint
+  readonly usdPriceDecimals: number
+  readonly currencyDecimals: number
   readonly expiration: bigint
 }
 type TriggerHashInput = {
@@ -156,15 +166,17 @@ async function seedPrices(
   await oracle.write.setPrice([
     INPUT.chainId,
     INPUT.currency,
-    INPUT_PRICE.amount,
-    INPUT_PRICE.decimals,
+    INPUT_PRICE.usdPrice,
+    INPUT_PRICE.usdPriceDecimals,
+    INPUT_PRICE.currencyDecimals,
     INPUT_PRICE.expiration,
   ])
   await oracle.write.setPrice([
     BASE_DERIVATION_FIELDS.outputChainId,
     BASE_DERIVATION_FIELDS.outputCurrency,
-    OUTPUT_PRICE.amount,
-    OUTPUT_PRICE.decimals,
+    OUTPUT_PRICE.usdPrice,
+    OUTPUT_PRICE.usdPriceDecimals,
+    OUTPUT_PRICE.currencyDecimals,
     OUTPUT_PRICE.expiration,
   ])
 }
@@ -249,15 +261,17 @@ describe("RelayDepositAddressManager", function () {
       // Mutate the input price after seeding to confirm the value bound into
       // the hash is the one read at trigger time, not at fixture setup.
       const updatedInputPrice = {
-        amount: INPUT_PRICE.amount + 1n,
-        decimals: INPUT_PRICE.decimals,
+        currencyDecimals: INPUT_PRICE.currencyDecimals,
         expiration: INPUT_PRICE.expiration,
+        usdPrice: INPUT_PRICE.usdPrice + 1n,
+        usdPriceDecimals: INPUT_PRICE.usdPriceDecimals,
       } as const
       await oracle.write.setPrice([
         INPUT.chainId,
         INPUT.currency,
-        updatedInputPrice.amount,
-        updatedInputPrice.decimals,
+        updatedInputPrice.usdPrice,
+        updatedInputPrice.usdPriceDecimals,
+        updatedInputPrice.currencyDecimals,
         updatedInputPrice.expiration,
       ])
 
@@ -296,15 +310,17 @@ describe("RelayDepositAddressManager", function () {
       // Deploy a second oracle and seed it with distinct prices.
       const altOracle = await hre.viem.deployContract("MockPricingOracle")
       const altInputPrice = {
-        amount: 999_999n,
-        decimals: 6,
+        currencyDecimals: 18,
         expiration: PRICE_EXPIRATION + 1n,
+        usdPrice: 999_999n,
+        usdPriceDecimals: 6,
       } as const
       await altOracle.write.setPrice([
         INPUT.chainId,
         INPUT.currency,
-        altInputPrice.amount,
-        altInputPrice.decimals,
+        altInputPrice.usdPrice,
+        altInputPrice.usdPriceDecimals,
+        altInputPrice.currencyDecimals,
         altInputPrice.expiration,
       ])
 
@@ -400,8 +416,9 @@ describe("RelayDepositAddressManager", function () {
       await oracle.write.setPrice([
         INPUT.chainId,
         INPUT.currency,
-        INPUT_PRICE.amount,
-        INPUT_PRICE.decimals,
+        INPUT_PRICE.usdPrice,
+        INPUT_PRICE.usdPriceDecimals,
+        INPUT_PRICE.currencyDecimals,
         INPUT_PRICE.expiration,
       ])
 
@@ -426,7 +443,7 @@ describe("RelayDepositAddressManager", function () {
         orderId: ORDER_ID,
         prices: [INPUT_PRICE],
       })
-      // Same amount and decimals, different expiration: should not collide.
+      // Same price fields, different expiration: should not collide.
       const mismatchedHash = hashTrigger({
         currencies,
         derivationFields,
@@ -436,8 +453,7 @@ describe("RelayDepositAddressManager", function () {
         orderId: ORDER_ID,
         prices: [
           {
-            amount: INPUT_PRICE.amount,
-            decimals: INPUT_PRICE.decimals,
+            ...INPUT_PRICE,
             expiration: INPUT_PRICE.expiration + 1n,
           },
         ],
@@ -454,15 +470,16 @@ describe("RelayDepositAddressManager", function () {
       )
     })
 
-    it("binds price decimals into the trigger hash", async function () {
+    it("binds usdPriceDecimals into the trigger hash", async function () {
       const { oracle, publicClient, relayDepositAddress } = await loadFixture(
         deployRelayDepositAddressManager
       )
       await oracle.write.setPrice([
         INPUT.chainId,
         INPUT.currency,
-        INPUT_PRICE.amount,
-        INPUT_PRICE.decimals,
+        INPUT_PRICE.usdPrice,
+        INPUT_PRICE.usdPriceDecimals,
+        INPUT_PRICE.currencyDecimals,
         INPUT_PRICE.expiration,
       ])
 
@@ -487,7 +504,7 @@ describe("RelayDepositAddressManager", function () {
         orderId: ORDER_ID,
         prices: [INPUT_PRICE],
       })
-      // Same amount, different decimals: should not collide.
+      // Same usdPrice, different usdPriceDecimals: should not collide.
       const mismatchedHash = hashTrigger({
         currencies,
         derivationFields,
@@ -497,9 +514,8 @@ describe("RelayDepositAddressManager", function () {
         orderId: ORDER_ID,
         prices: [
           {
-            amount: INPUT_PRICE.amount,
-            decimals: 6,
-            expiration: INPUT_PRICE.expiration,
+            ...INPUT_PRICE,
+            usdPriceDecimals: 6,
           },
         ],
       })

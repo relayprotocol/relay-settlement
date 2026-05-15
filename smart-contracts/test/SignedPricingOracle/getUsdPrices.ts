@@ -24,19 +24,21 @@ const OUTPUT_CURRENCY = {
 const FUTURE_EXPIRATION = 9_999_999_999n
 
 const INPUT_PRICE = {
-  amount: 100_000_000n,
   chainId: INPUT_CURRENCY.chainId,
   currency: INPUT_CURRENCY.currency,
-  decimals: 8,
+  currencyDecimals: 18,
   expiration: FUTURE_EXPIRATION,
+  usdPrice: 100_000_000n,
+  usdPriceDecimals: 8,
 } as const
 
 const OUTPUT_PRICE = {
-  amount: 200_000_000n,
   chainId: OUTPUT_CURRENCY.chainId,
   currency: OUTPUT_CURRENCY.currency,
-  decimals: 8,
+  currencyDecimals: 6,
   expiration: FUTURE_EXPIRATION,
+  usdPrice: 200_000_000n,
+  usdPriceDecimals: 8,
 } as const
 
 describe("SignedPricingOracle.getUsdPrices", function () {
@@ -63,11 +65,13 @@ describe("SignedPricingOracle.getUsdPrices", function () {
     ])
 
     expect(prices).to.have.lengthOf(2)
-    expect(prices[0].amount).to.equal(INPUT_PRICE.amount)
-    expect(prices[0].decimals).to.equal(INPUT_PRICE.decimals)
+    expect(prices[0].usdPrice).to.equal(INPUT_PRICE.usdPrice)
+    expect(prices[0].usdPriceDecimals).to.equal(INPUT_PRICE.usdPriceDecimals)
+    expect(prices[0].currencyDecimals).to.equal(INPUT_PRICE.currencyDecimals)
     expect(prices[0].expiration).to.equal(INPUT_PRICE.expiration)
-    expect(prices[1].amount).to.equal(OUTPUT_PRICE.amount)
-    expect(prices[1].decimals).to.equal(OUTPUT_PRICE.decimals)
+    expect(prices[1].usdPrice).to.equal(OUTPUT_PRICE.usdPrice)
+    expect(prices[1].usdPriceDecimals).to.equal(OUTPUT_PRICE.usdPriceDecimals)
+    expect(prices[1].currencyDecimals).to.equal(OUTPUT_PRICE.currencyDecimals)
     expect(prices[1].expiration).to.equal(OUTPUT_PRICE.expiration)
   })
 
@@ -189,7 +193,7 @@ describe("SignedPricingOracle.getUsdPrices", function () {
     ).to.be.rejectedWith("InvalidSignature")
   })
 
-  it("reverts with InvalidSignature when amount is tampered post-signing", async function () {
+  it("reverts with InvalidSignature when usdPrice is tampered post-signing", async function () {
     const { signedPricingOracle, solver } = await loadFixture(
       deploySignedPricingOracle
     )
@@ -199,8 +203,8 @@ describe("SignedPricingOracle.getUsdPrices", function () {
       signedPricingOracle.address,
       INPUT_PRICE
     )
-    // Replace amount, keep original signature
-    const tampered = { ...signed, amount: INPUT_PRICE.amount + 1n }
+    // Replace usdPrice, keep original signature
+    const tampered = { ...signed, usdPrice: INPUT_PRICE.usdPrice + 1n }
     const extraData = encodeSignedPrices([tampered])
 
     await expect(
@@ -218,8 +222,9 @@ describe("SignedPricingOracle.getUsdPrices", function () {
           components: [
             { name: "chainId", type: "string" },
             { name: "currency", type: "bytes" },
-            { name: "amount", type: "uint256" },
-            { name: "decimals", type: "uint8" },
+            { name: "usdPrice", type: "uint256" },
+            { name: "usdPriceDecimals", type: "uint8" },
+            { name: "currencyDecimals", type: "uint8" },
             { name: "expiration", type: "uint256" },
             { name: "signature", type: "bytes" },
           ],

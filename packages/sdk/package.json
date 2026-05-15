@@ -1,6 +1,6 @@
 {
   "name": "@relay-protocol/settlement-sdk",
-  "version": "0.0.98",
+  "version": "0.0.99",
   "description": "Relay protocol SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

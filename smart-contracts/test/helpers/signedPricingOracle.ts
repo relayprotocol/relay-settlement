@@ -5,8 +5,9 @@ import { Hex, WalletClient, encodeAbiParameters } from "viem"
 export interface SignedPriceInput {
   chainId: string
   currency: Hex
-  amount: bigint
-  decimals: number
+  usdPrice: bigint
+  usdPriceDecimals: number
+  currencyDecimals: number
   expiration: bigint
 }
 
@@ -19,8 +20,9 @@ export const SIGNED_PRICE_ARRAY_ABI = [
     components: [
       { name: "chainId", type: "string" },
       { name: "currency", type: "bytes" },
-      { name: "amount", type: "uint256" },
-      { name: "decimals", type: "uint8" },
+      { name: "usdPrice", type: "uint256" },
+      { name: "usdPriceDecimals", type: "uint8" },
+      { name: "currencyDecimals", type: "uint8" },
       { name: "expiration", type: "uint256" },
       { name: "signature", type: "bytes" },
     ],
@@ -43,19 +45,21 @@ export const signPrice = async (
       version: "1",
     },
     message: {
-      amount: input.amount,
       chainId: input.chainId,
       currency: input.currency,
-      decimals: input.decimals,
+      currencyDecimals: input.currencyDecimals,
       expiration: input.expiration,
+      usdPrice: input.usdPrice,
+      usdPriceDecimals: input.usdPriceDecimals,
     },
     primaryType: "SignedPrice",
     types: {
       SignedPrice: [
         { name: "chainId", type: "string" },
         { name: "currency", type: "bytes" },
-        { name: "amount", type: "uint256" },
-        { name: "decimals", type: "uint8" },
+        { name: "usdPrice", type: "uint256" },
+        { name: "usdPriceDecimals", type: "uint8" },
+        { name: "currencyDecimals", type: "uint8" },
         { name: "expiration", type: "uint256" },
       ],
     },

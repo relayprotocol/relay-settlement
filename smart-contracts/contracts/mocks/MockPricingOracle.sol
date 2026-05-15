@@ -19,19 +19,22 @@ contract MockPricingOracle is IPricingOracle {
   /// pair.
   /// @param chainId Identifier of the chain the currency lives on
   /// @param currency Opaque, VM-specific encoding of the currency
-  /// @param amount USD amount to return for this currency
-  /// @param decimals Number of decimals used to scale `amount`
+  /// @param usdPrice USD price of one whole unit of the currency, scaled by `10 ** usdPriceDecimals`
+  /// @param usdPriceDecimals Fixed-point precision of `usdPrice`
+  /// @param currencyDecimals Number of decimals the currency itself uses
   /// @param expiration Unix timestamp after which this price should no longer be used
   function setPrice(
     string calldata chainId,
     bytes calldata currency,
-    uint256 amount,
-    uint8 decimals,
+    uint256 usdPrice,
+    uint8 usdPriceDecimals,
+    uint8 currencyDecimals,
     uint256 expiration
   ) external {
     prices[_key(chainId, currency)] = Price({
-      amount: amount,
-      decimals: decimals,
+      usdPrice: usdPrice,
+      usdPriceDecimals: usdPriceDecimals,
+      currencyDecimals: currencyDecimals,
       expiration: expiration
     });
   }
