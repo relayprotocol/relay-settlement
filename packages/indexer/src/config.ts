@@ -14,6 +14,7 @@ export type RuntimeConfig = {
   healthMaxLagBlocks: number
   hubContractAddress: string
   hubStartBlock: number
+  maxTransferReplayBlockRange: number
   oracleContractAddress: string
   oracleStartBlock: number
   port: number
@@ -128,6 +129,10 @@ export const config: RuntimeConfig = {
   hubStartBlock: resolveNumber(
     process.env.HUB_START_BLOCK,
     resolveNumber(process.env.START_BLOCK, relayNetworkDefaults.startBlock)
+  ),
+  maxTransferReplayBlockRange: resolveNumber(
+    process.env.MAX_TRANSFER_REPLAY_BLOCK_RANGE,
+    100_000
   ),
   oracleContractAddress: resolveAddress(
     process.env.ORACLE_CONTRACT_ADDRESS,

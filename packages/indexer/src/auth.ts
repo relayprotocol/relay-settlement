@@ -30,13 +30,22 @@ export const isApiKeyAuthorized = (
   return safeEqual(providedApiKey, expectedApiKey)
 }
 
-export const createApiKeyMiddleware = (expectedApiKey: string | undefined) => {
+export const createApiKeyMiddleware = (
+  expectedApiKey: string | undefined,
+  options: {
+    headerName?: string
+    pathPrefix?: string
+  } = {}
+) => {
+  const headerName = options.headerName ?? "x-api-key"
+  const pathPrefix = options.pathPrefix ?? "/api/"
+
   return (req: Request, res: Response, next: NextFunction) => {
-    if (!req.path.startsWith("/api/")) {
+    if (!req.path.startsWith(pathPrefix)) {
       return next()
     }
 
-    if (isApiKeyAuthorized(req.headers["x-api-key"], expectedApiKey)) {
+    if (isApiKeyAuthorized(req.headers[headerName], expectedApiKey)) {
       return next()
     }
 

@@ -67,11 +67,14 @@ const start = async () => {
 
   const app = createServer(runtimeState, {
     db,
+    defaultTransferReplayBatchSize: config.batchSize,
     expectedApiKey: config.authApiKey,
     healthProvider: provider,
     hubContractAddress: config.hubContractAddress,
+    maxTransferReplayBlockRange: config.maxTransferReplayBlockRange,
     oracleContractAddress: config.oracleContractAddress,
     oracleProvider: provider,
+    replayProvider: provider,
   })
   app.listen(config.port, () => {
     if (config.enableApi) {

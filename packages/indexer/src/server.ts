@@ -26,9 +26,15 @@ import {
   ProtocolTransactionRequestError,
 } from "./protocol/transactionRequest.js"
 import { getHealthStatus } from "./services/health.js"
+import { TransferReplayRequestError } from "./services/transferReplay.js"
+import {
+  createTransferReplayJobManager,
+  TransferReplayJobConflictError,
+} from "./services/transferReplayJobs.js"
 import { type RuntimeState } from "./runtimeState.js"
 
 const MAX_PAGE_LIMIT = 200
+const DEFAULT_TRANSFER_REPLAY_RECONCILE_CHUNK_SIZE = 100
 
 type AsyncHandler = (
   _req: Request,
@@ -63,21 +69,27 @@ export const createServer = (
   runtimeState: RuntimeState,
   options: {
     db?: Database
+    defaultTransferReplayBatchSize?: number
     expectedApiKey?: string
     healthProvider?: Provider
     hubContractAddress?: string
+    maxTransferReplayBlockRange?: number
     oracleContractAddress?: string
     oracleProvider?: Provider
+    replayProvider?: Provider
   } = {}
 ) => {
   const app = express()
   const {
     db,
+    defaultTransferReplayBatchSize = 2000,
     expectedApiKey,
     healthProvider,
     hubContractAddress,
+    maxTransferReplayBlockRange = 100_000,
     oracleContractAddress,
     oracleProvider,
+    replayProvider,
   } = options
 
   app.use(express.json())
@@ -156,6 +168,56 @@ export const createServer = (
 
   if (!db) {
     throw new Error("API mode requires a database connection")
+  }
+
+  if (expectedApiKey && replayProvider && hubContractAddress) {
+    const replayJobs = createTransferReplayJobManager({
+      db,
+      defaultBatchSize: defaultTransferReplayBatchSize,
+      defaultReconcileChunkSize: DEFAULT_TRANSFER_REPLAY_RECONCILE_CHUNK_SIZE,
+      hubContractAddress,
+      maxBlockRange: maxTransferReplayBlockRange,
+      provider: replayProvider,
+    })
+    const adminAuth = createApiKeyMiddleware(expectedApiKey, {
+      pathPrefix: "/api/admin/",
+    })
+
+    app.post(
+      "/api/admin/replay/transfers",
+      adminAuth,
+      asyncHandler(async (req, res) => {
+        try {
+          const job = replayJobs.start(req.body ?? {})
+          return res.status(202).json(job)
+        } catch (error) {
+          if (error instanceof TransferReplayRequestError) {
+            return res.status(400).json({ error: error.message })
+          }
+
+          if (error instanceof TransferReplayJobConflictError) {
+            return res.status(409).json({ error: error.message })
+          }
+
+          throw error
+        }
+      })
+    )
+
+    app.get(
+      "/api/admin/replay/transfers/:jobId",
+      adminAuth,
+      asyncHandler(async (req, res) => {
+        const job = replayJobs.get(req.params.jobId)
+        if (!job) {
+          return res
+            .status(404)
+            .json({ error: "Transfer replay job not found" })
+        }
+
+        return res.json(job)
+      })
+    )
   }
 
   app.use(createApiKeyMiddleware(expectedApiKey))
