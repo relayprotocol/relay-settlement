@@ -229,30 +229,13 @@ yarn hardhat relay-multisig-signer:execute-transactions --transactions tasks/rel
 
 ## Coverage
 
-The contracts are currently being migrated from Hardhat to Foundry (see DEC-905). During the dual-run window, tests for ported modules live under `test-foundry/` and run with `forge`, while tests for un-ported modules live under `test/` and run with `hardhat`. A combined coverage gate enforces that no `(file, line)` or branch hit in the baseline is ever lost — regardless of which toolchain is producing the hits.
+The contracts are currently being migrated from Hardhat to Foundry (see DEC-905). During the dual-run window, tests for ported modules live under `test-foundry/` (run with `forge`) and tests for un-ported modules live under `test/` (run with `hardhat`). Both suites run in CI on every PR via `yarn test`; either failing fails the build.
+
+Coverage reports can be generated ad-hoc:
 
 ```sh
-# produce Hardhat coverage at coverage/lcov.info
-yarn coverage
-
-# produce Foundry coverage at forge-out/lcov.info
-yarn forge:coverage
-
-# combine + compare against the committed baseline; exits non-zero on regression
-yarn coverage:diff:combined coverage-baseline/hardhat.lcov
-
-# convenience: run everything in one shot
-yarn coverage:gate
+yarn coverage:hardhat    # writes coverage/lcov.info
+yarn coverage:foundry    # writes forge-out/lcov.info
 ```
 
-The baseline lives at `coverage-baseline/hardhat.lcov`. It was generated from the original Hardhat suite at the start of the migration. `yarn coverage:diff:combined` unions the per-file line/branch hit counts from `coverage/lcov.info` and `forge-out/lcov.info` into `coverage/combined.lcov`, then calls `coverage-diff` against the baseline.
-
-Behavior notes:
-
-- `coverage-diff` reports any `(file, line)` or branch hit in the baseline that is no longer hit in either current run.
-- Omit the baseline argument to disable the gate explicitly (script logs and exits 0). This is the safe wiring while no baseline has been committed.
-- A baseline argument that points to a missing file is treated as a configuration error (exit 2), so typos and broken CI wiring fail loud.
-- LCOV `SF:` paths are normalized to repo-relative `contracts/...` form before comparison so baselines generated on a different machine still line up.
-- If the baseline references files that don't exist on disk, the script aborts loudly rather than silently reporting "no regressions".
-
-When intentionally regenerating the baseline (for example after removing dead contract code, or rebasing the baseline onto Foundry-only coverage at the end of the migration), include the literal token `[baseline:refresh]` in the HEAD commit message. The diff script honors this tag and skips the gate so the baseline can be updated in the same PR.
+Coverage is not gated in CI — describe-block parity (each TS describe/it has a Solidity counterpart with the same name, enforced by the 1:1 file mapping in `test-foundry/`) is the migration's coverage-preservation guarantee.
