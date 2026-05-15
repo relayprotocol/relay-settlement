@@ -15,6 +15,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # smart-contracts' Foundry test suite depends on forge-std,
+          # which lives under smart-contracts/lib/forge-std as a git
+          # submodule.
+          submodules: recursive
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

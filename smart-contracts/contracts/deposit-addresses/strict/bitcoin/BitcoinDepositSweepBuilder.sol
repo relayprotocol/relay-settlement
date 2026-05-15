@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {Base64} from "solady/src/utils/Base64.sol";
+import {Base64} from "solady/utils/Base64.sol";
 import {ChainSignatures} from "../../../ChainSignatures.sol";
 import {Utils} from "../../../Utils.sol";
 import {IBitcoinDepositSweepBuilder} from "./IBitcoinDepositSweepBuilder.sol";
