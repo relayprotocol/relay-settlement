@@ -34,6 +34,14 @@ type TokenMetadataRow = {
   holders: number
 }
 
+export type ParsedTransferLog = {
+  amount: bigint
+  from: string
+  operator: string
+  to: string
+  tokenId: string
+}
+
 const selectToken = async (db: Queryable, tokenId: string) =>
   db.oneOrNone<TokenMetadataRow>(
     `SELECT token_id, name, symbol, decimals, total_supply, holders
@@ -319,6 +327,24 @@ export const incrementTokenTransfers = async (
   )
 }
 
+export const syncTokenTransfersFromEvents = async (
+  db: Queryable,
+  tokenId: string
+) => {
+  const now = new Date().toISOString()
+  await db.none(
+    `UPDATE tokens
+     SET transfers = (
+       SELECT COUNT(*)::int
+       FROM events
+       WHERE token_id = $1
+     ),
+     updated_at = $2
+     WHERE token_id = $1`,
+    [tokenId, now]
+  )
+}
+
 export const reconcileTransferStateFromChain = async (
   db: Queryable,
   contract: Contract,
@@ -438,15 +464,85 @@ export const insertEvent = async (
   return inserted
 }
 
+const transferArg = (
+  args: Record<string, unknown> & { [_index: number]: unknown },
+  name: string,
+  index: number
+) => args[name] ?? args[index]
+
+const normalizeTransferArgs = (
+  args: Record<string, unknown> & { [_index: number]: unknown }
+): ParsedTransferLog | null => {
+  const operator = transferArg(args, "caller", 0)
+  const from = transferArg(args, "from", 1)
+  const to = transferArg(args, "to", 2)
+  const id = transferArg(args, "id", 3)
+  const amount = transferArg(args, "amount", 4)
+
+  if (
+    typeof operator !== "string" ||
+    typeof from !== "string" ||
+    typeof to !== "string" ||
+    id == null ||
+    amount == null
+  ) {
+    return null
+  }
+
+  return {
+    amount: BigInt(amount.toString()),
+    from,
+    operator,
+    to,
+    tokenId: id.toString(),
+  }
+}
+
 export const parseTransferLog = (log: {
   topics: readonly string[]
   data: string
 }) => {
   try {
-    return erc6909TransferWithCaller.parseLog(log)
+    const parsed = erc6909TransferWithCaller.parseLog(log)
+    return parsed ? normalizeTransferArgs(parsed.args) : null
   } catch {
     return null
   }
+}
+
+export const replayTransferLogFromChain = async (
+  db: Queryable,
+  contract: Contract,
+  transfer: ParsedTransferLog,
+  log: {
+    blockNumber: number
+    transactionHash: string
+    index: number
+  },
+  timestamp: number
+) => {
+  const inserted = await insertEvent(db, {
+    amount: transfer.amount.toString(),
+    blockNumber: log.blockNumber,
+    from: transfer.from,
+    index: log.index,
+    operator: transfer.operator,
+    timestamp,
+    to: transfer.to,
+    tokenId: transfer.tokenId,
+    transactionHash: log.transactionHash,
+  })
+
+  await reconcileTransferStateFromChain(
+    db,
+    contract,
+    transfer.tokenId,
+    [transfer.from, transfer.to],
+    timestamp
+  )
+  await syncTokenTransfersFromEvents(db, transfer.tokenId)
+
+  return { inserted }
 }
 
 export const recordFailedEvent = async (
@@ -511,31 +607,26 @@ export const processSingleLog = async (
         if (!context.tokenContract) {
           throw new Error("Transfer log processing requires a token contract")
         }
-        const operator = parsedTransfer.args.caller
-        const from = parsedTransfer.args.from
-        const to = parsedTransfer.args.to
-        const id = parsedTransfer.args.id
-        const amount = parsedTransfer.args.amount
 
-        if (shouldSkipTokenId(id.toString())) {
+        if (shouldSkipTokenId(parsedTransfer.tokenId)) {
           logger.info("processor", "Skipping transfer for token", {
             blockNumber: log.blockNumber,
             logIndex: log.index,
-            tokenId: id.toString(),
+            tokenId: parsedTransfer.tokenId,
             txHash: log.transactionHash,
           })
           return
         }
 
         const inserted = await insertEvent(tx, {
-          amount: amount.toString(),
+          amount: parsedTransfer.amount.toString(),
           blockNumber: log.blockNumber,
-          from,
+          from: parsedTransfer.from,
           index: log.index,
-          operator,
+          operator: parsedTransfer.operator,
           timestamp,
-          to,
-          tokenId: id.toString(),
+          to: parsedTransfer.to,
+          tokenId: parsedTransfer.tokenId,
           transactionHash: log.transactionHash,
         })
 
@@ -543,26 +634,29 @@ export const processSingleLog = async (
           await applyTransfer(
             tx,
             context.tokenContract,
-            id.toString(),
-            from,
-            to,
-            amount,
+            parsedTransfer.tokenId,
+            parsedTransfer.from,
+            parsedTransfer.to,
+            parsedTransfer.amount,
             timestamp
           )
-          await incrementTokenTransfers(tx, id.toString())
+          await incrementTokenTransfers(tx, parsedTransfer.tokenId)
         }
 
         if (inserted) {
           logger.info("processor", "Transfer processed", {
-            amount: amount.toString(),
+            amount: parsedTransfer.amount.toString(),
             blockNumber: log.blockNumber,
-            from,
+            from: parsedTransfer.from,
             logIndex: log.index,
-            operator,
-            to,
-            tokenId: id.toString(),
+            operator: parsedTransfer.operator,
+            to: parsedTransfer.to,
+            tokenId: parsedTransfer.tokenId,
             txHash: log.transactionHash,
-            type: getProtocolTransferType(from, to),
+            type: getProtocolTransferType(
+              parsedTransfer.from,
+              parsedTransfer.to
+            ),
           })
         }
         return

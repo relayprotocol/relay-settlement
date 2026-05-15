@@ -12,10 +12,8 @@ import {
 } from "../services/oracleExecutionProcessor.js"
 import { runWithRetry } from "../services/retry.js"
 import {
-  incrementTokenTransfers,
-  insertEvent,
   parseTransferLog,
-  reconcileTransferStateFromChain,
+  replayTransferLogFromChain,
   shouldSkipTokenId,
 } from "../services/transferProcessor.js"
 import { getBlockTimestamp } from "../services/utils.js"
@@ -169,45 +167,34 @@ const processFailedLog = async (
       )
 
       if (parsedTransfer) {
-        const operator = parsedTransfer.args.caller
-        const from = parsedTransfer.args.from
-        const to = parsedTransfer.args.to
-        const id = parsedTransfer.args.id
-        const amount = parsedTransfer.args.amount
-        const tokenId = id.toString()
-
-        if (shouldSkipTokenId(tokenId)) {
+        if (shouldSkipTokenId(parsedTransfer.tokenId)) {
           logger.info("retry", "Skipping transfer replay for token", {
             blockNumber: log.blockNumber,
             logIndex: log.index,
-            tokenId,
+            tokenId: parsedTransfer.tokenId,
             txHash: log.transactionHash,
           })
           return
         }
 
-        const inserted = await insertEvent(tx, {
-          amount: amount.toString(),
-          blockNumber: log.blockNumber,
-          from,
-          index: log.index,
-          operator,
-          timestamp,
-          to,
-          tokenId,
-          transactionHash: log.transactionHash,
-        })
+        await replayTransferLogFromChain(
+          tx,
+          context.hubContract,
+          parsedTransfer,
+          {
+            blockNumber: log.blockNumber,
+            index: log.index,
+            transactionHash: log.transactionHash,
+          },
+          timestamp
+        )
 
-        if (inserted) {
-          await reconcileTransferStateFromChain(
-            tx,
-            context.hubContract,
-            tokenId,
-            [from, to],
-            timestamp
-          )
-          await incrementTokenTransfers(tx, tokenId)
-        }
+        logger.info("retry", "Transfer replay reconciled", {
+          blockNumber: log.blockNumber,
+          logIndex: log.index,
+          tokenId: parsedTransfer.tokenId,
+          txHash: log.transactionHash,
+        })
 
         return
       }

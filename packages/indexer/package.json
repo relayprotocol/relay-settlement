@@ -6,9 +6,11 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "clean": "rm -rf dist",
+    "audit:balances": "node dist/scripts/audit-balances.js",
     "lint": "lint",
     "build": "yarn workspace @relay-protocol/settlement-sdk build && yarn workspace @relay-protocol/settlement-networks build && yarn workspace @relay-protocol/settlement-abis clean && yarn workspace @relay-protocol/settlement-abis build && tsc -p tsconfig.json",
     "migrate": "node dist/scripts/run-migrations.js -m ./src/migrations --no-check-order",
+    "replay:transfers": "node dist/scripts/replay-transfer-range.js",
     "start": "yarn migrate up 2>/dev/null && node dist/index.js",
     "test": "yarn workspace @relay-protocol/settlement-sdk build && yarn workspace @relay-protocol/settlement-networks build && yarn workspace @relay-protocol/settlement-abis clean && yarn workspace @relay-protocol/settlement-abis build && tsx --test src/**/*.test.ts"
   },

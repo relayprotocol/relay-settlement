@@ -16,10 +16,16 @@ type SyncStatus = {
   lag: number
 }
 
+type FailedEventStatus = {
+  count: number
+  oldestBlockNumber: number | null
+}
+
 export type HealthResponse = {
   ok: boolean
   latestChainBlock: number
   maxAllowedLag: number
+  failedEvents: FailedEventStatus
   hub: SyncStatus & {
     transferLastProcessedBlock: number | null
     roleLastProcessedBlock: number | null
@@ -37,6 +43,7 @@ export type HealthCheckpointState = {
   hubRoleLastProcessedBlock: number | null
   oracleRoleLastProcessedBlock: number | null
   oracleExecutionLastProcessedBlock: number | null
+  failedEvents?: FailedEventStatus
 }
 
 const parseBlock = (value: string | null) => {
@@ -80,19 +87,26 @@ export const getHealthStatus = async (
   provider: Provider
 ): Promise<HealthResponse> => {
   const latestChainBlock = await provider.getBlockNumber()
-  const [hubTransferRaw, hubRoleRaw, oracleRoleRaw, oracleExecutionRaw] =
-    await Promise.all([
-      getMetaWithFallback(
-        db,
-        HUB_TRANSFER_META_KEY,
-        LEGACY_HUB_TRANSFER_META_KEY
-      ),
-      getMetaWithFallback(db, HUB_ROLE_META_KEY, LEGACY_HUB_ROLE_META_KEY),
-      getMeta(db, ORACLE_ROLE_META_KEY),
-      getMeta(db, ORACLE_EXECUTION_META_KEY),
-    ])
+  const [
+    hubTransferRaw,
+    hubRoleRaw,
+    oracleRoleRaw,
+    oracleExecutionRaw,
+    failedEvents,
+  ] = await Promise.all([
+    getMetaWithFallback(
+      db,
+      HUB_TRANSFER_META_KEY,
+      LEGACY_HUB_TRANSFER_META_KEY
+    ),
+    getMetaWithFallback(db, HUB_ROLE_META_KEY, LEGACY_HUB_ROLE_META_KEY),
+    getMeta(db, ORACLE_ROLE_META_KEY),
+    getMeta(db, ORACLE_EXECUTION_META_KEY),
+    getFailedEventStatus(db),
+  ])
 
   return buildHealthResponse({
+    failedEvents,
     hubRoleLastProcessedBlock: parseBlock(hubRoleRaw),
     hubTransferLastProcessedBlock: parseBlock(hubTransferRaw),
     latestChainBlock,
@@ -102,7 +116,26 @@ export const getHealthStatus = async (
   })
 }
 
+const getFailedEventStatus = async (
+  db: Database
+): Promise<FailedEventStatus> => {
+  const row = await db.one<{
+    count: number | string
+    oldest_block_number: number | string | null
+  }>(
+    `SELECT COUNT(*)::int AS count, MIN(block_number)::bigint AS oldest_block_number
+     FROM failed_events`
+  )
+
+  return {
+    count: Number(row.count),
+    oldestBlockNumber:
+      row.oldest_block_number == null ? null : Number(row.oldest_block_number),
+  }
+}
+
 export const buildHealthResponse = ({
+  failedEvents = { count: 0, oldestBlockNumber: null },
   latestChainBlock,
   maxAllowedLag,
   hubTransferLastProcessedBlock,
@@ -123,6 +156,7 @@ export const buildHealthResponse = ({
   const oracleLag = toLag(latestChainBlock, oracleLastProcessedBlock)
 
   return {
+    failedEvents,
     hub: {
       lag: hubLag,
       lastProcessedBlock: hubLastProcessedBlock,

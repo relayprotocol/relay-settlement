@@ -87,18 +87,26 @@ export const createServer = (
   })
 
   const resolveSyncHealth = async () => {
-    if (!runtimeState.doBackgroundWork || !db || !healthProvider) {
+    if (!db || !healthProvider) {
       return null
     }
 
     return getHealthStatus(db, healthProvider)
   }
 
+  const resolveReadinessSyncHealth = async () => {
+    if (!runtimeState.doBackgroundWork) {
+      return null
+    }
+
+    return resolveSyncHealth()
+  }
+
   app.get("/ready", async (_req, res) => {
     const readiness = runtimeState.getReadiness()
 
     try {
-      const sync = await resolveSyncHealth()
+      const sync = await resolveReadinessSyncHealth()
       const ok = readiness.ok && (sync?.ok ?? true)
       res
         .status(ok ? 200 : 503)
