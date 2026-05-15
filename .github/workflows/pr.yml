@@ -40,3 +40,102 @@ jobs:
 
       - name: Run workspace tests
         run: yarn workspaces foreach --all --topological-dev --exclude @relay-settlement/hub-monorepo run test
+
+  smart-contracts-coverage-gate:
+    name: Smart-contracts coverage gate
+    runs-on: ubuntu-24.04
+    env:
+      CI: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # actions/checkout defaults to refs/pull/N/merge on pull_request
+          # events, which makes HEAD a synthetic merge commit. The
+          # [baseline:refresh] tag in the PR author's commit message would
+          # never be visible to coverage-diff's `git log -1 HEAD`. Pin to
+          # the PR head sha so HEAD is the real commit.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build workspace dependencies
+        run: yarn build
+
+      - name: Show diagnostic context
+        working-directory: smart-contracts
+        run: |
+          {
+            echo "## Coverage-gate diagnostics"
+            echo
+            echo "### node + yarn + forge"
+            node --version
+            yarn --version
+            forge --version
+            echo
+            echo "### smart-contracts/node_modules dependency layout"
+            ls -la node_modules/@openzeppelin node_modules/solady node_modules/forge-std 2>&1 || true
+            echo
+            echo "### HEAD commit (checked by [baseline:refresh])"
+            git log -1 --format="%h %s"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Generate Hardhat coverage
+        id: hardhat-coverage
+        working-directory: smart-contracts
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          yarn coverage 2>&1 | tail -200 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Generate Foundry coverage
+        id: forge-coverage
+        working-directory: smart-contracts
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          yarn forge:coverage 2>&1 | tail -200 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce no coverage regressions vs. baseline
+        id: gate
+        working-directory: smart-contracts
+        run: |
+          set -o pipefail
+          if [ ! -f coverage/lcov.info ]; then
+            echo "::warning::Hardhat coverage missing — gate cannot evaluate."
+            echo "::warning::Hardhat coverage step outcome: ${{ steps.hardhat-coverage.outcome }}"
+            exit 1
+          fi
+          if [ ! -f forge-out/lcov.info ]; then
+            echo "::notice::Foundry lcov missing — treating Foundry side as empty."
+            mkdir -p forge-out && : > forge-out/lcov.info
+          fi
+          yarn coverage:diff:combined coverage-baseline/hardhat.lcov \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload lcov artifacts (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov-${{ github.run_id }}
+          path: |
+            smart-contracts/coverage/lcov.info
+            smart-contracts/coverage/combined.lcov
+            smart-contracts/forge-out/lcov.info
+            smart-contracts/coverage-baseline/hardhat.lcov
+          if-no-files-found: warn
+          retention-days: 7

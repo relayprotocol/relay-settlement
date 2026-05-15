@@ -3,12 +3,18 @@
   "scripts": {
     "build": "yarn hardhat compile",
     "build:abis": "yarn hardhat export:abis",
+    "postinstall": "ts-node tools/link-solidity-deps.ts",
     "test": "hardhat test",
+    "test:all": "yarn test && yarn forge:test",
+    "forge:test": "forge test",
+    "forge:coverage": "forge coverage --report lcov --report-file forge-out/lcov.info",
     "coverage": "SOLIDITY_COVERAGE=true hardhat coverage",
     "coverage:diff": "ts-node tools/coverage-diff.ts coverage/lcov.info",
-    "forge:coverage": "forge coverage --report lcov --report-file forge-out/lcov.info",
+    "coverage:merge": "ts-node tools/merge-lcov.ts --output coverage/combined.lcov coverage/lcov.info forge-out/lcov.info",
+    "coverage:diff:combined": "yarn coverage:merge && ts-node tools/coverage-diff.ts coverage/combined.lcov",
+    "coverage:gate": "yarn coverage && yarn forge:coverage && yarn coverage:diff:combined coverage-baseline/hardhat.lcov",
     "lint:solidity": "yarn solhint 'contracts/**/*.sol'",
-    "lint": "yarn lint:solidity && lint"
+    "lint": "yarn lint:solidity"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-foundry": "1.2.1",

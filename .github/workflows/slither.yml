@@ -59,7 +59,13 @@ jobs:
         run: yarn install --immutable
 
       - name: Symlink solady for Slither source resolution
-        run: ln -sf ../../node_modules/solady/src smart-contracts/node_modules/solady
+        # -n (no-dereference) is required when the destination is already a
+        # symlink to a directory (e.g. created by the smart-contracts
+        # postinstall hook). Without it, `ln -sf` dereferences the symlink
+        # and tries to create the link inside the resolved package, which
+        # collides with the real src/ directory and fails:
+        #   ln: smart-contracts/node_modules/solady/src: cannot overwrite directory
+        run: ln -sfn ../../node_modules/solady/src smart-contracts/node_modules/solady
 
       - name: Build
         run: |
