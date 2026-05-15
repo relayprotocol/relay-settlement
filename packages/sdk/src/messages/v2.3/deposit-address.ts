@@ -17,7 +17,7 @@ export interface DepositAddressTriggerDerivationFields {
   pricingOracle: string
   depositor: string
   refundRecipient: string
-  slippageBps: string
+  priceImpactBps: string
 }
 
 export interface DepositAddressTriggerCurrency {
@@ -63,7 +63,7 @@ const TRIGGER_HASH_ABI = [
       { name: "pricingOracle", type: "address" },
       { name: "depositor", type: "bytes" },
       { name: "refundRecipient", type: "bytes" },
-      { name: "slippageBps", type: "uint256" },
+      { name: "priceImpactBps", type: "uint256" },
     ],
     type: "tuple",
   },
@@ -108,7 +108,7 @@ export const getDepositAddressTriggerHash = (
       pricingOracle: trigger.derivationFields.pricingOracle as Address,
       depositor: trigger.derivationFields.depositor as Hex,
       refundRecipient: trigger.derivationFields.refundRecipient as Hex,
-      slippageBps: BigInt(trigger.derivationFields.slippageBps),
+      priceImpactBps: BigInt(trigger.derivationFields.priceImpactBps),
     },
     trigger.orderId as Hex,
     BigInt(trigger.nonce),

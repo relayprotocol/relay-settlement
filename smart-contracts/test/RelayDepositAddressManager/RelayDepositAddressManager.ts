@@ -27,7 +27,7 @@ const BASE_DERIVATION_FIELDS = {
   outputRecipient: "0x" + "22".repeat(20),
   outputVmType: "evm",
   refundRecipient: "0x" + "33".repeat(20),
-  slippageBps: 50n,
+  priceImpactBps: 50n,
   solver: getAddress("0x000000000000000000000000000000000000bEEF"),
 } as const
 
@@ -100,7 +100,7 @@ const TRIGGER_HASH_ABI = [
       { name: "pricingOracle", type: "address" },
       { name: "depositor", type: "bytes" },
       { name: "refundRecipient", type: "bytes" },
-      { name: "slippageBps", type: "uint256" },
+      { name: "priceImpactBps", type: "uint256" },
     ],
     type: "tuple",
   },

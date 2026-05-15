@@ -31,7 +31,7 @@ contract RelayDepositAddressManager {
   /// @param pricingOracle Address of the `IPricingOracle` consulted by the trigger method to capture USD prices into the trigger hash
   /// @param depositor Opaque, VM-specific encoding of the depositor on the source chain
   /// @param refundRecipient Opaque, VM-specific encoding of the refund recipient on the source chain
-  /// @param slippageBps Maximum allowed slippage on the output, in basis points
+  /// @param priceImpactBps Maximum allowed price impact on the output, in basis points
   struct DerivationFields {
     string inputVmType;
     string outputVmType;
@@ -42,7 +42,7 @@ contract RelayDepositAddressManager {
     address pricingOracle;
     bytes depositor;
     bytes refundRecipient;
-    uint256 slippageBps;
+    uint256 priceImpactBps;
   }
 
   /// @notice Emitted when a deposit address trigger is recorded.
