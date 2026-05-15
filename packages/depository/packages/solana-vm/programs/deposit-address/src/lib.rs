@@ -374,6 +374,9 @@ pub mod deposit_address {
             .collect();
         account_infos.push(ctx.accounts.target_program.to_account_info());
 
+        // `deposit_address` PDA signer is intentional. `execute()` is an owner-multisig
+        // rescue path for unsticking funds at deposit_address PDAs. Whitelisted programs
+        // are added on-demand per rescue, not as a standing allowlist.
         invoke_signed(&instruction, &account_infos, seeds)?;
 
         emit!(ExecuteEvent {
