@@ -1,6 +1,6 @@
 import { task } from "hardhat/config"
 import { getViemClients } from "../../lib/viem"
-import { mintAction } from "../../test/helpers/oracle"
+import { mintAction } from "./helpers/oracle"
 
 // 01 Dec 2025 - this was useful to test changes in ABI
 // can be safely removed once the new oracle with `executeMultiple` support

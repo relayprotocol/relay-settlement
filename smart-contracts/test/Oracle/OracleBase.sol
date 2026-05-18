@@ -6,9 +6,7 @@ import {Eip712} from "../utils/Eip712.sol";
 import {RelayHub} from "../../contracts/RelayHub.sol";
 import {RelayOracle} from "../../contracts/RelayOracle.sol";
 
-/// @notice Shared fixture for the Oracle Foundry tests. Mirrors
-/// test/helpers/deployOracle.ts plus the per-describe setUp seen in the TS
-/// suite.
+/// @notice Shared deploy + per-describe setUp fixture for the Oracle tests.
 abstract contract OracleBase is BaseTest {
     RelayHub internal hub;
     RelayOracle internal oracle;

@@ -11,8 +11,8 @@ import {MockWNEAR} from "../../contracts/mocks/MockWNEAR.sol";
 /// @notice Port of the BitcoinDepositAddress describe block in
 /// test/BitcoinDepositAddressBuilder/BitcoinDepositAddressBuilder.ts.
 ///
-/// Companion to test-foundry/BitcoinDepositAddressBuilder/BitcoinDepositAddressBuilder.t.sol
-/// (the BitcoinDepositSweepBuilder describe block, ported in #395).
+/// Companion to ./BitcoinDepositAddressBuilder.t.sol (the
+/// BitcoinDepositSweepBuilder describe block, ported in #395).
 ///
 /// The TS tests exercised the production `sweep()` path; that path invokes
 /// the Aurora SDK precompiles which can't run in Foundry. We use the

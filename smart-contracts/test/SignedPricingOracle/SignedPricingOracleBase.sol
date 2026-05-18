@@ -6,8 +6,7 @@ import {Eip712} from "../utils/Eip712.sol";
 import {SignedPricingOracle} from "../../contracts/deposit-addresses/open/oracle/SignedPricingOracle.sol";
 import {Currency} from "../../contracts/deposit-addresses/open/oracle/IPricingOracle.sol";
 
-/// @notice Shared fixture for SignedPricingOracle tests. Mirrors
-/// test/SignedPricingOracle/fixtures.ts + test/helpers/signedPricingOracle.ts.
+/// @notice Shared fixture for SignedPricingOracle tests.
 abstract contract SignedPricingOracleBase is BaseTest {
     address internal solver;
     uint256 internal solverPk;

@@ -3,7 +3,6 @@
 # ABOUTME: and configures forge build/test/coverage for an eventual Foundry test suite.
 [profile.default]
 src = "contracts"
-test = "test-foundry"
 out = "forge-out"
 libs = ["node_modules", "lib"]
 auto_detect_remappings = false

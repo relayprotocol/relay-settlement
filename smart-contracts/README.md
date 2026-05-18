@@ -229,13 +229,10 @@ yarn hardhat relay-multisig-signer:execute-transactions --transactions tasks/rel
 
 ## Coverage
 
-The contracts are currently being migrated from Hardhat to Foundry (see DEC-905). During the dual-run window, tests for ported modules live under `test-foundry/` (run with `forge`) and tests for un-ported modules live under `test/` (run with `hardhat`). Both suites run in CI on every PR via `yarn test`; either failing fails the build.
+Tests live under `test/` and run with `forge` via `yarn test`.
 
 Coverage reports can be generated ad-hoc:
 
 ```sh
-yarn coverage:hardhat    # writes coverage/lcov.info
-yarn coverage:foundry    # writes forge-out/lcov.info
+yarn coverage    # writes forge-out/lcov.info
 ```
-
-Coverage is not gated in CI — describe-block parity (each TS describe/it has a Solidity counterpart with the same name, enforced by the 1:1 file mapping in `test-foundry/`) is the migration's coverage-preservation guarantee.
