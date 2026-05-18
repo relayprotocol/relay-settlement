@@ -4,7 +4,9 @@ import {
   TransferReplayRequestError,
   buildTransferReplayProgress,
   buildTransferReplayRequest,
+  getTransferLogsWithSplit,
 } from "./transferReplay.js"
+import type { Provider } from "ethers"
 
 test("buildTransferReplayRequest accepts a bounded range", () => {
   assert.deepEqual(
@@ -207,4 +209,134 @@ test("buildTransferReplayProgress reports completed replay progress", () => {
   assert.equal(progress.reconciledAddresses, 4)
   assert.equal(progress.skipped, 1)
   assert.equal(progress.estimatedRemainingSeconds, 0)
+})
+
+test("getTransferLogsWithSplit splits oversized log ranges", async () => {
+  const calls: Array<[number, number]> = []
+  const responseTooLargeError = Object.assign(
+    new Error("could not coalesce error"),
+    {
+      error: {
+        code: -32005,
+        message: "Response size exceeds limit",
+      },
+    }
+  )
+  const provider = {
+    getLogs: async (filter: { fromBlock: number; toBlock: number }) => {
+      calls.push([filter.fromBlock, filter.toBlock])
+      if (filter.fromBlock === 10 && filter.toBlock === 13) {
+        throw responseTooLargeError
+      }
+
+      return [
+        {
+          blockNumber: filter.fromBlock,
+          data: "0x",
+          index: 0,
+          topics: [],
+          transactionHash: `0x${filter.fromBlock.toString(16).padStart(64, "0")}`,
+        },
+      ]
+    },
+  } as unknown as Provider
+
+  const logs = await getTransferLogsWithSplit(provider, {
+    address: "0x0000000000000000000000000000000000000001",
+    fromBlock: 10,
+    toBlock: 13,
+    topic: "0x0",
+  })
+
+  assert.deepEqual(calls, [
+    [10, 13],
+    [10, 11],
+    [12, 13],
+  ])
+  assert.equal(logs.length, 2)
+})
+
+test("getTransferLogsWithSplit uses cursor pagination for oversized single-block ranges", async () => {
+  const responseTooLargeError = Object.assign(
+    new Error("could not coalesce error"),
+    {
+      error: {
+        code: -32005,
+        message: "Response size exceeds limit",
+      },
+    }
+  )
+  const calls: Array<Record<string, unknown>> = []
+  const provider = {
+    getLogs: async () => {
+      throw responseTooLargeError
+    },
+    send: async (method: string, params: [Record<string, unknown>]) => {
+      assert.equal(method, "eth_getLogsWithCursor")
+      calls.push(params[0])
+      return calls.length === 1
+        ? {
+            cursor: "next",
+            logs: [
+              {
+                blockNumber: "0xa",
+                data: "0x",
+                logIndex: "0x1",
+                topics: ["0x0"],
+                transactionHash: "0x1",
+              },
+            ],
+          }
+        : {
+            logs: [
+              {
+                blockNumber: "0xa",
+                data: "0x",
+                logIndex: "0x2",
+                topics: ["0x0"],
+                transactionHash: "0x2",
+              },
+            ],
+          }
+    },
+  } as unknown as Provider
+
+  const logs = await getTransferLogsWithSplit(provider, {
+    address: "0x0000000000000000000000000000000000000001",
+    fromBlock: 10,
+    toBlock: 10,
+    topic: "0x0",
+  })
+
+  assert.deepEqual(calls, [
+    {
+      address: "0x0000000000000000000000000000000000000001",
+      fromBlock: "0xa",
+      toBlock: "0xa",
+      topics: [["0x0"]],
+    },
+    {
+      address: "0x0000000000000000000000000000000000000001",
+      cursor: "next",
+      fromBlock: "0xa",
+      toBlock: "0xa",
+      topics: [["0x0"]],
+    },
+  ])
+  assert.deepEqual(logs, [
+    {
+      blockNumber: 10,
+      data: "0x",
+      index: 1,
+      topics: ["0x0"],
+      transactionHash: "0x1",
+    },
+    {
+      blockNumber: 10,
+      data: "0x",
+      index: 2,
+      topics: ["0x0"],
+      transactionHash: "0x2",
+    },
+  ])
 })
