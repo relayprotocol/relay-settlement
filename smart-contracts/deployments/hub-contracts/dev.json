@@ -1,0 +1,12 @@
+{
+  "chainId": 421614,
+  "hub": "0xb505c75f4d135c65a9806e2b8ff72b1816be931c",
+  "oracle": "0xf7692e62495c472863490ee06499b50ce133babd",
+  "oracleMultisig": "0x17a6baf4811e1f12d225b41d39ca7745a8e36520",
+  "genericMapping": "0xc296ab0760f3ddef367100ea83627fbd2636066d",
+  "allocator": "0x6544a81a7e3961b35040f6fc848294367822b6b9",
+  "config": "0x3ce69c8da146ee33b9f0bf64a1e2398fbc8214c7",
+  "ethereumVmPayloadBuilder": "0xd187d50a1314cc8fe0e0f5548587b4a827105976",
+  "solanaVmPayloadBuilder": "0xddd90bf49ab76221b750b317b30a43b944813318",
+  "depositAddressManager": "0xd03250b221f709abe58ff4a177d50d01d922d974"
+}

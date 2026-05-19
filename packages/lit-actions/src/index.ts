@@ -1,8 +1,8 @@
 import { VmType } from "@relay-protocol/settlement-sdk"
 
-import * as allocatorV1 from "./allocator/v1"
+import { envs } from "./allocator"
 
-export type AllocatorActionEnvironment = "dev"
+export type AllocatorActionEnvironment = "dev" | "prod"
 export type AllocatorActionVersion = "v1"
 
 export interface AllocatorActionConfig {
@@ -23,22 +23,19 @@ export function getAllocatorAction(
   version: AllocatorActionVersion,
   vmType: VmType
 ): AllocatorAction {
-  if (version === "v1") {
-    const env = allocatorV1.envs[environment]
-    if (!env) {
-      throw new Error(`missing environment ${environment}`)
-    }
-    if (!env.code[vmType]) {
-      throw new Error(`missing vm-type ${vmType} in environment ${environment}`)
-    }
-
-    return {
-      config: env.config,
-      code: env.code[vmType],
-    }
+  const env = envs[environment]
+  if (!env) {
+    throw new Error(`missing environment ${environment}`)
   }
-
-  throw new Error(
-    `allocator action not found for ${version}/${environment}/${vmType}`
-  )
+  const ver = env.versions[version]
+  if (!ver) {
+    throw new Error(`missing version ${version} for environment ${environment}`)
+  }
+  if (!ver.code[vmType]) {
+    throw new Error(`missing vm-type ${vmType} for ${environment}/${version}`)
+  }
+  return {
+    config: ver.config,
+    code: ver.code[vmType],
+  }
 }

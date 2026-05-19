@@ -1,12 +1,12 @@
 import { AllocatorActionConfig } from "../../index"
 
-import * as dev from "./dev"
+import * as v1 from "./v1"
 
-const envs: Record<
+const versions: Record<
   string,
   { config: AllocatorActionConfig; code: Record<string, string> }
 > = {
-  dev,
+  v1,
 }
 
-export { envs }
+export { versions }
