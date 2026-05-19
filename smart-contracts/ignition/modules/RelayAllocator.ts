@@ -3,9 +3,10 @@ import { buildModule } from "@nomicfoundation/hardhat-ignition/modules"
 const RelayAllocatorModule = buildModule("RelayAllocator", (m) => {
   const owner = m.getParameter("owner")
   const hub = m.getParameter("hub")
+  const oracle = m.getParameter("oracle")
 
   const Utils = m.library("Utils")
-  const relayAllocator = m.contract("RelayAllocator", [owner, hub], {
+  const relayAllocator = m.contract("RelayAllocator", [owner, hub, oracle], {
     libraries: {
       Utils,
     },

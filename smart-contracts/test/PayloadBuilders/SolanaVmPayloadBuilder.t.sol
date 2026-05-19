@@ -40,7 +40,7 @@ abstract contract SolanaVmPayloadBuilderBase is BaseTest {
         depositoryAddr = otherAccounts[0];
 
         hub = new RelayHub(owner);
-        allocator = new RelayAllocator(owner, address(hub));
+        allocator = new RelayAllocator(owner, address(hub), address(0));
         config = new Config(address(allocator));
         payloadBuilder = new SolanaVmPayloadBuilder(address(config));
 

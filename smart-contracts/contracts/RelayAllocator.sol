@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 import {RelayHub} from "./RelayHub.sol";
@@ -57,6 +58,7 @@ interface IPayloadBuilder {
 /// @notice Manages cross-chain withdrawal requests and payload signing
 contract RelayAllocator is Ownable, EIP712 {
   using ECDSA for bytes32;
+  using SignatureChecker for address;
 
   /// --- Fields ---
 
@@ -75,6 +77,9 @@ contract RelayAllocator is Ownable, EIP712 {
   /// @notice Address of the hub contract
   address public immutable HUB;
 
+  /// @notice Oracle used to verify spender signatures
+  address public immutable ORACLE;
+
   /// @notice Mapping of payload builders: chain id => depository => payload builder address
   mapping(string => mapping(bytes => address)) public payloadBuilders;
 
@@ -84,8 +89,9 @@ contract RelayAllocator is Ownable, EIP712 {
   /// @notice Signed payloads: withdrawal request hash => hash index => hash to be signed
   mapping(bytes32 => mapping(uint256 => bytes32)) public hashesToSign;
 
-  /// @notice Used nonces for replay protection: signer => nonce => whether it has been used
-  mapping(address => mapping(bytes32 => bool)) public usedNonces;
+  /// @notice Used nonces for replay protection: spender id hash => nonce => whether it has been used
+  /// @dev Nonces are shared by spender across direct ECDSA and oracle-verified signatures.
+  mapping(bytes32 => mapping(bytes32 => bool)) public usedNonces;
 
   /// @notice Tracks spender aliases that have been suspended by the owner
   mapping(address => bool) public suspended;
@@ -93,6 +99,10 @@ contract RelayAllocator is Ownable, EIP712 {
   /// @notice Emitted when the hub contract is set
   /// @param hub Hub contract address
   event HubSet(address indexed hub);
+
+  /// @notice Emitted when the oracle contract is set
+  /// @param oracle Oracle contract address
+  event OracleSet(address indexed oracle);
 
   // --- Events ---
 
@@ -174,12 +184,16 @@ contract RelayAllocator is Ownable, EIP712 {
   /// @notice Creates a new RelayAllocator contract
   /// @param _owner Owner of the contract
   /// @param _hub Hub contract address
+  /// @param _oracle Oracle used to verify spender signatures
   constructor(
     address _owner,
-    address _hub
+    address _hub,
+    address _oracle
   ) Ownable(_owner) EIP712(SIGNING_DOMAIN, SIGNATURE_VERSION) {
     HUB = _hub;
+    ORACLE = _oracle;
     emit HubSet(_hub);
+    emit OracleSet(_oracle);
   }
 
   /// @notice Sets or updates the payload builder for a specific chain and depository
@@ -307,7 +321,8 @@ contract RelayAllocator is Ownable, EIP712 {
   }
 
   /// @notice Verifies and consumes a spender signature for a withdrawal request
-  /// @dev Signature-based authorization is only available for 20-byte EVM spenders.
+  /// @dev For 20-byte spenders, ECDSA recovery is attempted first. If recovery
+  ///      fails, the configured oracle is used as a fallback.
   /// @param params The withdrawal request parameters
   /// @param signature The signature to verify
   /// @return matched True if the signature matches the spender and the nonce was unused
@@ -315,42 +330,60 @@ contract RelayAllocator is Ownable, EIP712 {
     WithdrawRequest calldata params,
     bytes memory signature
   ) internal returns (bool matched) {
-    if (signature.length == 0 || params.spender.length != 20) {
+    if (signature.length == 0) {
       return false;
     }
 
-    address signer = address(bytes20(params.spender));
-    if (usedNonces[signer][params.nonce]) {
+    bytes32 spenderKey = keccak256(params.spender);
+    if (usedNonces[spenderKey][params.nonce]) {
       return false;
     }
 
-    bytes32 digest = _hashTypedDataV4(
-      keccak256(
-        abi.encode(
-          PAYLOAD_TYPEHASH,
-          keccak256(bytes(params.chainId)),
-          keccak256(params.depository),
-          keccak256(params.currency),
-          params.amount,
-          keccak256(bytes(params.spenderChainId)),
-          keccak256(params.spender),
-          keccak256(params.receiver),
-          keccak256(params.data),
-          params.nonce
+    bytes32 digest = _withdrawRequestDigest(params);
+    if (params.spender.length == 20) {
+      address signer = address(bytes20(params.spender));
+
+      (address recovered, ECDSA.RecoverError recoverError, ) = ECDSA.tryRecover(
+        digest,
+        signature
+      );
+      if (recoverError == ECDSA.RecoverError.NoError && recovered == signer) {
+        usedNonces[spenderKey][params.nonce] = true;
+        return true;
+      }
+    }
+
+    if (ORACLE.isValidSignatureNow(digest, signature)) {
+      usedNonces[spenderKey][params.nonce] = true;
+      return true;
+    }
+
+    return false;
+  }
+
+  /// @notice Computes the EIP-712 digest for a withdrawal request
+  /// @param params Withdrawal request parameters
+  /// @return digest EIP-712 digest signed by the spender
+  function _withdrawRequestDigest(
+    WithdrawRequest calldata params
+  ) internal view returns (bytes32 digest) {
+    return
+      _hashTypedDataV4(
+        keccak256(
+          abi.encode(
+            PAYLOAD_TYPEHASH,
+            keccak256(bytes(params.chainId)),
+            keccak256(params.depository),
+            keccak256(params.currency),
+            params.amount,
+            keccak256(bytes(params.spenderChainId)),
+            keccak256(params.spender),
+            keccak256(params.receiver),
+            keccak256(params.data),
+            params.nonce
+          )
         )
-      )
-    );
-
-    (address recovered, ECDSA.RecoverError recoverError, ) = ECDSA.tryRecover(
-      digest,
-      signature
-    );
-    if (recoverError != ECDSA.RecoverError.NoError || recovered != signer) {
-      return false;
-    }
-
-    usedNonces[signer][params.nonce] = true;
-    return true;
+      );
   }
 
   /// @notice Builds a payload using the configured builder for the given request

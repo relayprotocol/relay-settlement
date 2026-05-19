@@ -21,8 +21,12 @@ contract ConfigTest is BaseTest {
     function setUp() public override {
         super.setUp();
         hub = new RelayHub(owner);
-        allocator = new RelayAllocator(owner, address(hub));
-        replacementAllocator = new RelayAllocator(newOwner, address(hub));
+        allocator = new RelayAllocator(owner, address(hub), address(0));
+        replacementAllocator = new RelayAllocator(
+            newOwner,
+            address(hub),
+            address(0)
+        );
         config = new Config(address(allocator));
     }
 

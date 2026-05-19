@@ -10,6 +10,51 @@ import {EthereumVmPayloadBuilder} from "../../contracts/payload-builders/Ethereu
 import {EmptyPayloadBuilder} from "../../contracts/mocks/EmptyPayloadBuilder.sol";
 import {Utils} from "../../contracts/Utils.sol";
 
+contract MockSpenderSignatureOracle {
+    bytes4 internal constant MAGIC_VALUE = 0x1626ba7e;
+
+    bytes32 internal expectedDigest;
+    bytes internal expectedSignature;
+    bool internal expectedValid;
+    bool internal shouldRevert;
+
+    function setExpected(
+        string memory,
+        bytes memory,
+        bytes32 digest,
+        bytes memory signature,
+        bool valid
+    ) external {
+        expectedDigest = digest;
+        expectedSignature = signature;
+        expectedValid = valid;
+        shouldRevert = false;
+    }
+
+    function setShouldRevert(bool value) external {
+        shouldRevert = value;
+    }
+
+    function isValidSignature(
+        bytes32 digest,
+        bytes calldata signature
+    ) external view returns (bytes4) {
+        if (shouldRevert) {
+            revert("oracle reverted");
+        }
+
+        if (
+            expectedValid &&
+            digest == expectedDigest &&
+            keccak256(signature) == keccak256(expectedSignature)
+        ) {
+            return MAGIC_VALUE;
+        }
+
+        return bytes4(0);
+    }
+}
+
 /// @notice Port of test/RelayAllocator/RelayAllocator.ts.
 contract RelayAllocatorBase is BaseTest {
     string internal constant CHAIN_ID = "ethereum-mainnet";
@@ -31,6 +76,7 @@ contract RelayAllocatorBase is BaseTest {
     RelayAllocator internal allocator;
     Config internal config;
     EthereumVmPayloadBuilder internal payloadBuilder;
+    MockSpenderSignatureOracle internal signatureOracle;
 
     address internal spenderAlias;
     uint256 internal tokenId;
@@ -44,7 +90,12 @@ contract RelayAllocatorBase is BaseTest {
         depositoryAddr = otherAccounts[2];
 
         hub = new RelayHub(allocatorOwner);
-        allocator = new RelayAllocator(allocatorOwner, address(hub));
+        signatureOracle = new MockSpenderSignatureOracle();
+        allocator = new RelayAllocator(
+            allocatorOwner,
+            address(hub),
+            address(signatureOracle)
+        );
         config = new Config(address(allocator));
         payloadBuilder = new EthereumVmPayloadBuilder(address(config));
 
@@ -108,10 +159,9 @@ contract RelayAllocatorBase is BaseTest {
             });
     }
 
-    function _signRequest(
-        uint256 pk,
+    function _requestDigest(
         RelayAllocator.WithdrawRequest memory r
-    ) internal view returns (bytes memory) {
+    ) internal view returns (bytes32) {
         bytes32 structHash = keccak256(
             abi.encode(
                 WITHDRAW_REQUEST_TYPEHASH,
@@ -126,7 +176,25 @@ contract RelayAllocatorBase is BaseTest {
                 r.nonce
             )
         );
-        return Eip712.sign(pk, allocatorDomain, structHash);
+        return
+            keccak256(
+                abi.encodePacked("\x19\x01", allocatorDomain, structHash)
+            );
+    }
+
+    function _signRequest(
+        uint256 pk,
+        RelayAllocator.WithdrawRequest memory r
+    ) internal view returns (bytes memory) {
+        bytes32 digest = _requestDigest(r);
+        (uint8 v, bytes32 sigR, bytes32 sigS) = vm.sign(pk, digest);
+        return abi.encodePacked(sigR, sigS, v);
+    }
+
+    function _spenderNonceKey(
+        RelayAllocator.WithdrawRequest memory r
+    ) internal pure returns (bytes32) {
+        return keccak256(r.spender);
     }
 }
 
@@ -163,6 +231,17 @@ contract RelayAllocatorSuspendUnsuspendTest is RelayAllocatorBase {
 }
 
 contract RelayAllocatorSubmitWithdrawRequestTest is RelayAllocatorBase {
+    function test_emitsOracleSetInConstructor() public {
+        address newOracle = address(new MockSpenderSignatureOracle());
+
+        vm.expectEmit(true, false, false, true);
+        emit RelayAllocator.HubSet(address(hub));
+        vm.expectEmit(true, false, false, true);
+        emit RelayAllocator.OracleSet(newOracle);
+
+        new RelayAllocator(allocatorOwner, address(hub), newOracle);
+    }
+
     function test_revertsWhenPayloadBuilderReturnsEmptyPayload() public {
         EmptyPayloadBuilder emptyBuilder = new EmptyPayloadBuilder();
 
@@ -234,7 +313,7 @@ contract RelayAllocatorSubmitWithdrawRequestWithSignatureTest is
         allocator.submitWithdrawRequestWithSignature(r, sig);
 
         assertEq(hub.balanceOf(spenderAlias, tokenId), 90);
-        assertTrue(allocator.usedNonces(receiver, bytes32(uint256(1))));
+        assertTrue(allocator.usedNonces(_spenderNonceKey(r), r.nonce));
     }
 
     function test_rejectsReplayingReceiverNonce() public {
@@ -250,5 +329,141 @@ contract RelayAllocatorSubmitWithdrawRequestWithSignatureTest is
         vm.prank(relayer);
         vm.expectRevert();
         allocator.submitWithdrawRequestWithSignature(r2, sig);
+    }
+
+    function test_allowsSpenderSignatureVerifiedByOracle() public {
+        bytes memory solanaSpender = bytes("solana-public-key");
+        address solanaAlias = Utils.generateAddress(
+            "solana-mainnet",
+            solanaSpender
+        );
+        vm.prank(allocatorOwner);
+        hub.mint(solanaAlias, tokenId, 100);
+
+        RelayAllocator.WithdrawRequest memory r = _request(
+            bytes32(uint256(2)),
+            10
+        );
+        r.spenderChainId = "solana-mainnet";
+        r.spender = solanaSpender;
+        bytes memory sig = bytes("oracle-verified-signature");
+        signatureOracle.setExpected(
+            r.spenderChainId,
+            r.spender,
+            _requestDigest(r),
+            sig,
+            true
+        );
+
+        vm.prank(relayer);
+        allocator.submitWithdrawRequestWithSignature(r, sig);
+
+        assertEq(hub.balanceOf(solanaAlias, tokenId), 90);
+        assertTrue(allocator.usedNonces(_spenderNonceKey(r), r.nonce));
+    }
+
+    function test_fallsBackToOracleWhenEvmRecoverFails() public {
+        RelayAllocator.WithdrawRequest memory r = _request(
+            bytes32(uint256(3)),
+            10
+        );
+        bytes memory sig = bytes("oracle-signature");
+        signatureOracle.setExpected(
+            r.spenderChainId,
+            r.spender,
+            _requestDigest(r),
+            sig,
+            true
+        );
+
+        vm.prank(relayer);
+        allocator.submitWithdrawRequestWithSignature(r, sig);
+
+        assertEq(hub.balanceOf(spenderAlias, tokenId), 90);
+        assertTrue(allocator.usedNonces(_spenderNonceKey(r), r.nonce));
+    }
+
+    function test_sharesNonceBetweenEcdsaAndOracleSignaturesForSpender()
+        public
+    {
+        bytes32 nonce = bytes32(uint256(4));
+        RelayAllocator.WithdrawRequest memory r = _request(nonce, 10);
+        bytes memory sig = _signRequest(receiverPk, r);
+
+        vm.prank(relayer);
+        allocator.submitWithdrawRequestWithSignature(r, sig);
+
+        RelayAllocator.WithdrawRequest memory r2 = _request(nonce, 11);
+        bytes memory oracleSig = bytes("oracle-signature");
+        signatureOracle.setExpected(
+            r2.spenderChainId,
+            r2.spender,
+            _requestDigest(r2),
+            oracleSig,
+            true
+        );
+
+        vm.prank(relayer);
+        vm.expectRevert();
+        allocator.submitWithdrawRequestWithSignature(r2, oracleSig);
+    }
+
+    function test_sharesOracleNonceForSameSpenderAcrossSpenderChainIds()
+        public
+    {
+        bytes32 nonce = bytes32(uint256(5));
+        bytes memory sharedSpender = bytes("shared-spender");
+
+        RelayAllocator.WithdrawRequest memory r = _request(nonce, 10);
+        r.spenderChainId = "chain-a";
+        r.spender = sharedSpender;
+
+        address chainAAlias = Utils.generateAddress(
+            r.spenderChainId,
+            r.spender
+        );
+        vm.prank(allocatorOwner);
+        hub.mint(chainAAlias, tokenId, 100);
+
+        bytes memory sig = bytes("chain-a-oracle-signature");
+        signatureOracle.setExpected(
+            r.spenderChainId,
+            r.spender,
+            _requestDigest(r),
+            sig,
+            true
+        );
+
+        vm.prank(relayer);
+        allocator.submitWithdrawRequestWithSignature(r, sig);
+
+        RelayAllocator.WithdrawRequest memory r2 = _request(nonce, 11);
+        r2.spenderChainId = "chain-b";
+        r2.spender = sharedSpender;
+
+        address chainBAlias = Utils.generateAddress(
+            r2.spenderChainId,
+            r2.spender
+        );
+        vm.prank(allocatorOwner);
+        hub.mint(chainBAlias, tokenId, 100);
+
+        bytes memory sig2 = bytes("chain-b-oracle-signature");
+        signatureOracle.setExpected(
+            r2.spenderChainId,
+            r2.spender,
+            _requestDigest(r2),
+            sig2,
+            true
+        );
+
+        vm.prank(relayer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RelayAllocator.CallerIsNotApproved.selector,
+                relayer
+            )
+        );
+        allocator.submitWithdrawRequestWithSignature(r2, sig2);
     }
 }

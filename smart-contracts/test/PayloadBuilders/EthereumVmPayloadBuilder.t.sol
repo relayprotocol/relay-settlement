@@ -29,7 +29,7 @@ abstract contract EthereumVmPayloadBuilderBase is BaseTest {
         receiverAddr = otherAccounts[1];
 
         hub = new RelayHub(owner);
-        allocator = new RelayAllocator(owner, address(hub));
+        allocator = new RelayAllocator(owner, address(hub), address(0));
         config = new Config(address(allocator));
         payloadBuilder = new EthereumVmPayloadBuilder(address(config));
         myToken = new MyToken();
