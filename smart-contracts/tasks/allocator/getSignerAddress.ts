@@ -8,7 +8,6 @@ const SUPPORTED_FAMILIES: ChainType[] = [
   "ethereum-vm",
   "solana-vm",
   "tron-vm",
-  // 'sui-vm',
 ]
 
 task(

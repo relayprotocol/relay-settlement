@@ -99,7 +99,6 @@ const executionId = getExecutionMessageId(message)
 - `bitcoin-vm`
 - `ethereum-vm`
 - `solana-vm`
-- `sui-vm`
 - `hyperliquid-vm`
 - `tron-vm`
 - `lighter-vm`

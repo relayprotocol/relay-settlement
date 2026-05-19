@@ -1,6 +1,6 @@
 {
   "name": "@relay-protocol/settlement-sdk",
-  "version": "0.0.100",
+  "version": "0.0.101",
   "description": "Relay protocol SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,7 +21,6 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
-    "@mysten/sui": "^1.24.0",
     "@solana/web3.js": "1.98.4",
     "bech32": "^2.0.0",
     "bitcoinjs-lib": "^6.1.7",

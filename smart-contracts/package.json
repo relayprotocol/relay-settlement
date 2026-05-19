@@ -38,7 +38,6 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.27.0",
-    "@mysten/sui": "1.38.0",
     "@near-js/providers": "2.3.2",
     "@nomiclabs/hardhat-solhint": "4.1.0",
     "@openzeppelin/contracts": "5.3.0",

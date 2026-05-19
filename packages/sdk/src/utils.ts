@@ -9,7 +9,6 @@ export type VmType =
   | "ethereum-vm"
   | "hyperliquid-vm"
   | "solana-vm"
-  | "sui-vm"
   | "ton-vm"
   | "tron-vm"
   | "lighter-vm"
@@ -128,10 +127,6 @@ export const encodeAddress = (address: string, vmType: VmType): Uint8Array => {
       return bs58.decode(address)
     }
 
-    case "sui-vm": {
-      return hexToBytes(address as Hex)
-    }
-
     case "ton-vm": {
       throw new Error("Vm type not implemented (encodeAddress)")
     }
@@ -190,10 +185,6 @@ export const decodeAddress = (address: Uint8Array, vmType: VmType): string => {
       return bs58.encode(address)
     }
 
-    case "sui-vm": {
-      return bytesToHex(address)
-    }
-
     case "ton-vm": {
       throw new Error("Vm type not implemented (decodeAddress)")
     }
@@ -238,10 +229,6 @@ export const encodeTransactionId = (
       return bs58.decode(transactionId)
     }
 
-    case "sui-vm": {
-      throw new Error("Vm type not implemented (encodeTransactionId)")
-    }
-
     case "ton-vm": {
       throw new Error("Vm type not implemented (encodeTransactionId)")
     }
@@ -275,10 +262,6 @@ export const decodeTransactionId = (
 
     case "solana-vm": {
       return bs58.encode(transactionId)
-    }
-
-    case "sui-vm": {
-      throw new Error("Vm type not implemented (decodeTransactionId)")
     }
 
     case "ton-vm": {

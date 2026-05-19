@@ -10,7 +10,6 @@ import EVMPayloadBuilder from "./abis/PayloadBuilders/EVMPayloadBuilder.sol/EVMP
 import HyperLiquidPayloadBuilder from "./abis/PayloadBuilders/HyperliquidPayloadBuilder.sol/HyperLiquidPayloadBuilder.json"
 import IRelayAllocator from "./abis/PayloadBuilders/HyperliquidPayloadBuilder.sol/IRelayAllocator.json"
 import SolanaPayloadBuilder from "./abis/PayloadBuilders/SolanaPayloadBuilder.sol/SolanaPayloadBuilder.json"
-import SuiPayloadBuilder from "./abis/PayloadBuilders/SuiPayloadBuilder.sol/SuiPayloadBuilder.json"
 import IEvmERC20 from "./abis/RelayAllocator.sol/IEvmERC20.json"
 import IPayloadBuilder from "./abis/RelayAllocator.sol/IPayloadBuilder.json"
 import ISafe from "./abis/RelayAllocator.sol/ISafe.json"
@@ -42,7 +41,6 @@ export { EVMPayloadBuilder }
 export { HyperLiquidPayloadBuilder }
 export { IRelayAllocator }
 export { SolanaPayloadBuilder }
-export { SuiPayloadBuilder }
 export { IEvmERC20 }
 export { IPayloadBuilder }
 export { ISafe }

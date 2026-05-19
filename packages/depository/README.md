@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Relay Depository is a cross-chain protocol that securely manages user deposits and enables controlled withdrawals through a trusted allocator mechanism. It acts as a financial coordination layer across multiple blockchain environments, with implementations for Ethereum Virtual Machine (EVM) chains, Solana, and in development for Sui and TON.
+The Relay Depository is a cross-chain protocol that securely manages user deposits and enables controlled withdrawals through a trusted allocator mechanism. It acts as a financial coordination layer across multiple blockchain environments, with implementations for Ethereum Virtual Machine (EVM) chains, Solana, and in development for TON.
 
 At its core, the Relay Depository provides two fundamental operations:
 
@@ -14,7 +14,6 @@ The protocol maintains consistent behavior across all blockchain environments wh
 
 - [Ethereum VM](./docs/EthereumVMImplementation.md)
 - [Solana VM](./docs/SolanaVMImplementation.md)
-- [Sui VM (Development)](./docs/SuiVMImplementation.md)
 - [TON VM (Development)](./docs/TonVMImplementation.md)
 
 ## How It Works

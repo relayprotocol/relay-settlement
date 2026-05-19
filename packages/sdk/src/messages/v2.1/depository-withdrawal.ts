@@ -1,6 +1,5 @@
 import * as anchor from "@coral-xyz/anchor"
 import { BorshCoder, Idl } from "@coral-xyz/anchor"
-import { bcs } from "@mysten/sui/bcs"
 import { PublicKey, SystemProgram } from "@solana/web3.js"
 import { sha256 } from "js-sha256"
 import * as tronweb from "tronweb"
@@ -130,17 +129,6 @@ export type DecodedSolanaVmWithdrawal = {
   }
 }
 
-export type DecodedSuiVmWithdrawal = {
-  vmType: "sui-vm"
-  withdrawal: {
-    recipient: string
-    coinType: string
-    amount: string
-    nonce: string
-    expiration: number
-  }
-}
-
 export type DecodedBitcoinVmWithdrawal = {
   vmType: "bitcoin-vm"
   withdrawal: {
@@ -200,7 +188,6 @@ export type DecodedLighterVmWithdrawal = {
 type DecodedWithdrawal =
   | DecodedEthereumVmWithdrawal
   | DecodedSolanaVmWithdrawal
-  | DecodedSuiVmWithdrawal
   | DecodedBitcoinVmWithdrawal
   | DecodedTronVmWithdrawal
   | DecodedHyperliquidVmWithdrawal
@@ -276,34 +263,6 @@ export const encodeWithdrawal = (
             ),
           })
           .toString("hex")
-      )
-    }
-
-    case "sui-vm": {
-      return (
-        "0x" +
-        Buffer.from(
-          bcs
-            .struct("TransferRequest", {
-              recipient: bcs.Address,
-              amount: bcs.u64(),
-              coin_type: bcs.struct("TypeName", {
-                name: bcs.string(),
-              }),
-              nonce: bcs.u64(),
-              expiration: bcs.u64(),
-            })
-            .serialize({
-              recipient: decodedWithdrawal.withdrawal.recipient,
-              amount: BigInt(decodedWithdrawal.withdrawal.amount),
-              coin_type: {
-                name: decodedWithdrawal.withdrawal.coinType,
-              },
-              nonce: BigInt(decodedWithdrawal.withdrawal.nonce),
-              expiration: BigInt(decodedWithdrawal.withdrawal.expiration),
-            })
-            .toBytes()
-        ).toString("hex")
       )
     }
 
@@ -490,35 +449,6 @@ export const decodeWithdrawal = (
           nonce: request.nonce.toString(),
           expiration: request.expiration.toNumber(),
           vaultAddress: request.vault_address.toBase58(),
-        },
-      }
-    }
-
-    case "sui-vm": {
-      const buffer = Uint8Array.from(
-        Buffer.from(encodedWithdrawal.substring(2), "hex")
-      )
-
-      const request = bcs
-        .struct("TransferRequest", {
-          recipient: bcs.Address,
-          amount: bcs.u64(),
-          coin_type: bcs.struct("TypeName", {
-            name: bcs.string(),
-          }),
-          nonce: bcs.u64(),
-          expiration: bcs.u64(),
-        })
-        .parse(buffer)
-
-      return {
-        vmType: "sui-vm",
-        withdrawal: {
-          recipient: request.recipient,
-          coinType: request.coin_type.name,
-          amount: request.amount.toString(),
-          nonce: request.nonce.toString(),
-          expiration: Number(request.expiration.toString()),
         },
       }
     }
@@ -744,35 +674,6 @@ export const getDecodedWithdrawalId = (
       )
     }
 
-    case "sui-vm": {
-      const encodedWithdrawal =
-        "0x" +
-        Buffer.from(
-          bcs
-            .struct("TransferRequest", {
-              recipient: bcs.Address,
-              amount: bcs.u64(),
-              coin_type: bcs.struct("TypeName", {
-                name: bcs.string(),
-              }),
-              nonce: bcs.u64(),
-              expiration: bcs.u64(),
-            })
-            .serialize({
-              recipient: decodedWithdrawal.withdrawal.recipient,
-              amount: BigInt(decodedWithdrawal.withdrawal.amount),
-              coin_type: {
-                name: decodedWithdrawal.withdrawal.coinType,
-              },
-              nonce: BigInt(decodedWithdrawal.withdrawal.nonce),
-              expiration: BigInt(decodedWithdrawal.withdrawal.expiration),
-            })
-            .toBytes()
-        ).toString("hex")
-
-      return "0x" + sha256.create().update(encodedWithdrawal).hex()
-    }
-
     case "bitcoin-vm": {
       const encodedWithdrawal = "0x" + decodedWithdrawal.withdrawal.psbt
 
@@ -880,10 +781,6 @@ export const getDecodedWithdrawalCurrency = (
       return decodedWithdrawal.withdrawal.token
     }
 
-    case "sui-vm": {
-      return decodedWithdrawal.withdrawal.coinType
-    }
-
     case "hyperliquid-vm": {
       const { parameters } = decodedWithdrawal.withdrawal
 
@@ -967,10 +864,6 @@ export const getDecodedWithdrawalAmount = (
       return decodedWithdrawal.withdrawal.amount
     }
 
-    case "sui-vm": {
-      return decodedWithdrawal.withdrawal.amount
-    }
-
     case "bitcoin-vm": {
       const psbt = bitcoin.Psbt.fromHex(decodedWithdrawal.withdrawal.psbt)
       const fee = psbt.finalizeAllInputs().getFee()
@@ -1021,10 +914,6 @@ export const getDecodedWithdrawalRecipient = (
     }
 
     case "solana-vm": {
-      return decodedWithdrawal.withdrawal.recipient
-    }
-
-    case "sui-vm": {
       return decodedWithdrawal.withdrawal.recipient
     }
 
