@@ -1,10 +1,10 @@
 {
   "RelayGenericMapping#RelayGenericMapping": "0xC296aB0760f3dDef367100eA83627FbD2636066D",
   "RelayAllocator#Utils": "0x3A62977f4D0A26cE6FEb66e180E3EaBd631dBf32",
-  "RelayAllocator#RelayAllocator": "0x357dFbEC07a628e934bdB3642056FD72F10a7902",
   "Config#Config": "0x3ce69C8Da146ee33B9F0BF64a1e2398fbc8214c7",
   "EthereumVmPayloadBuilder#EthereumVmPayloadBuilder": "0xD187D50a1314cC8fe0E0F5548587b4a827105976",
   "SolanaVmPayloadBuilder#SolanaVmPayloadBuilder": "0xDDd90bF49ab76221B750B317B30a43B944813318",
   "BasicPricingOracle#BasicPricingOracle": "0xAf0E1FE8897D2F14209aA8330953917f89F278a2",
-  "RelayDepositAddressManager#RelayDepositAddressManager": "0xd03250B221F709ABE58FF4A177D50d01d922D974"
+  "RelayDepositAddressManager#RelayDepositAddressManager": "0xd03250B221F709ABE58FF4A177D50d01d922D974",
+  "RelayAllocator#RelayAllocator": "0x6544A81A7E3961b35040F6fC848294367822B6b9"
 }

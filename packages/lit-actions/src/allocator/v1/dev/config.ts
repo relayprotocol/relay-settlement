@@ -2,7 +2,7 @@ import type { AllocatorActionConfig } from "../../../index"
 
 const config: AllocatorActionConfig = {
   name: "dev",
-  allocatorAddress: "0x357dfbec07a628e934bdb3642056fd72f10a7902",
+  allocatorAddress: "0x6544a81a7e3961b35040f6fc848294367822b6b9",
   hubEvmChainId: 421614,
   allowedOracles: [
     "0xcda3c24706c1a5eea958a988693e8a838d520af9",
