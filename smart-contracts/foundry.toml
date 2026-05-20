@@ -1,8 +1,9 @@
 # ABOUTME: Foundry config matching Hardhat's solc settings.
 # ABOUTME: Provides remappings so Hardhat (via hardhat-foundry) can compile sources,
-# ABOUTME: and configures forge build/test/coverage for an eventual Foundry test suite.
+# ABOUTME: and configures forge build/test/coverage plus the deploy scripts under script/.
 [profile.default]
 src = "contracts"
+script = "script"
 out = "forge-out"
 libs = ["node_modules", "lib"]
 auto_detect_remappings = false
@@ -22,3 +23,9 @@ runs = 256
 [profile.default.invariant]
 runs = 256
 depth = 15
+
+# Etherscan v2 multi-chain key. forge resolves `${ETHERSCAN_API_KEY}` from the
+# environment at runtime; per-chain keys can still be supplied via the
+# `--etherscan-api-key` flag for non-v2 explorers.
+[etherscan]
+mainnet = { key = "${ETHERSCAN_API_KEY}" }

@@ -1,43 +1,88 @@
 # Relay Protocol
 
-## Allocator
+## Deployments (Foundry)
 
-Deploy, set up and use the allocator. Multiple tasks exist to set things up:
+Deployments live as Foundry scripts under [`script/`](./script). Each script is
+configured via environment variables and runs with `forge script`. Deploys are
+broadcast to the chain specified by `--rpc-url`; verification is handled by
+forge against Etherscan's v2 multi-chain API (the same API key works for every
+supported explorer) via `--verify --etherscan-api-key $ETHERSCAN_API_KEY`.
+
+Common environment variables:
+
+- `DEPLOYER_PRIVATE_KEY` – deployer key (hex, 0x-prefixed). Required for all
+  deploy scripts. `PRIVATE_KEY` is honoured as a fallback.
+- `ETHERSCAN_API_KEY` – v2 multi-chain Etherscan API key. Forwarded via
+  `--etherscan-api-key`.
+
+Yarn wrappers exist for each script so the CLI looks similar to the previous
+Hardhat tasks. They pass through any additional flags (e.g. `--rpc-url`,
+`--verify`).
+
+### Allocator
 
 ```sh
 # Deploy the main RelayAllocator contract
-yarn hardhat deploy:allocator --owner <multisig-address> --hub <relay-hub-address>
+OWNER=<multisig-address> HUB=<relay-hub-address> ORACLE=<oracle-address> \
+  yarn deploy:allocator --rpc-url $RPC_URL --verify --etherscan-api-key $ETHERSCAN_API_KEY
 
-# deploy the Config contract for the allocator
-yarn hardhat deploy:allocator-config --allocator <allocator-contract-address>
+# Deploy the Config contract for the allocator
+ALLOCATOR=<allocator-contract-address> \
+  yarn deploy:allocator-config --rpc-url $RPC_URL --verify
 
-# deploy the EVM payload builder
-yarn hardhat deploy:ethereum-vm-payload-builder --config-address <config-contract-address>
+# Deploy the EVM payload builder
+CONFIG=<config-contract-address> \
+  yarn deploy:ethereum-vm-payload-builder --rpc-url $RPC_URL --verify
 
-# deploy the Solana VM payload builder
-yarn hardhat deploy:solana-vm-payload-builder --config-address <config-contract-address>
+# Deploy the Solana VM payload builder
+CONFIG=<config-contract-address> \
+  yarn deploy:solana-vm-payload-builder --rpc-url $RPC_URL --verify
+```
 
-# alternatively, you can deploy the raw ignition modules directly
-yarn run hardhat ignition deploy ignition/modules/EthereumVmPayloadBuilder.ts
+`RelayAllocator` links the `Utils` library and `RelayMultisigSigner` /
+`BitcoinDepositAddress` link `AuroraSdk`, `ChainSignatures`, etc. Forge
+automatically deploys and links these libraries as part of the script run; for
+deterministic addresses pass `--libraries 'contracts/Utils.sol:Utils:0x...'`
+to reuse a pre-deployed copy (see `libraries.json` for canonical Aurora
+addresses).
 
-# verify contracts
-yarn hardhat ignition verify chain-1313161555
+### Roles
 
-# grant APPROVED_WITHDRAWER_ROLE to your address
-yarn hardhat allocator:add-withdrawer --allocator <allocator-contract-address>
+```sh
+# Grant APPROVED_WITHDRAWER_ROLE on the allocator
+CONTRACT=<allocator-contract-address> ROLE=APPROVED_WITHDRAWER_ROLE \
+  ACCOUNT=<address> yarn grant-role --rpc-url $RPC_URL
 
-# set dummy payload builder in allocator
+# Renounce a role held by the deployer
+CONTRACT=<contract-address> ROLE=OPERATOR_ROLE \
+  yarn renounce-role --rpc-url $RPC_URL
+```
+
+`ROLE` accepts either a plain string (hashed with keccak256) or a
+`0x`-prefixed bytes32 hash.
+
+### Legacy allocator orchestration tasks
+
+The Hardhat tasks below remain available for flows that integrate with NEAR /
+Aurora signing (initialization, payload signing, withdraw orchestration). They
+will be migrated separately as they primarily depend on TypeScript SDKs rather
+than EVM deployments.
+
+```sh
+# Initialize the allocator (requires 2 wNEAR on Aurora)
+yarn hardhat allocator:init --allocator <allocator-contract-address>
+
+# Set a payload builder for a specific chain
 yarn hardhat allocator:set-payload-builder --builder <builder-address> --allocator <allocator-contract-address> --chain-id <depository-contract-chain> --depository <depository-contract-address>
 
-# submit withdraw request params (thru block explorer)
+# Submit withdraw request params (thru block explorer)
 yarn hardhat allocator:submit-withdraw --allocator <allocator-address> --chain-id <depository-chain-id> --depository <depository-contract-address>
 
-# sign payload
+# Sign payload
 yarn hardhat allocator:sign-payload --allocator <allocator-address> --chain-id <depository-chain-id> --depository <depository-contract-address> --nonce <nonce from withdraw request>
 
-# submit the withdrawal to the depository contract (passing the payload builder enables formatting of the transaction)
+# Submit the withdrawal to the depository contract
 yarn hardhat depository:withdraw --withdraw-request-hash <withdraw-request-hash> --allocator <allocator-address> --payload-builder-type <payload-builder-name>
-
 ```
 
 We also have "end to end" tasks which can be used to deploy everything and submit transactions. This uses a lot of defaults, and roles are granted to the caller's address (you need to set the `DEPLOYER_PRIVATE_KEY` environment variable).
@@ -161,35 +206,49 @@ To add support for additional contract types, define the parameter schema in `ta
 
 ### Deploy the contracts
 
-You can now deploy the Hub and Oracle contracts on your new chain.
+Deploy the Hub, Oracle, and (optionally) OracleMultisig with Foundry. Order
+matters: deploy the hub first, then the oracle pointing at the hub, then wire
+roles via `yarn grant-role` (see below).
 
 ```sh
-yarn hardhat hub:setup --network <hub-network>
+# Deploy the hub
+ADMIN=<admin-address> \
+  yarn deploy:hub --rpc-url $RPC_URL --verify --etherscan-api-key $ETHERSCAN_API_KEY
+
+# Deploy the oracle, pointing at the hub
+ADMIN=<admin-address> HUB=<hub-address> \
+  yarn deploy:oracle --rpc-url $RPC_URL --verify --etherscan-api-key $ETHERSCAN_API_KEY
+
+# Optional: deploy the OracleMultisig
+OWNER=<admin-address> SIGNERS=<addr1,addr2,...> THRESHOLD=<n> \
+  yarn deploy:oracle-multisig --rpc-url $RPC_URL --verify
+
+# Deploy the ERC20View helper used by the hub
+yarn deploy:erc20-view --rpc-url $RPC_URL --verify
 ```
-
-NB: This will also configure correctly the oracle as `OPERATOR_ROLE` of the hub, and set the deployer address as `ORACLE_ROLE` for testing purposes - you may want to revoke that later.
-
-### Test perms on the oracle
-
-```sh
-yarn hardhat test-oracle --network <hub-network> --oracle <hub-network>
-```
-
-WARN: This will write and tweak balances of accounts on the hub
 
 ### Set roles
 
-There is two main roles to set: the `ORACLE_ROLE` to allow an offchain oracle to send data to the hub via the oracle contract, and the `EDITOR_ROLE` that can update tokens metadata directly on the hub.
+There are two main roles to set: the `ORACLE_ROLE` to allow an offchain oracle
+to send data to the hub via the oracle contract, and the `EDITOR_ROLE` that
+can update tokens metadata directly on the hub. Use the `grant-role` Foundry
+script:
 
 ```sh
-# grant offchain oracle signer write access to the oracle contract
-yarn hardhat grant-role --contract <oracle-contract> --account <offchain-oracle-signer> --role ORACLE_ROLE --network <hub-network>
+# Grant the oracle OPERATOR_ROLE on the hub (so it can mint/burn)
+CONTRACT=<hub-contract> ROLE=OPERATOR_ROLE ACCOUNT=<oracle-contract> \
+  yarn grant-role --rpc-url $RPC_URL
 
-# grant editors write metadata access to the hub
-yarn hardhat grant-role --contract <hub-contract> --accounts <list-of-signers> --role EDITOR_ROLE --network <hub-network>
+# Grant an offchain oracle signer write access to the oracle contract
+CONTRACT=<oracle-contract> ROLE=ORACLE_ROLE ACCOUNT=<offchain-oracle-signer> \
+  yarn grant-role --rpc-url $RPC_URL
+
+# Grant editors write metadata access to the hub
+CONTRACT=<hub-contract> ROLE=EDITOR_ROLE ACCOUNT=<editor-signer> \
+  yarn grant-role --rpc-url $RPC_URL
 ```
 
-NB: we pass a list of editors addresses to the hub to support multi-EOA
+`grant-role` accepts a single account; loop over multiple editors if needed.
 
 ### Submit HUB actions
 

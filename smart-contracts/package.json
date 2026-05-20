@@ -7,7 +7,22 @@
     "test": "forge test",
     "coverage": "forge coverage --report lcov --report-file forge-out/lcov.info",
     "lint:solidity": "yarn solhint 'contracts/**/*.sol'",
-    "lint": "yarn lint:solidity"
+    "lint": "yarn lint:solidity",
+    "deploy:hub": "forge script script/DeployHub.s.sol --broadcast",
+    "deploy:oracle": "forge script script/DeployOracle.s.sol --broadcast",
+    "deploy:oracle-multisig": "forge script script/DeployOracleMultisig.s.sol --broadcast",
+    "deploy:allocator": "forge script script/DeployAllocator.s.sol --broadcast",
+    "deploy:allocator-config": "forge script script/DeployConfig.s.sol --broadcast",
+    "deploy:ethereum-vm-payload-builder": "forge script script/DeployEthereumVmPayloadBuilder.s.sol --broadcast",
+    "deploy:solana-vm-payload-builder": "forge script script/DeploySolanaVmPayloadBuilder.s.sol --broadcast",
+    "deploy:basic-pricing-oracle": "forge script script/DeployBasicPricingOracle.s.sol --broadcast",
+    "deploy:erc20-view": "forge script script/DeployErc20View.s.sol --broadcast",
+    "deploy:deposit-address-manager": "forge script script/DeployDepositAddressManager.s.sol --broadcast",
+    "deploy:deposit-address-factory": "forge script script/DeployDepositAddressFactory.s.sol --broadcast",
+    "deploy:bitcoin-deposit-address": "forge script script/DeployBitcoinDepositAddress.s.sol --broadcast",
+    "deploy:relay-multisig-signer": "forge script script/DeployRelayMultisigSigner.s.sol --broadcast",
+    "grant-role": "forge script script/GrantRole.s.sol --broadcast",
+    "renounce-role": "forge script script/RenounceRole.s.sol --broadcast"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-foundry": "1.2.1",
