@@ -23,6 +23,19 @@ This is a **public repository**. All code, commits, PR descriptions, and comment
   - `tsconfig` — Shared TypeScript config
 - `docs/` — Documentation and audit reports
 
+## Environment setup
+
+The smart-contracts package uses Foundry (`forge test`) alongside Hardhat. A
+working dev environment needs:
+
+1. **Foundry** (`forge`, `cast`, `anvil`) — install via `curl -L https://foundry.paradigm.xyz | bash && foundryup`.
+2. **Git submodules** — `git submodule update --init --recursive` (pulls `forge-std`).
+3. **Yarn deps** — `yarn install` (smart-contracts' `postinstall` symlinks hoisted Solidity deps).
+
+For Claude Code on the web, the `.claude/hooks/session-start.sh` hook performs
+all three automatically at session start. If `forge` is ever missing locally,
+run that script directly.
+
 ## Commands
 
 From repo root:
