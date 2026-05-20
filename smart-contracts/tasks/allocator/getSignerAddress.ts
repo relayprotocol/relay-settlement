@@ -1,9 +1,9 @@
-import { ChainType } from "@relay-settlement/types"
+import type { VmType } from "@relay-protocol/settlement-sdk"
 import { task } from "hardhat/config"
-import { deriveAllocatorSignerAddress } from "../../lib/signer"
+import { deriveAllocatorSignerAddress } from "@relay-settlement/multisig-tools/crypto/signer"
 import { networks } from "@relay-protocol/settlement-networks"
 
-const SUPPORTED_FAMILIES: ChainType[] = [
+const SUPPORTED_FAMILIES: VmType[] = [
   "bitcoin-vm",
   "ethereum-vm",
   "solana-vm",

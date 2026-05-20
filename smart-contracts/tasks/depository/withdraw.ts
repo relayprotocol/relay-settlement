@@ -10,8 +10,11 @@ import {
 } from "viem"
 import { privateKeyToAccount } from "viem/accounts"
 import * as chains from "viem/chains"
-import { decodeCallRequest, IRelayDespository } from "../../lib/evm"
-import { extractNearSignature } from "../../lib/near"
+import {
+  decodeCallRequest,
+  IRelayDespository,
+} from "@relay-settlement/multisig-tools/crypto/evm"
+import { extractNearSignature } from "@relay-settlement/multisig-tools/crypto/near"
 
 task("depository:withdraw", "Withdraw from depository")
   .addParam("allocator", "The address of the allocator contract")

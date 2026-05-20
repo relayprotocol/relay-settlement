@@ -20,10 +20,10 @@ import {
   getBalance,
   txidToBytes32,
   verifySighashMatches,
-} from "../../../lib/bitcoin"
-import { getAllocatorPublicKey } from "../../../lib/signer"
-import { extractNearSignature } from "../../../lib/near"
-import { wait } from "../../../lib/wait"
+} from "@relay-settlement/multisig-tools/crypto/bitcoin"
+import { getAllocatorPublicKey } from "@relay-settlement/multisig-tools/crypto/signer"
+import { extractNearSignature } from "@relay-settlement/multisig-tools/crypto/near"
+import { wait } from "@relay-settlement/multisig-tools/crypto/wait"
 import { networks } from "@relay-protocol/settlement-networks"
 
 task(

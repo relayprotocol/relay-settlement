@@ -13,7 +13,12 @@
     "packages:build": "yarn packages --topological-dev run build",
     "lint": "lint",
     "test": "yarn workspaces foreach --all run test",
-    "packages": "yarn workspaces foreach --recursive --from '{@relay-settlement/eslint-config,@relay-settlement/tsconfig,@relay-protocol/settlement-sdk,@relay-protocol/settlement-abis,@relay-protocol/settlement-networks,@relay-settlement/hub-client,@relay-settlement/indexer,@relay-settlement/indexer-ui,@relay-protocol/lit-actions,@relay-settlement/smart-contracts}'"
+    "packages": "yarn workspaces foreach --recursive --from '{@relay-settlement/eslint-config,@relay-settlement/tsconfig,@relay-protocol/settlement-sdk,@relay-protocol/settlement-abis,@relay-protocol/settlement-networks,@relay-settlement/hub-client,@relay-settlement/indexer,@relay-settlement/indexer-ui,@relay-protocol/lit-actions,@relay-settlement/multisig-tools,@relay-settlement/smart-contracts}'",
+    "multisig:simulate": "yarn workspace @relay-settlement/multisig-tools cli simulate",
+    "multisig:submit": "yarn workspace @relay-settlement/multisig-tools cli submit",
+    "multisig:check": "yarn workspace @relay-settlement/multisig-tools cli check-hashes",
+    "multisig:execute": "yarn workspace @relay-settlement/multisig-tools cli execute-transactions",
+    "multisig:decode": "yarn workspace @relay-settlement/multisig-tools cli decode-multicall"
   },
   "devDependencies": {
     "@relay-settlement/eslint-config": "workspace:*",

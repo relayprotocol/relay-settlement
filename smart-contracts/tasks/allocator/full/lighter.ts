@@ -24,10 +24,12 @@ import {
   AccountApi,
   TransactionApi,
 } from "@reservoir0x/lighter-ts-sdk"
-import { extractNearSignature } from "../../../lib/near"
-import { wait } from "../../../lib/wait"
+import {
+  derivePublicKey,
+  extractNearSignature,
+} from "@relay-settlement/multisig-tools/crypto/near"
+import { wait } from "@relay-settlement/multisig-tools/crypto/wait"
 import { publicKeyToAddress } from "viem/utils"
-import { derivePublicKey } from "../../../lib/near"
 import { base58 } from "@scure/base"
 import { checkAndApproveWNEAR } from "../../../lib/aurora"
 import { generateLighterApiKey } from "../../../lib/lighter/generateApiKey"

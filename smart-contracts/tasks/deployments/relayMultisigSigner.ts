@@ -3,7 +3,7 @@ import { task } from "hardhat/config"
 import RelayMultisigSignerModule from "../../ignition/modules/RelayMultisigSignerModule"
 import { parseUnits } from "viem"
 import { checkAndApproveWNEAR } from "../../lib/aurora"
-import { derivePublicKey } from "../../lib/near"
+import { derivePublicKey } from "@relay-settlement/multisig-tools/crypto/near"
 import { publicKeyToAddress } from "viem/accounts"
 import { base58 } from "@scure/base"
 

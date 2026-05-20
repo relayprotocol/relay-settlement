@@ -52,18 +52,8 @@ import "./tasks/computeSignatures"
 import "./tasks/exportAbis"
 import "./tasks/grantRole"
 
-// Relay Multisig signer
+// Relay Multisig signer — off-chain CLI lives in packages/multisig-tools.
 import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
-import "./tasks/relayMultisigSigner/check-hashes"
-import "./tasks/relayMultisigSigner/create-nonce-account"
-import "./tasks/relayMultisigSigner/decode-multicall"
-import "./tasks/relayMultisigSigner/execute-transactions"
-import "./tasks/relayMultisigSigner/full/solana"
-import "./tasks/relayMultisigSigner/full/tron"
-import "./tasks/relayMultisigSigner/generate-tron-headers"
-import "./tasks/relayMultisigSigner/simulate"
-import "./tasks/relayMultisigSigner/solana/solana-program-upgrade-with-migration"
-import "./tasks/relayMultisigSigner/submit"
 
 // get pk from shell
 const { DEPLOYER_PRIVATE_KEY } = process.env

@@ -3,9 +3,9 @@ import { task } from "hardhat/config"
 import nacl from "tweetnacl"
 import { fromHex, parseEventLogs, zeroAddress } from "viem"
 import { checkAndApproveWNEAR } from "../../../lib/aurora"
-import { derivePublicKey } from "../../../lib/near"
+import { derivePublicKey } from "@relay-settlement/multisig-tools/crypto/near"
 import { base58ToBytes32, decodeDepositoryRequest } from "../../../lib/solana"
-import { wait } from "../../../lib/wait"
+import { wait } from "@relay-settlement/multisig-tools/crypto/wait"
 
 const DEFAULT_DELAY = "1"
 

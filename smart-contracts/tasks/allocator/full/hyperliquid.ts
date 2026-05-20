@@ -7,10 +7,12 @@ import {
   keccak256,
   parseUnits,
 } from "viem"
-import { extractNearSignature } from "../../../lib/near"
-import { wait } from "../../../lib/wait"
+import {
+  derivePublicKey,
+  extractNearSignature,
+} from "@relay-settlement/multisig-tools/crypto/near"
+import { wait } from "@relay-settlement/multisig-tools/crypto/wait"
 import { publicKeyToAddress } from "viem/utils"
-import { derivePublicKey } from "../../../lib/near"
 import { checkAndApproveWNEAR } from "../../../lib/aurora"
 import { base58 } from "@scure/base"
 import {
