@@ -1,0 +1,8 @@
+# Dependencoes
+node_modules/
+
+# Build
+dist/
+
+# Secrets
+.env*

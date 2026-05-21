@@ -1,0 +1,10 @@
+{
+  "name": "dev",
+  "allocatorAddress": "0x6544a81a7e3961b35040f6fc848294367822b6b9",
+  "hubEvmChainId": 421614,
+  "allowedOracles": [
+    "0xcda3c24706c1a5eea958a988693e8a838d520af9",
+    "0xf24a399259f47c6360d00da3793eca9cc6ad1caa"
+  ],
+  "oracleSignatureThreshold": 2
+}
