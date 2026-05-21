@@ -11,7 +11,8 @@ export type GenericMappingMessage = {
 export const getNonceMappingMessage = (
   user: string,
   nonce: string,
-  depositId: string
+  depositId: string,
+  depositor?: string
 ): GenericMappingMessage => {
   return {
     user,
@@ -22,7 +23,7 @@ export const getNonceMappingMessage = (
         .update(`NONCE_MAPPING:${nonce}`)
         .digest()
         .toString("hex"),
-    data: depositId,
+    data: depositId + (depositor ? depositor.slice(2) : ""),
     nonce:
       "0x" +
       crypto
