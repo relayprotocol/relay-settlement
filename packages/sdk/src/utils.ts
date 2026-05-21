@@ -67,6 +67,8 @@ export const encodeAddressToHex = (address: string, vmType: VmType): Hex => {
 export const encodeAddress = (address: string, vmType: VmType): Uint8Array => {
   switch (vmType) {
     case "bitcoin-vm": {
+      const LEGACY_BITCOIN_ADDRESS_DISCRIMINATOR = 0xff
+
       const getBitcoinAddressType = (
         address: string
       ): "p2pkh" | "p2sh" | "bech32" | "bech32m" => {
@@ -104,8 +106,13 @@ export const encodeAddress = (address: string, vmType: VmType): Uint8Array => {
       const type = getBitcoinAddressType(address)
       if (type === "p2pkh" || type === "p2sh") {
         const decoded = bs58.decode(address)
-        // Strip the checksum
-        return decoded.slice(0, -4)
+        // Strip the checksum and prefix with a discriminator so legacy
+        // Base58Check addresses don't collide with witness-version encodings
+        // (notably P2PKH 0x00 || hash160 vs P2WPKH v0 || 20-byte program).
+        return Uint8Array.from([
+          LEGACY_BITCOIN_ADDRESS_DISCRIMINATOR,
+          ...decoded.slice(0, -4),
+        ])
       } else {
         const decoder = type === "bech32" ? bech32 : bech32m
         const { words } = decoder.decode(address)
@@ -148,20 +155,24 @@ export const encodeAddress = (address: string, vmType: VmType): Uint8Array => {
 export const decodeAddress = (address: Uint8Array, vmType: VmType): string => {
   switch (vmType) {
     case "bitcoin-vm": {
-      if (
-        address.length === 21 &&
-        (address[0] === 0x00 || address[0] === 0x05)
-      ) {
-        // Base58Check (P2PKH/P2SH)
-
+      const LEGACY_BITCOIN_ADDRESS_DISCRIMINATOR = 0xff
+      if (address[0] === LEGACY_BITCOIN_ADDRESS_DISCRIMINATOR) {
+        // Discriminated Base58Check (P2PKH/P2SH)
+        const payload = address.slice(1)
+        if (
+          payload.length !== 21 ||
+          (payload[0] !== 0x00 && payload[0] !== 0x05)
+        ) {
+          throw new Error("Unsupported legacy bitcoin address encoding")
+        }
         const checksum = bitcoin.crypto
-          .hash256(Buffer.from(address))
+          .hash256(Buffer.from(payload))
           .slice(0, 4)
-        const full = Buffer.concat([Buffer.from(address), checksum])
+        const full = Buffer.concat([Buffer.from(payload), checksum])
         return bs58.encode(full)
       } else {
-        // Bech32/Bech32m
-
+        // Bech32/Bech32m. The first byte is the witness version and the
+        // remaining bytes are the witness program.
         const version = address[0]
         const program = Array.from(address.slice(1))
         const words = [version, ...bech32.toWords(Uint8Array.from(program))]
