@@ -3217,6 +3217,8 @@ __metadata:
   dependencies:
     "@coral-xyz/anchor": "npm:^0.31.1"
     "@solana/web3.js": "npm:1.98.4"
+    "@ton/core": "npm:0.61.0"
+    "@ton/crypto": "npm:3.3.0"
     "@types/node": "npm:^22.15.3"
     bech32: "npm:^2.0.0"
     bitcoinjs-lib: "npm:^6.1.7"
@@ -4869,6 +4871,37 @@ __metadata:
   dependencies:
     defer-to-connect: "npm:^2.0.1"
   checksum: 10c0/4629d2fbb2ea67c2e9dc03af235c0991c79ebdddcbc19aed5d5732fb29ce01c13331e9b1a491584b9069bd6ecde6581dcbf871f11b7eefdebbab34de6cf2197e
+  languageName: node
+  linkType: hard
+
+"@ton/core@npm:0.61.0":
+  version: 0.61.0
+  resolution: "@ton/core@npm:0.61.0"
+  dependencies:
+    symbol.inspect: "npm:1.0.1"
+  peerDependencies:
+    "@ton/crypto": ">=3.2.0"
+  checksum: 10c0/0bec288efa33c2302bf2d783a7d723a7b24b31da1bce28907036110e0979b28faeb3bbea761c32b83ea07e8352230591ad655e896b9146e4c539ff53ed327fe3
+  languageName: node
+  linkType: hard
+
+"@ton/crypto-primitives@npm:2.1.0":
+  version: 2.1.0
+  resolution: "@ton/crypto-primitives@npm:2.1.0"
+  dependencies:
+    jssha: "npm:3.2.0"
+  checksum: 10c0/9869a393297930ae8dfd784b0c2c4f3c9eff6341b82c75b103990281855392fbf01780251e32d8afd86a82f3eaa388bfe35b9634a0b64d7f05d65c658855870b
+  languageName: node
+  linkType: hard
+
+"@ton/crypto@npm:3.3.0":
+  version: 3.3.0
+  resolution: "@ton/crypto@npm:3.3.0"
+  dependencies:
+    "@ton/crypto-primitives": "npm:2.1.0"
+    jssha: "npm:3.2.0"
+    tweetnacl: "npm:1.0.3"
+  checksum: 10c0/2fc008d4ada55f483ef7aba63a0690e09a307be340876ed95e7202253d8373daa1d07253dc031889067c578c95f0d08073903fdbc9cce643106d5ccd68095000
   languageName: node
   linkType: hard
 
@@ -10515,6 +10548,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"jssha@npm:3.2.0":
+  version: 3.2.0
+  resolution: "jssha@npm:3.2.0"
+  checksum: 10c0/eba7fb986a6ed12238d57b959c522fae90ff25a9e427d70aeffaf698d4ffadc7a994af7cb28e121139b1a54e38e0bd9b08f2da4ea7979c72653ccba2fb558924
+  languageName: node
+  linkType: hard
+
 "keccak@npm:^3.0.0, keccak@npm:^3.0.2, keccak@npm:^3.0.4":
   version: 3.0.4
   resolution: "keccak@npm:3.0.4"
@@ -13925,6 +13965,13 @@ __metadata:
   version: 1.0.0
   resolution: "supports-preserve-symlinks-flag@npm:1.0.0"
   checksum: 10c0/6c4032340701a9950865f7ae8ef38578d8d7053f5e10518076e6554a9381fa91bd9c6850193695c141f32b21f979c985db07265a758867bac95de05f7d8aeb39
+  languageName: node
+  linkType: hard
+
+"symbol.inspect@npm:1.0.1":
+  version: 1.0.1
+  resolution: "symbol.inspect@npm:1.0.1"
+  checksum: 10c0/7ed8636838ede2740293b09175964aef7d65d4ed14b4ffa197785f9b66bd8f964a05979be3d87c021c1a90a25c01262b0528211c97b14ffe64b2acdb941ad214
   languageName: node
   linkType: hard
 

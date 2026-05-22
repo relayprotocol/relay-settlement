@@ -2,6 +2,7 @@ import { bytesToHex, Hex, hexToBytes } from "viem"
 import { bech32, bech32m } from "bech32"
 import * as bitcoin from "bitcoinjs-lib"
 import bs58 from "bs58"
+import { Address as TonAddress } from "@ton/core"
 import * as tronweb from "tronweb"
 
 export type VmType =
@@ -38,6 +39,8 @@ export const getVmTypeNativeCurrency = (vmType: VmType) => {
       return "0x00000000000000000000000000000000"
     case "solana-vm":
       return "11111111111111111111111111111111"
+    case "ton-vm":
+      return "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c"
     case "tron-vm":
       return "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb"
     case "lighter-vm":
@@ -135,7 +138,17 @@ export const encodeAddress = (address: string, vmType: VmType): Uint8Array => {
     }
 
     case "ton-vm": {
-      throw new Error("Vm type not implemented (encodeAddress)")
+      // 32-byte hash-only encoding (fits the bytes32 order slot used across
+      // all VMs). Workchain is a chain-level property — each Relay chainId
+      // maps to a single TON workchain (current chains all target basechain).
+      // Cross-workchain addresses on a single chainId are a mismatch.
+      const parsed = TonAddress.parse(address)
+      if (parsed.workChain !== 0) {
+        throw new Error(
+          `TON address on workchain ${parsed.workChain} does not match the expected basechain (workchain 0) for this chainId`
+        )
+      }
+      return new Uint8Array(parsed.hash)
     }
 
     case "tron-vm": {
@@ -197,7 +210,14 @@ export const decodeAddress = (address: Uint8Array, vmType: VmType): string => {
     }
 
     case "ton-vm": {
-      throw new Error("Vm type not implemented (decodeAddress)")
+      if (address.length !== 32) {
+        throw new Error(
+          `Invalid TON address byte length ${address.length}; expected 32`
+        )
+      }
+      // Workchain implied = 0 (basechain); see comment on encodeAddress's
+      // ton-vm case for why workchain is chain-level, not address-level.
+      return new TonAddress(0, Buffer.from(address)).toRawString()
     }
 
     case "tron-vm": {
@@ -241,7 +261,12 @@ export const encodeTransactionId = (
     }
 
     case "ton-vm": {
-      throw new Error("Vm type not implemented (encodeTransactionId)")
+      if (transactionId.length !== 64) {
+        throw new Error(
+          `Invalid TON transaction id length ${transactionId.length}; expected 64 hex chars`
+        )
+      }
+      return hexToBytes(`0x${transactionId}`)
     }
 
     case "tron-vm": {
@@ -276,7 +301,7 @@ export const decodeTransactionId = (
     }
 
     case "ton-vm": {
-      throw new Error("Vm type not implemented (decodeTransactionId)")
+      return bytesToHex(transactionId).slice(2)
     }
 
     case "tron-vm": {
