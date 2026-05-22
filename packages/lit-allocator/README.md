@@ -89,7 +89,7 @@ npm run setup -- --env dev --mode chain-secured \
   (--create-pkp | --pkp-id <address>)
 ```
 
-In ChainSecured mode the account hash queried on-chain is `keccak256(toUtf8Bytes(accountApiKey))`, so the same `--account-api-key` identifies the account in both modes. The Base RPC URL and AccountConfig contract address are hardcoded at the top of `scripts/setup/backend-chain-secured.ts` — edit those constants to target a different Chipotle deployment.
+In ChainSecured mode the account hash queried on-chain is `keccak256(toUtf8Bytes(accountApiKey))`, so the same `--account-api-key` identifies the account in both modes. Shared setup backend constants live in `../lit-helpers/src/setup/backend-chain-secured.ts`; shared account-helper script constants live in `../lit-helpers/src/chainSecured.ts`.
 
 Setup is idempotent and will:
 
@@ -100,6 +100,10 @@ Setup is idempotent and will:
 - create or reuse the environment usage API key (`allocator-<env>-usage-key`)
 - print the environment variables needed for signing
 
+## Shared Account Helpers
+
+The conversion, ownership, credits, and top-up commands are action-agnostic and run from `../lit-helpers`.
+
 ## Converting an Account to ChainSecured
 
 Migrate a managed (API-mode) account so it's owned by a wallet instead of
@@ -109,7 +113,7 @@ hash is `keccak256(toUtf8Bytes(accountApiKey))`), so groups, actions, PKPs,
 usage keys, and billing all stay attached.
 
 ```sh
-npm run convert-to-chain-secured -- \
+yarn workspace @relay-protocol/lit-helpers convert-to-chain-secured -- \
   --account-api-key <existing-account-api-key> \
   --new-admin-private-key 0x<new-admin-wallet-key>
 ```
@@ -129,13 +133,13 @@ wallet.
 
 ```sh
 # By new admin's address (e.g. transferring to someone else)
-npm run transfer-ownership -- \
+yarn workspace @relay-protocol/lit-helpers transfer-ownership -- \
   --account-api-key <existing-account-api-key> \
   --current-admin-private-key 0x<current-admin-wallet-key> \
   --new-admin-address 0x<new-admin-wallet-address>
 
 # By new admin's private key (e.g. you hold both keys; address is derived)
-npm run transfer-ownership -- \
+yarn workspace @relay-protocol/lit-helpers transfer-ownership -- \
   --account-api-key <existing-account-api-key> \
   --current-admin-private-key 0x<current-admin-wallet-key> \
   --new-admin-private-key 0x<new-admin-wallet-key>
@@ -172,12 +176,12 @@ etc.) are mapped to actionable error messages.
 
 ```sh
 # By admin address
-npm run verify-ownership -- \
+yarn workspace @relay-protocol/lit-helpers verify-ownership -- \
   --account-api-key <existing-account-api-key> \
   --admin-address 0x<candidate-admin-address>
 
 # By admin private key (address derived locally; no signing happens)
-npm run verify-ownership -- \
+yarn workspace @relay-protocol/lit-helpers verify-ownership -- \
   --account-api-key <existing-account-api-key> \
   --admin-private-key 0x<candidate-admin-key>
 ```
@@ -188,13 +192,12 @@ to derive the candidate address — the script does not sign anything.
 ## Reading Credits
 
 ```sh
-npm run credits -- --usage-api-key <usage-api-key>
+yarn workspace @relay-protocol/lit-helpers credits -- --account-api-key <account-api-key>
 ```
 
 Calls `GET /billing/balance` and prints the account-level credit balance that
-decrements per request. Works for both API-mode and ChainSecured accounts —
-the endpoint authenticates with the same `X-Api-Key` header regardless. Output
-fields:
+decrements per request. Works for both API-mode and ChainSecured accounts.
+Output fields:
 
 - `balance_display` — human-readable form, e.g. `"$5.00 credit"`
 - `balance_cents` — negative means credits remaining, zero means exhausted,
@@ -212,7 +215,7 @@ The billing endpoints are the same as for card payments — Stripe simply
 renders crypto as another payment method.
 
 ```sh
-npm run top-up -- --account-api-key <account-api-key> --amount-cents 2500   # $25.00
+yarn workspace @relay-protocol/lit-helpers top-up -- --account-api-key <account-api-key> --amount-cents 2500   # $25.00
 ```
 
 Flow:
@@ -348,11 +351,7 @@ src/                                 # Lit Action source (bundled into dist/)
 scripts/
   bundle-actions.ts                  # Bundles src/vm/*.ts into dist/actions/<env>/*.js
   env.ts                             # Environment config loading and --env parsing
-  setup.ts                           # Idempotent Chipotle provisioning (dispatches to a backend)
-  setup/
-    backend.ts                       # SetupBackend interface + shared types
-    backend-api-key.ts               # REST/HTTP implementation (managed accounts)
-    backend-chain-secured.ts         # Wallet-signed contract calls (ChainSecured accounts)
+  setup.ts                           # Idempotent Chipotle provisioning using @relay-protocol/lit-helpers/setup
   client/
     index.ts                         # AllocatorClient + executeLitAction
     wallet.ts                        # CLI: derive VM-specific wallet address
@@ -366,7 +365,7 @@ test/
   src/vm/                            # Unit tests for VM action helpers
 ```
 
-The `setup` script is organized around a `SetupBackend` interface (in `scripts/setup/backend.ts`) that abstracts every read/write step. Two implementations exist today (`backend-api-key.ts`, `backend-chain-secured.ts`); a future Gnosis Safe backend would be a third file behind the same interface.
+The `setup` script uses the shared `SetupBackend` interface and implementations exported from `@relay-protocol/lit-helpers/setup`. The package-specific setup script owns allocator environment loading, action bundle discovery, and resource naming.
 
 ## Key Derivation (HKDF-SHA256)
 

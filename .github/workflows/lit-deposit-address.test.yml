@@ -1,0 +1,36 @@
+name: Lit Deposit Address Test
+
+on:
+  pull_request:
+    paths:
+      - "packages/lit-deposit-address/**"
+      - "packages/lit-helpers/**"
+      - "package.json"
+      - "yarn.lock"
+      - ".github/workflows/lit-deposit-address.test.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build
+        run: yarn workspace @relay-protocol/lit-deposit-address build
+
+      - name: Test
+        run: yarn workspace @relay-protocol/lit-deposit-address test

@@ -11,9 +11,12 @@
  * the contract's view functions, so this backend works without any API key.
  */
 
-import { addr, signTyped, Transaction } from "micro-eth-signer";
-import { createContract, type ContractABI } from "micro-eth-signer/advanced/abi.js";
-import { keccak_256 } from "@noble/hashes/sha3.js";
+import { addr, signTyped, Transaction } from "micro-eth-signer"
+import {
+  createContract,
+  type ContractABI,
+} from "micro-eth-signer/advanced/abi.js"
+import { keccak_256 } from "@noble/hashes/sha3.js"
 import type {
   ActionInfo,
   GroupInfo,
@@ -21,124 +24,140 @@ import type {
   SetupBackend,
   UpdateGroupParams,
   UsageKeyInfo,
-} from "./backend.js";
+} from "./backend.js"
 
-const BASE_URL = "https://api.chipotle.litprotocol.com";
+const BASE_URL = "https://api.chipotle.litprotocol.com"
 
 /**
  * Hardcoded Chipotle deployment on Base mainnet. Override these constants
  * directly if you need to target a different Chipotle deployment (staging,
  * local anvil, etc.).
  */
-export const DEFAULT_BASE_RPC_URL = "https://mainnet.base.org";
-export const DEFAULT_BASE_CHAIN_ID = 8453n;
-export const DEFAULT_ACCOUNT_CONFIG_ADDRESS = "0xaaaaa9120fe271f653cfdb6bf400db93d2dea7aa";
+export const DEFAULT_BASE_RPC_URL = "https://mainnet.base.org"
+export const DEFAULT_BASE_CHAIN_ID = 8453n
+export const DEFAULT_ACCOUNT_CONFIG_ADDRESS =
+  "0xaaaaa9120fe271f653cfdb6bf400db93d2dea7aa"
 
 // ─── Hex / hash primitives ───────────────────────────────────────────────────
 
 export function toHex(bytes: Uint8Array): string {
   return `0x${Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, "0"))
-    .join("")}`;
+    .join("")}`
 }
 
 export function fromHex(hex: string): Uint8Array {
-  const clean = hex.replace(/^0x/i, "");
-  const out = new Uint8Array(clean.length / 2);
+  const clean = hex.replace(/^0x/i, "")
+  const out = new Uint8Array(clean.length / 2)
   for (let i = 0; i < out.length; i++) {
-    out[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+    out[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16)
   }
-  return out;
+  return out
 }
 
 export function bytesToBigInt(bytes: Uint8Array): bigint {
-  let n = 0n;
+  let n = 0n
   for (const b of bytes) {
-    n = (n << 8n) + BigInt(b);
+    n = (n << 8n) + BigInt(b)
   }
-  return n;
+  return n
 }
 
 export function keccak(bytes: Uint8Array): Uint8Array {
-  return new Uint8Array(keccak_256(bytes));
+  return new Uint8Array(keccak_256(bytes))
 }
 
 /** keccak256(toUtf8Bytes(cid)) as a uint256. */
 function hashCidToBigInt(cid: string): bigint {
-  return bytesToBigInt(keccak(new TextEncoder().encode(cid)));
+  return bytesToBigInt(keccak(new TextEncoder().encode(cid)))
 }
 
 // ─── RPC ─────────────────────────────────────────────────────────────────────
 
-const RPC_THROTTLE_MS = 150;
-const RPC_MAX_RETRIES = 6;
-const RPC_INITIAL_BACKOFF_MS = 1_000;
+const RPC_THROTTLE_MS = 150
+const RPC_MAX_RETRIES = 6
+const RPC_INITIAL_BACKOFF_MS = 1_000
 
-let rpcLastCallAt = 0;
+let rpcLastCallAt = 0
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-type JsonRpcSuccess<T> = { jsonrpc: string; id: number; result: T };
-type JsonRpcFailure = { jsonrpc: string; id: number; error: { code?: number; message: string } };
+type JsonRpcSuccess<T> = { jsonrpc: string; id: number; result: T }
+type JsonRpcFailure = {
+  jsonrpc: string
+  id: number
+  error: { code?: number; message: string }
+}
 
 /** JSON-RPC with throttling + retry-on-429 to survive rate-limited public RPCs. */
-async function rpcCall<T>(rpcUrl: string, method: string, params: unknown[]): Promise<T> {
-  const sinceLast = Date.now() - rpcLastCallAt;
+async function rpcCall<T>(
+  rpcUrl: string,
+  method: string,
+  params: unknown[]
+): Promise<T> {
+  const sinceLast = Date.now() - rpcLastCallAt
   if (sinceLast < RPC_THROTTLE_MS) {
-    await sleep(RPC_THROTTLE_MS - sinceLast);
+    await sleep(RPC_THROTTLE_MS - sinceLast)
   }
 
-  let backoff = RPC_INITIAL_BACKOFF_MS;
+  let backoff = RPC_INITIAL_BACKOFF_MS
   for (let attempt = 1; attempt <= RPC_MAX_RETRIES; attempt++) {
-    rpcLastCallAt = Date.now();
+    rpcLastCallAt = Date.now()
     const res = await fetch(rpcUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-    });
+    })
 
     if (res.status === 429 || (res.status >= 500 && res.status < 600)) {
       if (attempt === RPC_MAX_RETRIES) {
-        throw new Error(`RPC HTTP ${res.status} for ${method} after ${attempt} attempts`);
+        throw new Error(
+          `RPC HTTP ${res.status} for ${method} after ${attempt} attempts`
+        )
       }
-      const retryAfter = res.headers.get("retry-after");
-      const waitMs = Math.max(retryAfter ? Number.parseFloat(retryAfter) * 1000 : 0, backoff);
+      const retryAfter = res.headers.get("retry-after")
+      const waitMs = Math.max(
+        retryAfter ? Number.parseFloat(retryAfter) * 1000 : 0,
+        backoff
+      )
       console.error(
-        `   (RPC ${res.status} — retrying after ${waitMs}ms, attempt ${attempt}/${RPC_MAX_RETRIES})`,
-      );
-      await sleep(waitMs);
-      backoff *= 2;
-      continue;
+        `   (RPC ${res.status} — retrying after ${waitMs}ms, attempt ${attempt}/${RPC_MAX_RETRIES})`
+      )
+      await sleep(waitMs)
+      backoff *= 2
+      continue
     }
 
     if (!res.ok) {
-      throw new Error(`RPC HTTP ${res.status} for ${method}: ${await res.text()}`);
+      throw new Error(
+        `RPC HTTP ${res.status} for ${method}: ${await res.text()}`
+      )
     }
-    const body = (await res.json()) as JsonRpcSuccess<T> | JsonRpcFailure;
+    const body = (await res.json()) as JsonRpcSuccess<T> | JsonRpcFailure
     if ("error" in body) {
-      throw new Error(`RPC error for ${method}: ${body.error.message}`);
+      throw new Error(`RPC error for ${method}: ${body.error.message}`)
     }
-    return body.result;
+    return body.result
   }
-  throw new Error(`RPC unreachable for ${method}`);
+  throw new Error(`RPC unreachable for ${method}`)
 }
 
 /** `eth_call` returning the decoded raw bytes, or undefined when the contract returns empty data. */
 async function ethCall(
   rpcUrl: string,
   contractAddress: string,
-  calldata: Uint8Array,
+  calldata: Uint8Array
 ): Promise<Uint8Array | undefined> {
   const result = await rpcCall<string>(rpcUrl, "eth_call", [
     { to: contractAddress, data: toHex(calldata) },
     "latest",
-  ]);
+  ])
   if (!result || result === "0x") {
-    return undefined;
+    return undefined
   }
-  return fromHex(result);
+  return fromHex(result)
 }
 
 // ─── Contract ABI fragments ──────────────────────────────────────────────────
@@ -260,7 +279,7 @@ const VIEW_ABI: ContractABI = [
     ],
     type: "function",
   },
-];
+]
 
 const WRITE_ABI: ContractABI = [
   {
@@ -379,39 +398,41 @@ const WRITE_ABI: ContractABI = [
     outputs: [],
     type: "function",
   },
-];
+]
 
 interface ViewMethod {
-  encodeInput(args: object): Uint8Array;
-  decodeOutput(data: Uint8Array): unknown[];
+  encodeInput(args: object): Uint8Array
+  decodeOutput(data: Uint8Array): unknown[]
 }
 interface WriteMethod {
-  encodeInput(args: object): Uint8Array;
+  encodeInput(args: object): Uint8Array
 }
 
 interface ViewContract {
-  listGroups: ViewMethod;
-  listPkps: ViewMethod;
-  listActions: ViewMethod;
-  listWalletsInGroup: ViewMethod;
-  listApiKeys: ViewMethod;
+  listGroups: ViewMethod
+  listPkps: ViewMethod
+  listActions: ViewMethod
+  listWalletsInGroup: ViewMethod
+  listApiKeys: ViewMethod
 }
 
 interface WriteContract {
-  addGroup: WriteMethod;
-  updateGroup: WriteMethod;
-  addAction: WriteMethod;
-  removeAction: WriteMethod;
-  addActionToGroup: WriteMethod;
-  removeActionFromGroup: WriteMethod;
-  addPkpToGroup: WriteMethod;
-  registerWalletDerivation: WriteMethod;
-  setUsageApiKey: WriteMethod;
-  transferChainSecuredAccountOwnership: WriteMethod;
+  addGroup: WriteMethod
+  updateGroup: WriteMethod
+  addAction: WriteMethod
+  removeAction: WriteMethod
+  addActionToGroup: WriteMethod
+  removeActionFromGroup: WriteMethod
+  addPkpToGroup: WriteMethod
+  registerWalletDerivation: WriteMethod
+  setUsageApiKey: WriteMethod
+  transferChainSecuredAccountOwnership: WriteMethod
 }
 
-const viewContract = createContract(VIEW_ABI) as unknown as ViewContract;
-export const writeContract = createContract(WRITE_ABI) as unknown as WriteContract;
+const viewContract = createContract(VIEW_ABI) as unknown as ViewContract
+export const writeContract = createContract(
+  WRITE_ABI
+) as unknown as WriteContract
 
 /**
  * Read every entry of a contract list view. The contract ignores `pageNumber`
@@ -422,26 +443,33 @@ async function readAll<T>(
   rpcUrl: string,
   contractAddress: string,
   encodeInput: (page: bigint, pageSize: bigint) => Uint8Array,
-  decodeOutput: (data: Uint8Array) => T[],
+  decodeOutput: (data: Uint8Array) => T[]
 ): Promise<T[]> {
-  let pageSize = 100n;
+  let pageSize = 100n
   for (let attempt = 0; attempt < 5; attempt++) {
-    const raw = await ethCall(rpcUrl, contractAddress, encodeInput(0n, pageSize));
+    const raw = await ethCall(
+      rpcUrl,
+      contractAddress,
+      encodeInput(0n, pageSize)
+    )
     if (!raw) {
-      return [];
+      return []
     }
-    const items = decodeOutput(raw);
+    const items = decodeOutput(raw)
     if (BigInt(items.length) < pageSize) {
-      return items;
+      return items
     }
-    pageSize *= 4n;
+    pageSize *= 4n
   }
-  throw new Error(`readAll exceeded 5 widen attempts at pageSize=${pageSize}`);
+  throw new Error(`readAll exceeded 5 widen attempts at pageSize=${pageSize}`)
 }
 
 // ─── EIP-712 Lit ChainSecured signing ────────────────────────────────────────
 
-export type ChainSecuredPrimaryType = "CreateWallet" | "AddUsageApiKey" | "ConvertAccount";
+export type ChainSecuredPrimaryType =
+  | "CreateWallet"
+  | "AddUsageApiKey"
+  | "ConvertAccount"
 
 /**
  * Build + sign the canonical Lit ChainSecured EIP-712 payload for the
@@ -452,9 +480,9 @@ export function signChainSecuredTypedData(
   primaryType: ChainSecuredPrimaryType,
   adminWalletAddress: string,
   chainId: number,
-  privateKey: string,
+  privateKey: string
 ): { typed_data: object; signature: string } {
-  const issuedAt = Math.floor(Date.now() / 1000);
+  const issuedAt = Math.floor(Date.now() / 1000)
   const typedData = {
     types: {
       EIP712Domain: [
@@ -477,9 +505,12 @@ export function signChainSecuredTypedData(
       address: adminWalletAddress,
       issuedAt: String(issuedAt),
     },
-  };
-  const signature = signTyped(typedData as unknown as Parameters<typeof signTyped>[0], privateKey);
-  return { typed_data: typedData, signature };
+  }
+  const signature = signTyped(
+    typedData as unknown as Parameters<typeof signTyped>[0],
+    privateKey
+  )
+  return { typed_data: typedData, signature }
 }
 
 // ─── Transaction sending ─────────────────────────────────────────────────────
@@ -494,29 +525,36 @@ export async function sendTransaction(
   chainId: bigint,
   privateKey: string,
   to: string,
-  calldata: Uint8Array,
+  calldata: Uint8Array
 ): Promise<string> {
-  const fromAddress = addr.fromPrivateKey(privateKey);
-  const calldataHex = toHex(calldata);
-  console.log(`     cast call --rpc-url ${rpcUrl} ${to} '${calldataHex}' --from ${fromAddress}`);
+  const fromAddress = addr.fromPrivateKey(privateKey)
+  const calldataHex = toHex(calldata)
+  console.log(
+    `     cast call --rpc-url ${rpcUrl} ${to} '${calldataHex}' --from ${fromAddress}`
+  )
 
   const [nonceHex, feeData] = await Promise.all([
-    rpcCall<string>(rpcUrl, "eth_getTransactionCount", [fromAddress, "pending"]),
-    rpcCall<{ baseFeePerGas: string[] }>(rpcUrl, "eth_feeHistory", [1, "latest", [50]]).then(
-      (h) => {
-        const baseFee = BigInt(h.baseFeePerGas?.[0] ?? "0x1");
-        return {
-          maxFeePerGas: baseFee * 2n + 1_000_000n,
-          maxPriorityFeePerGas: 1_000_000n,
-        };
-      },
-    ),
-  ]);
+    rpcCall<string>(rpcUrl, "eth_getTransactionCount", [
+      fromAddress,
+      "pending",
+    ]),
+    rpcCall<{ baseFeePerGas: string[] }>(rpcUrl, "eth_feeHistory", [
+      1,
+      "latest",
+      [50],
+    ]).then((h) => {
+      const baseFee = BigInt(h.baseFeePerGas?.[0] ?? "0x1")
+      return {
+        maxFeePerGas: baseFee * 2n + 1_000_000n,
+        maxPriorityFeePerGas: 1_000_000n,
+      }
+    }),
+  ])
 
   const gasEstimate = await rpcCall<string>(rpcUrl, "eth_estimateGas", [
     { from: fromAddress, to, data: calldataHex },
-  ]);
-  const gasLimit = (BigInt(gasEstimate) * 12n) / 10n;
+  ])
+  const gasLimit = (BigInt(gasEstimate) * 12n) / 10n
 
   const tx = Transaction.prepare({
     to,
@@ -527,80 +565,91 @@ export async function sendTransaction(
     maxFeePerGas: feeData.maxFeePerGas,
     maxPriorityFeePerGas: feeData.maxPriorityFeePerGas,
     gasLimit,
-  });
-  const signed = tx.signBy(privateKey);
-  const txHash = await rpcCall<string>(rpcUrl, "eth_sendRawTransaction", [signed.toHex(true)]);
+  })
+  const signed = tx.signBy(privateKey)
+  const txHash = await rpcCall<string>(rpcUrl, "eth_sendRawTransaction", [
+    signed.toHex(true),
+  ])
 
   for (let i = 0; i < 60; i++) {
-    await sleep(2000);
-    const receipt = await rpcCall<{ status: string } | null>(rpcUrl, "eth_getTransactionReceipt", [
-      txHash,
-    ]);
+    await sleep(2000)
+    const receipt = await rpcCall<{ status: string } | null>(
+      rpcUrl,
+      "eth_getTransactionReceipt",
+      [txHash]
+    )
     if (receipt) {
       if (receipt.status !== "0x1") {
-        throw new Error(`Transaction reverted: ${txHash}`);
+        throw new Error(`Transaction reverted: ${txHash}`)
       }
-      return txHash;
+      return txHash
     }
   }
-  throw new Error(`Transaction not mined after 2 minutes: ${txHash}`);
+  throw new Error(`Transaction not mined after 2 minutes: ${txHash}`)
 }
 
 // ─── HTTP endpoints used by ChainSecured flows ───────────────────────────────
 
 interface CreateWalletWithSignatureResponse {
-  wallet_address: string;
-  derivation_path: string;
+  wallet_address: string
+  derivation_path: string
 }
 
 async function createWalletWithSignature(
   adminWalletAddress: string,
   chainId: number,
-  privateKey: string,
+  privateKey: string
 ): Promise<CreateWalletWithSignatureResponse> {
   const { typed_data, signature } = signChainSecuredTypedData(
     "CreateWallet",
     adminWalletAddress,
     chainId,
-    privateKey,
-  );
+    privateKey
+  )
   const res = await fetch(`${BASE_URL}/core/v1/create_wallet_with_signature`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ typed_data, signature }),
-  });
+  })
   if (!res.ok) {
-    throw new Error(`create_wallet_with_signature failed (${res.status}): ${await res.text()}`);
+    throw new Error(
+      `create_wallet_with_signature failed (${res.status}): ${await res.text()}`
+    )
   }
-  return res.json() as Promise<CreateWalletWithSignatureResponse>;
+  return res.json() as Promise<CreateWalletWithSignatureResponse>
 }
 
 interface AddUsageApiKeyWithSignatureResponse {
-  usage_api_key: string;
-  wallet_address: string;
-  derivation_path: string;
+  usage_api_key: string
+  wallet_address: string
+  derivation_path: string
 }
 
 async function addUsageApiKeyWithSignature(
   adminWalletAddress: string,
   chainId: number,
-  privateKey: string,
+  privateKey: string
 ): Promise<AddUsageApiKeyWithSignatureResponse> {
   const { typed_data, signature } = signChainSecuredTypedData(
     "AddUsageApiKey",
     adminWalletAddress,
     chainId,
-    privateKey,
-  );
-  const res = await fetch(`${BASE_URL}/core/v1/add_usage_api_key_with_signature`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ typed_data, signature }),
-  });
+    privateKey
+  )
+  const res = await fetch(
+    `${BASE_URL}/core/v1/add_usage_api_key_with_signature`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ typed_data, signature }),
+    }
+  )
   if (!res.ok) {
-    throw new Error(`add_usage_api_key_with_signature failed (${res.status}): ${await res.text()}`);
+    throw new Error(
+      `add_usage_api_key_with_signature failed (${res.status}): ${await res.text()}`
+    )
   }
-  return res.json() as Promise<AddUsageApiKeyWithSignatureResponse>;
+  return res.json() as Promise<AddUsageApiKeyWithSignatureResponse>
 }
 
 // ─── Backend ─────────────────────────────────────────────────────────────────
@@ -608,13 +657,16 @@ async function addUsageApiKeyWithSignature(
 /** Configuration required by the ChainSecured backend. */
 export interface ChainSecuredBackendOptions {
   /** Admin wallet private key (0x-prefixed). Signs every contract write. */
-  privateKey: string;
+  privateKey: string
   /**
    * Master account API key. Used solely to derive the on-chain account hash
    * (`keccak256(toUtf8Bytes(accountApiKey))`) so the same key identifies the
    * account in both backends.
    */
-  accountApiKey: string;
+  accountApiKey: string
+  /** Metadata to register when this backend mints a fresh PKP. */
+  pkpName: string
+  pkpDescription: string
 }
 
 /**
@@ -622,34 +674,44 @@ export interface ChainSecuredBackendOptions {
  * id, and RPC URL are pinned to the constants near the top of this file;
  * edit them there to target a different deployment.
  */
-export function createChainSecuredBackend(opts: ChainSecuredBackendOptions): SetupBackend {
+export function createChainSecuredBackend(
+  opts: ChainSecuredBackendOptions
+): SetupBackend {
   return new ChainSecuredBackend({
     privateKey: opts.privateKey,
-    adminHash: bytesToBigInt(keccak(new TextEncoder().encode(opts.accountApiKey))),
+    adminHash: bytesToBigInt(
+      keccak(new TextEncoder().encode(opts.accountApiKey))
+    ),
     contractAddress: DEFAULT_ACCOUNT_CONFIG_ADDRESS,
     chainId: DEFAULT_BASE_CHAIN_ID,
     rpcUrl: DEFAULT_BASE_RPC_URL,
-  });
+    pkpName: opts.pkpName,
+    pkpDescription: opts.pkpDescription,
+  })
 }
 
 /** Internal config the class actually uses. */
 interface InternalOptions {
-  privateKey: string;
-  adminHash: bigint;
-  contractAddress: string;
-  chainId: bigint;
-  rpcUrl: string;
+  privateKey: string
+  adminHash: bigint
+  contractAddress: string
+  chainId: bigint
+  rpcUrl: string
+  pkpName: string
+  pkpDescription: string
 }
 
 class ChainSecuredBackend implements SetupBackend {
-  readonly mode = "chain-secured" as const;
-  private readonly adminWalletAddress: string;
+  readonly mode = "chain-secured" as const
+  private readonly adminWalletAddress: string
 
   constructor(private readonly opts: InternalOptions) {
-    const normalized = opts.privateKey.startsWith("0x") ? opts.privateKey : `0x${opts.privateKey}`;
-    this.adminWalletAddress = addr.fromPrivateKey(normalized).toLowerCase();
+    const normalized = opts.privateKey.startsWith("0x")
+      ? opts.privateKey
+      : `0x${opts.privateKey}`
+    this.adminWalletAddress = addr.fromPrivateKey(normalized).toLowerCase()
     // Keep the normalized key in opts so later signers don't have to re-normalize.
-    this.opts = { ...opts, privateKey: normalized };
+    this.opts = { ...opts, privateKey: normalized }
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────
@@ -659,8 +721,8 @@ class ChainSecuredBackend implements SetupBackend {
       this.opts.chainId,
       this.opts.privateKey,
       this.opts.contractAddress,
-      calldata,
-    );
+      calldata
+    )
   }
 
   // ── Reads ───────────────────────────────────────────────────────────────
@@ -676,17 +738,17 @@ class ChainSecuredBackend implements SetupBackend {
         }),
       (data) =>
         viewContract.listPkps.decodeOutput(data) as Array<{
-          id: bigint;
-          pkpId: string;
-          name: string;
-          description: string;
-        }>,
-    );
+          id: bigint
+          pkpId: string
+          name: string
+          description: string
+        }>
+    )
     return rows.map((r) => ({
       walletAddress: r.pkpId,
       name: r.name,
       description: r.description,
-    }));
+    }))
   }
 
   async listGroups(): Promise<GroupInfo[]> {
@@ -701,12 +763,16 @@ class ChainSecuredBackend implements SetupBackend {
         }),
       (data) =>
         viewContract.listGroups.decodeOutput(data) as Array<{
-          id: bigint;
-          name: string;
-          description: string;
-        }>,
-    );
-    return rows.map((r) => ({ id: r.id, name: r.name, description: r.description }));
+          id: bigint
+          name: string
+          description: string
+        }>
+    )
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description,
+    }))
   }
 
   async listActions(): Promise<ActionInfo[]> {
@@ -721,16 +787,20 @@ class ChainSecuredBackend implements SetupBackend {
         }),
       (data) =>
         viewContract.listActions.decodeOutput(data) as Array<{
-          id: bigint;
-          name: string;
-          description: string;
-        }>,
-    );
+          id: bigint
+          name: string
+          description: string
+        }>
+    )
     // The contract stores `actionMetadata[actionHash].id = actionHash`, so the
     // `id` IS the actionHash. Tombstones (id === 0n) are excluded.
     return rows
       .filter((r) => r.id !== 0n)
-      .map((r) => ({ actionHash: r.id, name: r.name, description: r.description }));
+      .map((r) => ({
+        actionHash: r.id,
+        name: r.name,
+        description: r.description,
+      }))
   }
 
   async listUsageApiKeys(): Promise<UsageKeyInfo[]> {
@@ -744,9 +814,11 @@ class ChainSecuredBackend implements SetupBackend {
           pageSize: size,
         }),
       (data) =>
-        viewContract.listApiKeys.decodeOutput(data) as Array<{ metadata: { name: string } }>,
-    );
-    return rows.map((r) => ({ name: r.metadata.name }));
+        viewContract.listApiKeys.decodeOutput(data) as Array<{
+          metadata: { name: string }
+        }>
+    )
+    return rows.map((r) => ({ name: r.metadata.name }))
   }
 
   async listPkpsInGroup(groupId: bigint): Promise<PkpInfo[]> {
@@ -762,17 +834,17 @@ class ChainSecuredBackend implements SetupBackend {
         }),
       (data) =>
         viewContract.listWalletsInGroup.decodeOutput(data) as Array<{
-          id: bigint;
-          pkpId: string;
-          name: string;
-          description: string;
-        }>,
-    );
+          id: bigint
+          pkpId: string
+          name: string
+          description: string
+        }>
+    )
     return rows.map((r) => ({
       walletAddress: r.pkpId,
       name: r.name,
       description: r.description,
-    }));
+    }))
   }
 
   // ── Writes ──────────────────────────────────────────────────────────────
@@ -780,18 +852,18 @@ class ChainSecuredBackend implements SetupBackend {
     const minted = await createWalletWithSignature(
       this.adminWalletAddress,
       Number(this.opts.chainId),
-      this.opts.privateKey,
-    );
+      this.opts.privateKey
+    )
 
     const calldata = writeContract.registerWalletDerivation.encodeInput({
       apiKeyHash: this.opts.adminHash,
       pkpId: minted.wallet_address,
       derivationPath: BigInt(minted.derivation_path),
-      name: "Allocator PKP",
-      description: "Lit Allocator PKP",
-    });
-    await this.send(calldata);
-    return { walletAddress: minted.wallet_address };
+      name: this.opts.pkpName,
+      description: this.opts.pkpDescription,
+    })
+    await this.send(calldata)
+    return { walletAddress: minted.wallet_address }
   }
 
   async addGroup(name: string, description: string): Promise<bigint> {
@@ -801,16 +873,16 @@ class ChainSecuredBackend implements SetupBackend {
       description,
       cidHashes: [],
       pkpIds: [],
-    });
-    await this.send(calldata);
+    })
+    await this.send(calldata)
 
     // Re-read to discover the new id.
-    const groups = await this.listGroups();
-    const created = groups.find((g) => g.name === name);
+    const groups = await this.listGroups()
+    const created = groups.find((g) => g.name === name)
     if (!created) {
-      throw new Error(`Failed to find group "${name}" after creation`);
+      throw new Error(`Failed to find group "${name}" after creation`)
     }
-    return created.id;
+    return created.id
   }
 
   async addPkpToGroup(groupId: bigint, pkpId: string): Promise<void> {
@@ -818,18 +890,22 @@ class ChainSecuredBackend implements SetupBackend {
       apiKeyHash: this.opts.adminHash,
       groupId,
       pkpId,
-    });
-    await this.send(calldata);
+    })
+    await this.send(calldata)
   }
 
-  async addAction(name: string, description: string, cid: string): Promise<void> {
+  async addAction(
+    name: string,
+    description: string,
+    cid: string
+  ): Promise<void> {
     const calldata = writeContract.addAction.encodeInput({
       accountApiKeyHash: this.opts.adminHash,
       name,
       description,
       actionHash: hashCidToBigInt(cid),
-    });
-    await this.send(calldata);
+    })
+    await this.send(calldata)
   }
 
   async addActionToGroup(groupId: bigint, cid: string): Promise<void> {
@@ -837,21 +913,24 @@ class ChainSecuredBackend implements SetupBackend {
       apiKeyHash: this.opts.adminHash,
       groupId,
       action: hashCidToBigInt(cid),
-    });
-    await this.send(calldata);
+    })
+    await this.send(calldata)
   }
 
-  async removeActionFromGroup(groupId: bigint, actionHash: bigint): Promise<void> {
+  async removeActionFromGroup(
+    groupId: bigint,
+    actionHash: bigint
+  ): Promise<void> {
     try {
       const calldata = writeContract.removeActionFromGroup.encodeInput({
         apiKeyHash: this.opts.adminHash,
         groupId,
         action: actionHash,
-      });
-      await this.send(calldata);
+      })
+      await this.send(calldata)
     } catch (e: unknown) {
-      const msg = (e instanceof Error ? e.message : String(e)).split("\n")[0];
-      console.log(`     (skipped removeActionFromGroup: ${msg})`);
+      const msg = (e instanceof Error ? e.message : String(e)).split("\n")[0]
+      console.log(`     (skipped removeActionFromGroup: ${msg})`)
     }
   }
 
@@ -860,11 +939,11 @@ class ChainSecuredBackend implements SetupBackend {
       const calldata = writeContract.removeAction.encodeInput({
         accountApiKeyHash: this.opts.adminHash,
         actionHash,
-      });
-      await this.send(calldata);
+      })
+      await this.send(calldata)
     } catch (e: unknown) {
-      const msg = (e instanceof Error ? e.message : String(e)).split("\n")[0];
-      console.log(`     (skipped removeAction: ${msg})`);
+      const msg = (e instanceof Error ? e.message : String(e)).split("\n")[0]
+      console.log(`     (skipped removeAction: ${msg})`)
     }
   }
 
@@ -876,21 +955,21 @@ class ChainSecuredBackend implements SetupBackend {
       description: params.description,
       cidHashes: params.cidHashesPermitted,
       pkpIds: params.pkpIdsPermitted,
-    });
-    await this.send(calldata);
+    })
+    await this.send(calldata)
   }
 
   async createUsageApiKey(
     name: string,
     description: string,
-    executeInGroupIds: bigint[],
+    executeInGroupIds: bigint[]
   ): Promise<string> {
     // Mint the wallet behind the usage key via DStack MPC.
     const minted = await addUsageApiKeyWithSignature(
       this.adminWalletAddress,
       Number(this.opts.chainId),
-      this.opts.privateKey,
-    );
+      this.opts.privateKey
+    )
 
     // Register the new wallet derivation on-chain.
     const regCalldata = writeContract.registerWalletDerivation.encodeInput({
@@ -899,12 +978,12 @@ class ChainSecuredBackend implements SetupBackend {
       derivationPath: BigInt(minted.derivation_path),
       name,
       description,
-    });
-    await this.send(regCalldata);
+    })
+    await this.send(regCalldata)
 
     // keccak256 over the raw 32-byte secret bytes (base64-decoded).
-    const keyBytes = Buffer.from(minted.usage_api_key, "base64");
-    const usageApiKeyHash = bytesToBigInt(keccak(new Uint8Array(keyBytes)));
+    const keyBytes = Buffer.from(minted.usage_api_key, "base64")
+    const usageApiKeyHash = bytesToBigInt(keccak(new Uint8Array(keyBytes)))
 
     // Attach the key to the account with execute permission for the given groups.
     const setCalldata = writeContract.setUsageApiKey.encodeInput({
@@ -921,9 +1000,9 @@ class ChainSecuredBackend implements SetupBackend {
       addPkpToGroups: [],
       removePkpFromGroups: [],
       executeInGroups: executeInGroupIds,
-    });
-    await this.send(setCalldata);
+    })
+    await this.send(setCalldata)
 
-    return minted.usage_api_key;
+    return minted.usage_api_key
   }
 }

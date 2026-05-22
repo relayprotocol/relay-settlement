@@ -1,0 +1,12 @@
+# Build
+dist
+actions
+
+# Dependencies
+node_modules
+
+# Scripts
+local_scripts
+
+# Secrets
+.env*

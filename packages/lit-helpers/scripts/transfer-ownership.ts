@@ -28,7 +28,7 @@
  *     (--new-admin-address 0x... | --new-admin-private-key 0x...)
  */
 
-import { addr } from "micro-eth-signer";
+import { addr } from "micro-eth-signer"
 import {
   bytesToBigInt,
   DEFAULT_ACCOUNT_CONFIG_ADDRESS,
@@ -37,86 +37,90 @@ import {
   keccak,
   sendTransaction,
   writeContract,
-} from "./setup/backend-chain-secured.js";
+} from "../src/chainSecured.js"
 
 const USAGE =
   "Usage:\n" +
   "  tsx scripts/transfer-ownership.ts " +
   "--account-api-key <key> " +
   "--current-admin-private-key 0x... " +
-  "(--new-admin-address 0x... | --new-admin-private-key 0x...)";
+  "(--new-admin-address 0x... | --new-admin-private-key 0x...)"
 
 /** Read a CLI flag value accepting `--name value` or `--name=value`. */
 function getOption(args: string[], name: string): string | undefined {
-  const idx = args.indexOf(name);
+  const idx = args.indexOf(name)
   if (idx !== -1) {
-    return args[idx + 1];
+    return args[idx + 1]
   }
-  const prefix = `${name}=`;
-  return args.find((a) => a.startsWith(prefix))?.slice(prefix.length);
+  const prefix = `${name}=`
+  return args.find((a) => a.startsWith(prefix))?.slice(prefix.length)
 }
 
 async function main() {
-  const args = process.argv.slice(2);
-  const accountApiKey = getOption(args, "--account-api-key");
-  const currentAdminPrivateKey = getOption(args, "--current-admin-private-key");
-  const newAdminAddressArg = getOption(args, "--new-admin-address");
-  const newAdminPrivateKey = getOption(args, "--new-admin-private-key");
+  const args = process.argv.slice(2)
+  const accountApiKey = getOption(args, "--account-api-key")
+  const currentAdminPrivateKey = getOption(args, "--current-admin-private-key")
+  const newAdminAddressArg = getOption(args, "--new-admin-address")
+  const newAdminPrivateKey = getOption(args, "--new-admin-private-key")
 
-  const missing: string[] = [];
+  const missing: string[] = []
   if (!accountApiKey) {
-    missing.push("--account-api-key <key>");
+    missing.push("--account-api-key <key>")
   }
   if (!currentAdminPrivateKey) {
-    missing.push("--current-admin-private-key 0x...");
+    missing.push("--current-admin-private-key 0x...")
   }
   if (!newAdminAddressArg && !newAdminPrivateKey) {
-    missing.push("--new-admin-address 0x... or --new-admin-private-key 0x...");
+    missing.push("--new-admin-address 0x... or --new-admin-private-key 0x...")
   }
   if (missing.length > 0 || !accountApiKey || !currentAdminPrivateKey) {
-    console.error(`Missing ${missing.join(", ")}.\n\n${USAGE}`);
-    process.exit(1);
+    console.error(`Missing ${missing.join(", ")}.\n\n${USAGE}`)
+    process.exit(1)
   }
   if (newAdminAddressArg && newAdminPrivateKey) {
     console.error(
-      `Pass only one of --new-admin-address or --new-admin-private-key, not both.\n\n${USAGE}`,
-    );
-    process.exit(1);
+      `Pass only one of --new-admin-address or --new-admin-private-key, not both.\n\n${USAGE}`
+    )
+    process.exit(1)
   }
 
   // Resolve the new admin address: either provided directly, or derived from
   // its private key. The contract only needs the address — the new owner
   // never has to expose their key during the transfer.
-  let newAdminAddressLc: string;
+  let newAdminAddressLc: string
   if (newAdminAddressArg) {
     if (!/^0x[0-9a-fA-F]{40}$/.test(newAdminAddressArg)) {
-      console.error("--new-admin-address must be a 0x-prefixed 20-byte hex address");
-      process.exit(1);
+      console.error(
+        "--new-admin-address must be a 0x-prefixed 20-byte hex address"
+      )
+      process.exit(1)
     }
-    newAdminAddressLc = newAdminAddressArg.toLowerCase();
+    newAdminAddressLc = newAdminAddressArg.toLowerCase()
   } else {
     const normalizedNewAdminPk = newAdminPrivateKey!.startsWith("0x")
       ? newAdminPrivateKey!
-      : `0x${newAdminPrivateKey!}`;
+      : `0x${newAdminPrivateKey!}`
     try {
-      newAdminAddressLc = addr.fromPrivateKey(normalizedNewAdminPk).toLowerCase();
+      newAdminAddressLc = addr
+        .fromPrivateKey(normalizedNewAdminPk)
+        .toLowerCase()
     } catch (e) {
       console.error(
-        `--new-admin-private-key is not a valid private key: ${e instanceof Error ? e.message : e}`,
-      );
-      process.exit(1);
+        `--new-admin-private-key is not a valid private key: ${e instanceof Error ? e.message : e}`
+      )
+      process.exit(1)
     }
   }
 
   const normalizedPk = currentAdminPrivateKey.startsWith("0x")
     ? currentAdminPrivateKey
-    : `0x${currentAdminPrivateKey}`;
-  const currentAdminAddress = addr.fromPrivateKey(normalizedPk).toLowerCase();
+    : `0x${currentAdminPrivateKey}`
+  const currentAdminAddress = addr.fromPrivateKey(normalizedPk).toLowerCase()
   if (currentAdminAddress === newAdminAddressLc) {
     console.error(
-      "--new-admin-address must differ from the address derived from --current-admin-private-key",
-    );
-    process.exit(1);
+      "--new-admin-address must differ from the address derived from --current-admin-private-key"
+    )
+    process.exit(1)
   }
 
   // The account is keyed on-chain by keccak256(toUtf8Bytes(accountApiKey)),
@@ -124,39 +128,50 @@ async function main() {
   // to the master entry (incl. keccak256(currentAdminAddress) for accounts
   // that have been transferred once already), but using the original API key
   // hash is the canonical and most stable input.
-  const apiKeyHash = bytesToBigInt(keccak(new TextEncoder().encode(accountApiKey)));
+  const apiKeyHash = bytesToBigInt(
+    keccak(new TextEncoder().encode(accountApiKey))
+  )
 
-  console.log("🔁 Transferring ChainSecured account ownership");
-  console.log(`   account API key hash: 0x${apiKeyHash.toString(16).padStart(64, "0")}`);
-  console.log(`   current admin:        ${currentAdminAddress}`);
-  console.log(`   new admin:            ${newAdminAddressLc}`);
-  console.log(`   contract:             ${DEFAULT_ACCOUNT_CONFIG_ADDRESS}`);
-  console.log(`   chain id:             ${DEFAULT_BASE_CHAIN_ID}`);
-  console.log();
+  console.log("🔁 Transferring ChainSecured account ownership")
+  console.log(
+    `   account API key hash: 0x${apiKeyHash.toString(16).padStart(64, "0")}`
+  )
+  console.log(`   current admin:        ${currentAdminAddress}`)
+  console.log(`   new admin:            ${newAdminAddressLc}`)
+  console.log(`   contract:             ${DEFAULT_ACCOUNT_CONFIG_ADDRESS}`)
+  console.log(`   chain id:             ${DEFAULT_BASE_CHAIN_ID}`)
+  console.log()
 
-  const calldata = writeContract.transferChainSecuredAccountOwnership.encodeInput({
-    apiKeyHash,
-    newAdminWalletAddress: newAdminAddressLc,
-  });
+  const calldata =
+    writeContract.transferChainSecuredAccountOwnership.encodeInput({
+      apiKeyHash,
+      newAdminWalletAddress: newAdminAddressLc,
+    })
 
   const txHash = await sendTransaction(
     DEFAULT_BASE_RPC_URL,
     DEFAULT_BASE_CHAIN_ID,
     normalizedPk,
     DEFAULT_ACCOUNT_CONFIG_ADDRESS,
-    calldata,
-  );
+    calldata
+  )
 
-  console.log();
-  console.log(`✓ Ownership transferred.`);
-  console.log(`  tx hash: ${txHash}`);
-  console.log();
-  console.log(`  ChainSecured admin writes must now be signed by ${newAdminAddressLc}.`);
-  console.log(`  Continue using --account-api-key="${accountApiKey.slice(0, 6)}…" to identify`);
-  console.log(`  the account; the master apiKeyHash and billing wallet are preserved.`);
+  console.log()
+  console.log(`✓ Ownership transferred.`)
+  console.log(`  tx hash: ${txHash}`)
+  console.log()
+  console.log(
+    `  ChainSecured admin writes must now be signed by ${newAdminAddressLc}.`
+  )
+  console.log(
+    `  Continue using --account-api-key="${accountApiKey.slice(0, 6)}…" to identify`
+  )
+  console.log(
+    `  the account; the master apiKeyHash and billing wallet are preserved.`
+  )
 }
 
 main().catch((err) => {
-  console.error("Error:", err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+  console.error("Error:", err instanceof Error ? err.message : err)
+  process.exit(1)
+})

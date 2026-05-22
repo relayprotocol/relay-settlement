@@ -19,81 +19,81 @@
 /** Minimal PKP wallet info exposed by both backends. */
 export interface PkpInfo {
   /** EVM address of the PKP wallet. */
-  walletAddress: string;
-  name?: string;
-  description?: string;
+  walletAddress: string
+  name?: string
+  description?: string
 }
 
 /** Minimal group info exposed by both backends. */
 export interface GroupInfo {
   /** On-chain group id. */
-  id: bigint;
-  name: string;
-  description?: string;
+  id: bigint
+  name: string
+  description?: string
 }
 
 /** Minimal action info exposed by both backends. */
 export interface ActionInfo {
   /** keccak256(toUtf8Bytes(cid)) as a uint256 — the on-chain registry key. */
-  actionHash: bigint;
+  actionHash: bigint
   /** Raw IPFS CID, when known. */
-  cid?: string;
-  name?: string;
-  description?: string;
+  cid?: string
+  name?: string
+  description?: string
 }
 
 /** Minimal usage-key info exposed by both backends. */
 export interface UsageKeyInfo {
-  name: string;
+  name: string
 }
 
 /** Permissions written by `updateGroup`. */
 export interface UpdateGroupParams {
-  name: string;
-  description: string;
+  name: string
+  description: string
   /** Wallet addresses permitted to execute against the group. */
-  pkpIdsPermitted: string[];
+  pkpIdsPermitted: string[]
   /** keccak256-hashed CIDs allowed in the group. */
-  cidHashesPermitted: bigint[];
+  cidHashesPermitted: bigint[]
 }
 
 /** The mode label for log output and CLI parsing. */
-export type SetupMode = "api-key" | "chain-secured";
+export type SetupMode = "api-key" | "chain-secured"
 
 /** Read surface — same shape for every backend, different transport. */
 export interface SetupReads {
-  listPkps(): Promise<PkpInfo[]>;
-  listGroups(): Promise<GroupInfo[]>;
-  listActions(): Promise<ActionInfo[]>;
-  listUsageApiKeys(): Promise<UsageKeyInfo[]>;
-  listPkpsInGroup(groupId: bigint): Promise<PkpInfo[]>;
+  listPkps(): Promise<PkpInfo[]>
+  listGroups(): Promise<GroupInfo[]>
+  listActions(): Promise<ActionInfo[]>
+  listUsageApiKeys(): Promise<UsageKeyInfo[]>
+  listPkpsInGroup(groupId: bigint): Promise<PkpInfo[]>
 }
 
 /** Write surface — same shape for every backend, different transport. */
 export interface SetupWrites {
   /** Mint a fresh PKP and register it to the account. */
-  createPkp(): Promise<{ walletAddress: string }>;
+  createPkp(): Promise<{ walletAddress: string }>
 
   /** Register a new group. Returns the new group's id. */
-  addGroup(name: string, description: string): Promise<bigint>;
+  addGroup(name: string, description: string): Promise<bigint>
 
   /** Attach a PKP to a group. */
-  addPkpToGroup(groupId: bigint, pkpId: string): Promise<void>;
+  addPkpToGroup(groupId: bigint, pkpId: string): Promise<void>
 
   /** Register an action in the account-level registry. */
-  addAction(name: string, description: string, cid: string): Promise<void>;
+  addAction(name: string, description: string, cid: string): Promise<void>
 
   /** Attach an action to a group. */
-  addActionToGroup(groupId: bigint, cid: string): Promise<void>;
+  addActionToGroup(groupId: bigint, cid: string): Promise<void>
 
   /** Best-effort removal: callers must tolerate failure. */
-  removeActionFromGroup(groupId: bigint, actionHash: bigint): Promise<void>;
+  removeActionFromGroup(groupId: bigint, actionHash: bigint): Promise<void>
 
   /** Best-effort removal: callers must tolerate failure. */
-  removeAction(actionHash: bigint): Promise<void>;
+  removeAction(actionHash: bigint): Promise<void>
 
   /** Replace a group's metadata and permission lists. */
-  updateGroup(groupId: bigint, params: UpdateGroupParams): Promise<void>;
+  updateGroup(groupId: bigint, params: UpdateGroupParams): Promise<void>
 
   /**
    * Mint a usage API key with execute permission for the given group ids.
@@ -102,12 +102,12 @@ export interface SetupWrites {
   createUsageApiKey(
     name: string,
     description: string,
-    executeInGroupIds: bigint[],
-  ): Promise<string>;
+    executeInGroupIds: bigint[]
+  ): Promise<string>
 }
 
 /** Combined setup-time surface. */
 export interface SetupBackend extends SetupReads, SetupWrites {
   /** Human-readable mode label for log output. */
-  readonly mode: SetupMode;
+  readonly mode: SetupMode
 }

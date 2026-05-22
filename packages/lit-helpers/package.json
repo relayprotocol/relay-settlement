@@ -1,0 +1,41 @@
+{
+  "name": "@relay-protocol/lit-helpers",
+  "version": "0.1.0",
+  "description": "Action-agnostic Lit Chipotle account helper scripts",
+  "type": "module",
+  "exports": {
+    "./setup": "./src/setup/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "tsc --noEmit && eslint .",
+    "convert-to-chain-secured": "tsx scripts/convert-to-chain-secured.ts",
+    "transfer-ownership": "tsx scripts/transfer-ownership.ts",
+    "verify-ownership": "tsx scripts/verify-ownership.ts",
+    "credits": "tsx scripts/credits.ts",
+    "top-up": "tsx scripts/top-up.ts",
+    "list-account": "tsx scripts/list-account.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "private": true,
+  "dependencies": {
+    "@noble/hashes": "2.0.1",
+    "micro-eth-signer": "0.18.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "25.5.2",
+    "eslint": "10.3.0",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.6.0",
+    "prettier": "3.8.3",
+    "tsx": "4.21.0",
+    "typescript": "6.0.2",
+    "typescript-eslint": "8.59.3"
+  }
+}

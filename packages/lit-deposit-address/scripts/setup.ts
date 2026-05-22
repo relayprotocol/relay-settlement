@@ -1,25 +1,23 @@
 #!/usr/bin/env tsx
 /**
- * Idempotent Chipotle setup for the allocator Lit Actions.
+ * Idempotent Chipotle setup for the deposit-address Lit Actions.
  *
- * Two backends are supported, picked via `--mode`. Both modes use
- * `--account-api-key` as the sole account identifier:
+ * Two account modes are supported, picked via `--mode`:
  *
  *   --mode api-key
- *     Managed (API-mode) accounts. All admin writes go through the Chipotle
- *     REST API with `X-Api-Key: <account-api-key>`.
+ *     Managed/API-mode accounts. Admin reads and writes go through the
+ *     Chipotle REST API with `X-Api-Key: <account-api-key>`.
  *
  *   --mode chain-secured
  *     Wallet-owned accounts. Reads go through the AccountConfig contract on
  *     Base (keyed by `keccak256(toUtf8Bytes(accountApiKey))`) and writes are
- *     wallet-signed transactions sent from the admin wallet. Layers
- *     `--private-key` on top of `--account-api-key`. The Base RPC URL and
- *     AccountConfig contract address are defined in the shared setup backend
- *     in `@relay-protocol/lit-helpers`.
+ *     wallet-signed transactions from `--private-key`. PKP and usage-key
+ *     minting use Chipotle's wallet-signature endpoints.
  *
  * Each step checks whether the underlying resource already exists and skips
  * creation when so. PKP selection is explicit: pass `--create-pkp` to mint a
- * fresh PKP or `--pkp-id <address>` to reuse an existing one.
+ * fresh PKP or `--pkp-id <address>` to reuse an existing one. Exactly one of
+ * the two must be supplied.
  *
  * Usage:
  *   tsx scripts/setup.ts --env <name> --mode api-key       --account-api-key <key> (--create-pkp | --pkp-id <address>)
@@ -32,10 +30,9 @@ import { fileURLToPath } from "node:url";
 import { keccak_256 } from "@noble/hashes/sha3.js";
 import {
   VM_TYPES,
-  actionBasenameForVm,
   loadEnvironment,
   parseEnvArg,
-  type AllocatorEnvironmentName,
+  type DepositAddressEnvironmentName,
   type VmType,
 } from "./env.js";
 import {
@@ -46,8 +43,9 @@ import {
 } from "@relay-protocol/lit-helpers/setup";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const BASE_URL = "https://api.chipotle.litprotocol.com";
 
-// ─── Shared script utilities ─────────────────────────────────────────────────
+// ─── Shared script utilities ────────────────────────────────────────────────
 
 /** Read a CLI flag value accepting `--name value` or `--name=value`. */
 function getOption(args: string[], name: string): string | undefined {
@@ -59,14 +57,15 @@ function getOption(args: string[], name: string): string | undefined {
   return args.find((a) => a.startsWith(prefix))?.slice(prefix.length);
 }
 
-/** Read the bundled action file from disk for a (env, vm) pair. */
-function loadBundledActionFile(envName: AllocatorEnvironmentName, vmType: VmType): string {
-  const basename = actionBasenameForVm(vmType);
+/** Read one bundled VM action file from disk, trying a few candidate paths. */
+function loadBundledActionFile(envName: DepositAddressEnvironmentName, vmType: VmType): string {
+  const filename = `${vmType}.js`;
   const candidates = [
-    resolve(__dirname, "../actions", envName, `${basename}.js`),
-    resolve(__dirname, "../dist/actions", envName, `${basename}.js`),
-    resolve(process.cwd(), "dist/actions", envName, `${basename}.js`),
+    resolve(__dirname, "../actions", envName, filename),
+    resolve(__dirname, "../dist/actions", envName, filename),
+    resolve(process.cwd(), "dist/actions", envName, filename),
   ];
+
   for (const candidate of candidates) {
     try {
       return readFileSync(candidate, "utf-8");
@@ -77,8 +76,7 @@ function loadBundledActionFile(envName: AllocatorEnvironmentName, vmType: VmType
     }
   }
   throw new Error(
-    `bundled ${vmType} action not found for ${envName}. ` +
-      `Run \`npm run bundle:actions -- --env ${envName}\` first.`,
+    `bundled ${vmType} action file not found for ${envName}. Run \`npm run bundle:actions -- --env ${envName}\` first.`,
   );
 }
 
@@ -103,7 +101,7 @@ function formatHash(value: bigint): string {
  * directly to the REST API regardless of which write backend is in use.
  */
 async function getLitActionIpfsCid(code: string): Promise<string> {
-  const res = await fetch("https://api.chipotle.litprotocol.com/core/v1/get_lit_action_ipfs_id", {
+  const res = await fetch(`${BASE_URL}/core/v1/get_lit_action_ipfs_id`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(code),
@@ -114,7 +112,7 @@ async function getLitActionIpfsCid(code: string): Promise<string> {
   return ((await res.json()) as string).replace(/"/g, "");
 }
 
-// ─── Backend selection ───────────────────────────────────────────────────────
+// ─── Backend selection ──────────────────────────────────────────────────────
 
 /** Build the backend the user asked for, validating mode-specific args. */
 function buildBackend(args: string[]): SetupBackend {
@@ -139,12 +137,12 @@ function buildBackend(args: string[]): SetupBackend {
   return createChainSecuredBackend({
     privateKey,
     accountApiKey,
-    pkpName: "Allocator PKP",
-    pkpDescription: "Lit Allocator PKP",
+    pkpName: "Deposit Address PKP",
+    pkpDescription: "Lit Deposit Address PKP",
   });
 }
 
-// ─── Main ────────────────────────────────────────────────────────────────────
+// ─── Main ───────────────────────────────────────────────────────────────────
 
 const USAGE =
   "Usage:\n" +
@@ -160,17 +158,17 @@ async function main() {
 
   const env = loadEnvironment(envName);
 
-  const groupName = `allocator-${env.name}`;
-  const usageKeyName = `allocator-${env.name}-usage-key`;
-  const actionNameForVm = (vm: VmType) => `allocator-${env.name}-action-${vm}`;
-  const actionDescriptionForVm = (vm: VmType) =>
-    vm === "ethereum-vm"
-      ? "Lit Allocator Ethereum signing action"
-      : "Lit Allocator Solana signing action";
+  const groupName = `deposit-address-${env.name}`;
+  const usageKeyName = `deposit-address-${env.name}-usage-key`;
+  const actionNamePrefix = `deposit-address-${env.name}-action-`;
+  const actionNameForVm = (vmType: VmType) => `${actionNamePrefix}${vmType}`;
+  const actionDescriptionForVm = (vmType: VmType) =>
+    `Lit Deposit Address signing action (${vmType})`;
+  const managedActionNames = new Set(VM_TYPES.map(actionNameForVm));
 
-  const createPkpFlag = args.includes("--create-pkp");
+  const createPkp = args.includes("--create-pkp");
   const providedPkpId = getOption(args, "--pkp-id")?.trim();
-  if (createPkpFlag === Boolean(providedPkpId)) {
+  if (createPkp === Boolean(providedPkpId)) {
     console.error("setup requires exactly one of --create-pkp or --pkp-id <address>.\n\n" + USAGE);
     process.exit(1);
   }
@@ -183,14 +181,15 @@ async function main() {
     process.exit(1);
   }
 
-  console.log("🔥 Lit Allocator Setup (idempotent)");
-  console.log(`   Environment:  ${env.name}`);
-  console.log(`   Mode:         ${backend.mode}`);
-  console.log(`   Allocator:    ${env.allocatorAddress}`);
+  console.log("🔥 Lit Deposit Address Setup (idempotent)");
+  console.log(`   Environment: ${env.name}`);
+  console.log(`   Mode: ${backend.mode}`);
+  console.log(`   Deposit address manager: ${env.depositAddressManagerAddress}`);
   console.log(`   Hub chain id: ${env.hubEvmChainId}`);
+  console.log(`   API: ${BASE_URL}`);
   console.log();
 
-  // ── 1. Resolve PKP wallet ───────────────────────────────────────────────
+  // ── 1. Resolve PKP wallet ──────────────────────────────────────────────
   let pkpId: string;
   if (providedPkpId) {
     console.log(`1. Reusing PKP from --pkp-id: ${providedPkpId}`);
@@ -204,33 +203,36 @@ async function main() {
     pkpId = existing.walletAddress;
     console.log(`   ✓ Using existing wallet: ${pkpId}`);
   } else {
-    console.log("1. Creating a fresh allocator PKP wallet...");
+    console.log("1. Creating a fresh deposit-address PKP wallet...");
     const created = await backend.createPkp();
     pkpId = created.walletAddress;
     console.log(`   ✓ Wallet created: ${pkpId}`);
   }
   console.log();
 
-  // ── 2. Ensure group exists ──────────────────────────────────────────────
+  // ── 2. Ensure group exists ─────────────────────────────────────────────
   console.log("2. Checking for existing group...");
   const groups = await backend.listGroups();
-  let groupId = groups.find((g) => g.name === groupName)?.id;
+  let group = groups.find((g) => g.name === groupName);
 
-  if (groupId !== undefined) {
-    console.log(`   ✓ Skipped — using existing group: "${groupName}" (id=${groupId})`);
+  if (group) {
+    console.log(`   ✓ Skipped — using existing group: "${group.name}" (id=${group.id})`);
   } else {
     console.log(`   Creating group "${groupName}"...`);
-    groupId = await backend.addGroup(groupName, "Lit Allocator signing group");
-    console.log(`   ✓ Group created: id=${groupId}`);
+    const groupId = await backend.addGroup(groupName, "Lit Deposit Address signing group");
+    group = { id: groupId, name: groupName, description: "Lit Deposit Address signing group" };
+    console.log(`   ✓ Group created: id=${group.id}`);
   }
+  const groupId = group.id;
   console.log();
 
-  // ── 3. Ensure PKP is in the group ───────────────────────────────────────
+  // ── 3. Ensure PKP is in the group ──────────────────────────────────────
   console.log("3. Checking if PKP is in group...");
   const walletsInGroup = await backend.listPkpsInGroup(groupId);
   const pkpInGroup = walletsInGroup.some(
     (w) => w.walletAddress.toLowerCase() === pkpId.toLowerCase(),
   );
+
   if (pkpInGroup) {
     console.log("   ✓ Skipped — PKP already in group");
   } else {
@@ -240,42 +242,50 @@ async function main() {
   }
   console.log();
 
-  // ── 4. Register the Lit Actions in the group ────────────────────────────
-  console.log("4. Registering Lit Actions in group...");
+  // ── 4. Register the Lit Actions in the group ───────────────────────────
+  console.log("4. Registering per-VM Lit Actions in group...");
 
   const existingActions = await backend.listActions();
   console.log(`   account has ${existingActions.length} action(s) before sync`);
 
-  // Compute target CIDs/hashes for every VM up front.
+  // Compute target CIDs/hashes for every VM up front so group permissions can
+  // be synced once against the union of all current CIDs.
   const targetCids = new Map<VmType, { cid: string; actionHash: bigint }>();
   for (const vmType of VM_TYPES) {
     const code = loadBundledActionFile(env.name, vmType);
     const cid = await getLitActionIpfsCid(code);
-    targetCids.set(vmType, { cid, actionHash: hashCidToBigInt(cid) });
-    console.log(`   ${vmType} target CID: ${cid} (hash=${formatHash(hashCidToBigInt(cid))})`);
+    const actionHash = hashCidToBigInt(cid);
+    targetCids.set(vmType, { cid, actionHash });
+    console.log(`   ${vmType} target CID: ${cid} (hash=${formatHash(actionHash)})`);
   }
   const targetHashes = new Set([...targetCids.values()].map((t) => t.actionHash));
 
-  // Sweep stale entries: actions named `allocator-${env.name}-*` whose hash
-  // doesn't match any current target.
-  const stalePrefix = `allocator-${env.name}-`;
-  const stale: typeof existingActions = existingActions.filter(
-    (a) =>
-      a.name !== undefined && a.name.startsWith(stalePrefix) && !targetHashes.has(a.actionHash),
-  );
+  // Always sweep up stale entries on every setup pass (not only when adding a
+  // new CID), otherwise stale registrations from past bundles accumulate in
+  // the account. Be conservative: only actions whose name exactly matches one
+  // of this environment's canonical per-VM action names are managed here. This
+  // avoids deleting unrelated actions in the same Chipotle account that happen
+  // to share a broader prefix such as `deposit-address-${env.name}`.
+  const stale = existingActions.filter((a) => {
+    return (
+      a.name !== undefined && managedActionNames.has(a.name) && !targetHashes.has(a.actionHash)
+    );
+  });
 
   if (stale.length === 0) {
-    console.log(`   no stale action registrations to prune (prefix="${stalePrefix}")`);
-  }
-  for (const a of stale) {
     console.log(
-      `   pruning stale action: name=${a.name ?? "<unnamed>"} hash=${formatHash(a.actionHash)}`,
+      `   no stale action registrations to prune (managed names: ${[...managedActionNames].join(", ")})`,
     );
-    await backend.removeActionFromGroup(groupId, a.actionHash);
-    await backend.removeAction(a.actionHash);
+  }
+  for (const action of stale) {
+    console.log(
+      `   pruning stale action: name=${action.name ?? "<unnamed>"} hash=${formatHash(action.actionHash)}`,
+    );
+    await backend.removeActionFromGroup(groupId, action.actionHash);
+    await backend.removeAction(action.actionHash);
   }
 
-  // Register / refresh the canonical actions and attach them to the group.
+  // Register / refresh each per-VM action and attach it to the group.
   for (const vmType of VM_TYPES) {
     const { cid, actionHash } = targetCids.get(vmType)!;
     const matching = existingActions.find((a) => a.actionHash === actionHash);
@@ -291,21 +301,22 @@ async function main() {
     console.log(`   ✓ ${vmType}: action attached to group`);
   }
 
-  // Sync group permissions in one go so the permitted set never goes empty.
+  // Sync group permissions once — the cidHashesPermitted array is the union
+  // of every per-VM target hash so the group never goes empty.
   console.log("   Syncing group permissions...");
   const permittedPkpIds = Array.from(
     new Set([...walletsInGroup.map((w) => w.walletAddress), pkpId]),
   );
   await backend.updateGroup(groupId, {
-    name: groupName,
-    description: "Lit Allocator signing group",
+    name: group.name,
+    description: group.description ?? "Lit Deposit Address signing group",
     pkpIdsPermitted: permittedPkpIds,
     cidHashesPermitted: [...targetCids.values()].map((t) => t.actionHash),
   });
   console.log("   ✓ Group permissions synced");
   console.log();
 
-  // ── 5. Ensure usage API key exists ──────────────────────────────────────
+  // ── 5. Ensure usage API key exists ─────────────────────────────────────
   console.log("5. Checking for existing usage API key...");
   const existingKeys = await backend.listUsageApiKeys();
   const existing = existingKeys.find((k) => k.name === usageKeyName);
@@ -319,7 +330,7 @@ async function main() {
     console.log(`   Creating usage API key "${usageKeyName}"...`);
     usageApiKeyValue = await backend.createUsageApiKey(
       usageKeyName,
-      "Usage key for Lit Allocator",
+      "Usage key for Lit Deposit Address",
       [groupId],
     );
     console.log("   ✓ Usage API key created");
@@ -327,7 +338,7 @@ async function main() {
   }
   console.log();
 
-  // ── Summary ─────────────────────────────────────────────────────────────
+  // ── Summary ────────────────────────────────────────────────────────────
   console.log("═══════════════════════════════════════════════════════");
   console.log("  Setup complete! Add these to your environment:");
   console.log("═══════════════════════════════════════════════════════");
@@ -338,8 +349,8 @@ async function main() {
   console.log(`  export LIT_PKP_ID="${pkpId}"`);
   for (const vmType of VM_TYPES) {
     const { cid } = targetCids.get(vmType)!;
-    const envVar = vmType === "ethereum-vm" ? "LIT_ETHEREUM_ACTION_CID" : "LIT_SOLANA_ACTION_CID";
-    console.log(`  export ${envVar}="${cid}"`);
+    const envSuffix = vmType.replace("-", "_").toUpperCase();
+    console.log(`  export LIT_DEPOSIT_ADDRESSES_ACTION_CID_${envSuffix}="${cid}"`);
   }
   console.log();
 }
