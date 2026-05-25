@@ -24,6 +24,7 @@ type FailedEventStatus = {
 export type HealthResponse = {
   ok: boolean
   latestChainBlock: number
+  latestIndexedBlock: number
   maxAllowedLag: number
   failedEvents: FailedEventStatus
   hub: SyncStatus & {
@@ -38,6 +39,7 @@ export type HealthResponse = {
 
 export type HealthCheckpointState = {
   latestChainBlock: number
+  latestIndexedBlock?: number
   maxAllowedLag: number
   hubTransferLastProcessedBlock: number | null
   hubRoleLastProcessedBlock: number | null
@@ -87,6 +89,10 @@ export const getHealthStatus = async (
   provider: Provider
 ): Promise<HealthResponse> => {
   const latestChainBlock = await provider.getBlockNumber()
+  const latestIndexedBlock = Math.max(
+    0,
+    latestChainBlock - config.confirmationBlocks
+  )
   const [
     hubTransferRaw,
     hubRoleRaw,
@@ -110,6 +116,7 @@ export const getHealthStatus = async (
     hubRoleLastProcessedBlock: parseBlock(hubRoleRaw),
     hubTransferLastProcessedBlock: parseBlock(hubTransferRaw),
     latestChainBlock,
+    latestIndexedBlock,
     maxAllowedLag: config.healthMaxLagBlocks,
     oracleExecutionLastProcessedBlock: parseBlock(oracleExecutionRaw),
     oracleRoleLastProcessedBlock: parseBlock(oracleRoleRaw),
@@ -137,6 +144,7 @@ const getFailedEventStatus = async (
 export const buildHealthResponse = ({
   failedEvents = { count: 0, oldestBlockNumber: null },
   latestChainBlock,
+  latestIndexedBlock = latestChainBlock,
   maxAllowedLag,
   hubTransferLastProcessedBlock,
   hubRoleLastProcessedBlock,
@@ -152,8 +160,8 @@ export const buildHealthResponse = ({
     oracleExecutionLastProcessedBlock,
   ])
 
-  const hubLag = toLag(latestChainBlock, hubLastProcessedBlock)
-  const oracleLag = toLag(latestChainBlock, oracleLastProcessedBlock)
+  const hubLag = toLag(latestIndexedBlock, hubLastProcessedBlock)
+  const oracleLag = toLag(latestIndexedBlock, oracleLastProcessedBlock)
 
   return {
     failedEvents,
@@ -164,8 +172,12 @@ export const buildHealthResponse = ({
       transferLastProcessedBlock: hubTransferLastProcessedBlock,
     },
     latestChainBlock,
+    latestIndexedBlock,
     maxAllowedLag,
-    ok: hubLag <= maxAllowedLag && oracleLag <= maxAllowedLag,
+    ok:
+      hubLag <= maxAllowedLag &&
+      oracleLag <= maxAllowedLag &&
+      failedEvents.count === 0,
     oracle: {
       executionLastProcessedBlock: oracleExecutionLastProcessedBlock,
       lag: oracleLag,

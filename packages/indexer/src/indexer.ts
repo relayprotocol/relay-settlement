@@ -18,9 +18,15 @@ import {
   ORACLE_ROLE_META_KEY,
 } from "./indexerState.js"
 import { getBlockTimestamp } from "./services/utils.js"
+import { getProtocolTransferType } from "./protocol/transferSemantics.js"
 import {
+  insertParsedTransferLog,
+  parseTransferLog,
   processSingleLog,
   recordFailedEvent,
+  reconcileTransferStateFromChain,
+  shouldSkipTokenId,
+  syncTokenTransfersFromEvents,
 } from "./services/transferProcessor.js"
 import {
   OracleExecutionProcessingContext,
@@ -42,12 +48,14 @@ type IndexedLog = {
 type Lane = {
   name: string
   contractAddress: string
+  checkpointOverlapBlocks?: number
   topics: string[][]
   metaKey: string
   legacyMetaKey?: string
   startBlock: number
-  processLog: (_log: IndexedLog, _timestamp: number) => Promise<void>
+  processLog?: (_log: IndexedLog, _timestamp: number) => Promise<void>
   afterBatch?: () => void
+  tokenContract?: Contract
 }
 
 export const backfillAndWatch = async (db: Database) => {
@@ -90,21 +98,13 @@ export const backfillAndWatch = async (db: Database) => {
   }
   const lanes: Lane[] = [
     {
+      checkpointOverlapBlocks: config.transferOverlapBlocks,
       contractAddress: config.hubContractAddress,
       legacyMetaKey: LEGACY_HUB_TRANSFER_META_KEY,
       metaKey: HUB_TRANSFER_META_KEY,
       name: "hub-transfers",
-      processLog: (log, timestamp) =>
-        processSingleLog(
-          db,
-          {
-            contractAddress: config.hubContractAddress,
-            tokenContract: hubContract,
-          },
-          log,
-          timestamp
-        ),
       startBlock: config.hubStartBlock,
+      tokenContract: hubContract,
       topics: [[transferTopic]],
     },
     // Prioritize the protocol data path before slower role-history backfills.
@@ -191,6 +191,16 @@ export const backfillAndWatch = async (db: Database) => {
   const toHex = (n: number) => "0x" + n.toString(16)
 
   const processLogs = async (lane: Lane, logs: IndexedLog[]) => {
+    if (lane.tokenContract) {
+      await processTransferLogs(lane, logs, lane.tokenContract)
+      lane.afterBatch?.()
+      return
+    }
+
+    if (!lane.processLog) {
+      throw new Error(`Lane ${lane.name} is missing a log processor`)
+    }
+
     for (const log of logs) {
       try {
         const timestamp = await getBlockTimestamp(
@@ -217,6 +227,164 @@ export const backfillAndWatch = async (db: Database) => {
     }
 
     lane.afterBatch?.()
+  }
+
+  const addTouchedAddress = (
+    touched: Map<string, Map<string, number>>,
+    tokenId: string,
+    address: string,
+    timestamp: number
+  ) => {
+    const normalizedAddress = address.toLowerCase()
+    let addressesByTimestamp = touched.get(tokenId)
+    if (!addressesByTimestamp) {
+      addressesByTimestamp = new Map()
+      touched.set(tokenId, addressesByTimestamp)
+    }
+
+    addressesByTimestamp.set(
+      normalizedAddress,
+      Math.max(addressesByTimestamp.get(normalizedAddress) ?? 0, timestamp)
+    )
+  }
+
+  const processTransferLogs = async (
+    lane: Lane,
+    logs: IndexedLog[],
+    tokenContract: Contract
+  ) => {
+    const checkpoint = await getCheckpointValue(lane)
+    const parsedCheckpoint = checkpoint == null ? -1 : Number(checkpoint)
+    const touched = new Map<string, Map<string, number>>()
+    const touchedLogsByToken = new Map<string, IndexedLog[]>()
+
+    for (const log of logs) {
+      try {
+        const transfer = parseTransferLog(log)
+        if (!transfer) {
+          logger.warn("processor", "Skipping undecodable transfer log", {
+            blockNumber: log.blockNumber,
+            logIndex: log.index,
+            txHash: log.transactionHash,
+          })
+          continue
+        }
+
+        if (shouldSkipTokenId(transfer.tokenId)) {
+          logger.info("processor", "Skipping transfer for token", {
+            blockNumber: log.blockNumber,
+            logIndex: log.index,
+            tokenId: transfer.tokenId,
+            txHash: log.transactionHash,
+          })
+          continue
+        }
+
+        const timestamp = await getBlockTimestamp(
+          pollingProvider,
+          cache,
+          log.blockNumber
+        )
+        const { inserted } = await db.tx((tx) =>
+          insertParsedTransferLog(tx, transfer, log, timestamp)
+        )
+
+        if (inserted || log.blockNumber > parsedCheckpoint) {
+          addTouchedAddress(touched, transfer.tokenId, transfer.from, timestamp)
+          addTouchedAddress(touched, transfer.tokenId, transfer.to, timestamp)
+          const touchedLogs = touchedLogsByToken.get(transfer.tokenId) ?? []
+          touchedLogs.push(log)
+          touchedLogsByToken.set(transfer.tokenId, touchedLogs)
+        }
+
+        if (inserted) {
+          logger.info("processor", "Transfer processed", {
+            amount: transfer.amount.toString(),
+            blockNumber: log.blockNumber,
+            from: transfer.from,
+            logIndex: log.index,
+            operator: transfer.operator,
+            to: transfer.to,
+            tokenId: transfer.tokenId,
+            txHash: log.transactionHash,
+            type: getProtocolTransferType(transfer.from, transfer.to),
+          })
+        }
+      } catch (error) {
+        logger.error(
+          "indexer",
+          "Failed to process log; recorded in failed_events",
+          {
+            blockNumber: log.blockNumber,
+            contractAddress: lane.contractAddress,
+            error,
+            lane: lane.name,
+            logIndex: log.index,
+            txHash: log.transactionHash,
+          }
+        )
+        await recordFailedEvent(db, lane.contractAddress, log, error)
+      }
+    }
+
+    for (const [tokenId, addressesByTimestamp] of touched) {
+      const touchedLogs = touchedLogsByToken.get(tokenId) ?? []
+      let tokenFailed = false
+
+      try {
+        const groupedAddresses = new Map<number, string[]>()
+        for (const [address, timestamp] of addressesByTimestamp) {
+          const addresses = groupedAddresses.get(timestamp) ?? []
+          addresses.push(address)
+          groupedAddresses.set(timestamp, addresses)
+        }
+
+        for (const [timestamp, addresses] of groupedAddresses) {
+          await reconcileTransferStateFromChain(
+            db,
+            tokenContract,
+            tokenId,
+            addresses,
+            timestamp
+          )
+        }
+      } catch (error) {
+        tokenFailed = true
+        for (const log of touchedLogs) {
+          await recordFailedEvent(db, lane.contractAddress, log, error)
+        }
+        logger.error(
+          "indexer",
+          "Failed to reconcile transfer token; recorded token logs in failed_events",
+          {
+            error,
+            lane: lane.name,
+            tokenId,
+            touchedLogs: touchedLogs.length,
+          }
+        )
+      }
+
+      try {
+        await syncTokenTransfersFromEvents(db, tokenId)
+      } catch (error) {
+        if (!tokenFailed) {
+          for (const log of touchedLogs) {
+            await recordFailedEvent(db, lane.contractAddress, log, error)
+          }
+        }
+        logger.error(
+          "indexer",
+          "Failed to sync transfer count; recorded token logs in failed_events",
+          {
+            error,
+            lane: lane.name,
+            tokenId,
+            touchedLogs: touchedLogs.length,
+          }
+        )
+      }
+    }
   }
 
   const fetchLogsWithCursor = async (
@@ -276,6 +444,17 @@ export const backfillAndWatch = async (db: Database) => {
     return allLogs
   }
 
+  const setLaneCheckpoint = async (lane: Lane, end: number) => {
+    const checkpoint = await getCheckpointValue(lane)
+    const parsedCheckpoint = checkpoint == null ? null : Number(checkpoint)
+    const nextCheckpoint =
+      parsedCheckpoint == null || !Number.isFinite(parsedCheckpoint)
+        ? end
+        : Math.max(parsedCheckpoint, end)
+
+    await setMeta(db, lane.metaKey, String(nextCheckpoint))
+  }
+
   const processRange = async (
     lane: Lane,
     fromBlock: number,
@@ -303,7 +482,7 @@ export const backfillAndWatch = async (db: Database) => {
         }
         // Failed logs are persisted into failed_events for follow-up handling.
         // The main checkpoint still advances so one bad log does not stall the lane.
-        await setMeta(db, lane.metaKey, String(end))
+        await setLaneCheckpoint(lane, end)
       } catch (error) {
         if (isResponseSizeError(error)) {
           if (start < end) {
@@ -335,7 +514,7 @@ export const backfillAndWatch = async (db: Database) => {
             })
             await processLogs(lane, logs)
           }
-          await setMeta(db, lane.metaKey, String(end))
+          await setLaneCheckpoint(lane, end)
           continue
         }
         throw error
@@ -367,7 +546,10 @@ export const backfillAndWatch = async (db: Database) => {
       )
     }
 
-    return parsedCheckpoint + 1
+    return Math.max(
+      lane.startBlock,
+      parsedCheckpoint + 1 - (lane.checkpointOverlapBlocks ?? 0)
+    )
   }
 
   const processLaneUntil = async (lane: Lane, latestBlock: number) => {
@@ -391,9 +573,12 @@ export const backfillAndWatch = async (db: Database) => {
     }
   }
 
-  const latestBlock = await pollingProvider.getBlockNumber()
+  const chainLatestBlock = await pollingProvider.getBlockNumber()
+  const latestBlock = Math.max(0, chainLatestBlock - config.confirmationBlocks)
   logger.info("indexer", "Backfill start", {
     batchSize: config.batchSize,
+    chainLatestBlock,
+    confirmationBlocks: config.confirmationBlocks,
     laneCount: lanes.length,
     latestBlock,
   })
@@ -407,7 +592,8 @@ export const backfillAndWatch = async (db: Database) => {
     if (polling) return
     polling = true
     try {
-      const latest = await pollingProvider.getBlockNumber()
+      const chainLatest = await pollingProvider.getBlockNumber()
+      const latest = Math.max(0, chainLatest - config.confirmationBlocks)
       for (const lane of lanes) {
         await processLaneUntil(lane, latest)
       }

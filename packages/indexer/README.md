@@ -29,6 +29,17 @@ The replay is idempotent. It inserts missing events, reconciles touched balances
 
 For production repairs, pause the background worker before replaying and resume it after verification.
 
+## Transfer Ingestion Safety
+
+The background worker waits for `CONFIRMATION_BLOCKS` before processing new logs and re-scans the last `TRANSFER_OVERLAP_BLOCKS` Hub transfer blocks on each poll. Transfer processing is idempotent: events are inserted once, then touched addresses are reconciled against on-chain `balanceOf` and token `totalSupply`.
+
+Health lag is measured against the confirmed indexing target (`latestChainBlock - CONFIRMATION_BLOCKS`), not the unconfirmed chain head.
+
+Useful environment variables:
+
+- `CONFIRMATION_BLOCKS`: number of latest chain blocks to leave unindexed until they are less likely to be reorganized. Defaults to `12`.
+- `TRANSFER_OVERLAP_BLOCKS`: number of Hub transfer blocks to re-scan from the checkpoint on each poll. Defaults to `250`.
+
 ## Admin Transfer Replay API
 
 The API can expose a restricted admin endpoint to trigger the same bounded replay without local DB access:

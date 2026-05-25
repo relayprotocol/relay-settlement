@@ -3,10 +3,7 @@ import { Contract } from "ethers"
 import { Interface } from "ethers"
 import type { Database, Queryable } from "../db/connection.js"
 import { runWithRetry } from "./retry.js"
-import {
-  getProtocolTransferType,
-  isZeroAddress,
-} from "../protocol/transferSemantics.js"
+import { isZeroAddress } from "../protocol/transferSemantics.js"
 import { logger } from "../logger.js"
 import {
   applyRoleEvent,
@@ -22,8 +19,6 @@ const SKIP_TOKEN_IDS = new Set<string>([
 
 export const shouldSkipTokenId = (tokenId: string) =>
   SKIP_TOKEN_IDS.has(tokenId)
-
-const toBigInt = (value: string | bigint) => BigInt(value)
 
 type TokenMetadataRow = {
   token_id: string
@@ -274,19 +269,6 @@ const setBalance = async (
   )
 }
 
-const updateTokenTotals = async (
-  db: Queryable,
-  tokenId: string,
-  totalSupply: bigint,
-  holderDelta: number
-) => {
-  const now = new Date().toISOString()
-  await db.none(
-    "UPDATE tokens SET total_supply = $1, holders = holders + $2, updated_at = $3 WHERE token_id = $4",
-    [totalSupply.toString(), holderDelta, now, tokenId]
-  )
-}
-
 const setTokenState = async (
   db: Queryable,
   tokenId: string,
@@ -315,16 +297,6 @@ const getTotalSupply = async (
 ): Promise<bigint> => {
   const totalSupply = await contract.totalSupply(tokenId)
   return BigInt(totalSupply.toString())
-}
-
-export const incrementTokenTransfers = async (
-  db: Queryable,
-  tokenId: string
-) => {
-  await db.none(
-    "UPDATE tokens SET transfers = transfers + 1 WHERE token_id = $1",
-    [tokenId]
-  )
 }
 
 export const syncTokenTransfersFromEvents = async (
@@ -382,47 +354,6 @@ export const reconcileTransferStateFromChain = async (
     getHolderCount(db, tokenId),
   ])
   await setTokenState(db, tokenId, totalSupply, holders)
-}
-
-export const applyTransfer = async (
-  db: Queryable,
-  contract: Contract,
-  tokenId: string,
-  from: string,
-  to: string,
-  amount: bigint,
-  timestamp?: number
-) => {
-  const token = await ensureToken(db, contract, tokenId)
-  let holdersDelta = 0
-  let totalSupply = toBigInt(token.total_supply)
-
-  const fromAddr = from.toLowerCase()
-  const toAddr = to.toLowerCase()
-
-  if (isZeroAddress(fromAddr)) {
-    totalSupply += amount
-  } else {
-    const fromOld = await getBalance(db, fromAddr, tokenId)
-    const fromNew = fromOld - amount
-    if (fromOld > 0n && fromNew <= 0n) {
-      holdersDelta -= 1
-    }
-    await setBalance(db, fromAddr, tokenId, fromNew, token.decimals, timestamp)
-  }
-
-  if (isZeroAddress(toAddr)) {
-    totalSupply -= amount
-  } else {
-    const toOld = await getBalance(db, toAddr, tokenId)
-    const toNew = toOld + amount
-    if (toOld === 0n && toNew > 0n) {
-      holdersDelta += 1
-    }
-    await setBalance(db, toAddr, tokenId, toNew, token.decimals, timestamp)
-  }
-
-  await updateTokenTotals(db, tokenId, totalSupply, holdersDelta)
 }
 
 export const insertEvent = async (
@@ -510,9 +441,8 @@ export const parseTransferLog = (log: {
   }
 }
 
-export const replayTransferLogFromChain = async (
+export const insertParsedTransferLog = async (
   db: Queryable,
-  contract: Contract,
   transfer: ParsedTransferLog,
   log: {
     blockNumber: number
@@ -532,6 +462,27 @@ export const replayTransferLogFromChain = async (
     tokenId: transfer.tokenId,
     transactionHash: log.transactionHash,
   })
+
+  return { inserted }
+}
+
+export const replayTransferLogFromChain = async (
+  db: Queryable,
+  contract: Contract,
+  transfer: ParsedTransferLog,
+  log: {
+    blockNumber: number
+    transactionHash: string
+    index: number
+  },
+  timestamp: number
+) => {
+  const { inserted } = await insertParsedTransferLog(
+    db,
+    transfer,
+    log,
+    timestamp
+  )
 
   await reconcileTransferStateFromChain(
     db,
@@ -592,9 +543,8 @@ export const processSingleLog = async (
 ) => {
   await runWithRetry(async () => {
     await db.tx(async (tx) => {
-      const parsedTransfer = parseTransferLog(log)
-      const parsedAccess = parsedTransfer ? null : parseAccessControlLog(log)
-      if (!parsedTransfer && !parsedAccess) {
+      const parsedAccess = parseAccessControlLog(log)
+      if (!parsedAccess) {
         logger.warn("processor", "Skipping undecodable log", {
           blockNumber: log.blockNumber,
           logIndex: log.index,
@@ -603,93 +553,32 @@ export const processSingleLog = async (
         return
       }
 
-      if (parsedTransfer) {
-        if (!context.tokenContract) {
-          throw new Error("Transfer log processing requires a token contract")
-        }
-
-        if (shouldSkipTokenId(parsedTransfer.tokenId)) {
-          logger.info("processor", "Skipping transfer for token", {
-            blockNumber: log.blockNumber,
-            logIndex: log.index,
-            tokenId: parsedTransfer.tokenId,
-            txHash: log.transactionHash,
-          })
-          return
-        }
-
-        const inserted = await insertEvent(tx, {
-          amount: parsedTransfer.amount.toString(),
+      const inserted = await insertRoleEvent(
+        tx,
+        {
           blockNumber: log.blockNumber,
-          from: parsedTransfer.from,
+          contractAddress: context.contractAddress,
           index: log.index,
-          operator: parsedTransfer.operator,
           timestamp,
-          to: parsedTransfer.to,
-          tokenId: parsedTransfer.tokenId,
           transactionHash: log.transactionHash,
-        })
+        },
+        parsedAccess
+      )
 
-        if (inserted) {
-          await applyTransfer(
-            tx,
-            context.tokenContract,
-            parsedTransfer.tokenId,
-            parsedTransfer.from,
-            parsedTransfer.to,
-            parsedTransfer.amount,
-            timestamp
-          )
-          await incrementTokenTransfers(tx, parsedTransfer.tokenId)
-        }
-
-        if (inserted) {
-          logger.info("processor", "Transfer processed", {
-            amount: parsedTransfer.amount.toString(),
-            blockNumber: log.blockNumber,
-            from: parsedTransfer.from,
-            logIndex: log.index,
-            operator: parsedTransfer.operator,
-            to: parsedTransfer.to,
-            tokenId: parsedTransfer.tokenId,
-            txHash: log.transactionHash,
-            type: getProtocolTransferType(
-              parsedTransfer.from,
-              parsedTransfer.to
-            ),
-          })
-        }
-        return
+      if (inserted) {
+        await applyRoleEvent(tx, context.contractAddress, parsedAccess)
       }
 
-      if (parsedAccess) {
-        const inserted = await insertRoleEvent(
-          tx,
-          {
-            blockNumber: log.blockNumber,
-            contractAddress: context.contractAddress,
-            index: log.index,
-            timestamp,
-            transactionHash: log.transactionHash,
-          },
-          parsedAccess
-        )
-
-        if (inserted) {
-          await applyRoleEvent(tx, context.contractAddress, parsedAccess)
-        }
-
-        if (inserted) {
-          logger.info("processor", "Access control event processed", {
-            account: parsedAccess.account,
-            blockNumber: log.blockNumber,
-            eventType: parsedAccess.eventType,
-            logIndex: log.index,
-            role: parsedAccess.role,
-            sender: parsedAccess.sender,
-            txHash: log.transactionHash,
-          })
-        }
+      if (inserted) {
+        logger.info("processor", "Access control event processed", {
+          account: parsedAccess.account,
+          blockNumber: log.blockNumber,
+          eventType: parsedAccess.eventType,
+          logIndex: log.index,
+          role: parsedAccess.role,
+          sender: parsedAccess.sender,
+          txHash: log.transactionHash,
+        })
       }
     })
   })
@@ -697,5 +586,4 @@ export const processSingleLog = async (
 
 type LogProcessingContext = {
   contractAddress: string
-  tokenContract?: Contract
 }

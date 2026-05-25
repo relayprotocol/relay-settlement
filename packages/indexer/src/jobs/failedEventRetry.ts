@@ -131,74 +131,70 @@ const processFailedLog = async (
   }
 ) => {
   await runWithRetry(async () => {
-    await db.tx(async (tx) => {
-      const contractAddress = log.contractAddress.toLowerCase()
-      const isKnownContract =
-        contractAddress === context.hubContractAddress ||
-        contractAddress === context.oracleContractAddress
+    const contractAddress = log.contractAddress.toLowerCase()
+    const isKnownContract =
+      contractAddress === context.hubContractAddress ||
+      contractAddress === context.oracleContractAddress
 
-      if (!isKnownContract) {
-        throw new Error(
-          `Unknown failed-event contract address: ${contractAddress}`
-        )
-      }
-
-      const parsedTransfer =
-        contractAddress === context.hubContractAddress
-          ? parseTransferLog(log)
-          : null
-      const parsedOracleExecution =
-        contractAddress === context.oracleContractAddress
-          ? parseOracleExecutionLog(log)
-          : null
-      const parsedAccess =
-        parsedTransfer || parsedOracleExecution
-          ? null
-          : parseAccessControlLog(log)
-
-      if (!parsedTransfer && !parsedOracleExecution && !parsedAccess) {
-        return
-      }
-
-      const timestamp = await getBlockTimestamp(
-        provider,
-        cache,
-        log.blockNumber
+    if (!isKnownContract) {
+      throw new Error(
+        `Unknown failed-event contract address: ${contractAddress}`
       )
+    }
 
-      if (parsedTransfer) {
-        if (shouldSkipTokenId(parsedTransfer.tokenId)) {
-          logger.info("retry", "Skipping transfer replay for token", {
-            blockNumber: log.blockNumber,
-            logIndex: log.index,
-            tokenId: parsedTransfer.tokenId,
-            txHash: log.transactionHash,
-          })
-          return
-        }
+    const parsedTransfer =
+      contractAddress === context.hubContractAddress
+        ? parseTransferLog(log)
+        : null
+    const parsedOracleExecution =
+      contractAddress === context.oracleContractAddress
+        ? parseOracleExecutionLog(log)
+        : null
+    const parsedAccess =
+      parsedTransfer || parsedOracleExecution
+        ? null
+        : parseAccessControlLog(log)
 
-        await replayTransferLogFromChain(
-          tx,
-          context.hubContract,
-          parsedTransfer,
-          {
-            blockNumber: log.blockNumber,
-            index: log.index,
-            transactionHash: log.transactionHash,
-          },
-          timestamp
-        )
+    if (!parsedTransfer && !parsedOracleExecution && !parsedAccess) {
+      return
+    }
 
-        logger.info("retry", "Transfer replay reconciled", {
+    const timestamp = await getBlockTimestamp(provider, cache, log.blockNumber)
+
+    if (parsedTransfer) {
+      if (shouldSkipTokenId(parsedTransfer.tokenId)) {
+        logger.info("retry", "Skipping transfer replay for token", {
           blockNumber: log.blockNumber,
           logIndex: log.index,
           tokenId: parsedTransfer.tokenId,
           txHash: log.transactionHash,
         })
-
         return
       }
 
+      await replayTransferLogFromChain(
+        db,
+        context.hubContract,
+        parsedTransfer,
+        {
+          blockNumber: log.blockNumber,
+          index: log.index,
+          transactionHash: log.transactionHash,
+        },
+        timestamp
+      )
+
+      logger.info("retry", "Transfer replay reconciled", {
+        blockNumber: log.blockNumber,
+        logIndex: log.index,
+        tokenId: parsedTransfer.tokenId,
+        txHash: log.transactionHash,
+      })
+
+      return
+    }
+
+    await db.tx(async (tx) => {
       if (parsedOracleExecution) {
         await processAndStoreOracleExecutionLog(
           tx,

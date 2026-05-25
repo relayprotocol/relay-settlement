@@ -32,6 +32,24 @@ test("buildHealthResponse uses the slowest hub and oracle checkpoints", () => {
   assert.equal(health.ok, true)
 })
 
+test("buildHealthResponse measures lag against the confirmed indexing target", () => {
+  const health = buildHealthResponse({
+    hubRoleLastProcessedBlock: 988,
+    hubTransferLastProcessedBlock: 988,
+    latestChainBlock: 1_000,
+    latestIndexedBlock: 988,
+    maxAllowedLag: 0,
+    oracleExecutionLastProcessedBlock: 988,
+    oracleRoleLastProcessedBlock: 988,
+  })
+
+  assert.equal(health.latestChainBlock, 1_000)
+  assert.equal(health.latestIndexedBlock, 988)
+  assert.equal(health.hub.lag, 0)
+  assert.equal(health.oracle.lag, 0)
+  assert.equal(health.ok, true)
+})
+
 test("buildHealthResponse reports unhealthy when checkpoints are missing or exceed lag threshold", () => {
   const health = buildHealthResponse({
     hubRoleLastProcessedBlock: 495,
@@ -49,7 +67,7 @@ test("buildHealthResponse reports unhealthy when checkpoints are missing or exce
   assert.equal(health.ok, false)
 })
 
-test("buildHealthResponse exposes failed event status", () => {
+test("buildHealthResponse reports unhealthy when failed events are pending", () => {
   const health = buildHealthResponse({
     failedEvents: {
       count: 5,
@@ -67,5 +85,5 @@ test("buildHealthResponse exposes failed event status", () => {
     count: 5,
     oldestBlockNumber: 123,
   })
-  assert.equal(health.ok, true)
+  assert.equal(health.ok, false)
 })

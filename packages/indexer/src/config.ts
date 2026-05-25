@@ -8,6 +8,7 @@ export type RuntimeConfig = {
   allowUnauthenticatedApi: boolean
   authApiKey: string | undefined
   batchSize: number
+  confirmationBlocks: number
   databaseUrl: string | undefined
   doBackgroundWork: boolean
   enableApi: boolean
@@ -22,6 +23,7 @@ export type RuntimeConfig = {
   rpcHttpUrl: string | undefined
   rpcWsUrl: string | undefined
   startBlock: number
+  transferOverlapBlocks: number
 }
 
 const relayProdContracts = relay.contracts?.prod
@@ -90,6 +92,17 @@ export const resolveNumber = (value: string | undefined, fallback: number) => {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
+export const resolveNonNegativeInteger = (
+  value: string | undefined,
+  fallback: number
+) => {
+  const resolved = resolveNumber(value, fallback)
+  if (!Number.isFinite(resolved)) {
+    return fallback
+  }
+  return Math.max(0, Math.trunc(resolved))
+}
+
 export const validateRuntimeConfig = (config: RuntimeConfig) => {
   if ((config.doBackgroundWork || config.enableApi) && !config.databaseUrl) {
     throw new Error(
@@ -114,6 +127,10 @@ export const config: RuntimeConfig = {
   apiRequested,
   authApiKey,
   batchSize: resolveNumber(process.env.BATCH_SIZE, 2000),
+  confirmationBlocks: resolveNonNegativeInteger(
+    process.env.CONFIRMATION_BLOCKS,
+    12
+  ),
   databaseUrl: process.env.DATABASE_URL,
   doBackgroundWork: resolveBoolean(process.env.DO_BACKGROUND_WORK, true),
   enableApi: resolveEnableApi(
@@ -149,5 +166,9 @@ export const config: RuntimeConfig = {
   startBlock: resolveNumber(
     process.env.START_BLOCK,
     relayNetworkDefaults.startBlock
+  ),
+  transferOverlapBlocks: resolveNonNegativeInteger(
+    process.env.TRANSFER_OVERLAP_BLOCKS,
+    250
   ),
 }

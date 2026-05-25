@@ -474,13 +474,11 @@ export const runTransferReplay = async (
             [...addresses],
             request.reconcileChunkSize
           )) {
-            await lockedDb.tx((tx) =>
-              reconcileTransferStateFromChain(
-                tx,
-                hubContract,
-                tokenId,
-                addressChunk
-              )
+            await reconcileTransferStateFromChain(
+              lockedDb,
+              hubContract,
+              tokenId,
+              addressChunk
             )
             counters.reconciledAddresses += addressChunk.length
           }

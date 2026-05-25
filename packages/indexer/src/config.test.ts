@@ -5,6 +5,7 @@ import {
   resolveAddress,
   resolveBoolean,
   resolveEnableApi,
+  resolveNonNegativeInteger,
   resolveNumber,
   resolvePort,
   validateRuntimeConfig,
@@ -25,6 +26,12 @@ test("resolveNumber falls back when unset or invalid", () => {
 
 test("resolveNumber accepts a numeric env value", () => {
   assert.equal(resolveNumber("42", 10), 42)
+})
+
+test("resolveNonNegativeInteger clamps unsafe values", () => {
+  assert.equal(resolveNonNegativeInteger("-1", 10), 0)
+  assert.equal(resolveNonNegativeInteger("12.8", 10), 12)
+  assert.equal(resolveNonNegativeInteger("nope", 10), 10)
 })
 
 test("resolveBoolean falls back when unset", () => {
@@ -82,6 +89,7 @@ test("validateRuntimeConfig requires a database url for api or background work",
         apiRequested: false,
         authApiKey: undefined,
         batchSize: 2000,
+        confirmationBlocks: 12,
         databaseUrl: undefined,
         doBackgroundWork: true,
         enableApi: false,
@@ -96,6 +104,7 @@ test("validateRuntimeConfig requires a database url for api or background work",
         rpcHttpUrl: undefined,
         rpcWsUrl: "wss://rpc.chain.relay.link/rpc",
         startBlock: relayNetworkDefaults.startBlock,
+        transferOverlapBlocks: 250,
       }),
     {
       message:
@@ -112,6 +121,7 @@ test("validateRuntimeConfig requires an rpc ws url for background work", () => {
         apiRequested: false,
         authApiKey: undefined,
         batchSize: 2000,
+        confirmationBlocks: 12,
         databaseUrl: "postgresql://postgres:postgres@127.0.0.1:54329/indexer",
         doBackgroundWork: true,
         enableApi: false,
@@ -126,6 +136,7 @@ test("validateRuntimeConfig requires an rpc ws url for background work", () => {
         rpcHttpUrl: undefined,
         rpcWsUrl: undefined,
         startBlock: relayNetworkDefaults.startBlock,
+        transferOverlapBlocks: 250,
       }),
     {
       message: "RPC_WS_URL is required when DO_BACKGROUND_WORK=1",
