@@ -1,6 +1,6 @@
-import { SLIP10Node } from "https://cdn.jsdelivr.net/npm/@metamask/key-tree@10.1.1/+esm#sha384-iWbSDJToETb8472qJVfgUl0vgl03s8An4v0EtHgKVwHrYQFjgbPU8Xu9n83+plLN";
-import { secp256k1 } from "https://cdn.jsdelivr.net/npm/@noble/curves@2.0.1/secp256k1.js/+esm#sha384-EtK9grXXeMKBkEYOQQfnqbuL27d6fm62SvYWp0bXat9Nh0VIK6vdGAqidcU/3m+d";
-import { bech32 } from "https://cdn.jsdelivr.net/npm/@scure/base@2.0.0/+esm#sha384-Tw6lJWVcnorbAhNG1S0uWwn2pRShQPG6VN+IAvK+uVz3B5VPYxJoeuKo6IlfFljz";
+import { SLIP10Node } from "https://cdn.jsdelivr.net/npm/@metamask/key-tree@10.1.1/+esm";
+import { secp256k1 } from "https://cdn.jsdelivr.net/npm/@noble/curves@2.0.1/secp256k1.js/+esm";
+import { bech32 } from "https://cdn.jsdelivr.net/npm/@scure/base@2.0.0/+esm";
 import { bytesToHex } from "../../../common/bytes.js";
 import { hash160 } from "../../../common/crypto.js";
 import type {

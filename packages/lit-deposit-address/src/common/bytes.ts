@@ -2,7 +2,7 @@ import {
   bytesToHex as nobleBytesToHex,
   concatBytes as nobleConcatBytes,
   hexToBytes as nobleHexToBytes,
-} from "https://cdn.jsdelivr.net/npm/@noble/hashes@2.0.1/utils.js/+esm#sha384-81Ys7folK9g1yP638SSxYBut5/EduVcZkl91gBJkPC/7ox5wD+2MJVne2gymPq4f";
+} from "https://cdn.jsdelivr.net/npm/@noble/hashes@2.0.1/utils.js/+esm";
 
 /**
  * Decode a hex string (with or without `0x` prefix) to bytes. Throws with a

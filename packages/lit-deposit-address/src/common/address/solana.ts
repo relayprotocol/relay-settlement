@@ -1,4 +1,4 @@
-import { base58 } from "https://cdn.jsdelivr.net/npm/@scure/base@2.0.0/+esm#sha384-Tw6lJWVcnorbAhNG1S0uWwn2pRShQPG6VN+IAvK+uVz3B5VPYxJoeuKo6IlfFljz";
+import { base58 } from "https://cdn.jsdelivr.net/npm/@scure/base@2.0.0/+esm";
 
 /** Encode a solana-vm address as raw 32-byte pubkey bytes. */
 export function encodeSolanaAddress(address: string): Uint8Array {

@@ -1,5 +1,5 @@
-import { secp256k1 } from "https://cdn.jsdelivr.net/npm/@noble/curves@2.0.1/secp256k1.js/+esm#sha384-EtK9grXXeMKBkEYOQQfnqbuL27d6fm62SvYWp0bXat9Nh0VIK6vdGAqidcU/3m+d";
-import { hexToBytes } from "https://cdn.jsdelivr.net/npm/@noble/hashes@2.0.1/utils.js/+esm#sha384-81Ys7folK9g1yP638SSxYBut5/EduVcZkl91gBJkPC/7ox5wD+2MJVne2gymPq4f";
+import { secp256k1 } from "https://cdn.jsdelivr.net/npm/@noble/curves@2.0.1/secp256k1.js/+esm";
+import { hexToBytes } from "https://cdn.jsdelivr.net/npm/@noble/hashes@2.0.1/utils.js/+esm";
 import {
   getAddress,
   hashMessage,
@@ -9,7 +9,7 @@ import {
   type Address,
   type Hex,
   type TypedDataDefinition,
-} from "https://cdn.jsdelivr.net/npm/viem@2.48.11/+esm#sha384-YppD9Zm3WvzBC3kmMreLoS2VRCnN1bgrD8Ai2tGMcfMQsNoKMdWqL+ToE+kej/ys";
+} from "https://cdn.jsdelivr.net/npm/viem@2.48.11/+esm";
 import {
   ALLOWED_ORACLES,
   DEPOSIT_ADDRESS_MANAGER_ADDRESS,

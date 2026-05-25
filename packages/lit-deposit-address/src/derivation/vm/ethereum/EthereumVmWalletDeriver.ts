@@ -1,10 +1,10 @@
-import { SLIP10Node } from "https://cdn.jsdelivr.net/npm/@metamask/key-tree@10.1.1/+esm#sha384-iWbSDJToETb8472qJVfgUl0vgl03s8An4v0EtHgKVwHrYQFjgbPU8Xu9n83+plLN";
-import { secp256k1 } from "https://cdn.jsdelivr.net/npm/@noble/curves@2.0.1/secp256k1.js/+esm#sha384-EtK9grXXeMKBkEYOQQfnqbuL27d6fm62SvYWp0bXat9Nh0VIK6vdGAqidcU/3m+d";
+import { SLIP10Node } from "https://cdn.jsdelivr.net/npm/@metamask/key-tree@10.1.1/+esm";
+import { secp256k1 } from "https://cdn.jsdelivr.net/npm/@noble/curves@2.0.1/secp256k1.js/+esm";
 import {
   parseTransaction,
   serializeTransaction,
   type Hex,
-} from "https://cdn.jsdelivr.net/npm/viem@2.48.11/+esm#sha384-YppD9Zm3WvzBC3kmMreLoS2VRCnN1bgrD8Ai2tGMcfMQsNoKMdWqL+ToE+kej/ys";
+} from "https://cdn.jsdelivr.net/npm/viem@2.48.11/+esm";
 import { encodeAddressToHex, normalizeAddressHex } from "../../../common/address.js";
 import { bytesToHex, hexToBytes } from "../../../common/bytes.js";
 import { keccak256 } from "../../../common/crypto.js";
@@ -57,27 +57,6 @@ function decodeUint256Arg(data: Hex, index: number): bigint {
 /** Decode an ABI-encoded `bytes32` (already a full word). */
 function decodeBytes32Arg(data: Hex, index: number): Hex {
   return `0x${wordAt(data, index).toLowerCase()}` as Hex;
-}
-
-function assertTransactionChainId(
-  txIndex: number,
-  parsed: { chainId?: number },
-  expectedChainId: string,
-): void {
-  if (parsed.chainId === undefined) {
-    throw new Error(`transactions[${txIndex}]: chainId is required`);
-  }
-  let expected: bigint;
-  try {
-    expected = BigInt(expectedChainId);
-  } catch {
-    throw new Error(`transactions[${txIndex}]: trigger.input.chainId must be numeric for EVM txs`);
-  }
-  if (BigInt(parsed.chainId) !== expected) {
-    throw new Error(
-      `transactions[${txIndex}]: chainId mismatch: expected=${expectedChainId}, got=${parsed.chainId}`,
-    );
-  }
 }
 
 function assertZeroValue(txIndex: number, value: bigint | undefined): void {
@@ -147,7 +126,6 @@ export class EthereumVmWalletDeriver extends Secp256k1VmWalletDeriver<
       );
     }
     const parsed = parseTransaction(transactions[0].unsignedTransaction as Hex);
-    assertTransactionChainId(0, parsed, trigger.input.chainId);
     const expectedTo = normalizeAddressHex(attestation.inputDepository, "ethereum-vm");
     const actualTo = parsed.to
       ? encodeAddressToHex(parsed.to, "ethereum-vm").toLowerCase()
@@ -213,7 +191,6 @@ export class EthereumVmWalletDeriver extends Secp256k1VmWalletDeriver<
 
     // ── tx[0]: token.approve(spender = inputDepository, value = input.amount)
     const approveTx = parseTransaction(transactions[0].unsignedTransaction as Hex);
-    assertTransactionChainId(0, approveTx, trigger.input.chainId);
     assertZeroValue(0, approveTx.value);
     const expectedTokenTo = normalizeAddressHex(trigger.input.currency, "ethereum-vm");
     const actualTokenTo = approveTx.to
@@ -254,7 +231,6 @@ export class EthereumVmWalletDeriver extends Secp256k1VmWalletDeriver<
 
     // ── tx[1]: depository.depositErc20(depositor, token, amount, orderId)
     const depositTx = parseTransaction(transactions[1].unsignedTransaction as Hex);
-    assertTransactionChainId(1, depositTx, trigger.input.chainId);
     assertZeroValue(1, depositTx.value);
     const expectedDepositTo = normalizeAddressHex(attestation.inputDepository, "ethereum-vm");
     const actualDepositTo = depositTx.to

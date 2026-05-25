@@ -147,12 +147,6 @@ describe("ethereum-vm transaction policy", () => {
     ).toThrow(/native deposit requires exactly 1 transaction/);
   });
 
-  it("rejects a native deposit whose transaction chainId does not equal input.chainId", () => {
-    expect(() =>
-      verifyTransactionsWithWallet(makeTrigger(), makeAttestation(), [buildTx({ chainId: 1 })]),
-    ).toThrow(/transactions\[0\]: chainId mismatch: expected=10, got=1/);
-  });
-
   it("rejects a native deposit whose value does not equal input.amount", () => {
     expect(() =>
       verifyTransactionsWithWallet(makeTrigger(), makeAttestation(), [
@@ -341,15 +335,6 @@ describe("ethereum-vm transaction policy (ERC-20 deposits)", () => {
         buildDepositErc20Tx(),
       ]),
     ).toThrow(/transactions\[0\]: approve\.spender mismatch/);
-  });
-
-  it("rejects an ERC-20 approve whose transaction chainId does not equal input.chainId", () => {
-    expect(() =>
-      verifyTransactionsWithWallet(erc20Trigger(), makeAttestation(), [
-        buildApproveTx({ chainId: 1 }),
-        buildDepositErc20Tx(),
-      ]),
-    ).toThrow(/transactions\[0\]: chainId mismatch: expected=10, got=1/);
   });
 
   it("rejects an ERC-20 approve transaction with non-zero native value", () => {

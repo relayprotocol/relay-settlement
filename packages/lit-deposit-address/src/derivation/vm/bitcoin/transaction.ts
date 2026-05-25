@@ -1,4 +1,4 @@
-import { sha256 } from "https://cdn.jsdelivr.net/npm/@noble/hashes@2.0.1/sha2.js/+esm#sha384-fpq5UdD7vTx0NhDc6RRBoykedv2HsZB3RxSOX130Tk6qLqG1jtQzuXISijyF++FS";
+import { sha256 } from "https://cdn.jsdelivr.net/npm/@noble/hashes@2.0.1/sha2.js/+esm";
 import { encodeAddressToHex, normalizeAddressHex } from "../../../common/address.js";
 import { hexToBytes } from "../../../common/bytes.js";
 import { hash160 } from "../../../common/crypto.js";

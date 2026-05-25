@@ -24,7 +24,7 @@ import {
   keccak256,
   type Address,
   type Hex,
-} from "https://cdn.jsdelivr.net/npm/viem@2.48.11/+esm#sha384-YppD9Zm3WvzBC3kmMreLoS2VRCnN1bgrD8Ai2tGMcfMQsNoKMdWqL+ToE+kej/ys";
+} from "https://cdn.jsdelivr.net/npm/viem@2.48.11/+esm";
 
 import type { DepositAddressTrigger } from "./types.js";
 

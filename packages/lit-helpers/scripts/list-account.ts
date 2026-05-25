@@ -123,7 +123,26 @@ interface RawUsageKeyInfo {
   can_delete_groups?: boolean
   create_pkps?: boolean
   can_create_pkps?: boolean
+  balance?: number | string
+  expiration?: number | string
   [key: string]: unknown
+}
+
+function formatUint256(value: number | string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  let n: bigint
+  try {
+    n = BigInt(value)
+  } catch {
+    return String(value)
+  }
+  const MAX = (1n << 256n) - 1n
+  if (n === MAX) {
+    return `${n} (uint256 max — effectively unlimited)`
+  }
+  return n.toString()
 }
 
 interface AccountInventory {
@@ -438,6 +457,16 @@ function printInventory(inventory: AccountInventory): void {
         "removePkpFromGroupIds"
       )
     )
+    const balance = formatUint256(key.balance)
+    const expiration = formatUint256(key.expiration)
+    if (balance !== undefined) {
+      console.log(`    balance:   ${balance}`)
+    }
+    if (expiration !== undefined) {
+      console.log(
+        `    expiration: ${expiration === "0" ? "0 (no expiration)" : expiration}`
+      )
+    }
     console.log(
       `    create groups: ${Boolean(key.can_create_groups ?? key.create_groups)}, delete groups: ${Boolean(
         key.can_delete_groups ?? key.delete_groups

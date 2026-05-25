@@ -15,6 +15,8 @@
     "credits": "tsx scripts/credits.ts",
     "top-up": "tsx scripts/top-up.ts",
     "list-account": "tsx scripts/list-account.ts",
+    "top-up-usage-key": "tsx scripts/top-up-usage-key.ts",
+    "remove-usage-key": "tsx scripts/remove-usage-key.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

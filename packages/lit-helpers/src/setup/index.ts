@@ -12,8 +12,18 @@ export type {
 export { createApiKeyBackend } from "./backend-api-key.js"
 export {
   createChainSecuredBackend,
+  setUsageApiKeyBalance,
+  removeUsageApiKey,
+  defaultUsageApiKeyExpiration,
   DEFAULT_ACCOUNT_CONFIG_ADDRESS,
   DEFAULT_BASE_CHAIN_ID,
   DEFAULT_BASE_RPC_URL,
+  DEFAULT_USAGE_API_KEY_BALANCE,
+  DEFAULT_USAGE_API_KEY_LIFETIME_SECONDS,
 } from "./backend-chain-secured.js"
-export type { ChainSecuredBackendOptions } from "./backend-chain-secured.js"
+export type {
+  ChainSecuredBackendOptions,
+  RemoveUsageApiKeyOptions,
+  SetUsageApiKeyBalanceOptions,
+  UsageKeyTarget,
+} from "./backend-chain-secured.js"

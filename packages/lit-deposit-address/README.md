@@ -99,38 +99,41 @@ The `cross-derivation.test.ts` suite asserts that the off-TEE output matches
 the in-TEE `wallet` derivation for all VM types.
 
 Every external dependency is imported in `src/` via a full jsDelivr `+esm`
-URL with an inline `#sha384-...` integrity hash, e.g.:
+URL, e.g.:
 
 ```ts
-import { sha256 } from "https://cdn.jsdelivr.net/npm/@noble/hashes@2.0.1/sha2.js/+esm#sha384-fpq5UdD7vTx0NhDc6RRBoykedv2HsZB3RxSOX130Tk6qLqG1jtQzuXISijyF++FS";
-import {
-  encodeAbiParameters,
-  keccak256,
-} from "https://cdn.jsdelivr.net/npm/viem@2.48.11/+esm#sha384-YppD9Zm3WvzBC3kmMreLoS2VRCnN1bgrD8Ai2tGMcfMQsNoKMdWqL+ToE+kej/ys";
+import { sha256 } from "https://cdn.jsdelivr.net/npm/@noble/hashes@2.0.1/sha2.js/+esm";
+import { encodeAbiParameters, keccak256 } from "https://cdn.jsdelivr.net/npm/viem@2.48.11/+esm";
 ```
-
-The `#sha384-...` URL fragment is documented at
-<https://developer.litprotocol.com/lit-actions/imports#full-urls>: the Lit
-Action runtime strips it before fetching (per the URL specification) and then
-verifies the SHA-384 of the downloaded bytes against it before any code is
-executed. A jsDelivr compromise or DNS hijack therefore can't silently swap
-in different code — a hash mismatch aborts the action.
 
 `src/action-env.d.ts` declares each URL as a module that re-exports the types
 of the locally installed npm package, so the source still type-checks against
 `node_modules`. The bundler marks every `https://` import as external, so the
-resulting bundle contains only first-party code with the integrity-hash URLs
-preserved verbatim. `vitest.config.ts` aliases the same URLs (hashes
-included) back to local packages so tests resolve normally.
+resulting bundle contains only first-party code; the Lit Action runtime
+bundles each URL at execution time via `swc_bundler` and verifies its bytes
+against jsDelivr's SRI hash header (with TOFU pinning into the node's
+`integrity.lock`). `vitest.config.ts` aliases the same URLs back to local
+packages so tests resolve normally.
 
-Whenever a dependency is bumped, recompute its SHA-384:
+The Lit docs at
+<https://developer.litprotocol.com/lit-actions/imports#full-urls> describe an
+inline `#sha384-<hash>` URL fragment for action-source-level SRI assertion.
+We are **not** using it currently because the in-production `swc_bundler`
+resolves the entry URL with the fragment preserved while pre-fetched sources
+are keyed without it, so the bundler reports `bundler requested ... but it
+was not pre-fetched` and the action fails to load. Once Lit ships a fix
+(`resolve_entry_specifier` should strip the fragment, mirroring
+`walk_deps`), re-add the `#sha384-...` fragments here by hashing each URL
+with:
 
 ```sh
 curl -sSL '<full-jsdelivr-url>' | openssl dgst -sha384 -binary | base64 -w0
 ```
 
-and update the inline `#sha384-...` fragments in `src/`, `vitest.config.ts`,
-and `src/action-env.d.ts` accordingly.
+Integrity of the action's import URLs is still anchored on-chain via the
+IPFS CID registered on the Chipotle action registry, since that CID is
+computed over the bundled file's exact byte content (including the URL
+specifiers).
 
 Because the source files import from URLs, this repo is **not** publishable as
 a conventional npm library; consume the bundled per-VM action file

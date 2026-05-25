@@ -2,9 +2,13 @@ import { bytesToHex } from "../../../common/bytes.js";
 import { hashTypedData, signTypedDataHash } from "../../../common/eip712.js";
 import type { HyperliquidVmSendAsset, HyperliquidVmNonceMapping } from "../../../common/types.js";
 
-declare const __HUB_EVM_CHAIN_ID__: string;
-
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+// Deposit addresses are EOAs, so the EIP-712 domain chainId doesn't affect
+// signature validity in any meaningful way (an EOA signature recovers to
+// the same address regardless of the chain it claims to be from). We pin
+// this to 1 for simplicity.
+const NONCE_MAPPING_DOMAIN_CHAIN_ID = 1;
 
 const NONCE_MAPPING_TYPES = {
   NonceMapping: [
@@ -34,7 +38,7 @@ export function signNonceMapping(message: HyperliquidVmNonceMapping, privateKey:
     domain: {
       name: "RelayNonceMapping",
       version: "2",
-      chainId: Number.parseInt(__HUB_EVM_CHAIN_ID__, 10),
+      chainId: NONCE_MAPPING_DOMAIN_CHAIN_ID,
       verifyingContract: ZERO_ADDRESS,
     },
     types: NONCE_MAPPING_TYPES,

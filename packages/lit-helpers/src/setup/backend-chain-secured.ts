@@ -38,6 +38,30 @@ export const DEFAULT_BASE_CHAIN_ID = 8453n
 export const DEFAULT_ACCOUNT_CONFIG_ADDRESS =
   "0xaaaaa9120fe271f653cfdb6bf400db93d2dea7aa"
 
+/**
+ * Default on-chain balance newly minted usage API keys are seeded with.
+ * Chipotle ChainSecured deployments meter `/lit_action` calls against this
+ * value, so a usage key minted with `0` is rejected with a 402 even when
+ * the account has billing credits. Set to `10_000_000` to match the value
+ * Chipotle's allocator setup uses; operators can raise/lower it via
+ * `setUsageApiKeyBalance` afterwards.
+ */
+export const DEFAULT_USAGE_API_KEY_BALANCE = 10_000_000n
+
+/**
+ * Default lifetime (in seconds) granted to newly minted usage API keys.
+ * Used to compute the absolute `expiration` Unix timestamp written on-chain.
+ */
+export const DEFAULT_USAGE_API_KEY_LIFETIME_SECONDS =
+  10n * 365n * 24n * 60n * 60n
+
+/** Compute an absolute Unix-seconds expiration `lifetime` seconds from now. */
+export function defaultUsageApiKeyExpiration(
+  lifetimeSeconds: bigint = DEFAULT_USAGE_API_KEY_LIFETIME_SECONDS
+): bigint {
+  return BigInt(Math.floor(Date.now() / 1000)) + lifetimeSeconds
+}
+
 // ─── Hex / hash primitives ───────────────────────────────────────────────────
 
 export function toHex(bytes: Uint8Array): string {
@@ -391,6 +415,15 @@ const WRITE_ABI: ContractABI = [
   },
   {
     inputs: [
+      { name: "accountApiKeyHash", type: "uint256" },
+      { name: "usageApiKeyHash", type: "uint256" },
+    ],
+    name: "removeUsageApiKey",
+    outputs: [],
+    type: "function",
+  },
+  {
+    inputs: [
       { name: "apiKeyHash", type: "uint256" },
       { name: "newAdminWalletAddress", type: "address" },
     ],
@@ -426,6 +459,7 @@ interface WriteContract {
   addPkpToGroup: WriteMethod
   registerWalletDerivation: WriteMethod
   setUsageApiKey: WriteMethod
+  removeUsageApiKey: WriteMethod
   transferChainSecuredAccountOwnership: WriteMethod
 }
 
@@ -981,16 +1015,20 @@ class ChainSecuredBackend implements SetupBackend {
     })
     await this.send(regCalldata)
 
-    // keccak256 over the raw 32-byte secret bytes (base64-decoded).
-    const keyBytes = Buffer.from(minted.usage_api_key, "base64")
-    const usageApiKeyHash = bytesToBigInt(keccak(new Uint8Array(keyBytes)))
+    // Match Chipotle's `api_key_hash`: keccak256 over the UTF-8 bytes of the
+    // base64-encoded usage API key string. Hashing the base64-decoded bytes
+    // instead silently registers a hash the billing guard never resolves to
+    // a wallet, which surfaces as HTTP 402 on every `/lit_action` call.
+    const usageApiKeyHash = bytesToBigInt(
+      keccak(new TextEncoder().encode(minted.usage_api_key))
+    )
 
     // Attach the key to the account with execute permission for the given groups.
     const setCalldata = writeContract.setUsageApiKey.encodeInput({
       accountApiKeyHash: this.opts.adminHash,
       usageApiKeyHash,
-      expiration: 0n,
-      balance: 0n,
+      expiration: defaultUsageApiKeyExpiration(),
+      balance: DEFAULT_USAGE_API_KEY_BALANCE,
       name,
       description,
       createGroups: false,
@@ -1005,4 +1043,193 @@ class ChainSecuredBackend implements SetupBackend {
 
     return minted.usage_api_key
   }
+}
+
+interface RawApiKeyRow {
+  metadata: { id: bigint; name: string; description: string }
+  apiKeyHash: bigint
+  expiration: bigint
+  balance: bigint
+  executeInGroups: bigint[]
+  createGroups: boolean
+  deleteGroups: boolean
+  createPKPs: boolean
+  manageIPFSIdsInGroups: bigint[]
+  addPkpToGroups: bigint[]
+  removePkpFromGroups: bigint[]
+}
+
+/** Identify a target usage key either by its plaintext name or by its hash. */
+export interface UsageKeyTarget {
+  name?: string
+  usageApiKeyHash?: bigint
+}
+
+export interface SetUsageApiKeyBalanceOptions {
+  /** Admin wallet private key authorized to write to the account. */
+  privateKey: string
+  /** Master account API key (used to derive the on-chain account hash). */
+  accountApiKey: string
+  /** Which usage key to update. Exactly one of `name` or `usageApiKeyHash`. */
+  target: UsageKeyTarget
+  /** Absolute new balance to write. */
+  newBalance: bigint
+  /**
+   * Optional new absolute Unix-seconds expiration. Pass `0n` to clear it
+   * (no expiration). Omit to preserve whatever is currently on-chain.
+   */
+  newExpiration?: bigint
+}
+
+async function readAllApiKeys(
+  rpcUrl: string,
+  contractAddress: string,
+  adminHash: bigint
+): Promise<RawApiKeyRow[]> {
+  return readAll(
+    rpcUrl,
+    contractAddress,
+    (page, size) =>
+      viewContract.listApiKeys.encodeInput({
+        accountApiKeyHash: adminHash,
+        pageNumber: page,
+        pageSize: size,
+      }),
+    (data) => viewContract.listApiKeys.decodeOutput(data) as RawApiKeyRow[]
+  )
+}
+
+/**
+ * Overwrite an existing usage API key's on-chain `balance` while preserving
+ * every other field (executeInGroups, manage/add/remove PKP flags, etc.).
+ * Returns the broadcast transaction hash.
+ */
+export async function setUsageApiKeyBalance(
+  opts: SetUsageApiKeyBalanceOptions
+): Promise<string> {
+  if (!opts.target.name && opts.target.usageApiKeyHash === undefined) {
+    throw new Error(
+      "setUsageApiKeyBalance: target.name or target.usageApiKeyHash is required"
+    )
+  }
+  if (opts.target.name && opts.target.usageApiKeyHash !== undefined) {
+    throw new Error(
+      "setUsageApiKeyBalance: pass either target.name or target.usageApiKeyHash, not both"
+    )
+  }
+
+  const normalizedKey = opts.privateKey.startsWith("0x")
+    ? opts.privateKey
+    : `0x${opts.privateKey}`
+  const adminHash = bytesToBigInt(
+    keccak(new TextEncoder().encode(opts.accountApiKey))
+  )
+
+  const rows = await readAllApiKeys(
+    DEFAULT_BASE_RPC_URL,
+    DEFAULT_ACCOUNT_CONFIG_ADDRESS,
+    adminHash
+  )
+  const target = rows.find((row) =>
+    opts.target.name
+      ? row.metadata.name === opts.target.name
+      : row.apiKeyHash === opts.target.usageApiKeyHash
+  )
+  if (!target) {
+    throw new Error(
+      `usage API key not found: ${
+        opts.target.name ??
+        `hash=0x${opts.target.usageApiKeyHash?.toString(16)}`
+      }`
+    )
+  }
+
+  const calldata = writeContract.setUsageApiKey.encodeInput({
+    accountApiKeyHash: adminHash,
+    usageApiKeyHash: target.apiKeyHash,
+    expiration: opts.newExpiration ?? target.expiration,
+    balance: opts.newBalance,
+    name: target.metadata.name,
+    description: target.metadata.description,
+    createGroups: target.createGroups,
+    deleteGroups: target.deleteGroups,
+    createPKPs: target.createPKPs,
+    manageIPFSIdsInGroups: target.manageIPFSIdsInGroups,
+    addPkpToGroups: target.addPkpToGroups,
+    removePkpFromGroups: target.removePkpFromGroups,
+    executeInGroups: target.executeInGroups,
+  })
+
+  return sendTransaction(
+    DEFAULT_BASE_RPC_URL,
+    DEFAULT_BASE_CHAIN_ID,
+    normalizedKey,
+    DEFAULT_ACCOUNT_CONFIG_ADDRESS,
+    calldata
+  )
+}
+
+export interface RemoveUsageApiKeyOptions {
+  /** Admin wallet private key authorized to write to the account. */
+  privateKey: string
+  /** Master account API key (used to derive the on-chain account hash). */
+  accountApiKey: string
+  /** Which usage key to remove. Exactly one of `name` or `usageApiKeyHash`. */
+  target: UsageKeyTarget
+}
+
+/**
+ * Remove an existing usage API key entry from the account. Calls the
+ * `removeUsageApiKey` facet, which deletes the entry, drops it from the
+ * account's key list, and clears the `allApiKeyHashesToMaster` reverse
+ * mapping so the same name (or a fresh secret with the same hash) can be
+ * minted again afterwards. Returns the broadcast transaction hash.
+ */
+export async function removeUsageApiKey(
+  opts: RemoveUsageApiKeyOptions
+): Promise<string> {
+  if (!opts.target.name && opts.target.usageApiKeyHash === undefined) {
+    throw new Error(
+      "removeUsageApiKey: target.name or target.usageApiKeyHash is required"
+    )
+  }
+  if (opts.target.name && opts.target.usageApiKeyHash !== undefined) {
+    throw new Error(
+      "removeUsageApiKey: pass either target.name or target.usageApiKeyHash, not both"
+    )
+  }
+
+  const normalizedKey = opts.privateKey.startsWith("0x")
+    ? opts.privateKey
+    : `0x${opts.privateKey}`
+  const adminHash = bytesToBigInt(
+    keccak(new TextEncoder().encode(opts.accountApiKey))
+  )
+
+  let usageApiKeyHash = opts.target.usageApiKeyHash
+  if (usageApiKeyHash === undefined) {
+    const rows = await readAllApiKeys(
+      DEFAULT_BASE_RPC_URL,
+      DEFAULT_ACCOUNT_CONFIG_ADDRESS,
+      adminHash
+    )
+    const target = rows.find((row) => row.metadata.name === opts.target.name)
+    if (!target) {
+      throw new Error(`usage API key not found: ${opts.target.name}`)
+    }
+    usageApiKeyHash = target.apiKeyHash
+  }
+
+  const calldata = writeContract.removeUsageApiKey.encodeInput({
+    accountApiKeyHash: adminHash,
+    usageApiKeyHash,
+  })
+
+  return sendTransaction(
+    DEFAULT_BASE_RPC_URL,
+    DEFAULT_BASE_CHAIN_ID,
+    normalizedKey,
+    DEFAULT_ACCOUNT_CONFIG_ADDRESS,
+    calldata
+  )
 }

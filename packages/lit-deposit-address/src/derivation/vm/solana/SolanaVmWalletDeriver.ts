@@ -1,11 +1,11 @@
 import {
   SLIP10Node,
   ed25519Bip32,
-} from "https://cdn.jsdelivr.net/npm/@metamask/key-tree@10.1.1/+esm#sha384-iWbSDJToETb8472qJVfgUl0vgl03s8An4v0EtHgKVwHrYQFjgbPU8Xu9n83+plLN";
-import { ed25519 } from "https://cdn.jsdelivr.net/npm/@noble/curves@2.0.1/ed25519.js/+esm#sha384-Bdcn5+otxW5DZgXyuQ8l2JyyG6Op7ZzGm5KrBjD0Q/8vkBtT4KsX7abNZPcelj2p";
-import { pbkdf2 } from "https://cdn.jsdelivr.net/npm/@noble/hashes@2.0.1/pbkdf2.js/+esm#sha384-D5VIsA1sKtlUy0alXi0qwfCSsGkk/yblfbRQCtvHiyLjsS8FbWSPqf5Ot1CVMXsZ";
-import { sha512 } from "https://cdn.jsdelivr.net/npm/@noble/hashes@2.0.1/sha2.js/+esm#sha384-fpq5UdD7vTx0NhDc6RRBoykedv2HsZB3RxSOX130Tk6qLqG1jtQzuXISijyF++FS";
-import bs58 from "https://cdn.jsdelivr.net/npm/bs58@6.0.0/+esm#sha384-obRIzJpHEltALtaRu+VVERKw4iCzb8EUZaHzlyuZvEbHzDKHIiaO0940L3FlRjee";
+} from "https://cdn.jsdelivr.net/npm/@metamask/key-tree@10.1.1/+esm";
+import { ed25519 } from "https://cdn.jsdelivr.net/npm/@noble/curves@2.0.1/ed25519.js/+esm";
+import { pbkdf2 } from "https://cdn.jsdelivr.net/npm/@noble/hashes@2.0.1/pbkdf2.js/+esm";
+import { sha512 } from "https://cdn.jsdelivr.net/npm/@noble/hashes@2.0.1/sha2.js/+esm";
+import bs58 from "https://cdn.jsdelivr.net/npm/bs58@6.0.0/+esm";
 import {
   base64ToBytes,
   bytesToBase64,

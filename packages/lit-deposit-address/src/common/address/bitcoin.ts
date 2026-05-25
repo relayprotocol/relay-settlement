@@ -1,9 +1,5 @@
-import {
-  base58,
-  bech32,
-  bech32m,
-} from "https://cdn.jsdelivr.net/npm/@scure/base@2.0.0/+esm#sha384-Tw6lJWVcnorbAhNG1S0uWwn2pRShQPG6VN+IAvK+uVz3B5VPYxJoeuKo6IlfFljz";
-import { sha256 } from "https://cdn.jsdelivr.net/npm/@noble/hashes@2.0.1/sha2.js/+esm#sha384-fpq5UdD7vTx0NhDc6RRBoykedv2HsZB3RxSOX130Tk6qLqG1jtQzuXISijyF++FS";
+import { base58, bech32, bech32m } from "https://cdn.jsdelivr.net/npm/@scure/base@2.0.0/+esm";
+import { sha256 } from "https://cdn.jsdelivr.net/npm/@noble/hashes@2.0.1/sha2.js/+esm";
 import { bytesToHex } from "../bytes.js";
 
 const BITCOIN_MAINNET_P2PKH_VERSION = 0x00;
