@@ -1,0 +1,13 @@
+[package]
+name = "price-oracle-precompile"
+description = "Runtime-agnostic core for the Relay price oracle EVM precompile"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+alloy-primitives = { workspace = true }
+alloy-sol-types = { workspace = true }

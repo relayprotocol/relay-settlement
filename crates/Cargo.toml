@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = [
+    "price-oracle-precompile",
+    "oracle-reth",
+    "oracle-rpc-demo",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/unevenlabs/settlement-protocol"
+rust-version = "1.83"
+
+[workspace.dependencies]
+alloy-primitives = "1.6"
+alloy-sol-types = "1.6"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
