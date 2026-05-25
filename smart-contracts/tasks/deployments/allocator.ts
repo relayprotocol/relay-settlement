@@ -3,6 +3,7 @@ import ConfigModule from "../../ignition/modules/Config"
 import EthereumVmPayloadBuilderModule from "../../ignition/modules/EthereumVmPayloadBuilder"
 import RelayAllocatorModule from "../../ignition/modules/RelayAllocator"
 import SolanaVmPayloadBuilderModule from "../../ignition/modules/SolanaVmPayloadBuilder"
+import TonVmPayloadBuilderModule from "../../ignition/modules/TonVmPayloadBuilder"
 
 task("deploy:allocator", "Deploy the RelayAllocator contract")
   .addOptionalParam("owner", "The address of the owner")
@@ -98,4 +99,35 @@ task(
       `SolanaVmPayloadBuilder deployed to: ${solanaVmPayloadBuilder.address}`
     )
     return solanaVmPayloadBuilder.address
+  })
+
+task(
+  "deploy:ton-vm-payload-builder",
+  "Deploy the TonVmPayloadBuilder contract bound to a Highload V3 wallet"
+)
+  .addParam(
+    "subwalletId",
+    "The subwallet id baked into the target Highload V3 wallet (uint32)"
+  )
+  .addParam(
+    "timeout",
+    "The timeout in seconds baked into the target Highload V3 wallet (uint32)"
+  )
+  .setAction(async ({ subwalletId, timeout }, { ignition }) => {
+    const { tonVmPayloadBuilder } = await ignition.deploy(
+      TonVmPayloadBuilderModule,
+      {
+        parameters: {
+          TonVmPayloadBuilder: {
+            subwalletId: Number(subwalletId),
+            timeout: Number(timeout),
+          },
+        },
+      }
+    )
+
+    console.log(
+      `TonVmPayloadBuilder deployed to: ${tonVmPayloadBuilder.address}`
+    )
+    return tonVmPayloadBuilder.address
   })
