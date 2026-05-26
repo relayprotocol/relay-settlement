@@ -38,6 +38,6 @@ jobs:
             if npm view "$NAME@$VERSION" version 2>/dev/null; then
               echo "$NAME@$VERSION already published, skipping"
             else
-              npm publish --provenance --access public
+              npm publish --access public
             fi
           done
