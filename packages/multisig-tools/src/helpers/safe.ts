@@ -18,7 +18,7 @@ export const getPendingSafeTxActionsByNonce = async (
   })
 
   const tx = results.find(
-    (transaction: any) => transaction.nonce === targetNonce
+    (transaction: any) => Number(transaction.nonce) === targetNonce
   )
   if (!tx) {
     throw new Error(
