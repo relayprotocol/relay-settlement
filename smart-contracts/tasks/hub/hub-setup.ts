@@ -1,5 +1,4 @@
 import { task } from "hardhat/config"
-import { getViemClients } from "../../lib/viem"
 
 task("hub:setup", "Deploy and setup Hub, Oracle, and OracleMultisig contracts")
   .addOptionalParam("admin", "The admin address for Oracle and Hub contracts")
@@ -34,9 +33,8 @@ task("hub:setup", "Deploy and setup Hub, Oracle, and OracleMultisig contracts")
       },
       hre
     ) => {
-      const { run } = hre
-      const { walletClients } = await getViemClients(hre)
-      const [defaultAdmin] = walletClients
+      const { run, viem } = hre
+      const [defaultAdmin] = await viem.getWalletClients()
 
       if (!oracleSignerAddress) {
         oracleSignerAddress = defaultAdmin.account.address
@@ -45,35 +43,37 @@ task("hub:setup", "Deploy and setup Hub, Oracle, and OracleMultisig contracts")
         adminAddress = defaultAdmin.account.address
       }
 
-      // deploy contracts
       if (!hubAddress) {
-        ;({ address: hubAddress } = await run("deploy:hub", {
-          admin: adminAddress,
-        }))
+        const hub = await viem.deployContract("RelayHub", [adminAddress])
+        hubAddress = hub.address
+        console.log(`RelayHub deployed to: ${hubAddress}`)
       }
 
       if (!oracleAddress) {
-        ;({ address: oracleAddress } = await run("deploy:oracle", {
-          admin: adminAddress,
-          hub: hubAddress,
-        }))
+        const oracle = await viem.deployContract("RelayOracle", [
+          adminAddress,
+          hubAddress,
+        ])
+        oracleAddress = oracle.address
+        console.log(`RelayOracle deployed to: ${oracleAddress}`)
       }
 
       if (!oracleMultisigAddress && multisigSigners) {
-        const threshold = multisigThreshold ?? "1"
-        ;({ address: oracleMultisigAddress } = await run(
-          "deploy:oracle-multisig",
-          {
-            owner: adminAddress,
-            signers: multisigSigners,
-            threshold,
-          }
-        ))
+        const signerList = multisigSigners
+          .split(",")
+          .map((s: string) => s.trim())
+        const threshold = Number(multisigThreshold ?? "1")
+        const oracleMultisig = await viem.deployContract(
+          "RelayOracleMultisig",
+          [adminAddress, signerList, threshold]
+        )
+        oracleMultisigAddress = oracleMultisig.address
+        console.log(`RelayOracleMultisig deployed to: ${oracleMultisigAddress}`)
       }
 
-      await run("deploy:erc20View")
+      const erc20View = await viem.deployContract("ERC20View", [0n])
+      console.log(`ERC20View deployed to: ${erc20View.address}`)
 
-      // set roles
       await run("hub:add-operator", {
         account: oracleAddress,
         hub: hubAddress,

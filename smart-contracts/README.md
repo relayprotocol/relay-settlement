@@ -293,5 +293,5 @@ Tests live under `test/` and run with `forge` via `yarn test`.
 Coverage reports can be generated ad-hoc:
 
 ```sh
-yarn coverage    # writes forge-out/lcov.info
+yarn coverage    # writes out/lcov.info
 ```

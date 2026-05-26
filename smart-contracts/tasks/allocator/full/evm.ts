@@ -32,7 +32,7 @@ task(
     async (
       {
         owner,
-        signer,
+        signer: _signer,
         wnear,
         chainId,
         depository: depositoryAddress,
@@ -50,11 +50,11 @@ task(
       const publicClient = await viem.getPublicClient()
 
       if (!allocatorAddress) {
-        allocatorAddress = await run("deploy:allocator", {
-          owner,
-          signer,
-          wnear,
-        })
+        throw new Error(
+          "--allocator is required. Deploy one first with " +
+            "`HUB=<hub> ORACLE=<oracle> yarn deploy:allocator` and pass " +
+            "--allocator <address>."
+        )
       }
 
       const allocator = await viem.getContractAt(

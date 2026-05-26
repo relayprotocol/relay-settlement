@@ -30,7 +30,7 @@ jobs:
               - 'packages/depository/**'
 
   smart-contracts:
-    name: Slither — smart-contracts (Hardhat)
+    name: Slither — smart-contracts (Foundry)
     needs: changes
     if: needs.changes.outputs.smart-contracts == 'true'
     runs-on: ubuntu-latest
@@ -42,6 +42,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: recursive
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -58,19 +59,15 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
-      - name: Symlink solady for Slither source resolution
-        # -n (no-dereference) is required when the destination is already a
-        # symlink to a directory (e.g. created by the smart-contracts
-        # postinstall hook). Without it, `ln -sf` dereferences the symlink
-        # and tries to create the link inside the resolved package, which
-        # collides with the real src/ directory and fails:
-        #   ln: smart-contracts/node_modules/solady/src: cannot overwrite directory
-        run: ln -sfn ../../node_modules/solady/src smart-contracts/node_modules/solady
-
-      - name: Build
-        run: |
-          yarn build
-          yarn workspace @relay-settlement/smart-contracts build
+      - name: Build with Forge (build-info for Slither)
+        working-directory: smart-contracts
+        # `--skip ./test/** ./script/**` avoids forge's preprocessor
+        # writing synthetic `foundry-pp/DeployHelper*.sol` source
+        # entries (one per contract with a constructor); without
+        # the skip, crytic-compile fails with `InvalidCompilation:
+        # Unknown file: foundry-pp/...` because those sources only
+        # exist in solc input, not on disk.
+        run: forge build --build-info --skip "./test/**" --skip "./script/**" --force
 
       - name: Run Slither
         uses: crytic/slither-action@v0.4.2
@@ -79,8 +76,12 @@ jobs:
           target: smart-contracts/
           slither-config: smart-contracts/slither.config.json
           fail-on: high
+          # `ignore-compile: true` does two things: passes
+          # `--ignore-compile` through to slither so it reuses our
+          # pre-built artifacts, AND skips the action's own `npm i`
+          # step (which would fail on our `workspace:*` devDeps).
           ignore-compile: true
-          slither-args: --compile-force-framework hardhat --json slither-results.json
+          slither-args: --compile-force-framework foundry --json slither-results.json
 
       - name: Post PR comment
         if: github.event_name == 'pull_request' && always()

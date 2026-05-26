@@ -147,7 +147,7 @@ task(
       {
         dryRun,
         owner,
-        signer,
+        signer: _signer,
         wnear,
         allocator: existingAllocatorAddress,
         recipient,
@@ -198,13 +198,13 @@ task(
       // ================================================================
       // Step 1: Deploy Allocator
       // ================================================================
-      let allocatorAddress = existingAllocatorAddress
+      const allocatorAddress = existingAllocatorAddress
       if (!allocatorAddress) {
-        allocatorAddress = await run("deploy:allocator", {
-          owner,
-          signer,
-          wnear,
-        })
+        throw new Error(
+          "--allocator is required. Deploy one first with " +
+            "`HUB=<hub> ORACLE=<oracle> yarn deploy:allocator` and pass " +
+            "--allocator <address>."
+        )
       }
       console.log(`Allocator: ${allocatorAddress}`)
 

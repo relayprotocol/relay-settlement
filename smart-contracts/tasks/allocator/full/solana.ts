@@ -14,6 +14,10 @@ task(
   "Deploy the Allocator contract, initializes it, sets a payload builder, submits a withdraw request, triggers a signature, and verifies the payload"
 )
   .addParam("owner", "The address of the owner")
+  .addOptionalParam(
+    "allocator",
+    "The address of an existing RelayAllocator contract"
+  )
   .addOptionalParam("chainId", "The chain ID on which we withdraw")
   .addOptionalParam("depository", "The address of the depository contract")
   .addOptionalParam("signer", "The address of the signer")
@@ -35,7 +39,7 @@ task(
     async (
       {
         owner,
-        signer,
+        signer: _signer,
         wnear,
         delay,
         chainId = 1115111n,
@@ -43,6 +47,7 @@ task(
         amount,
         currency,
         recipient,
+        allocator: allocatorAddress,
       },
       hre
     ) => {
@@ -52,12 +57,13 @@ task(
 
       const publicClient = await viem.getPublicClient()
 
-      const allocatorAddress = await run("deploy:allocator", {
-        delay,
-        owner,
-        signer,
-        wnear,
-      })
+      if (!allocatorAddress) {
+        throw new Error(
+          "--allocator is required. Deploy one first with " +
+            "`HUB=<hub> ORACLE=<oracle> yarn deploy:allocator` and pass " +
+            "--allocator <address>."
+        )
+      }
 
       const allocator = await viem.getContractAt(
         "RelayAllocator",

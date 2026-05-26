@@ -1,11 +1,7 @@
 import "@nomicfoundation/hardhat-foundry"
-import "@nomicfoundation/hardhat-ignition"
-import "@nomicfoundation/hardhat-toolbox-viem"
-import "@nomiclabs/hardhat-solhint"
+import "@nomicfoundation/hardhat-viem"
 import { networks as nets } from "@relay-protocol/settlement-networks"
-import "hardhat-gas-reporter"
 import type { HardhatUserConfig } from "hardhat/config"
-import "solidity-coverage"
 
 import { parseEther } from "viem"
 
@@ -33,23 +29,10 @@ import "./tasks/hub/hub-setup"
 import "./tasks/hub/test-oracle"
 import "./tasks/hub/setup-withdrawal-test"
 
-// deployments
-import "./tasks/deployments/allocator"
-import "./tasks/deployments/basicPricingOracle"
-import "./tasks/deployments/bitcoinDepositAddress"
-import "./tasks/deployments/depositAddressFactory"
-import "./tasks/deployments/depositAddressManager"
-import "./tasks/deployments/erc20View"
-import "./tasks/deployments/hub"
-import "./tasks/deployments/oracle"
-import "./tasks/deployments/oracleMultisig"
-import "./tasks/deployments/relayMultisigSigner"
-
 // helpers
 import "./tasks/accounts"
 import "./tasks/allocator/getSignerAddress"
 import "./tasks/computeSignatures"
-import "./tasks/exportAbis"
 import "./tasks/grantRole"
 
 // Relay Multisig signer — off-chain CLI lives in packages/multisig-tools.
@@ -72,27 +55,6 @@ const networks = {
   hardhat: {
     allowUnlimitedContractSize: true,
   },
-}
-
-const customChains = Object.keys(nets)
-  .filter((id) => nets[id].blockExplorer)
-  .map((id) => nets[id].blockExplorer)
-
-// Build etherscan API keys from network configs
-const etherscanApiKeys = Object.keys(nets).reduce(
-  (acc, id) => {
-    const network = nets[id]
-    if (network.blockExplorer?.apiKey) {
-      acc[network.blockExplorer.network] = network.blockExplorer.apiKey
-    }
-    return acc
-  },
-  { mainnet: "C1KDFD2PHN7FXXXT1AW5PG27I5JB23J41D" } as Record<string, string>
-)
-
-const etherscan = {
-  apiKey: etherscanApiKeys,
-  customChains,
 }
 
 // check if protocol onctracts are present in the network config
@@ -165,10 +127,6 @@ if (forkUrl) {
 }
 
 const config: HardhatUserConfig = {
-  etherscan,
-  ignition: {
-    requiredConfirmations: 1,
-  },
   networks,
   solidity: {
     settings: {
@@ -183,9 +141,6 @@ const config: HardhatUserConfig = {
       },
     },
     version: "0.8.28",
-  },
-  sourcify: {
-    enabled: true,
   },
 }
 

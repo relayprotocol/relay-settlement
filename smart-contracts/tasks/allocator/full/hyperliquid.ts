@@ -30,6 +30,10 @@ task(
   "Deploy the Allocator contract, initializes it, sets a payload builder, submits a withdraw request, triggers a signature, and executes on Hyperliquid testnet"
 )
   .addParam("owner", "The address of the owner")
+  .addOptionalParam(
+    "allocator",
+    "The address of an existing RelayAllocator contract"
+  )
   .addOptionalParam("signer", "The address of the signer")
   .addOptionalParam("wnear", "The address of the wNEAR token")
   .addOptionalParam("amount", "The amount to withdraw (decimal format)", "0.5")
@@ -50,7 +54,7 @@ task(
     async (
       {
         owner,
-        signer,
+        signer: _signer,
         wnear,
         amount,
         decimals,
@@ -58,6 +62,7 @@ task(
         chainId,
         recipient,
         signatureChainId,
+        allocator: allocatorAddress,
       },
       hre
     ) => {
@@ -71,11 +76,13 @@ task(
 
       const publicClient = await viem.getPublicClient()
 
-      const allocatorAddress = await run("deploy:allocator", {
-        owner,
-        signer,
-        wnear,
-      })
+      if (!allocatorAddress) {
+        throw new Error(
+          "--allocator is required. Deploy one first with " +
+            "`HUB=<hub> ORACLE=<oracle> yarn deploy:allocator` and pass " +
+            "--allocator <address>."
+        )
+      }
 
       const allocator = await viem.getContractAt("Allocator", allocatorAddress)
       const delay = await allocator.read.delay()

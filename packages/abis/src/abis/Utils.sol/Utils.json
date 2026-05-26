@@ -1,84 +1,50 @@
 [
   {
-    "inputs": [],
-    "name": "StringsInvalidAddressFormat",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "family",
-        "type": "string"
-      },
-      {
-        "internalType": "uint256",
-        "name": "chainId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "string",
-        "name": "account",
-        "type": "string"
-      }
-    ],
+    "type": "function",
     "name": "generateAddress",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "virtualAddress",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "pure",
-    "type": "function"
-  },
-  {
     "inputs": [
       {
-        "internalType": "string",
-        "name": "family",
-        "type": "string"
-      },
-      {
-        "internalType": "uint256",
         "name": "chainId",
-        "type": "uint256"
+        "type": "string",
+        "internalType": "string"
       },
       {
-        "internalType": "string",
-        "name": "token",
-        "type": "string"
+        "name": "account",
+        "type": "bytes",
+        "internalType": "bytes"
       }
     ],
-    "name": "generateTokenId",
     "outputs": [
       {
-        "internalType": "uint256",
-        "name": "tokenId",
-        "type": "uint256"
+        "name": "virtualAddress",
+        "type": "address",
+        "internalType": "address"
       }
     ],
-    "stateMutability": "pure",
-    "type": "function"
+    "stateMutability": "pure"
   },
   {
+    "type": "function",
+    "name": "generateTokenId",
     "inputs": [
       {
-        "internalType": "string",
-        "name": "s",
-        "type": "string"
+        "name": "chainId",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "token",
+        "type": "bytes",
+        "internalType": "bytes"
       }
     ],
-    "name": "toAddress",
     "outputs": [
       {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
+        "name": "tokenId",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
-    "stateMutability": "pure",
-    "type": "function"
+    "stateMutability": "pure"
   }
 ]

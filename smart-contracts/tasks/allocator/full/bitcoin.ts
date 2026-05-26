@@ -40,8 +40,15 @@ task(
     "1000"
   )
   .addParam("recipient", "The Bitcoin address to send the funds to")
+  .addOptionalParam(
+    "allocator",
+    "The address of an existing RelayAllocator contract"
+  )
   .setAction(
-    async ({ owner, signer, wnear, amount, recipient }, { viem, run }) => {
+    async (
+      { owner, signer, wnear, amount, recipient, allocator: allocatorAddress },
+      { viem, run }
+    ) => {
       // recompile contracts
       const publicClient = await viem.getPublicClient()
 
@@ -61,11 +68,13 @@ task(
       // A fake chainId for Bitcoin, since we don't have a real one in the testnet
       const bitcoinChainId = 817781938n
 
-      const allocatorAddress = await run("deploy:allocator", {
-        owner,
-        signer,
-        wnear,
-      })
+      if (!allocatorAddress) {
+        throw new Error(
+          "--allocator is required. Deploy one first with " +
+            "`HUB=<hub> ORACLE=<oracle> yarn deploy:allocator` and pass " +
+            "--allocator <address>."
+        )
+      }
 
       const allocator = await viem.getContractAt(
         "RelayAllocator",

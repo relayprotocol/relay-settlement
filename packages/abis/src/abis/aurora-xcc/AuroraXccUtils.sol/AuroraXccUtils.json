@@ -1,21 +1,21 @@
 [
   {
+    "type": "function",
+    "name": "bytesToHex",
     "inputs": [
       {
-        "internalType": "bytes",
         "name": "buffer",
-        "type": "bytes"
+        "type": "bytes",
+        "internalType": "bytes"
       }
     ],
-    "name": "bytesToHex",
     "outputs": [
       {
-        "internalType": "string",
         "name": "",
-        "type": "string"
+        "type": "string",
+        "internalType": "string"
       }
     ],
-    "stateMutability": "pure",
-    "type": "function"
+    "stateMutability": "pure"
   }
 ]
