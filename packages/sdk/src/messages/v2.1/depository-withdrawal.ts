@@ -1,6 +1,12 @@
 import * as anchor from "@coral-xyz/anchor"
 import { BorshCoder, Idl } from "@coral-xyz/anchor"
 import { PublicKey, SystemProgram } from "@solana/web3.js"
+import {
+  Address as TonAddress,
+  beginCell,
+  internal as tonInternal,
+  storeMessageRelaxed,
+} from "@ton/core"
 import { sha256 } from "js-sha256"
 import * as tronweb from "tronweb"
 import * as bitcoin from "bitcoinjs-lib"
@@ -11,6 +17,7 @@ import {
   encodeAbiParameters,
   hashStruct,
   Hex,
+  hexToBytes,
   keccak256,
   parseAbiParameters,
   parseUnits,
@@ -19,6 +26,8 @@ import {
 
 import {
   ChainIdToVmType,
+  decodeAddress,
+  encodeAddress,
   encodeAddressToHex,
   encodeBytesToHex,
   getChainVmType,
@@ -185,6 +194,18 @@ export type DecodedLighterVmWithdrawal = {
   }
 }
 
+export type DecodedTonVmWithdrawal = {
+  vmType: "ton-vm"
+  withdrawal: {
+    receiver: string
+    amount: string
+    createdAt: number
+    queryId: number
+    subwalletId: number
+    timeout: number
+  }
+}
+
 type DecodedWithdrawal =
   | DecodedEthereumVmWithdrawal
   | DecodedSolanaVmWithdrawal
@@ -192,6 +213,7 @@ type DecodedWithdrawal =
   | DecodedTronVmWithdrawal
   | DecodedHyperliquidVmWithdrawal
   | DecodedLighterVmWithdrawal
+  | DecodedTonVmWithdrawal
 
 export const encodeWithdrawal = (
   decodedWithdrawal: DecodedWithdrawal
@@ -365,6 +387,28 @@ export const encodeWithdrawal = (
           {
             actionType,
             parameters: encodedParameters as Hex,
+          },
+        ]
+      )
+    }
+
+    case "ton-vm": {
+      // Mirrors TonVmPayloadBuilder.sol `abi.encode(TonTransferRequest)`.
+      const { receiver, amount, createdAt, queryId, subwalletId, timeout } =
+        decodedWithdrawal.withdrawal
+      const receiverBytes = encodeAddress(receiver, "ton-vm")
+      return encodeAbiParameters(
+        parseAbiParameters([
+          "(bytes32 receiver, uint128 amount, uint32 createdAt, uint32 queryId, uint32 subwalletId, uint32 timeout)",
+        ]),
+        [
+          {
+            receiver: bytesToHex(receiverBytes),
+            amount: BigInt(amount),
+            createdAt,
+            queryId,
+            subwalletId,
+            timeout,
           },
         ]
       )
@@ -585,6 +629,30 @@ export const decodeWithdrawal = (
       }
     }
 
+    case "ton-vm": {
+      const result = decodeAbiParameters(
+        parseAbiParameters([
+          "(bytes32 receiver, uint128 amount, uint32 createdAt, uint32 queryId, uint32 subwalletId, uint32 timeout)",
+        ]),
+        encodedWithdrawal as Hex
+      )
+
+      const { receiver, amount, createdAt, queryId, subwalletId, timeout } =
+        result[0]
+
+      return {
+        vmType: "ton-vm",
+        withdrawal: {
+          receiver: decodeAddress(hexToBytes(receiver as Hex), "ton-vm"),
+          amount: amount.toString(),
+          createdAt: Number(createdAt),
+          queryId: Number(queryId),
+          subwalletId: Number(subwalletId),
+          timeout: Number(timeout),
+        },
+      }
+    }
+
     default:
       throw new Error("Unsupported vm type")
   }
@@ -750,6 +818,10 @@ export const getDecodedWithdrawalId = (
       )
     }
 
+    case "ton-vm": {
+      return getTonVmWithdrawalCellHash(decodedWithdrawal.withdrawal)
+    }
+
     default:
       throw new Error("Unsupported vm type")
   }
@@ -818,6 +890,11 @@ export const getDecodedWithdrawalCurrency = (
     case "lighter-vm": {
       return decodedWithdrawal.withdrawal.parameters.assetIndex
     }
+
+    case "ton-vm": {
+      // Native TON only in v1 (jetton out of scope per TonVmPayloadBuilder.sol).
+      return getVmTypeNativeCurrency(decodedWithdrawal.vmType)
+    }
   }
 }
 
@@ -884,6 +961,10 @@ export const getDecodedWithdrawalAmount = (
       return decodedWithdrawal.withdrawal.parameters.amount
     }
 
+    case "ton-vm": {
+      return decodedWithdrawal.withdrawal.amount
+    }
+
     default:
       throw new Error("Unsupported vm type")
   }
@@ -931,9 +1012,62 @@ export const getDecodedWithdrawalRecipient = (
       return decodedWithdrawal.withdrawal.parameters.toAccountIndex
     }
 
+    case "ton-vm": {
+      return decodedWithdrawal.withdrawal.receiver
+    }
+
     default:
       throw new Error("Unsupported vm type")
   }
+}
+
+// ====== TON Highload V3 msg_inner cell hash ======
+
+// Mirrors `TonVmPayloadBuilder._signingMessageCellHash` and the reference
+// vectors in settlement-protocol `tools/tonReferenceHashes.ts`.
+//
+// Cell layout (149 bits, 1 ref):
+//   subwallet_id  uint32
+//   ref → MessageRelaxed (native TON transfer, bounce=false)
+//   send_mode     uint8   (= 1, PAY_GAS_SEPARATELY; wallet OR's IGNORE_ERRORS)
+//   shift         uint13  ┐  HighloadQueryId = (shift << 10) | bit_number
+//   bit_number    uint10  ┘
+//   created_at    uint64
+//   timeout       uint22
+const TON_SEND_MODE = 1
+const TON_BOUNCE = false
+
+const getTonVmWithdrawalCellHash = (
+  withdrawal: DecodedTonVmWithdrawal["withdrawal"]
+): string => {
+  const receiver = TonAddress.parse(withdrawal.receiver)
+
+  const messageCell = beginCell()
+    .store(
+      storeMessageRelaxed(
+        tonInternal({
+          to: receiver,
+          value: BigInt(withdrawal.amount),
+          bounce: TON_BOUNCE,
+        })
+      )
+    )
+    .endCell()
+
+  const shift = withdrawal.queryId >>> 10
+  const bitNumber = withdrawal.queryId & 0x3ff
+
+  const innerCell = beginCell()
+    .storeUint(withdrawal.subwalletId, 32)
+    .storeRef(messageCell)
+    .storeUint(TON_SEND_MODE, 8)
+    .storeUint(shift, 13)
+    .storeUint(bitNumber, 10)
+    .storeUint(BigInt(withdrawal.createdAt), 64)
+    .storeUint(withdrawal.timeout, 22)
+    .endCell()
+
+  return "0x" + innerCell.hash().toString("hex")
 }
 
 // ====== Lighter L1 message helpers ======
