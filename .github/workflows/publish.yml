@@ -1,5 +1,4 @@
 name: Publish Networks Package
-
 on:
   workflow_dispatch:
   push:
@@ -8,31 +7,28 @@ on:
     paths:
       - "packages/networks/**"
       - "packages/sdk/**"
-
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
+        uses: actions/checkout@v6
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
-
+          registry-url: "https://registry.npmjs.org"
+      - name: Upgrade npm for Trusted Publishing
+        run: npm install -g npm@latest
       - name: Install dependencies
         run: yarn
-
       - name: Build packages
         run: |
           yarn workspace @relay-protocol/settlement-sdk build
           yarn workspace @relay-protocol/settlement-networks build
-
       - name: Publish to npm
         run: |
           for pkg in packages/networks packages/sdk; do
