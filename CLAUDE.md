@@ -78,5 +78,5 @@ From `smart-contracts/`:
 ## Security
 
 - Never commit secrets. Use `.env` files (gitignored) for `DEPLOYER_PRIVATE_KEY`, `RPC_URL`, etc.
-- Do not edit generated folders (`artifacts/`, `cache/`, `ignition/deployments/`) manually.
+- Do not edit generated folders (`artifacts/`, `cache/`, `out/`) manually.
 - Review diffs before committing to ensure no sensitive data leaks into this public repo.

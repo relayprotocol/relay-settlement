@@ -110,7 +110,6 @@ module.exports = [
       "dist",
       "cache",
       "typechain-types",
-      "**/ignition/deployments/**/*",
     ],
   },
 ]
