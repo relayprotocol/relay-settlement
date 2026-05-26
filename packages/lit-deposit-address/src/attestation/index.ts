@@ -97,7 +97,7 @@ function recoverEip712Address(typedData: TypedDataDefinition, signature: Hex): A
  * Recover the signer of an EIP-191 `personal_sign` signature over a raw
  * (hex-encoded) message.
  */
-function recoverPersonalSignAddress(message: Hex, signature: Hex): Address {
+export function recoverPersonalSignAddress(message: Hex, signature: Hex): Address {
   return recoverAddressFromDigest(hashMessage({ raw: message }), signature);
 }
 

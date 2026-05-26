@@ -7,8 +7,9 @@ Supported VM types:
 - `ethereum-vm`
 - `bitcoin-vm`
 - `solana-vm`
+- `hyperliquid-vm`
 
-The Lit Action in `src/action.ts` retrieves a Lit PKP private key **inside the TEE** with `Lit.Actions.getPrivateKey({ pkpId })`, derives deterministic VM wallets from that key, and returns an account-level public derivation root so deposit addresses can also be derived outside the TEE.
+Each VM is bundled as its own Lit Action. The shared action runner in `src/vm/action.ts` retrieves a Lit PKP private key **inside the TEE** with `Lit.Actions.getPrivateKey({ pkpId })`, derives deterministic VM wallets from that key, and returns an account-level public derivation root so deposit addresses can also be derived outside the TEE.
 
 ## Local commands
 
@@ -21,12 +22,12 @@ yarn build
 
 ## Lit Action bundling and Chipotle setup
 
-The action source in `src/action.ts` is bundled per environment with the
+The per-VM action sources are generated and bundled per environment with the
 `config.ts` placeholders replaced at build time, then registered against a Lit
 PKP via Chipotle.
 
 ```sh
-# Bundle the action for a specific environment into dist/actions/<env>/action.js
+# Bundle per-VM actions for a specific environment into dist/actions/<env>/<vm>.js
 yarn bundle:actions -- --env dev
 
 # Provision Chipotle resources (account, group, action, usage key) for an env
@@ -52,8 +53,8 @@ yarn workspace @relay-protocol/lit-helpers top-up -- --account-api-key <account-
 `@relay-protocol/lit-helpers`. PKP selection is explicit: pass `--create-pkp`
 to mint a fresh PKP, or `--pkp-id <address>` to reuse one already owned by the
 account. Exactly one of the two must be supplied. The script prints the
-`LIT_API_KEY`, `LIT_PKP_ID`, and
-`LIT_DEPOSIT_ADDRESSES_ACTION_CID` you'll need to execute the action.
+`LIT_API_KEY`, `LIT_PKP_ID`, and per-VM
+`LIT_DEPOSIT_ADDRESSES_ACTION_CID_<VM>` values you'll need to execute the actions.
 
 ```sh
 yarn setup -- --env dev --account-api-key <key> --create-pkp
@@ -80,10 +81,15 @@ yarn client wallet -- \
 ```
 
 Both invocations execute the bundled action via Chipotle's `/lit_action`
-endpoint and print the parsed JSON response. `--input` for `wallet` is a JSON
+endpoint using a usage API key authorized for the action CID/group, then print the parsed JSON response. `--input` for `wallet` is a JSON
 file whose shape matches `DepositAddressTriggerDerivationFields`; the VM
 family of the bundled action loaded for the call is taken from
 `derivationFields.inputVmType`.
+
+For production solver integrations, derive deposit wallets locally from the
+VM account public root instead of calling the Lit Action's `wallet` action on
+every quote or request. The `wallet` action executes inside Lit/Chipotle and
+is comparatively expensive; use it for diagnostics and parity checks only.
 
 For offline verification, `derive` reproduces the `wallet` action's output
 locally from the `account` action's response plus the same derivation fields.
@@ -97,6 +103,8 @@ yarn client derive -- \
 
 The `cross-derivation.test.ts` suite asserts that the off-TEE output matches
 the in-TEE `wallet` derivation for all VM types.
+
+Solver-facing integration guides for every supported VM live in [`docs/`](./docs/). The docs also describe the end-to-end trust flow: Hub `DepositAddressManager.trigger(...)`, oracle verification/attestation, and the final Lit Action checks before signing.
 
 Every external dependency is imported in `src/` via a full jsDelivr `+esm`
 URL, e.g.:
@@ -135,9 +143,7 @@ IPFS CID registered on the Chipotle action registry, since that CID is
 computed over the bundled file's exact byte content (including the URL
 specifiers).
 
-Because the source files import from URLs, this repo is **not** publishable as
-a conventional npm library; consume the bundled per-VM action file
-(`dist/actions/<env>/<vm>.js`) instead.
+Because the source files import from URLs, this package is primarily action source and test/dev tooling. Production integrators should consume the canonical bundled action code from the sibling `../lit-actions` package, which publishes the per-VM bundle/CID data used by solver callers. Local development can still use the generated per-VM action files under `dist/actions/<env>/<vm>.js`.
 
 ## Quick local derivation example
 
@@ -149,13 +155,11 @@ import {
   deriveAccount,
   deriveWallet,
   deriveWalletFromExtendedPublicKey,
-  signWithWallet,
 } from "./src/derivation/index.ts";
 
 const rootKeyHex = "0x" + "11".repeat(32);
 const vmType = "ethereum-vm";
 const indexes = [0];
-const messageHex = "0x" + "22".repeat(32);
 
 const account = await deriveAccount(rootKeyHex, vmType);
 console.log("account", account);
@@ -170,113 +174,16 @@ const publicOnly = await deriveWalletFromExtendedPublicKey(
 );
 console.log("wallet from public root", publicOnly);
 
-const signed = await signWithWallet(rootKeyHex, vmType, indexes, messageHex);
-console.log("signed", signed);
 '
 ```
 
-Change `vmType` to `bitcoin-vm` or `solana-vm` to test other implementations. `indexes` is a non-empty array of unhardened uint31 child segments appended to the account path; in production the `wallet` and `sign` actions derive it from `derivationFields` (see below).
+Change `vmType` to `bitcoin-vm`, `solana-vm`, or `hyperliquid-vm` to test other implementations. `indexes` is a non-empty array of unhardened uint31 child segments appended to the account path; in production the `wallet` and `sign` actions derive it from `derivationFields` (see below).
 
 ## Lit Action API
 
-`src/action.ts` expects Lit `jsParams` shaped as follows.
+The shared action runner in `src/vm/action.ts` dispatches on a `jsParams.action` of `"account"`, `"wallet"`, or `"sign"`. Each VM bundle pins itself to one VM family and rejects mismatched inputs.
 
-### `account`
-
-```json
-{
-  "pkpId": "0x...",
-  "action": "account",
-  "vmType": "ethereum-vm"
-}
-```
-
-### `wallet`
-
-```json
-{
-  "pkpId": "0x...",
-  "action": "wallet",
-  "derivationFields": {
-    "inputVmType": "solana-vm",
-    "outputVmType": "ethereum-vm",
-    "outputChainId": "1",
-    "outputCurrency": "0x...",
-    "outputRecipient": "0x...",
-    "solver": "0x...",
-    "pricingOracle": "0x...",
-    "depositor": "0x...",
-    "refundRecipient": "0x...",
-    "slippageBps": "50"
-  }
-}
-```
-
-The wallet action derives the same eight-segment unhardened path from `derivationFields` that `sign` uses. The VM family is taken from `derivationFields.inputVmType`.
-
-### `sign`
-
-`sign` accepts a `trigger`, its oracle `attestation`, and one or more
-VM-native `transactions` to sign with the derived deposit wallet.
-
-```json
-{
-  "pkpId": "0x...",
-  "action": "sign",
-  "trigger": {
-    "input": { "vmType": "ethereum-vm", "chainId": "...", "currency": "0x...", "amount": "..." },
-    "derivationFields": {
-      "inputVmType": "ethereum-vm",
-      "outputVmType": "ethereum-vm",
-      "outputChainId": "1",
-      "outputCurrency": "0x...",
-      "outputRecipient": "0x...",
-      "solver": "0x...",
-      "pricingOracle": "0x...",
-      "depositor": "0x...",
-      "refundRecipient": "0x...",
-      "slippageBps": "50"
-    },
-    "orderId": "0x...",
-    "nonce": "1",
-    "currencies": [],
-    "prices": [],
-    "extraData": "0x"
-  },
-  "attestation": {
-    "chainId": 421614,
-    "depositAddressManager": "0x...",
-    "triggerHash": "0x...",
-    "signatures": [{ "oracleSigner": "0x...", "signature": "0x..." }]
-  },
-  "transactions": [{ "unsignedTransaction": "0x02..." }]
-}
-```
-
-The action recomputes the trigger hash, verifies the attestation signatures against bundled environment config, derives an eight-segment unhardened child path solely from `trigger.derivationFields`, and signs every supplied transaction with the derived deposit wallet.
-
-Each transaction is passed pre-encoded so the action just signs and (where applicable) reserializes:
-
-- `ethereum-vm`: `{ unsignedTransaction }` — hex-encoded RLP unsigned transaction. EIP-155 legacy and typed transactions (EIP-1559, EIP-2930, EIP-4844, …) are supported; the encoded payload itself carries the type. Pre-EIP-155 legacy transactions (no chain id) are rejected. The caller builds it via e.g. viem's `serializeTransaction` (nonce, gas, fees, chain id, etc. are encoded inside). Returns `{ rawTransaction, transactionHash }`.
-- `bitcoin-vm`: `{ sighashes }` — precomputed BIP143 segwit sighash digests as `0x`-prefixed 32-byte hex strings. Returns `{ signatures }` — compact ECDSA signatures matching the input order. The caller composes the final PSBT/transaction.
-- `solana-vm`: `{ message }` — base64-encoded compiled message bytes. Only single-signer transactions are supported (the derived wallet is the fee payer at signer index 0). Returns `{ signature, rawTransaction }` where `rawTransaction` is the base64-encoded fully signed transaction.
-
-The response is:
-
-```json
-{
-  "wallet": { "vmType": "...", "indexes": [...], "path": "...", "address": "...", "publicKey": "..." },
-  "triggerHash": "0x...",
-  "signedTransactions": [ ... ]
-}
-```
-
-Notes:
-
-- `pkpId` is always required.
-- `wallet` and `sign` derive the child path from `derivationFields`; neither takes raw indexes.
-- `sign` requires at least one transaction.
-- Derivation fields map to an eight-segment path of unhardened uint31 indexes (~248 bits of effective collision resistance).
+The full request/response shapes, the `requestSignature` requirement, the per-VM transaction policy, and the end-to-end design live in [`docs/`](./docs/). Solver integrators should start there.
 
 ## Environment config
 
@@ -301,7 +208,7 @@ Current dev config:
 ```json
 {
   "name": "dev",
-  "depositAddressManagerAddress": "0x1bff267aa51674fa536da3873188a41a9c05cf44",
+  "depositAddressManagerAddress": "0xd03250b221f709abe58ff4a177d50d01d922d974",
   "hubEvmChainId": 421614,
   "allowedOracles": [
     "0xcda3c24706c1a5eea958a988693e8a838d520af9",
@@ -313,13 +220,14 @@ Current dev config:
 
 ## Architecture
 
-Only `action.ts`, `action-env.d.ts`, and `config.ts` live at `src/` root; everything else is organized into subdirectories:
+Only `action-env.d.ts` and `config.ts` live at `src/` root; action entrypoints are generated by `scripts/bundle-actions.ts`, and the shared action runner lives under `src/vm/action.ts`. Everything else is organized into subdirectories:
 
 ```txt
 src/
-  action.ts                       # Lit Action entry + per-action handlers
   action-env.d.ts                 # Lit globals
   config.ts                       # bundle-time env constants
+  vm/
+    action.ts                     # shared account / wallet / sign dispatcher
   attestation/
     index.ts                      # verifyDepositAddressTriggerAttestation
   common/
@@ -331,11 +239,13 @@ src/
     index.ts                      # public API (deriveAccount, deriveWallet, ...)
     path.ts                       # derivationFieldsToIndexes
     vm/
-      VmWalletDeriver.ts          # abstract base / shared orchestration
-      Secp256k1VmWalletDeriver.ts # shared secp256k1 account derivation
-      EthereumVmWalletDeriver.ts  # ethereum-vm implementation
-      BitcoinVmWalletDeriver.ts   # bitcoin-vm implementation
-      SolanaVmWalletDeriver.ts    # solana-vm implementation
+      base/
+        VmWalletDeriver.ts          # abstract base / shared orchestration
+        Secp256k1VmWalletDeriver.ts # shared secp256k1 account derivation
+      ethereum/EthereumVmWalletDeriver.ts       # ethereum-vm implementation
+      bitcoin/BitcoinVmWalletDeriver.ts         # bitcoin-vm implementation
+      solana/SolanaVmWalletDeriver.ts           # solana-vm implementation
+      hyperliquid/HyperliquidVmWalletDeriver.ts # hyperliquid-vm implementation
 ```
 
 `src/derivation/index.ts` is the package's public entrypoint — it re-exports the types from `common/types.ts`, the `derivationFieldsToIndexes` helper, and the derivation/signing API.
@@ -346,7 +256,7 @@ For each VM, the package first derives VM-specific seed material:
 
 - `HKDF-SHA256`
 - salt: `"lit-deposit-addresses"`
-- info: VM type (`ethereum-vm`, `bitcoin-vm`, `solana-vm`)
+- info: VM type (`ethereum-vm`, `bitcoin-vm`, `solana-vm`, `hyperliquid-vm`)
 - input key material: the PKP private key inside Lit, or explicit `rootKeyHex` in local helpers
 
 It then uses `@metamask/key-tree` for HD derivation:
@@ -354,6 +264,7 @@ It then uses `@metamask/key-tree` for HD derivation:
 - `ethereum-vm`: secp256k1 BIP32
 - `bitcoin-vm`: secp256k1 BIP32
 - `solana-vm`: `ed25519Bip32` / CIP-3-style derivation
+- `hyperliquid-vm`: secp256k1 BIP32
 
 ### Paths
 
@@ -362,6 +273,7 @@ The full path is the VM's account path followed by every entry in `indexes`:
 - `ethereum-vm`: account path `m/44'/60'/0'/0`, child path `.../<i0>/<i1>/.../<iN>`
 - `bitcoin-vm`: account path `m/84'/0'/0'/0`, child path `.../<i0>/<i1>/.../<iN>`, native segwit `bc1...` addresses
 - `solana-vm`: account path `m/44'/501'/0'/0`, child path `.../<i0>/<i1>/.../<iN>`
+- `hyperliquid-vm`: account path `m/44'/60'/0'/0`, child path `.../<i0>/<i1>/.../<iN>`, EVM-style `0x...` addresses
 
 For `wallet` and `sign`, the eight-segment `indexes` array is computed as `keccak256(abi.encode(derivationFields))` split into eight 32-bit words with the top bit of each cleared.
 
@@ -384,8 +296,8 @@ import {
   deriveWallet,
   deriveWalletFromExtendedPublicKey,
   derivationFieldsToIndexes,
-  signWithWallet,
   signTransactionsWithWallet,
+  verifyTransactionsWithWallet,
   getSupportedVmTypes,
 } from "./src/derivation/index.js";
 ```
@@ -428,15 +340,9 @@ privateDerived.address === publicDerived.address; // true
 Maps a `DepositAddressTriggerDerivationFields` value to the deterministic
 eight-segment unhardened path used by both the `wallet` and `sign` actions.
 
-### `signWithWallet(rootKeyHex, vmType, indexes, messageHex)`
+### `verifyTransactionsWithWallet(trigger, attestation, transactions)`
 
-Signs the raw `messageHex` with the child wallet at `indexes`.
-
-Signature formats:
-
-- `ethereum-vm`: `0x{r}{s}{v}` with `v = 27/28`
-- `bitcoin-vm`: `0x{r}{s}` compact 64-byte ECDSA signature
-- `solana-vm`: `0x...` 64-byte Ed25519 signature
+Runs the same VM-specific deposit policy checks that the Lit Action runs before signing. This helper is intended for tests and preflight checks; successful local verification is not a substitute for the in-TEE check performed by `action: "sign"`.
 
 ### `signTransactionsWithWallet(rootKeyHex, vmType, indexes, transactions)`
 
@@ -458,9 +364,8 @@ Current coverage includes:
 - account root stability across runs
 - different `indexes` and root keys produce different wallets
 - multi-index derivation paths
-- VM-specific wallet formatting (Ethereum / Bitcoin / Solana)
-- raw-message signature verification for all VMs
-- transaction signing for all VMs (Ethereum: parse-and-recover, Bitcoin: per-input ECDSA verification, Solana: Ed25519 verification + signed-transaction layout)
+- VM-specific wallet formatting (Ethereum / Bitcoin / Solana / Hyperliquid)
+- transaction signing for all VMs (Ethereum: parse-and-recover, Bitcoin: per-input ECDSA verification, Solana: Ed25519 verification + signed-transaction layout, Hyperliquid: EIP-712 nonce mapping and sendAsset signing)
 - trigger attestation signature verification
 - derivation-fields-to-indexes determinism and sensitivity
 - invalid index / empty input rejection

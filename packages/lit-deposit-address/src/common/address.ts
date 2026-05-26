@@ -2,6 +2,7 @@ import { bytesToHex, hexToBytes } from "./bytes.js";
 import type { VmType } from "./types.js";
 import { decodeBitcoinAddress, encodeBitcoinAddress } from "./address/bitcoin.js";
 import { decodeEthereumAddress, encodeEthereumAddress } from "./address/ethereum.js";
+import { decodeHyperliquidAddress, encodeHyperliquidAddress } from "./address/hyperliquid.js";
 import { decodeSolanaAddress, encodeSolanaAddress } from "./address/solana.js";
 
 /** Encode a VM-native address with the same bytes representation as the settlement SDK. */
@@ -10,8 +11,9 @@ export function encodeAddress(address: string, vmType: VmType): Uint8Array {
     case "bitcoin-vm":
       return encodeBitcoinAddress(address);
     case "ethereum-vm":
-    case "hyperliquid-vm":
       return encodeEthereumAddress(address);
+    case "hyperliquid-vm":
+      return encodeHyperliquidAddress(address);
     case "solana-vm":
       return encodeSolanaAddress(address);
   }
@@ -28,8 +30,9 @@ export function decodeAddress(encoded: Uint8Array, vmType: VmType): string {
     case "bitcoin-vm":
       return decodeBitcoinAddress(encoded);
     case "ethereum-vm":
-    case "hyperliquid-vm":
       return decodeEthereumAddress(encoded);
+    case "hyperliquid-vm":
+      return decodeHyperliquidAddress(encoded);
     case "solana-vm":
       return decodeSolanaAddress(encoded);
   }
@@ -50,4 +53,5 @@ export function normalizeAddressHex(encodedHex: string, vmType: VmType): string 
 
 export { decodeBitcoinAddress, encodeBitcoinAddress } from "./address/bitcoin.js";
 export { decodeEthereumAddress, encodeEthereumAddress } from "./address/ethereum.js";
+export { decodeHyperliquidAddress, encodeHyperliquidAddress } from "./address/hyperliquid.js";
 export { decodeSolanaAddress, encodeSolanaAddress } from "./address/solana.js";

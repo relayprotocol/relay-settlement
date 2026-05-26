@@ -105,32 +105,55 @@ export interface SolanaVmSignedTransaction {
   rawTransaction: string;
 }
 
+/**
+ * Hyperliquid `sendAsset` action payload. This is not an EVM transaction; the
+ * signed result is wrapped into Hyperliquid's `/exchange` request body by the
+ * solver.
+ */
 export interface HyperliquidVmSendAsset {
+  /** Hyperliquid action discriminator. Only `sendAsset` is supported. */
   type: "sendAsset";
+  /** Hyperliquid EIP-712 domain chain id, e.g. `0xa4b1` for mainnet. */
   signatureChainId: string;
+  /** Hyperliquid environment. Currently only mainnet is accepted by policy. */
   hyperliquidChain: "Mainnet";
+  /** Destination depository address on Hyperliquid. */
   destination: string;
+  /** Source DEX: empty for native USDC perp, `spot` for spot tokens. */
   sourceDex: "" | "spot";
+  /** Destination DEX: empty for native USDC perp, `spot` for spot tokens. */
   destinationDex: "" | "spot";
+  /** Hyperliquid token descriptor, formatted as `SYMBOL:0x<16-byte-token>`. */
   token: string;
+  /** Decimal amount string in whole-token units. */
   amount: string;
+  /** Hyperliquid sub-account selector. Deposit sweeps require the root account. */
   fromSubAccount: string;
+  /** Hyperliquid action nonce. Must equal the Relay nonce mapping nonce. */
   nonce: number;
 }
 
+/** Relay nonce mapping signed by the Hyperliquid deposit wallet. */
 export interface HyperliquidVmNonceMapping {
+  /** Protocol chain id string that the solver/oracle use for the wallet chain. */
   walletChainId: string;
+  /** Derived Hyperliquid deposit wallet address. */
   wallet: string;
+  /** Depositor associated with the Relay order. */
   depositor: string;
+  /** Relay order id bound to this Hyperliquid nonce. */
   id: string;
+  /** Hyperliquid action nonce, decimal string. */
   nonce: string;
 }
 
+/** Hyperliquid signing input: a nonce mapping plus the matching sendAsset. */
 export interface HyperliquidVmTransaction {
   nonceMapping: HyperliquidVmNonceMapping;
   sendAsset: HyperliquidVmSendAsset;
 }
 
+/** EIP-712 digests and signatures returned for Hyperliquid signing. */
 export interface HyperliquidVmSignedTransaction {
   nonceMapping: { digest: string; signature: string };
   sendAsset: { digest: string; signature: string };

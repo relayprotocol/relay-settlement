@@ -19,6 +19,16 @@ const CASES: Array<{ vmType: VmType; address: string; encoded: string; decoded?:
     encoded: "0x000000000000000000000000000000000000beef",
   },
   {
+    vmType: "hyperliquid-vm",
+    address: "0x6d1e7cde53ba9467b783cb7c530ce054",
+    encoded: "0x6d1e7cde53ba9467b783cb7c530ce054",
+  },
+  {
+    vmType: "hyperliquid-vm",
+    address: "0xbeef",
+    encoded: "0xbeef",
+  },
+  {
     vmType: "bitcoin-vm",
     address: "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
     encoded: "0xff0062e907b15cbf27d5425399ebf6f0fb50ebb88f18",
@@ -45,4 +55,10 @@ describe("address encoding utilities", () => {
       expect(decodeAddressFromHex(test.encoded, test.vmType)).toBe(test.decoded ?? test.address);
     });
   }
+
+  it("keeps ethereum-vm strict about 20-byte addresses", () => {
+    expect(() => encodeAddressToHex("0xbeef", "ethereum-vm")).toThrow(
+      /ethereum-vm address must be 20 bytes/,
+    );
+  });
 });

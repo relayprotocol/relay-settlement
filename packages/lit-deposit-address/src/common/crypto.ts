@@ -8,7 +8,7 @@ import { utf8ToBytes } from "https://cdn.jsdelivr.net/npm/@noble/hashes@2.0.1/ut
  * HKDF domain separator. Bumping this invalidates every previously derived
  * deposit address, so it should be treated as a stable protocol constant.
  */
-const DOMAIN_SEPARATOR = "lit-deposit-addresses";
+const DOMAIN_SEPARATOR = "lit-deposit-address";
 
 /**
  * Derive a 64-byte seed for a specific VM from the PKP root key, using
