@@ -1,0 +1,14 @@
+[
+  {
+    "family": "ethereum-vm",
+    "gas": "33386",
+    "maxFeePerGas": "1100331",
+    "maxPriorityFeePerGas": "1100000",
+    "nonce": 0,
+    "rpc": "https://chain-rpc.mythicalgames.com",
+    "amount": "0",
+    "calldata": "0xbf83f2a2000000000000000000000000865eb9baa5492cef598adf7afb1038654fcb7081",
+    "from": "0x16c4dEEB433bde1804d8f17cd1Ba3D29a30f9671",
+    "to": "0x4cD00E387622C35bDDB9b4c962C136462338BC31"
+  }
+]

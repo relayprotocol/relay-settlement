@@ -1,0 +1,69 @@
+{
+  "name": "@relay-settlement/multisig-tools",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Off-chain CLI for the Relay multisig signer: build, simulate, submit, check, and execute cross-VM transactions",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": "dist/cli.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./crypto/signer": {
+      "types": "./dist/crypto/signer.d.ts",
+      "default": "./dist/crypto/signer.js"
+    },
+    "./crypto/near": {
+      "types": "./dist/crypto/near.d.ts",
+      "default": "./dist/crypto/near.js"
+    },
+    "./crypto/bitcoin": {
+      "types": "./dist/crypto/bitcoin.d.ts",
+      "default": "./dist/crypto/bitcoin.js"
+    },
+    "./crypto/evm": {
+      "types": "./dist/crypto/evm.d.ts",
+      "default": "./dist/crypto/evm.js"
+    },
+    "./crypto/wait": {
+      "types": "./dist/crypto/wait.d.ts",
+      "default": "./dist/crypto/wait.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "lint": "lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "cli": "node dist/cli.js"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "0.27.0",
+    "@near-js/providers": "2.3.2",
+    "@noble/curves": "1.6.0",
+    "@relay-protocol/settlement-abis": "workspace:*",
+    "@relay-protocol/settlement-networks": "workspace:*",
+    "@relay-protocol/settlement-sdk": "workspace:*",
+    "@safe-global/sdk-starter-kit": "3.0.1",
+    "@scure/base": "1.2.0",
+    "@solana/web3.js": "1.98.4",
+    "bitcoinjs-lib": "6.1.7",
+    "bs58": "6.0.0",
+    "bs58check": "4.0.0",
+    "commander": "12.1.0",
+    "tronweb": "6.1.0",
+    "viem": "2.47.6",
+    "zod": "4.1.11"
+  },
+  "devDependencies": {
+    "@relay-settlement/eslint-config": "workspace:*",
+    "@relay-settlement/tsconfig": "workspace:*",
+    "@types/node": "24.6.1",
+    "tsx": "4.19.2",
+    "typescript": "5.9.3",
+    "vitest": "2.1.8"
+  }
+}

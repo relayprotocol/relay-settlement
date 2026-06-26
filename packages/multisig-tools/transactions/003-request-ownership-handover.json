@@ -1,0 +1,14 @@
+[
+  {
+    "family": "ethereum-vm",
+    "rpc": "https://arb1.arbitrum.io/rpc",
+    "to": "0x5cb1de3603a71ac2f67b12bfbf095013fe4ac299",
+    "calldata": "0x25692962",
+    "amount": "0",
+    "from": "0x16c4deeb433bde1804d8f17cd1ba3d29a30f9671",
+    "maxFeePerGas": "121020000",
+    "maxPriorityFeePerGas": "0",
+    "gas": "200000",
+    "nonce": 1
+  }
+]

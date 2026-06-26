@@ -1,0 +1,55 @@
+[
+  {
+    "type": "function",
+    "name": "encodeJSONRequest",
+    "inputs": [
+      {
+        "name": "payloadString",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "curve",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "signerPath",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "domainId",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "stringifyBytes",
+    "inputs": [
+      {
+        "name": "data",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "pure"
+  }
+]

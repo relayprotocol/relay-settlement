@@ -1,0 +1,352 @@
+#include "imports/stdlib.fc";
+
+;; Constants for signature verification
+const int SIGNATURE_LENGTH = 512;
+const int PUBLIC_KEY_LENGTH = 256;
+
+const op::set_allocator = "op::set_allocator"c;
+const op::deposit = "op::deposit"c;
+const op::transfers = "op::transfers"c;
+const int op::transfer_notification = 0x7362d09c;
+
+const int event::deposit = 0x88879a49;
+const int event::transfer = 0x5c87ae7e;
+
+;; Currency types
+const int CURRENCY_TON = 0;
+const int CURRENCY_JETTON = 1;
+
+;; storage variables
+global slice owner;
+global slice allocator;
+global int nonce;
+global int chain_id;
+
+;; Errors
+const int error::not_owner = 101;
+const int error::invalid_signature = 102;
+const int error::expired = 103;
+const int error::invalid_nonce = 104;
+const int error::insufficient_funds = 105;
+const int error::invalid_currency_type = 106;
+const int error::empty_actions = 107;
+
+() send_log_message(slice msg_body) impure {
+  cell msg = begin_cell()
+    .store_uint(0xc0, 8)     ;; ext_out_msg_info$11 prefix (11000000)
+    .store_uint(0, 2)        ;; src = addr_none
+    .store_uint(0, 2)        ;; dest = addr_none  
+    .store_uint(0, 64)       ;; created_lt (will be overwritten)
+    .store_uint(0, 32)       ;; created_at (will be overwritten)
+    .store_uint(0, 1)        ;; init = 0 (no StateInit)
+    .store_uint(0, 1)        ;; body in this cell
+    .store_slice(msg_body)   ;; actual log message content
+  .end_cell();
+  send_raw_message(msg, 0);
+}
+
+;; load_data populates storage variables using stored data
+() load_data() impure {
+    var ds = get_data().begin_parse();
+
+    owner = ds~load_msg_addr(); ;; owner
+    allocator = ds~load_msg_addr(); ;; allocator
+    nonce = ds~load_uint(64); ;; nonce
+    chain_id = ds~load_int(32); ;; chain_id
+
+    ds.end_parse();
+}
+
+;; save_data stores storage variables as a cell into persistent storage
+() save_data() impure {
+    set_data(
+        begin_cell()
+            .store_slice(owner)
+            .store_slice(allocator)
+            .store_uint(nonce, 64)
+            .store_int(chain_id, 32)
+            .end_cell()
+    );
+}
+
+;; Check Transfer signature
+(int, int) check_transfer_signature(slice signature, cell msg_body) {
+    ;; Parse main data slice
+    slice ds = msg_body.begin_parse();
+
+    ;; Load main transfer data
+    int msg_nonce = ds~load_uint(64);
+    int expiry = ds~load_uint(32);
+    int currency_type = ds~load_uint(8);
+
+    ;; Load address data from reference cell
+    cell addr_cell = ds~load_ref();
+
+    ;; Load amount data from reference cell
+    cell amount_cell = ds~load_ref();
+
+    ;; Load signature from reference cell
+    cell sig_cell = ds~load_ref();
+    slice sig_slice = sig_cell.begin_parse();
+    slice sig = sig_slice~load_bits(SIGNATURE_LENGTH);
+
+    ;; Recreate message for signature verification with domain separator
+    ;; Domain separator includes: protocol name, contract address, chain ID
+    cell signing_message = begin_cell()
+        .store_slice("52656c6179457363726f77"s)  ;; "RelayEscrow" in hex
+        .store_slice(my_address())
+        .store_int(chain_id, 32)
+        .store_uint(msg_nonce, 64)
+        .store_uint(expiry, 32)
+        .store_uint(currency_type, 8)
+        .store_ref(addr_cell)
+        .store_ref(amount_cell)
+        .end_cell();
+
+    (int wc, int pk_hash) = parse_std_addr(allocator);
+    int msg_hash = cell_hash(signing_message);
+    return (
+        msg_hash,
+        check_signature(
+            msg_hash,
+            sig,
+            pk_hash
+        )
+    );
+}
+
+;; Transfer TON
+() send_tons(slice to, int amount, int mode) impure {
+    var msg = begin_cell()
+        .store_uint(0x10, 6) 
+        .store_slice(to)
+        .store_coins(amount)
+        .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .end_cell();
+    
+    send_raw_message(msg, mode);
+}
+
+;; Transfer Jetton
+() send_jetton(
+    slice to, 
+    slice jetton_wallet_addr, 
+    int amount, 
+    int forward_amount,
+    int gas_amount
+) impure {
+    slice my_address = my_address();
+
+    cell transfer_msg = begin_cell()
+        .store_uint(0xf8a7ea5, 32)    
+        .store_uint(0, 64)            
+        .store_coins(amount)          
+        .store_slice(to)              
+        .store_slice(my_address)    
+        .store_uint(0, 1)            
+        .store_coins(forward_amount) ;; for wallet deployment 
+        .store_uint(0, 1)            
+        .end_cell();
+
+    cell msg = begin_cell()
+        .store_uint(0x18, 6)          
+        .store_slice(jetton_wallet_addr)
+        .store_coins(gas_amount)        
+        .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .store_ref(transfer_msg)
+        .end_cell();
+
+    send_raw_message(msg, 1);
+}
+
+(int) process_transfer(cell transfer_data, int my_balance) impure {
+    slice ds = transfer_data.begin_parse();
+
+    ;; Get main data
+    int msg_nonce = ds~load_uint(64);
+    int expiry = ds~load_uint(32);
+    int currency_type = ds~load_uint(8);
+
+    ;; Load address data from reference cell
+    cell addr_cell = ds~load_ref();
+    slice addr_slice = addr_cell.begin_parse();
+    slice to = addr_slice~load_msg_addr();
+    slice my_jetton_wallet = addr_slice~load_msg_addr();
+    slice currency = addr_slice~load_msg_addr();
+
+    ;; Load amount data from reference cell
+    cell amount_cell = ds~load_ref();
+    slice amount_slice = amount_cell.begin_parse();
+    int amount = amount_slice~load_coins();
+    int forward_amount = amount_slice~load_coins();
+    int gas_amount = amount_slice~load_coins();
+
+    ;; Load signature from reference cell
+    cell sig_cell = ds~load_ref();
+    slice signature = sig_cell.begin_parse();
+    (int msg_hash, int check_result) = check_transfer_signature(signature, transfer_data);
+
+    ;; Verify signature
+    throw_unless(error::invalid_signature, check_result);
+
+    ;; Check expiry
+    throw_if(error::expired, now() > expiry);
+
+    ;; Check nonce
+    throw_if(error::invalid_nonce, msg_nonce <= nonce);
+    throw_unless(error::invalid_nonce, msg_nonce == nonce + 1);
+
+    nonce = msg_nonce;
+
+    ;; Process transfer based on type
+    if (currency_type == CURRENCY_TON) {
+        throw_if(error::insufficient_funds, amount > my_balance);
+        send_tons(to, amount, 1);
+        my_balance -= amount;
+    } elseif (currency_type == CURRENCY_JETTON) {
+        send_jetton(to, my_jetton_wallet, amount, forward_amount, gas_amount);
+    } else {
+        throw(error::invalid_currency_type);
+    }
+
+    cell event_data = begin_cell()
+        .store_uint(event::transfer, 32)
+        .store_slice(currency)      ;; Asset type
+        .store_coins(amount)        ;; Amount
+        .store_uint(msg_hash, 256)
+        .end_cell();
+
+    send_log_message(event_data.begin_parse());
+
+    return my_balance;
+}
+
+;; recv_internal is the main function of the contract and is called when it receives a message from other contracts
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) { ;; Accept incoming TON
+        slice cs = in_msg_full.begin_parse();
+        int flags = cs~load_uint(4);
+        slice sender = cs~load_msg_addr();
+        cell event_data = begin_cell()
+            .store_uint(event::deposit, 32)
+            .store_uint(0, 1)           ;; Asset type
+            .store_slice(my_address())  ;; Wallet
+            .store_coins(msg_value)     ;; Amount
+            .store_slice(sender)        ;; Depositor address
+            .store_uint(0, 64)          ;; ID
+            .end_cell();
+        
+        send_log_message(event_data.begin_parse());
+        return ();
+    }
+
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+    if (flags & 1) { ;; ignore all bounced messages
+        return ();
+    }
+
+    load_data(); ;; here we populate the storage variables
+
+    int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
+    int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
+   
+    slice sender = cs~load_msg_addr();
+
+    if (op == op::set_allocator) {
+        throw_unless(error::not_owner, equal_slices_bits(sender, owner));
+        allocator = in_msg_body~load_msg_addr();
+        save_data();
+        return ();
+    }
+
+    if (op == op::deposit) {  ;; custom op for TON deposit with ID
+        int deposit_id = in_msg_body~load_uint(64);
+        cell event_data = begin_cell()
+            .store_uint(event::deposit, 32)
+            .store_uint(0, 1)           ;; Asset type
+            .store_slice(my_address())  ;; Wallet
+            .store_coins(msg_value)     ;; Amount
+            .store_slice(sender)        ;; Depositor address
+            .store_uint(deposit_id, 64)          ;; ID
+            .end_cell();
+
+        send_log_message(event_data.begin_parse());
+        save_data();
+        return ();
+    }
+    
+    ;; Multiple transfers in one transaction
+    if (op == op::transfers) {
+        cell actions = in_msg_body~load_ref();
+        slice as = actions.begin_parse();
+        
+        int n = as~load_uint(8);  ;; Number of transfers
+        throw_if(error::empty_actions, n == 0);
+        
+        int i = 0;
+        int current_balance = my_balance;
+        
+        ;; Process each transfer
+        while (i < n) {
+            cell transfer_data = as~load_ref();
+            current_balance = process_transfer(transfer_data, current_balance);
+            save_data();
+            i += 1;
+        }
+        
+        return ();
+    }
+
+    ;; Handle incoming Jetton notification
+    if (op == op::transfer_notification) {
+        int amount = in_msg_body~load_coins(); ;; amount
+        slice from_address = in_msg_body~load_msg_addr(); ;; sender address
+        int deposit_id = 0;
+        if (in_msg_body.slice_refs_empty?() == 0) {
+            cell payload = in_msg_body~load_ref();
+            slice ps = payload.begin_parse();
+            if (ps.slice_bits() >= 64) {
+                deposit_id = ps~load_uint(64);
+            }
+        }
+
+        cell event_data = begin_cell()
+            .store_uint(event::deposit, 32)
+            .store_uint(1, 1)           ;; Asset type
+            .store_slice(sender)        ;; Jetton Wallet
+            .store_coins(amount)        ;; Amount
+            .store_slice(from_address)  ;; Depositor address
+            .store_uint(deposit_id, 64)  ;; Id
+            .end_cell();
+        
+        send_log_message(event_data.begin_parse());
+        return ();
+    }
+
+    throw(0xffff); ;; if the message contains an op that is not known to this contract, we throw
+}
+
+;; get methods are a means to conveniently read contract data using, for example, HTTP APIs
+;; they are marked with method_id
+;; note that unlike in many other smart contract VMs, get methods cannot be called by other contracts
+
+slice get_owner() method_id {
+    load_data();
+    return owner;
+}
+
+slice get_allocator() method_id {
+    load_data();
+    return allocator;
+}
+
+int get_nonce() method_id {
+    load_data();
+    return nonce;
+}
+
+int get_chain_id() method_id {
+    load_data();
+    return chain_id;
+}

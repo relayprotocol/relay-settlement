@@ -1,0 +1,17 @@
+{
+  "chainId": 537713,
+  "hub": "0x3c0be5a7f32a7dfb70c156b81eb747d0e5287f30",
+  "oracle": "0x1b5fadada97ecc6b882c5e87e90415bc899f0f15",
+  "oracleMultisig": "0xcc60889a875178ea2a984785c4217ed428fac7f2",
+  "genericMapping": "0x9b4463cf4b6bb6ea5bfeee169ff6b95b374594cd",
+  "allocator": "0xbdcd959cf9728656e69297c54f47e5d8a59d1870",
+  "executor": "0x1e39aaff3215ebf5b37bbe170e6b422e14e23f39",
+  "config": "0x62cabdd3d0681536bb68f9fac28bcf6fce92d099",
+  "ethereumVmPayloadBuilder": "0xf3c88db9aeca22e30a31e7df359f0b4fe48b0e90",
+  "solanaVmPayloadBuilder": "0x16e1a1c4c9334419a4fc290a31369c076d2f2a27",
+  "tonVmPayloadBuilder": "0x1e501cb130fac80b3cad5145abcbf7393b02c3a5",
+  "tronVmPayloadBuilder": "0x5a04454fdad7d2b0be6d7a85a7cde09c1e1821fc",
+  "bitcoinVmPayloadBuilder": "0x5365b15ea11403d8eb92fa7df8506882585037e5",
+  "hyperliquidVmPayloadBuilder": "0xc6a583365826fbda61f9272ccb13750f193eedba",
+  "lighterVmPayloadBuilder": "0x0ec2c1516324c9820d9da60754ed47fb0a9f47cb"
+}

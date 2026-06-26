@@ -1,0 +1,74 @@
+[
+  {
+    "family": "ethereum-vm",
+    "rpc": "https://rpc.mevblocker.io",
+    "to": "0x5cb1de3603a71ac2f67b12bfbf095013fe4ac299",
+    "calldata": "0x25692962",
+    "amount": "0",
+    "from": "0x16c4deeb433bde1804d8f17cd1ba3d29a30f9671",
+    "maxFeePerGas": "4943190594",
+    "maxPriorityFeePerGas": "2097824",
+    "gas": "45370",
+    "nonce": 0
+  },
+  {
+    "family": "ethereum-vm",
+    "rpc": "https://mainnet.optimism.io",
+    "to": "0x5cb1de3603a71ac2f67b12bfbf095013fe4ac299",
+    "calldata": "0x25692962",
+    "amount": "0",
+    "from": "0x16c4deeb433bde1804d8f17cd1ba3d29a30f9671",
+    "maxFeePerGas": "1004801",
+    "maxPriorityFeePerGas": "1000000",
+    "gas": "45370",
+    "nonce": 0
+  },
+  {
+    "family": "ethereum-vm",
+    "rpc": "https://polygon-rpc.com",
+    "to": "0x5cb1de3603a71ac2f67b12bfbf095013fe4ac299",
+    "calldata": "0x25692962",
+    "amount": "0",
+    "from": "0x16c4deeb433bde1804d8f17cd1ba3d29a30f9671",
+    "maxFeePerGas": "26019519945",
+    "maxPriorityFeePerGas": "25999216359",
+    "gas": "44990",
+    "nonce": 0
+  },
+  {
+    "family": "ethereum-vm",
+    "rpc": "https://api.mainnet.abs.xyz",
+    "to": "0x5cb1de3603a71ac2f67b12bfbf095013fe4ac299",
+    "calldata": "0x25692962",
+    "amount": "0",
+    "from": "0x16c4deeb433bde1804d8f17cd1ba3d29a30f9671",
+    "maxFeePerGas": "54300000",
+    "maxPriorityFeePerGas": "0",
+    "gas": "326179",
+    "nonce": 0
+  },
+  {
+    "family": "ethereum-vm",
+    "rpc": "https://mainnet.base.org",
+    "to": "0x5cb1de3603a71ac2f67b12bfbf095013fe4ac299",
+    "calldata": "0x25692962",
+    "amount": "0",
+    "from": "0x16c4deeb433bde1804d8f17cd1ba3d29a30f9671",
+    "maxFeePerGas": "15221018",
+    "maxPriorityFeePerGas": "1000000",
+    "gas": "45370",
+    "nonce": 0
+  },
+  {
+    "family": "ethereum-vm",
+    "rpc": "https://arb1.arbitrum.io/rpc",
+    "to": "0x5cb1de3603a71ac2f67b12bfbf095013fe4ac299",
+    "calldata": "0x25692962",
+    "amount": "0",
+    "from": "0x16c4deeb433bde1804d8f17cd1ba3d29a30f9671",
+    "maxFeePerGas": "121020000",
+    "maxPriorityFeePerGas": "0",
+    "gas": "45370",
+    "nonce": 0
+  }
+]

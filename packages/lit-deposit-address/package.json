@@ -1,0 +1,51 @@
+{
+  "name": "@relay-protocol/lit-deposit-address",
+  "version": "0.1.0",
+  "description": "Lit Action source for deterministic multi-VM wallet derivation and signing",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "tsc --noEmit && eslint .",
+    "test": "vitest run tests",
+    "test:watch": "vitest",
+    "bundle:actions": "tsx scripts/bundle-actions.ts",
+    "setup": "tsx scripts/setup.ts",
+    "create-usage-api-key": "tsx scripts/create-usage-api-key.ts",
+    "client": "tsx scripts/client.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@metamask/key-tree": "10.1.1",
+    "@noble/curves": "2.0.1",
+    "@noble/hashes": "2.0.1",
+    "@scure/base": "2.0.0",
+    "bs58": "6.0.0",
+    "viem": "2.48.11"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@relay-protocol/lit-helpers": "workspace:*",
+    "@relay-protocol/settlement-sdk": "0.0.110",
+    "@solana/web3.js": "1.98.4",
+    "@ton/core": "0.61.0",
+    "@ton/crypto": "3.3.0",
+    "@ton/ton": "15.1.0",
+    "@types/node": "25.5.2",
+    "esbuild": "0.28.0",
+    "eslint": "10.3.0",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.6.0",
+    "micro-eth-signer": "0.18.1",
+    "prettier": "3.8.3",
+    "tsx": "4.21.0",
+    "typescript": "6.0.2",
+    "typescript-eslint": "8.59.3",
+    "vitest": "4.1.2"
+  },
+  "private": true
+}

@@ -1,0 +1,185 @@
+[
+  {
+    "type": "function",
+    "name": "trigger",
+    "inputs": [
+      {
+        "name": "input",
+        "type": "tuple",
+        "internalType": "struct RelayDepositAddressManager.Input",
+        "components": [
+          {
+            "name": "vmType",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "chainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "currency",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "derivationFields",
+        "type": "tuple",
+        "internalType": "struct RelayDepositAddressManager.DerivationFields",
+        "components": [
+          {
+            "name": "inputVmType",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "outputVmType",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "outputChainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "outputCurrency",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "outputRecipient",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "solver",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "pricingOracle",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "depositor",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "refundRecipient",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "priceImpactBps",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "orderId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "currencies",
+        "type": "tuple[]",
+        "internalType": "struct Currency[]",
+        "components": [
+          {
+            "name": "chainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "currency",
+            "type": "bytes",
+            "internalType": "bytes"
+          }
+        ]
+      },
+      {
+        "name": "extraData",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "triggers",
+    "inputs": [
+      {
+        "name": "triggerHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "orderId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "Triggered",
+    "inputs": [
+      {
+        "name": "orderId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "triggerHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AlreadyTriggered",
+    "inputs": [
+      {
+        "name": "triggerHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InputVmTypeMismatch",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidOrderId",
+    "inputs": []
+  }
+]

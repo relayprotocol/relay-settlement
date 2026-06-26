@@ -1,0 +1,334 @@
+import * as tronweb from "tronweb"
+import {
+  Address,
+  decodeAbiParameters,
+  encodeAbiParameters,
+  hashStruct,
+  Hex,
+  parseAbiParameters,
+} from "viem"
+
+import {
+  ChainIdToVmType,
+  VmType,
+  encodeAddressToHex,
+  encodeBytesToHex,
+  getChainVmType,
+} from "../utils"
+
+export type Order = {
+  // The version of the order (determines the expected format)
+  version: "v1"
+
+  // The chain id and address of the solver given exclusive filling rights (must be an ethereum-vm eoa)
+  solverChainId: string
+  solver: string
+
+  // Random salt value to ensure order uniqueness
+  salt: string
+
+  // An order can have multiple inputs, each specifying:
+  inputs: {
+    // - the input payment details
+    payment: {
+      chainId: string
+      currency: string
+      amount: string
+      weight: string
+    }
+    // - a list of refund options when the solver is unable to fulfill the request
+    refunds: {
+      chainId: string
+      recipient: string
+      currency: string
+      minimumAmount: string
+      deadline: number
+      extraData: string
+    }[]
+  }[]
+
+  // An order can have a single output, specifying:
+  output: {
+    // - the chain id of the output fill
+    chainId: string
+    // - the output payments details
+    payments: {
+      recipient: string
+      currency: string
+      minimumAmount: string
+      expectedAmount: string
+    }[]
+    // - a list of calls to be executed (encoded based on the chain's vm type)
+    calls: string[]
+    // - deadline for execution
+    deadline: number
+    // - extra data (encoded based on the chain's vm type)
+    extraData: string
+  }
+
+  // An order can specify hub fees to be paid on successful fill
+  fees: {
+    recipientChainId: string
+    recipient: string
+    currencyChainId: string
+    currency: string
+    amount: string
+  }[]
+}
+
+export const ORDER_EIP712_TYPES = {
+  Order: [
+    { name: "version", type: "string" },
+    { name: "solverChainId", type: "string" },
+    { name: "solver", type: "address" },
+    { name: "salt", type: "uint256" },
+    { name: "inputs", type: "Input[]" },
+    { name: "output", type: "Output" },
+    { name: "fees", type: "Fee[]" },
+  ],
+  Input: [
+    { name: "payment", type: "InputPayment" },
+    { name: "refunds", type: "InputRefund[]" },
+  ],
+  InputPayment: [
+    { name: "chainId", type: "string" },
+    { name: "currency", type: "bytes" },
+    { name: "amount", type: "uint256" },
+    { name: "weight", type: "uint256" },
+  ],
+  InputRefund: [
+    { name: "chainId", type: "string" },
+    { name: "recipient", type: "bytes" },
+    { name: "currency", type: "bytes" },
+    { name: "minimumAmount", type: "uint256" },
+    { name: "deadline", type: "uint32" },
+    { name: "extraData", type: "bytes" },
+  ],
+  Output: [
+    { name: "chainId", type: "string" },
+    { name: "payments", type: "OutputPayment[]" },
+    { name: "deadline", type: "uint32" },
+    { name: "calls", type: "bytes[]" },
+    { name: "extraData", type: "bytes" },
+  ],
+  OutputPayment: [
+    { name: "recipient", type: "bytes" },
+    { name: "currency", type: "bytes" },
+    { name: "minimumAmount", type: "uint256" },
+    { name: "expectedAmount", type: "uint256" },
+  ],
+  Fee: [
+    { name: "recipientChainId", type: "string" },
+    { name: "recipient", type: "bytes" },
+    { name: "currencyChainId", type: "string" },
+    { name: "currency", type: "bytes" },
+    { name: "amount", type: "uint256" },
+  ],
+}
+
+export const normalizeOrder = (order: Order, chainsConfig: ChainIdToVmType) => {
+  const vmType = (chainId: string) => getChainVmType(chainId, chainsConfig)
+
+  return {
+    version: order.version,
+    solverChainId: order.solverChainId,
+    solver: order.solver,
+    salt: order.salt,
+    inputs: order.inputs.map((input) => ({
+      payment: {
+        chainId: input.payment.chainId,
+        currency: encodeAddressToHex(
+          input.payment.currency,
+          vmType(input.payment.chainId)
+        ),
+        amount: input.payment.amount,
+        weight: input.payment.weight,
+      },
+      refunds: input.refunds.map((refund) => ({
+        chainId: refund.chainId,
+        recipient: encodeAddressToHex(refund.recipient, vmType(refund.chainId)),
+        currency: encodeAddressToHex(refund.currency, vmType(refund.chainId)),
+        minimumAmount: refund.minimumAmount,
+        deadline: refund.deadline,
+        extraData: encodeBytesToHex(refund.extraData),
+      })),
+    })),
+    output: {
+      chainId: order.output.chainId,
+      payments: order.output.payments.map((payment) => ({
+        recipient: encodeAddressToHex(
+          payment.recipient,
+          vmType(order.output.chainId)
+        ),
+        currency: encodeAddressToHex(
+          payment.currency,
+          vmType(order.output.chainId)
+        ),
+        minimumAmount: payment.minimumAmount,
+        expectedAmount: payment.expectedAmount,
+      })),
+      calls: order.output.calls.map(encodeBytesToHex),
+      deadline: order.output.deadline,
+      extraData: encodeBytesToHex(order.output.extraData),
+    },
+    fees: order.fees.map((fee) => ({
+      recipientChainId: fee.recipientChainId,
+      recipient: encodeAddressToHex(
+        fee.recipient,
+        vmType(fee.recipientChainId)
+      ),
+      currencyChainId: fee.currencyChainId,
+      currency: encodeAddressToHex(fee.currency, vmType(fee.currencyChainId)),
+      amount: fee.amount,
+    })),
+  }
+}
+
+export const getOrderId = (order: Order, config: ChainIdToVmType) => {
+  return hashStruct({
+    types: ORDER_EIP712_TYPES,
+    primaryType: "Order",
+    data: normalizeOrder(order, config),
+  })
+}
+
+type DecodedCall = {
+  vmType: "ethereum-vm"
+  call: {
+    to: string
+    data: string
+    value: string
+  }
+}
+
+export const encodeOrderCall = (call: DecodedCall): string => {
+  switch (call.vmType) {
+    case "ethereum-vm": {
+      return encodeAbiParameters(
+        parseAbiParameters(["(address to)", "(bytes data)", "(uint256 value)"]),
+        [
+          { to: call.call.to as Address },
+          { data: call.call.data as Hex },
+          { value: BigInt(call.call.value) },
+        ]
+      )
+    }
+
+    default:
+      throw new Error("Unsupported vm type")
+  }
+}
+
+export const decodeOrderCall = (call: string, vmType: VmType): DecodedCall => {
+  switch (vmType) {
+    case "ethereum-vm": {
+      try {
+        const result = decodeAbiParameters(
+          parseAbiParameters([
+            "(address to)",
+            "(bytes data)",
+            "(uint256 value)",
+          ]),
+          call as Hex
+        )
+
+        return {
+          vmType: "ethereum-vm",
+          call: {
+            to: result[0].to.toLowerCase(),
+            data: result[1].data.toLowerCase(),
+            value: result[2].value.toString(),
+          },
+        }
+      } catch {
+        throw new Error("Failed to decode call")
+      }
+    }
+
+    default:
+      throw new Error("Unsupported vm type")
+  }
+}
+
+type DecodedExtraDataEthereumVm = {
+  vmType: "ethereum-vm"
+  extraData: {
+    fillContract: string
+  }
+}
+
+type DecodedExtraDataTronVm = {
+  vmType: "tron-vm"
+  extraData: {
+    fillContract: string
+  }
+}
+
+type DecodedExtraData = DecodedExtraDataEthereumVm | DecodedExtraDataTronVm
+
+export const encodeOrderExtraData = (extraData: DecodedExtraData): string => {
+  switch (extraData.vmType) {
+    case "ethereum-vm": {
+      return encodeAbiParameters(
+        parseAbiParameters(["(address fillContract)"]),
+        [{ fillContract: extraData.extraData.fillContract as Address }]
+      )
+    }
+
+    case "tron-vm": {
+      return tronweb.utils.abi.encodeParams(
+        ["address"],
+        [extraData.extraData.fillContract]
+      )
+    }
+
+    default:
+      throw new Error("Unsupported vm type")
+  }
+}
+
+export const decodeOrderExtraData = (
+  extraData: string,
+  vmType: VmType
+): DecodedExtraData => {
+  switch (vmType) {
+    case "ethereum-vm": {
+      try {
+        const result = decodeAbiParameters(
+          parseAbiParameters(["(address fillContract)"]),
+          extraData as Hex
+        )
+
+        return {
+          vmType: "ethereum-vm",
+          extraData: {
+            fillContract: result[0].fillContract.toLowerCase(),
+          },
+        }
+      } catch {
+        throw new Error("Failed to decode extra data")
+      }
+    }
+
+    case "tron-vm": {
+      try {
+        const result = tronweb.utils.abi.decodeParams(
+          ["fillContract"],
+          ["address"],
+          extraData
+        )
+        return {
+          vmType: "tron-vm",
+          extraData: {
+            fillContract: tronweb.utils.address.fromHex(result.fillContract),
+          },
+        }
+      } catch {
+        throw new Error("Failed to decode extra data")
+      }
+    }
+
+    default:
+      throw new Error("Unsupported vm type")
+  }
+}

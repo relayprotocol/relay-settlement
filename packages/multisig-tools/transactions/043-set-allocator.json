@@ -1,0 +1,14 @@
+[
+  {
+    "family": "ethereum-vm",
+    "rpc": "https://mainnet.optimism.io",
+    "to": "0x5cb1de3603a71ac2f67b12bfbf095013fe4ac299",
+    "calldata": "0xbf83f2a20000000000000000000000004eeee081129619a25c8551a86556b2e0e348186f",
+    "amount": "0",
+    "from": "0x16c4deeb433bde1804d8f17cd1ba3d29a30f9671",
+    "maxFeePerGas": "1004801",
+    "maxPriorityFeePerGas": "1000000",
+    "gas": "45370",
+    "nonce": 8
+  }
+]

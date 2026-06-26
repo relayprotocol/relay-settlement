@@ -1,0 +1,31 @@
+[features]
+seeds = false
+skip-lint = false
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "Localnet"
+wallet = "~/.config/solana/id.json"
+
+[programs.mainnet]
+relay_depository = "99vQwtBwYtrqqD9YSXbdum3KBdxPAVxYTaQ3cfnJSrN2"
+relay_forwarder = "DPArtTLbEqa6EuXHfL5UFLBZhFjiEXWRudhvXDrjwXUr"
+deposit_address = "H2RS2tansewENdGqaPfF4maSjSWJE3KToVsb2tfmehd9"
+
+[programs.devnet]
+relay_depository = "6TMx4zgh9Ho5DaJtaQbKbHgYLk7B6vKEoE7CfnxkqcHv"
+relay_forwarder = "FHMqGbdPeDkHsYBYf3tmUCMCjVcDgP5dTf1uYPyYTz9C"
+deposit_address = "CaQwnPKWy7mGQSueXJiAkAbdBqEibif1pJpaHoSfi9EE"
+
+[programs.localnet]
+relay_depository = "9hojvGqR8jU9q6su4WUzT7SbsTj2inaUewT84PkCzoR9"
+relay_forwarder = "5iXJVaSZAHvT33xbodj9HaYKB4g6Z5ojfmiQr6hfHwxT"
+deposit_address = "CaQwnPKWy7mGQSueXJiAkAbdBqEibif1pJpaHoSfi9EE"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+test-forwarder = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/relay-forwarder.ts"
+test-depository = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/relay-depository.ts"
+test-deposit-address = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/deposit-address.ts"

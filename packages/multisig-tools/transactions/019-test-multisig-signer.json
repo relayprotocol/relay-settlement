@@ -1,0 +1,14 @@
+[
+  {
+    "family": "ethereum-vm",
+    "rpc": "https://mainnet.base.org",
+    "to": "0xF61A305199fa1135d76FFaB3752D42F55cBd775A",
+    "calldata": "0x",
+    "amount": "0",
+    "from": "0xF61A305199fa1135d76FFaB3752D42F55cBd775A",
+    "maxFeePerGas": "1793063",
+    "maxPriorityFeePerGas": "1000000",
+    "gas": "21000",
+    "nonce": 0
+  }
+]

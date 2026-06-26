@@ -1,0 +1,28 @@
+{
+  "name": "@relay-settlement/eslint-config",
+  "version": "1.0.0",
+  "main": "index.js",
+  "bin": {
+    "lint": "./lint.js"
+  },
+  "dependencies": {
+    "@eslint/js": "9.36.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-evm-address-to-checksummed": "0.0.6",
+    "eslint-plugin-json": "4.0.1",
+    "eslint-plugin-mocha": "11.1.0",
+    "eslint-plugin-no-only-tests": "3.3.0",
+    "eslint-plugin-prettier": "5.5.4",
+    "eslint-plugin-sort-keys-fix": "1.1.2",
+    "globals": "14.0.0",
+    "prettier": "3.6.2",
+    "typescript-eslint": "8.45.0"
+  },
+  "peerDependencies": {
+    "eslint": "9.36.0"
+  },
+  "devDependencies": {
+    "eslint": "9.36.0",
+    "typescript": "5.9.3"
+  }
+}

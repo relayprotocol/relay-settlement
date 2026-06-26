@@ -1,0 +1,60 @@
+[
+  {
+    "type": "function",
+    "name": "getUsdPrices",
+    "inputs": [
+      {
+        "name": "currencies",
+        "type": "tuple[]",
+        "internalType": "struct Currency[]",
+        "components": [
+          {
+            "name": "chainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "currency",
+            "type": "bytes",
+            "internalType": "bytes"
+          }
+        ]
+      },
+      {
+        "name": "extraData",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "prices",
+        "type": "tuple[]",
+        "internalType": "struct Price[]",
+        "components": [
+          {
+            "name": "usdPrice",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "usdPriceDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "currencyDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "expiration",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  }
+]

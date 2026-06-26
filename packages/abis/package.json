@@ -1,0 +1,34 @@
+{
+  "name": "@relay-protocol/settlement-abis",
+  "version": "2.0.1",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "release": "npm publish",
+    "clean": "rm -rf dist",
+    "build:contracts": "yarn workspace @relay-settlement/smart-contracts build",
+    "build:export-abis": "yarn workspace @relay-settlement/smart-contracts build:abis",
+    "update": "yarn build:contracts && yarn build:export-abis",
+    "build:ts": "tsup src/index.ts --dts --format esm,cjs",
+    "build": "yarn build:ts",
+    "lint": "lint"
+  },
+  "devDependencies": {
+    "@relay-settlement/eslint-config": "workspace:*",
+    "@relay-settlement/tsconfig": "workspace:*",
+    "eslint": "9.36.0",
+    "tsup": "8.5.0",
+    "typescript": "5.9.3"
+  },
+  "files": [
+    "index.js",
+    "dist"
+  ]
+}

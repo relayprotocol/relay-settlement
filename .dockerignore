@@ -1,0 +1,10 @@
+.git
+node_modules
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+smart-contracts/ignition
+smart-contracts/artifacts
+smart-contracts/cache
+.pnp.*
+.yarn/unplugged

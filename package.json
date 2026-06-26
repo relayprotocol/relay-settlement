@@ -1,0 +1,45 @@
+{
+  "name": "@relay-settlement/hub-monorepo",
+  "private": true,
+  "version": "0.0.1",
+  "workspaces": [
+    "packages/*",
+    "oracle",
+    "smart-contracts"
+  ],
+  "scripts": {
+    "build": "yarn packages:clean && yarn packages:build",
+    "packages:clean": "yarn packages --parallel run clean",
+    "packages:build": "yarn packages --topological-dev run build",
+    "lint": "lint",
+    "test": "yarn workspaces foreach --all run test",
+    "packages": "yarn workspaces foreach --recursive --from '{@relay-settlement/eslint-config,@relay-settlement/tsconfig,@relay-protocol/settlement-sdk,@relay-protocol/settlement-abis,@relay-protocol/settlement-networks,@relay-settlement/hub-client,@relay-settlement/indexer,@relay-settlement/indexer-ui,@relay-protocol/lit-actions,@relay-protocol/lit-helpers,@relay-protocol/lit-allocator,@relay-protocol/lit-deposit-address,@relay-settlement/multisig-tools,@relay-settlement/smart-contracts}'",
+    "multisig:simulate": "yarn workspace @relay-settlement/multisig-tools cli simulate",
+    "multisig:submit": "yarn workspace @relay-settlement/multisig-tools cli submit",
+    "multisig:check": "yarn workspace @relay-settlement/multisig-tools cli check-hashes",
+    "multisig:execute": "yarn workspace @relay-settlement/multisig-tools cli execute-transactions",
+    "multisig:decode": "yarn workspace @relay-settlement/multisig-tools cli decode-multicall"
+  },
+  "devDependencies": {
+    "@relay-settlement/eslint-config": "workspace:*",
+    "@types/node": "24.6.1",
+    "eslint": "9.36.0",
+    "husky": "9.1.7",
+    "lint-staged": "16.2.3",
+    "prettier": "3.6.2",
+    "ts-node": "10.9.2",
+    "typescript": "5.9.3"
+  },
+  "packageManager": "yarn@4.9.1",
+  "dependencies": {
+    "typescript-eslint": "8.45.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "yarn lint"
+    ],
+    "*.{sol}": [
+      "yarn lint"
+    ]
+  }
+}

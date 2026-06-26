@@ -1,0 +1,39 @@
+{
+  "name": "@relay-settlement/indexer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "clean": "rm -rf dist",
+    "audit:balances": "node dist/scripts/audit-balances.js",
+    "lint": "lint",
+    "build": "yarn workspace @relay-protocol/settlement-sdk build && yarn workspace @relay-protocol/settlement-networks build && yarn workspace @relay-protocol/settlement-abis clean && yarn workspace @relay-protocol/settlement-abis build && tsc -p tsconfig.json",
+    "migrate": "node dist/scripts/run-migrations.js -m ./src/migrations --no-check-order",
+    "replay:transfers": "node dist/scripts/replay-transfer-range.js",
+    "start": "yarn migrate up 2>/dev/null && node dist/index.js",
+    "test": "yarn workspace @relay-protocol/settlement-sdk build && yarn workspace @relay-protocol/settlement-networks build && yarn workspace @relay-protocol/settlement-abis clean && yarn workspace @relay-protocol/settlement-abis build && tsx --test src/**/*.test.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/credential-providers": "3.1027.0",
+    "@aws-sdk/rds-signer": "3.1027.0",
+    "@relay-protocol/settlement-abis": "workspace:*",
+    "@relay-protocol/settlement-networks": "workspace:*",
+    "dotenv": "16.4.5",
+    "ethers": "6.12.1",
+    "express": "4.19.2",
+    "node-pg-migrate": "8.0.4",
+    "pg": "8.16.3",
+    "pg-promise": "12.3.0",
+    "pg-query-stream": "4.10.3"
+  },
+  "devDependencies": {
+    "@relay-settlement/eslint-config": "workspace:*",
+    "@relay-settlement/tsconfig": "workspace:*",
+    "@types/express": "4.17.21",
+    "@types/node": "24.6.1",
+    "eslint": "9.36.0",
+    "tsx": "4.19.0",
+    "typescript": "5.9.3"
+  }
+}

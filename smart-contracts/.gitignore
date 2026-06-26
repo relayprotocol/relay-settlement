@@ -1,0 +1,28 @@
+node_modules
+.env
+
+# Hardhat files
+/cache
+/cache_hardhat
+/artifacts
+
+# TypeChain files
+/typechain
+/typechain-types
+
+/scripts
+
+# solidity-coverage files
+/coverage
+/coverage.json
+
+# Foundry deployments
+/broadcast
+
+# Foundry build output
+/broadcast
+/out
+/forge-out
+foundry.lock
+
+withdrawal-test-data.json

@@ -1,0 +1,15 @@
+[
+  {
+    "family": "tron-vm",
+    "rpc": "https://api.shasta.trongrid.io",
+    "from": "TMzQj38CWrXVPkQsDVWw9CG3o1ir2K4hir",
+    "contractType": "TriggerSmartContract",
+    "parameter": {
+      "owner_address": "TMzQj38CWrXVPkQsDVWw9CG3o1ir2K4hir",
+      "contract_address": "TG3XXyExBkPp9nzdajDZsozEu4BkaSJozs",
+      "data": "a9059cbb000000000000000000000000a614f803b6fd780986a42c78ec9c7f77e6ded13c0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "feeLimit": "10000000",
+    "_comment": "Example: TRC20 token transfer using TriggerSmartContract. The 'data' field contains ABI-encoded function call: transfer(address,uint256). For USDT on Shasta testnet, use contract_address: 41A614F803B6FD780986A42C78EC9C7F77E6DED13C (TG3XXyExBkPp9nzdajDZsozEu4BkaSJozs in base58). The owner_address and 'from' will be automatically updated by the test task. You can use either base58 (T...) or hex (41...) address formats."
+  }
+]

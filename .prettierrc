@@ -1,0 +1,14 @@
+{
+  "trailingComma": "es5",
+  "singleQuote": false,
+  "semi": false,
+  "plugins": ["prettier-plugin-solidity"],
+  "overrides": [
+    {
+      "files": "*.sol",
+      "options": {
+        "tabWidth": 2
+      }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+
+export const superposition: NetworkConfig = {
+  chainId: 55244n,
+  contracts: {
+    prod: { depository: "0x4cD00E387622C35bDDB9b4c962C136462338BC31" },
+    stag: { depository: "0x9ddC6a541e8F8B50B0996786A3eC275AB4d3A76C" },
+  },
+  family: "ethereum-vm",
+  hubChainId: "55244",
+  isTestnet: false,
+  name: "Superposition",
+  rpc: process.env.RPC_55244
+    ? [process.env.RPC_55244]
+    : ["https://rpc.superposition.so"],
+  slug: "superposition",
+}

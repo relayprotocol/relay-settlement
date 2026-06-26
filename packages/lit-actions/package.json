@@ -1,0 +1,31 @@
+{
+  "name": "@relay-protocol/lit-actions",
+  "version": "0.0.21",
+  "description": "Definitions and helpers for tracking Relay Lit Actions",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "license": "MIT",
+  "scripts": {
+    "clean": "rm -rf dist tsconfig.tsbuildinfo src/generated.ts",
+    "prepublishOnly": "yarn clean && yarn build",
+    "generate": "tsx scripts/generate-actions.ts",
+    "build": "yarn generate && tsc -b"
+  },
+  "dependencies": {
+    "@relay-protocol/settlement-sdk": "0.0.97"
+  },
+  "devDependencies": {
+    "@relay-protocol/lit-allocator": "workspace:*",
+    "@relay-protocol/lit-deposit-address": "workspace:*",
+    "@relay-settlement/tsconfig": "workspace:*",
+    "eslint": "9.36.0",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3"
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

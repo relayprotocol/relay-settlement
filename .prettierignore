@@ -1,0 +1,11 @@
+**/build
+**/coverage
+**/artifacts
+**/dist
+**/cache
+**/cache_hardhat
+**/node_modules
+**/typechain-types
+.yarn
+.yarnrc.yml
+smart-contracts/ignition/deployments

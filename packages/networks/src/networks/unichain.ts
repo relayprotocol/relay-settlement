@@ -1,0 +1,17 @@
+import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+
+export const unichain: NetworkConfig = {
+  chainId: 130n,
+  contracts: {
+    prod: { depository: "0x4cD00E387622C35bDDB9b4c962C136462338BC31" },
+    stag: { depository: "0x9ddC6a541e8F8B50B0996786A3eC275AB4d3A76C" },
+  },
+  family: "ethereum-vm",
+  hubChainId: "130",
+  isTestnet: false,
+  name: "Unichain",
+  rpc: process.env.RPC_130
+    ? [process.env.RPC_130]
+    : ["https://mainnet.unichain.org"],
+  slug: "unichain",
+}

@@ -1,0 +1,21 @@
+[
+  {
+    "type": "function",
+    "name": "bytesToHex",
+    "inputs": [
+      {
+        "name": "buffer",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "pure"
+  }
+]

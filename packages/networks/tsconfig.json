@@ -1,0 +1,6 @@
+{
+  "extends": "@relay-settlement/tsconfig",
+  "compilerOptions": {
+    "outDir": "dist"
+  }
+}

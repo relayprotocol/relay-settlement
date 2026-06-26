@@ -1,0 +1,62 @@
+import { describe, expect, it } from "vitest";
+import type { DepositAddressTriggerDerivationFields } from "../src/common/types.js";
+import { deriveAccount, deriveWallet, type AccountInfo } from "../src/derivation/index.js";
+import { derivationFieldsToIndexes } from "../src/derivation/path.js";
+import {
+  deriveDepositWallet,
+  derivationFieldsToIndexes as localDerivationFieldsToIndexes,
+  type AccountResponse,
+  type DerivationFields,
+} from "../scripts/client/local-derivation.js";
+
+const ROOT_KEY = `0x${"11".repeat(32)}`;
+
+const derivationFields: DepositAddressTriggerDerivationFields = {
+  inputVmType: "ethereum-vm",
+  outputVmType: "ethereum-vm",
+  outputChainId: "1",
+  outputCurrency: "0x0000000000000000000000000000000000000000",
+  outputRecipient: "0x000000000000000000000000000000000000dead",
+  solver: "0x0000000000000000000000000000000000000001",
+  pricingOracle: "0x0000000000000000000000000000000000000002",
+  depositor: "0x000000000000000000000000000000000000beef",
+  refundRecipient: "0x000000000000000000000000000000000000cafe",
+  priceImpactBps: "50",
+};
+
+function toAccountResponse(account: AccountInfo): AccountResponse {
+  return {
+    vmType: account.vmType,
+    accountPath: account.accountPath,
+    publicKey: account.publicKey,
+    extendedPublicKey: account.extendedPublicKey,
+  };
+}
+
+describe("scripts/client/local-derivation parity with src/", () => {
+  it("derivationFieldsToIndexes produces the same indexes off- and in-TEE", () => {
+    const inTee = derivationFieldsToIndexes(derivationFields);
+    const offTee = localDerivationFieldsToIndexes(derivationFields as DerivationFields);
+    expect(offTee).toEqual(inTee);
+  });
+
+  for (const vmType of ["ethereum-vm", "bitcoin-vm", "solana-vm", "hyperliquid-vm"] as const) {
+    it(`deriveDepositWallet matches deriveWallet for ${vmType}`, async () => {
+      const fields: DepositAddressTriggerDerivationFields = {
+        ...derivationFields,
+        inputVmType: vmType,
+        outputVmType: vmType,
+      };
+      const account = toAccountResponse(await deriveAccount(ROOT_KEY, vmType));
+      const indexes = derivationFieldsToIndexes(fields);
+
+      const inTee = await deriveWallet(ROOT_KEY, vmType, indexes);
+      const offTee = await deriveDepositWallet(account, fields as DerivationFields);
+
+      expect(offTee.address).toBe(inTee.address);
+      expect(offTee.publicKey).toBe(inTee.publicKey);
+      expect(offTee.indexes).toEqual(inTee.indexes);
+      expect(offTee.path).toBe(inTee.path);
+    });
+  }
+});

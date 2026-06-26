@@ -1,0 +1,41 @@
+{
+  "name": "@relay-protocol/settlement-sdk",
+  "version": "0.0.116",
+  "description": "Relay protocol SDK",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "repository": "https://github.com/relayprotocol/relay-settlement/tree/main/packages/sdk",
+  "author": "Uneven Labs",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "prepublishOnly": "yarn clean && yarn build",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.31.1",
+    "@solana/web3.js": "1.98.4",
+    "@ton/core": "0.61.0",
+    "@ton/crypto": "3.3.0",
+    "bech32": "^2.0.0",
+    "bitcoinjs-lib": "^6.1.7",
+    "bs58": "^6.0.0",
+    "js-sha256": "^0.11.0",
+    "tronweb": "^6.0.4",
+    "viem": "2.47.6"
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+}

@@ -1,0 +1,14 @@
+title = "Relay Settlement Protocol gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public addresses in deterministic tests and transaction fixtures"
+targetRules = ["generic-api-key"]
+paths = [
+  '''packages/hub-client/src/methods/(burn|mint|transfer-from)\.test\.ts''',
+  '''packages/lit-deposit-address/tests/transaction-policy/hyperliquid-vm\.test\.ts''',
+  '''packages/multisig-tools/transactions/(025-test-set-allocator|026-test-authority-transfer|045-dev-solana-transfer-authority-and-ownership|051-set-allocator-arc-zorro-tron-solana-eclipse|demo-solana-durable-nonce-example|demo-solana-program-deploy|demo-solana-program-upgrade|demo-solana-send-memo)\.json''',
+  '''packages/sdk/test/withdrawal-codec-fixtures\.test\.ts''',
+]

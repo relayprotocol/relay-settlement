@@ -1,0 +1,18 @@
+{
+  "name": "dev",
+  "allocatorAddress": "0x6544a81a7e3961b35040f6fc848294367822b6b9",
+  "hubEvmChainId": 421614,
+  "allowedOracles": [
+    "0xcda3c24706c1a5eea958a988693e8a838d520af9",
+    "0xf24a399259f47c6360d00da3793eca9cc6ad1caa"
+  ],
+  "oracleSignatureThreshold": 2,
+  "lighterAllowedApiKeys": [
+    {
+      "apiKeyIndex": 4,
+      "publicKey": "0xf5f3c22e57c906b6f3c8b927fa1d5f7ec701086f02da98b10b13984b96bc3e4a58385e8696b2d5ab"
+    }
+  ],
+  "lighterGateway": "0x3b4d794a66304f130a4db8f2551b0070dfcf5ca7",
+  "lighterGatewayChainId": 1
+}

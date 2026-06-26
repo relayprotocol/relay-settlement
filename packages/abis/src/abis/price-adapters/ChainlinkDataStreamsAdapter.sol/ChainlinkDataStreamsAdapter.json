@@ -1,0 +1,116 @@
+[
+  {
+    "type": "function",
+    "name": "REPORT_V3_SCHEMA",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "USD_PRICE_DECIMALS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "decodeAndVerify",
+    "inputs": [
+      {
+        "name": "feedId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "updateData",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "usdPrice",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "usdPriceDecimals",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "publishTime",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "error",
+    "name": "FeedIdMismatch",
+    "inputs": [
+      {
+        "name": "expected",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "actual",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NonPositivePrice",
+    "inputs": [
+      {
+        "name": "benchmarkPrice",
+        "type": "int192",
+        "internalType": "int192"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ReportExpired",
+    "inputs": [
+      {
+        "name": "expiresAt",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "blockTimestamp",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnsupportedReportSchema",
+    "inputs": [
+      {
+        "name": "schemaVersion",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ]
+  }
+]

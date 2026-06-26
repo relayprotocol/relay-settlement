@@ -1,0 +1,19 @@
+{
+  "name": "stag",
+  "allocatorAddress": "0xbdcd959cf9728656e69297c54f47e5d8a59d1870",
+  "hubEvmChainId": 537713,
+  "allowedOracles": [
+    "0x3001dfd9e77675afd7d3dfd6b2183399ca4f801e",
+    "0x5c8031dfae2ad620f908e7e50f88e1d4835697cd",
+    "0x8e4716438b4be24a0e1d1b7375dff45727ca120a"
+  ],
+  "oracleSignatureThreshold": 2,
+  "lighterAllowedApiKeys": [
+    {
+      "apiKeyIndex": 4,
+      "publicKey": "0x8e5ef889db428ae84158d5f809dde810f4039cf47cbd55ae7043bf756305896353f86b82157c065b"
+    }
+  ],
+  "lighterGateway": "0x3b4d794a66304f130a4db8f2551b0070dfcf5ca7",
+  "lighterGatewayChainId": 1
+}

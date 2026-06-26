@@ -1,0 +1,212 @@
+import { Provider } from "ethers"
+import { Database } from "../db/connection.js"
+import { getMeta } from "../db/meta.js"
+import { config } from "../config.js"
+import {
+  getIndexerAuditHealth,
+  type IndexerAuditHealth,
+} from "./indexerAudit.js"
+import {
+  HUB_ROLE_META_KEY,
+  HUB_TRANSFER_META_KEY,
+  LEGACY_HUB_ROLE_META_KEY,
+  LEGACY_HUB_TRANSFER_META_KEY,
+  ORACLE_EXECUTION_META_KEY,
+  ORACLE_ROLE_META_KEY,
+} from "../indexerState.js"
+
+type SyncStatus = {
+  lastProcessedBlock: number | null
+  lag: number
+}
+
+type FailedEventStatus = {
+  count: number
+  oldestBlockNumber: number | null
+}
+
+export type HealthResponse = {
+  audits?: IndexerAuditHealth
+  ok: boolean
+  latestChainBlock: number
+  latestIndexedBlock: number
+  maxAllowedLag: number
+  failedEvents: FailedEventStatus
+  hub: SyncStatus & {
+    transferLastProcessedBlock: number | null
+    roleLastProcessedBlock: number | null
+  }
+  oracle: SyncStatus & {
+    roleLastProcessedBlock: number | null
+    executionLastProcessedBlock: number | null
+  }
+}
+
+export type HealthCheckpointState = {
+  audits?: IndexerAuditHealth
+  latestChainBlock: number
+  latestIndexedBlock?: number
+  maxAllowedLag: number
+  hubTransferLastProcessedBlock: number | null
+  hubRoleLastProcessedBlock: number | null
+  oracleRoleLastProcessedBlock: number | null
+  oracleExecutionLastProcessedBlock: number | null
+  failedEvents?: FailedEventStatus
+}
+
+export type HealthStatusOptions = {
+  includeAudits?: boolean
+}
+
+const parseBlock = (value: string | null) => {
+  if (value == null) return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const minIfAllPresent = (values: Array<number | null>) =>
+  values.every((value) => value != null)
+    ? Math.min(...(values as number[]))
+    : null
+
+const toLag = (latestChainBlock: number, lastProcessedBlock: number | null) => {
+  if (lastProcessedBlock == null) {
+    return latestChainBlock
+  }
+
+  return Math.max(latestChainBlock - lastProcessedBlock, 0)
+}
+
+const getMetaWithFallback = async (
+  db: Database,
+  key: string,
+  fallbackKey?: string
+) => {
+  const value = await getMeta(db, key)
+  if (value != null) {
+    return value
+  }
+
+  if (!fallbackKey) {
+    return null
+  }
+
+  return getMeta(db, fallbackKey)
+}
+
+export const getHealthStatus = async (
+  db: Database,
+  provider: Provider,
+  options: HealthStatusOptions = {}
+): Promise<HealthResponse> => {
+  const includeAudits = options.includeAudits ?? true
+  const latestChainBlock = await provider.getBlockNumber()
+  const latestIndexedBlock = Math.max(
+    0,
+    latestChainBlock - config.confirmationBlocks
+  )
+  const [
+    hubTransferRaw,
+    hubRoleRaw,
+    oracleRoleRaw,
+    oracleExecutionRaw,
+    failedEvents,
+    audits,
+  ] = await Promise.all([
+    getMetaWithFallback(
+      db,
+      HUB_TRANSFER_META_KEY,
+      LEGACY_HUB_TRANSFER_META_KEY
+    ),
+    getMetaWithFallback(db, HUB_ROLE_META_KEY, LEGACY_HUB_ROLE_META_KEY),
+    getMeta(db, ORACLE_ROLE_META_KEY),
+    getMeta(db, ORACLE_EXECUTION_META_KEY),
+    getFailedEventStatus(db),
+    includeAudits
+      ? getIndexerAuditHealth(db, {
+          consecutiveFailures: config.indexerAuditConsecutiveFailures,
+          failureThreshold: config.indexerAuditFailureThreshold,
+          maxAgeMs: config.indexerAuditMaxAgeMs,
+        })
+      : Promise.resolve(undefined),
+  ])
+
+  return buildHealthResponse({
+    audits,
+    failedEvents,
+    hubRoleLastProcessedBlock: parseBlock(hubRoleRaw),
+    hubTransferLastProcessedBlock: parseBlock(hubTransferRaw),
+    latestChainBlock,
+    latestIndexedBlock,
+    maxAllowedLag: config.healthMaxLagBlocks,
+    oracleExecutionLastProcessedBlock: parseBlock(oracleExecutionRaw),
+    oracleRoleLastProcessedBlock: parseBlock(oracleRoleRaw),
+  })
+}
+
+const getFailedEventStatus = async (
+  db: Database
+): Promise<FailedEventStatus> => {
+  const row = await db.one<{
+    count: number | string
+    oldest_block_number: number | string | null
+  }>(
+    `SELECT COUNT(*)::int AS count, MIN(block_number)::bigint AS oldest_block_number
+     FROM failed_events`
+  )
+
+  return {
+    count: Number(row.count),
+    oldestBlockNumber:
+      row.oldest_block_number == null ? null : Number(row.oldest_block_number),
+  }
+}
+
+export const buildHealthResponse = ({
+  audits,
+  failedEvents = { count: 0, oldestBlockNumber: null },
+  latestChainBlock,
+  latestIndexedBlock = latestChainBlock,
+  maxAllowedLag,
+  hubTransferLastProcessedBlock,
+  hubRoleLastProcessedBlock,
+  oracleRoleLastProcessedBlock,
+  oracleExecutionLastProcessedBlock,
+}: HealthCheckpointState): HealthResponse => {
+  const hubLastProcessedBlock = minIfAllPresent([
+    hubTransferLastProcessedBlock,
+    hubRoleLastProcessedBlock,
+  ])
+  const oracleLastProcessedBlock = minIfAllPresent([
+    oracleRoleLastProcessedBlock,
+    oracleExecutionLastProcessedBlock,
+  ])
+
+  const hubLag = toLag(latestIndexedBlock, hubLastProcessedBlock)
+  const oracleLag = toLag(latestIndexedBlock, oracleLastProcessedBlock)
+
+  return {
+    audits,
+    failedEvents,
+    hub: {
+      lag: hubLag,
+      lastProcessedBlock: hubLastProcessedBlock,
+      roleLastProcessedBlock: hubRoleLastProcessedBlock,
+      transferLastProcessedBlock: hubTransferLastProcessedBlock,
+    },
+    latestChainBlock,
+    latestIndexedBlock,
+    maxAllowedLag,
+    ok:
+      hubLag <= maxAllowedLag &&
+      oracleLag <= maxAllowedLag &&
+      (audits?.ok ?? true) &&
+      failedEvents.count === 0,
+    oracle: {
+      executionLastProcessedBlock: oracleExecutionLastProcessedBlock,
+      lag: oracleLag,
+      lastProcessedBlock: oracleLastProcessedBlock,
+      roleLastProcessedBlock: oracleRoleLastProcessedBlock,
+    },
+  }
+}

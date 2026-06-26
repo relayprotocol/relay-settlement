@@ -1,0 +1,15 @@
+[
+  {
+    "family": "tron-vm",
+    "rpc": "https://api.shasta.trongrid.io",
+    "from": "TMzQj38CWrXVPkQsDVWw9CG3o1ir2K4hir",
+    "contractType": "TransferContract",
+    "parameter": {
+      "owner_address": "TMzQj38CWrXVPkQsDVWw9CG3o1ir2K4hir",
+      "to_address": "TMJo4hwsowH1keuB3mdWE7TEgfgyRrjRKF",
+      "amount": 1000
+    },
+    "feeLimit": "1000000",
+    "_comment": "Example: TRX transfer using TransferContract. Amount is in SUN (1 TRX = 1,000,000 SUN). The 'from' and 'owner_address' fields will be automatically updated by the test task to match the derived Tron address. The 'to_address' is the recipient. You can use either base58 (T...) or hex (41...) address formats - they will be automatically converted."
+  }
+]

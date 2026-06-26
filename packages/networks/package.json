@@ -1,0 +1,36 @@
+{
+  "description": "Relay Protocol's supported networks",
+  "name": "@relay-protocol/settlement-networks",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "version": "3.0.0",
+  "license": "MIT",
+  "scripts": {
+    "start": "tsc --watch",
+    "lint": "lint",
+    "clean": "rm -rf ./dist",
+    "build": "yarn clean && tsup src/index.ts --dts --format esm,cjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@relay-protocol/settlement-sdk": "workspace:./packages/sdk",
+    "@relay-settlement/eslint-config": "workspace:^",
+    "@relay-settlement/tsconfig": "workspace:./packages/tsconfig",
+    "eslint": "9.36.0",
+    "fs-extra": "11.3.2",
+    "tsup": "8.5.0",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  },
+  "files": [
+    "dist"
+  ]
+}

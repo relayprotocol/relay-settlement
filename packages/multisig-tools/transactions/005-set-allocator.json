@@ -1,0 +1,74 @@
+[
+  {
+    "family": "ethereum-vm",
+    "gas": "30351",
+    "maxFeePerGas": "2649477812",
+    "maxPriorityFeePerGas": "200000",
+    "nonce": 2,
+    "rpc": "https://rpc.mevblocker.io",
+    "amount": "0",
+    "calldata": "0xbf83f2a2000000000000000000000000e40ecc02e4ec499393876a31e4af97fa9c069814",
+    "from": "0x16c4dEEB433bde1804d8f17cd1Ba3D29a30f9671",
+    "to": "0x5CB1De3603A71Ac2f67b12bFbF095013FE4Ac299"
+  },
+  {
+    "family": "ethereum-vm",
+    "gas": "30351",
+    "maxFeePerGas": "1000404",
+    "maxPriorityFeePerGas": "1000000",
+    "nonce": 2,
+    "rpc": "https://mainnet.optimism.io",
+    "amount": "0",
+    "calldata": "0xbf83f2a2000000000000000000000000e40ecc02e4ec499393876a31e4af97fa9c069814",
+    "from": "0x16c4dEEB433bde1804d8f17cd1Ba3D29a30f9671",
+    "to": "0x5CB1De3603A71Ac2f67b12bFbF095013FE4Ac299"
+  },
+  {
+    "family": "ethereum-vm",
+    "gas": "30001",
+    "maxFeePerGas": "84771263711",
+    "maxPriorityFeePerGas": "29938839873",
+    "nonce": 2,
+    "rpc": "https://polygon-rpc.com",
+    "amount": "0",
+    "calldata": "0xbf83f2a2000000000000000000000000e40ecc02e4ec499393876a31e4af97fa9c069814",
+    "from": "0x16c4dEEB433bde1804d8f17cd1Ba3D29a30f9671",
+    "to": "0x5CB1De3603A71Ac2f67b12bFbF095013FE4Ac299"
+  },
+  {
+    "family": "ethereum-vm",
+    "gas": "241311",
+    "maxFeePerGas": "54300000",
+    "maxPriorityFeePerGas": "0",
+    "nonce": 2,
+    "rpc": "https://api.mainnet.abs.xyz",
+    "amount": "0",
+    "calldata": "0xbf83f2a2000000000000000000000000e40ecc02e4ec499393876a31e4af97fa9c069814",
+    "from": "0x16c4dEEB433bde1804d8f17cd1Ba3D29a30f9671",
+    "to": "0x5CB1De3603A71Ac2f67b12bFbF095013FE4Ac299"
+  },
+  {
+    "family": "ethereum-vm",
+    "gas": "30351",
+    "maxFeePerGas": "6555649",
+    "maxPriorityFeePerGas": "1000000",
+    "nonce": 2,
+    "rpc": "https://mainnet.base.org",
+    "amount": "0",
+    "calldata": "0xbf83f2a2000000000000000000000000e40ecc02e4ec499393876a31e4af97fa9c069814",
+    "from": "0x16c4dEEB433bde1804d8f17cd1Ba3D29a30f9671",
+    "to": "0x5CB1De3603A71Ac2f67b12bFbF095013FE4Ac299"
+  },
+  {
+    "family": "ethereum-vm",
+    "gas": "50192",
+    "maxFeePerGas": "18208800",
+    "maxPriorityFeePerGas": "0",
+    "nonce": 3,
+    "rpc": "https://arb1.arbitrum.io/rpc",
+    "amount": "0",
+    "calldata": "0xbf83f2a2000000000000000000000000e40ecc02e4ec499393876a31e4af97fa9c069814",
+    "from": "0x16c4dEEB433bde1804d8f17cd1Ba3D29a30f9671",
+    "to": "0x5CB1De3603A71Ac2f67b12bFbF095013FE4Ac299"
+  }
+]

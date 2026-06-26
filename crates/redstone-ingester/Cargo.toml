@@ -1,0 +1,39 @@
+[package]
+description = "Standalone RedStone oracle ingester service"
+edition = { workspace = true }
+license = { workspace = true }
+name = "redstone-ingester"
+publish = false
+repository = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+
+[[bin]]
+name = "redstone-ingester"
+path = "src/main.rs"
+
+[dependencies]
+alloy-primitives = { workspace = true }
+anyhow = { workspace = true }
+base64 = { workspace = true }
+dotenvy = { workspace = true }
+hex = { workspace = true }
+k256 = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry-otlp = { workspace = true }
+opentelemetry-sdk = { workspace = true }
+parking_lot = { workspace = true }
+price-oracle-ipc = { workspace = true }
+rand = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+serde = { workspace = true }
+serde_json = { workspace = true, features = ["raw_value"] }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }

@@ -1,0 +1,45 @@
+{
+  "name": "@relay-protocol/lit-allocator",
+  "version": "0.1.0",
+  "description": "Multi-chain wallet allocator using Lit Protocol Chipotle — derives deterministic wallets from a PKP and signs messages via Lit Actions",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "tsc --noEmit && eslint .",
+    "test": "vitest run test",
+    "test:watch": "vitest",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "bundle:actions": "tsx scripts/bundle-actions.ts",
+    "setup": "tsx scripts/setup.ts",
+    "create-usage-api-key": "tsx scripts/create-usage-api-key.ts",
+    "wallet": "tsx scripts/client/wallet.ts",
+    "sign": "tsx scripts/client/sign.ts",
+    "changepubkey": "tsx scripts/client/change-pub-key.ts",
+    "change-pub-key": "tsx scripts/client/change-pub-key.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "private": true,
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@noble/curves": "2.0.1",
+    "@noble/hashes": "2.0.1",
+    "@relay-protocol/lit-helpers": "workspace:*",
+    "@types/node": "25.5.2",
+    "bs58": "6.0.0",
+    "esbuild": "0.27.7",
+    "eslint": "10.3.0",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.6.0",
+    "micro-eth-signer": "0.18.1",
+    "prettier": "3.8.3",
+    "tsx": "4.21.0",
+    "tweetnacl": "1.0.3",
+    "typescript": "6.0.2",
+    "typescript-eslint": "8.59.3",
+    "vitest": "4.1.2"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "extends": "solhint:recommended",
+  "rules": {
+    "no-unused-vars": [
+      "error",
+      {
+        "validateParameters": true
+      }
+    ],
+    "use-natspec": [
+      "error",
+      {
+        "param": {
+          "enabled": false
+        }
+      }
+    ],
+    "avoid-low-level-calls": "off",
+    "ordering": "off",
+    "func-visibility": [
+      "error",
+      {
+        "ignoreConstructors": true
+      }
+    ],
+    "quotes": ["error", "double"]
+  }
+}
