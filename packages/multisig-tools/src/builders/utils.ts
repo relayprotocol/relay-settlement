@@ -284,9 +284,18 @@ export const buildEvmTransaction = async (
     nonceOffsets[tx.from] = {}
   }
   const expectedNonce = nonce + (nonceOffsets[tx.from][chainId] || 0)
-  if (expectedNonce !== tx.nonce) {
+  if (tx.nonce < expectedNonce) {
+    // A nonce below the expected one is already used and can never execute.
     throw new Error(
-      `❌ Nonce mismatch: the transaction nonce is ${tx.nonce} but the current nonce is ${expectedNonce}. This tx will not be executed!`
+      `❌ Nonce too low: the transaction nonce is ${tx.nonce} but the current nonce is ${expectedNonce}. This tx will not be executed!`
+    )
+  }
+  if (tx.nonce > expectedNonce) {
+    // A nonce ahead of the expected one is valid as long as the gap is filled
+    // by earlier transactions queued from the same sender (e.g. a prior
+    // manifest that has not been executed yet).
+    console.warn(
+      `⚠️  Transaction nonce ${tx.nonce} is ahead of the current nonce ${expectedNonce} for ${tx.from} on chain ${chainId}. This relies on ${tx.nonce - expectedNonce} earlier queued transaction(s) executing first.`
     )
   }
   const raw = {
@@ -303,6 +312,11 @@ export const buildEvmTransaction = async (
     await networkClient.estimateGas({
       account: tx.from,
       ...raw,
+      // Estimate against the current on-chain nonce rather than this tx's
+      // (possibly future) nonce. Some nodes reject eth_estimateGas when the
+      // supplied nonce isn't the expected next one, which would break every
+      // bundled tx after the first.
+      nonce,
     })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)

@@ -3,22 +3,48 @@ pragma solidity ^0.8.28;
 
 import {IPriceFeedAdapter} from "../RelayPriceOracle.sol";
 
+/// @title IVerifierProxy
+/// @author Relay Protocol
+/// @notice Minimal interface for Chainlink's Data Streams `VerifierProxy`.
+/// @dev Matches the v0.3.0 reference contract. `verify` checks the report's
+///      DON signatures against the verifier's registered config, routes the
+///      verification fee, and returns the decoded report body. It is
+///      state-changing and (for native fees) payable, so it cannot be reached
+///      from a `view`/`staticcall` context.
+interface IVerifierProxy {
+  /// @notice Verifies a signed Data Streams report on-chain.
+  /// @param payload Full report envelope (`fullReport`) as served by the feed.
+  /// @param parameterPayload Fee metadata; for v0.3.0 the ABI-encoded fee-token
+  ///        address (LINK or the native fee token).
+  /// @return verifierResponse The verified, decoded report body (`ReportDataV3`).
+  function verify(
+    bytes calldata payload,
+    bytes calldata parameterPayload
+  ) external payable returns (bytes memory verifierResponse);
+}
+
 /// @title ChainlinkDataStreamsAdapter
 /// @author Relay Protocol
 /// @notice `IPriceFeedAdapter` for Chainlink Data Streams V3 (Crypto Streams)
-///         reports. Decodes the raw `fullReport` envelope cached by the price
-///         precompile and returns normalized USD price data to
-///         `RelayPriceOracle`.
-/// @dev Trust model: this adapter performs *structural* verification only. It
-///      confirms the bytes decode as a V3 report, that the report's feed ID
-///      matches the requested feed, that the benchmark price is positive, and
-///      that the report has not passed its `expiresAt`. It does NOT verify the
-///      DON signatures on-chain — that requires Chainlink's stateful
-///      `VerifierProxy.verify` (a non-`view`, fee-paying call) and cannot run
-///      from this `view` adapter. The precompile serves bytes the host ingester
-///      pulled from the authenticated Data Streams feed; the on-chain
-///      `VerifierProxy` verification path (for chains without the precompile)
-///      is documented in `docs/data-streams-onchain-verifier.md`.
+///         reports. Verifies the raw `fullReport` envelope cached by the price
+///         precompile against Chainlink's on-chain `VerifierProxy`, then
+///         returns normalized USD price data to `RelayPriceOracle`.
+/// @dev Trust model: this adapter performs **on-chain DON-signature
+///      verification**. It forwards the cached `fullReport` to
+///      `VerifierProxy.verify`, which checks the report's signatures against
+///      the verifier's registered config and returns the decoded report body.
+///      Because `verify` is state-changing and fee-paying, `decodeAndVerify`
+///      (and the `RelayPriceOracle` read path above it) are **not** `view`.
+///      On top of the signature check the adapter still applies structural
+///      validation: the verified report's feed ID matches the request, its
+///      schema is V3, its benchmark price is positive, and it has not passed
+///      its `expiresAt`.
+///
+///      Fees: `verify` routes a fee through Chainlink's `FeeManager` in
+///      `feeToken`. This adapter assumes either a zero-fee config or a LINK-fee
+///      config the adapter is pre-funded and pre-approved for (see
+///      `docs/data-streams-onchain-verifier.md`). Native (value-bearing) fees
+///      would require a `payable` path end-to-end and are out of scope here.
 contract ChainlinkDataStreamsAdapter is IPriceFeedAdapter {
   /// @notice Schema version carried in the high 2 bytes of a feed ID for V3
   ///         (Crypto Streams) reports.
@@ -26,6 +52,15 @@ contract ChainlinkDataStreamsAdapter is IPriceFeedAdapter {
 
   /// @notice Fixed-point precision of a Data Streams V3 benchmark price.
   uint8 public constant USD_PRICE_DECIMALS = 18;
+
+  /// @notice Chainlink `VerifierProxy` that checks DON signatures on-chain.
+  IVerifierProxy public immutable VERIFIER_PROXY;
+
+  /// @notice Fee token passed to `VerifierProxy.verify` (LINK or native fee token).
+  address public immutable FEE_TOKEN;
+
+  /// @notice Thrown when the verifier proxy address is zero.
+  error InvalidVerifierProxy();
 
   /// @notice Thrown when the decoded report feed ID does not match the request.
   /// @param expected Feed ID requested by the caller.
@@ -45,11 +80,23 @@ contract ChainlinkDataStreamsAdapter is IPriceFeedAdapter {
   /// @param blockTimestamp Current block timestamp.
   error ReportExpired(uint32 expiresAt, uint256 blockTimestamp);
 
+  /// @notice Deploys the adapter bound to a Chainlink `VerifierProxy`.
+  /// @param verifierProxy Chainlink Data Streams `VerifierProxy` to verify against.
+  /// @param feeToken Fee token forwarded to `verify` (LINK or native fee token).
+  constructor(IVerifierProxy verifierProxy, address feeToken) {
+    if (address(verifierProxy) == address(0)) {
+      revert InvalidVerifierProxy();
+    }
+    VERIFIER_PROXY = verifierProxy;
+    FEE_TOKEN = feeToken;
+  }
+
   /// @inheritdoc IPriceFeedAdapter
   /// @dev `updateData` is a Chainlink Data Streams `fullReport`:
   ///      `(bytes32[3] reportContext, bytes reportBlob, bytes32[] rs,
-  ///      bytes32[] ss, bytes32 rawVs)`, where `reportBlob` is a V3
-  ///      `ReportDataV3`:
+  ///      bytes32[] ss, bytes32 rawVs)`. It is forwarded verbatim to
+  ///      `VerifierProxy.verify`, which checks the DON signatures and returns
+  ///      the decoded V3 `ReportDataV3` body:
   ///      `(bytes32 feedId, uint32 validFromTimestamp,
   ///      uint32 observationsTimestamp, uint192 nativeFee, uint192 linkFee,
   ///      uint32 expiresAt, int192 benchmarkPrice, int192 bid, int192 ask)`.
@@ -58,15 +105,22 @@ contract ChainlinkDataStreamsAdapter is IPriceFeedAdapter {
     bytes calldata updateData
   )
     external
-    view
     returns (uint256 usdPrice, uint8 usdPriceDecimals, uint256 publishTime)
   {
+    // On-chain DON-signature verification. `verify` reverts unless the report
+    // is signed by the verifier's configured DON; it returns the decoded
+    // report body (not the signed envelope).
+    bytes memory verifiedReport = VERIFIER_PROXY.verify(
+      updateData,
+      abi.encode(FEE_TOKEN)
+    );
+
     (
       bytes32 reportFeedId,
       uint32 observationsTimestamp,
       uint32 expiresAt,
       int192 benchmarkPrice
-    ) = _decodeReport(updateData);
+    ) = _decodeReport(verifiedReport);
 
     if (reportFeedId != feedId) {
       revert FeedIdMismatch(feedId, reportFeedId);
@@ -90,15 +144,14 @@ contract ChainlinkDataStreamsAdapter is IPriceFeedAdapter {
     publishTime = observationsTimestamp;
   }
 
-  /// @notice Decodes the `fullReport` envelope and its V3 report body, keeping
-  ///         only the fields used for pricing.
-  /// @param updateData Chainlink Data Streams `fullReport` bytes.
+  /// @notice Decodes a verified V3 report body, keeping only the pricing fields.
+  /// @param verifiedReport Decoded `ReportDataV3` body returned by `verify`.
   /// @return reportFeedId Feed ID declared in the report body.
   /// @return observationsTimestamp Report's latest observation timestamp.
   /// @return expiresAt Timestamp after which the report is no longer valid.
   /// @return benchmarkPrice Benchmark price, scaled by `USD_PRICE_DECIMALS`.
   function _decodeReport(
-    bytes calldata updateData
+    bytes memory verifiedReport
   )
     private
     pure
@@ -109,12 +162,6 @@ contract ChainlinkDataStreamsAdapter is IPriceFeedAdapter {
       int192 benchmarkPrice
     )
   {
-    // Unwrap the signed envelope; only the report body is needed here.
-    (, bytes memory reportBlob, , , ) = abi.decode(
-      updateData,
-      (bytes32[3], bytes, bytes32[], bytes32[], bytes32)
-    );
-
     // Skip the fields not used for pricing: validFromTimestamp, nativeFee,
     // linkFee, bid, ask.
     (
@@ -128,7 +175,7 @@ contract ChainlinkDataStreamsAdapter is IPriceFeedAdapter {
       ,
 
     ) = abi.decode(
-        reportBlob,
+        verifiedReport,
         (
           bytes32,
           uint32,

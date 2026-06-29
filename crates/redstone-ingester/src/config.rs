@@ -3,7 +3,6 @@ use std::time::Duration;
 
 use alloy_primitives::B256;
 use anyhow::{Context as _, Result, anyhow};
-use price_oracle_ipc::Endpoint;
 use tracing::instrument;
 
 use crate::payload::feed_id_from_symbol;
@@ -14,7 +13,6 @@ const DEFAULT_MIN_SIGNERS: usize = 3;
 const DEFAULT_POLL_INTERVAL_MS: u64 = 1000;
 const DEFAULT_TRANSPORT: &str = "tcp";
 const DEFAULT_SOCKET_ADDRESS: &str = "127.0.0.1:9803";
-const DEFAULT_SOCKET_PATH: &str = "/run/relay/redstone.sock";
 const DEFAULT_HEARTBEAT_SEC: u64 = 10;
 const DEFAULT_OTEL_SAMPLE_RATIO: f64 = 1.0;
 
@@ -26,7 +24,7 @@ pub struct RedstoneFeed {
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    pub listen_endpoint: Endpoint,
+    pub listen_address: String,
     pub gateway_url: String,
     pub data_service_id: String,
     pub feeds: Vec<RedstoneFeed>,
@@ -51,7 +49,7 @@ pub fn get() -> Result<Config> {
     let feed_ids = feeds.iter().map(|f| f.feed_id).collect();
     let heartbeat_interval = parse_heartbeat_interval()?;
     Ok(Config {
-        listen_endpoint: parse_endpoint()?,
+        listen_address: parse_listen_address()?,
         gateway_url: optional_env("REDSTONE_GATEWAY_URL")
             .unwrap_or_else(|| DEFAULT_GATEWAY_URL.to_string()),
         data_service_id: optional_env("REDSTONE_DATA_SERVICE_ID")
@@ -113,19 +111,14 @@ fn parse_sample_ratio() -> Result<f64> {
     Ok(ratio)
 }
 
-fn parse_endpoint() -> Result<Endpoint> {
+fn parse_listen_address() -> Result<String> {
     let transport =
         optional_env("INGESTER_TRANSPORT").unwrap_or_else(|| DEFAULT_TRANSPORT.to_string());
     match transport.as_str() {
-        "tcp" => Ok(Endpoint::tcp(
-            optional_env("INGESTER_SOCKET_ADDRESS")
-                .unwrap_or_else(|| DEFAULT_SOCKET_ADDRESS.to_string()),
-        )),
-        "unix" => Ok(Endpoint::unix(
-            optional_env("INGESTER_SOCKET_PATH").unwrap_or_else(|| DEFAULT_SOCKET_PATH.to_string()),
-        )),
+        "tcp" => Ok(optional_env("INGESTER_SOCKET_ADDRESS")
+            .unwrap_or_else(|| DEFAULT_SOCKET_ADDRESS.to_string())),
         other => Err(anyhow!(
-            "INGESTER_TRANSPORT must be \"tcp\" or \"unix\", got \"{other}\""
+            "INGESTER_TRANSPORT must be \"tcp\", got \"{other}\""
         )),
     }
 }

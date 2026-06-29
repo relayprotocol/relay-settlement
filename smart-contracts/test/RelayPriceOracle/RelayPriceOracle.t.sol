@@ -292,7 +292,7 @@ contract RelayPriceOracleTest is BaseTest {
     config.setPriceFeedAdapter(PROVIDER_PYTH, address(0));
   }
 
-  function test_getUsdPricesDelegatesToConfiguredProviderFeeds() public {
+  function test_resolveUsdPricesDelegatesToConfiguredProviderFeeds() public {
     Currency[] memory currencies = new Currency[](2);
     currencies[0] = _eth();
     currencies[1] = _btc();
@@ -340,7 +340,7 @@ contract RelayPriceOracleTest is BaseTest {
     );
     vm.stopPrank();
 
-    Price[] memory prices = config.getUsdPrices(currencies);
+    Price[] memory prices = config.resolveUsdPrices(currencies);
 
     assertEq(prices[0].usdPrice, pythPrice);
     assertEq(prices[0].usdPriceDecimals, USD_PRICE_DECIMALS);
@@ -352,7 +352,7 @@ contract RelayPriceOracleTest is BaseTest {
     assertEq(prices[1].expiration, BTC_PUBLISH_TIME + MAX_AGE_SECONDS + 1);
   }
 
-  function test_getUsdPriceDelegatesToConfiguredProviderFeed() public {
+  function test_resolveUsdPriceDelegatesToConfiguredProviderFeed() public {
     Currency memory eth = _eth();
     uint256 pythPrice = 3500e8;
     uint256 chainlinkPrice = 3600e8;
@@ -389,14 +389,14 @@ contract RelayPriceOracleTest is BaseTest {
     );
     vm.stopPrank();
 
-    Price memory price = config.getUsdPrice(eth);
+    Price memory price = config.resolveUsdPrice(eth);
     assertEq(price.usdPrice, pythPrice);
     assertEq(price.usdPriceDecimals, USD_PRICE_DECIMALS);
     assertEq(price.currencyDecimals, ETH_DECIMALS);
     assertEq(price.expiration, ETH_PUBLISH_TIME + MAX_AGE_SECONDS);
   }
 
-  function test_getUsdPriceRevertsForMissingPriceFeedAdapter() public {
+  function test_resolveUsdPriceRevertsForMissingPriceFeedAdapter() public {
     Currency memory eth = _eth();
 
     vm.prank(owner);
@@ -414,10 +414,10 @@ contract RelayPriceOracleTest is BaseTest {
         PROVIDER_PYTH
       )
     );
-    config.getUsdPrice(eth);
+    config.resolveUsdPrice(eth);
   }
 
-  function test_getUsdPriceRevertsWhenAdapterRejectsFeed() public {
+  function test_resolveUsdPriceRevertsWhenAdapterRejectsFeed() public {
     Currency memory eth = _eth();
     bytes32 wrongFeed = keccak256("wrong-feed");
 
@@ -445,10 +445,10 @@ contract RelayPriceOracleTest is BaseTest {
         wrongFeed
       )
     );
-    config.getUsdPrice(eth);
+    config.resolveUsdPrice(eth);
   }
 
-  function test_getUsdPricesRevertsForMissingRoute() public {
+  function test_resolveUsdPricesRevertsForMissingRoute() public {
     Currency[] memory currencies = new Currency[](1);
     currencies[0] = _eth();
     bytes32 key = config.currencyKey(currencies[0]);
@@ -456,10 +456,10 @@ contract RelayPriceOracleTest is BaseTest {
     vm.expectRevert(
       abi.encodeWithSelector(RelayPriceOracle.FeedRouteNotFound.selector, key)
     );
-    config.getUsdPrices(currencies);
+    config.resolveUsdPrices(currencies);
   }
 
-  function test_getUsdPricesRejectsOversizedBatch() public {
+  function test_resolveUsdPricesRejectsOversizedBatch() public {
     uint256 maxBatchSize = config.MAX_PRICE_BATCH_SIZE();
     Currency[] memory currencies = new Currency[](maxBatchSize + 1);
 
@@ -470,7 +470,7 @@ contract RelayPriceOracleTest is BaseTest {
         maxBatchSize
       )
     );
-    config.getUsdPrices(currencies);
+    config.resolveUsdPrices(currencies);
   }
 
   function _eth() internal pure returns (Currency memory currency) {

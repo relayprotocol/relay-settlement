@@ -91,6 +91,7 @@ impl StreamConfig {
 pub struct RawReport {
     pub feed_id: B256,
     pub full_report: Vec<u8>,
+    pub source_time: u64,
 }
 
 pub struct ChainlinkStream {
@@ -228,6 +229,7 @@ impl StreamIngester {
             key: FeedKey::new(provider_id(), report.feed_id),
             payload: report.full_report,
             received_at,
+            source_time: report.source_time,
         });
     }
 }
@@ -252,6 +254,7 @@ fn parse_report_message(bytes: &[u8]) -> Result<RawReport, StreamError> {
     Ok(RawReport {
         feed_id,
         full_report,
+        source_time: message.report.observations_timestamp,
     })
 }
 
@@ -286,6 +289,8 @@ struct WsReport {
     feed_id: String,
     #[serde(rename = "fullReport")]
     full_report: String,
+    #[serde(default, rename = "observationsTimestamp")]
+    observations_timestamp: u64,
 }
 
 #[cfg(test)]
@@ -322,6 +327,7 @@ mod tests {
         let report = parse_report_message(json.as_bytes()).unwrap();
         assert_eq!(report.feed_id, feed(0x01));
         assert_eq!(report.full_report, vec![0xde, 0xad, 0xbe, 0xef]);
+        assert_eq!(report.source_time, 1718998800);
     }
 
     #[test]

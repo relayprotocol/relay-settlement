@@ -1,0 +1,18 @@
+[
+  {
+    "contractType": "TriggerSmartContract",
+    "expiration": 1782466017000,
+    "family": "tron-vm",
+    "feeLimit": "100000000",
+    "from": "TYQUbsiQjJoDCyP2Au22kHCGb6AbEJAbJp",
+    "parameter": {
+      "contract_address": "TXtEs6t2oUWQsNos7m68gbHdE9Q5n6x2oN",
+      "data": "bf83f2a20000000000000000000000005d7a4a396fb6c1170432ca22c8ac3377e99c28c5",
+      "owner_address": "TYQUbsiQjJoDCyP2Au22kHCGb6AbEJAbJp"
+    },
+    "refBlockBytes": "4370",
+    "refBlockHash": "358a098774f3739c",
+    "rpc": "https://api.trongrid.io",
+    "timestamp": 1782379617000
+  }
+]

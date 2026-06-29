@@ -46,11 +46,19 @@ interface IPricingOracle {
   /// @dev `extraData` is passed through from the caller verbatim to allow
   /// the oracle implementation to authenticate, version or otherwise
   /// parameterize the response (eg. signed price attestations).
+  ///
+  /// This function is intentionally **not** `view`: an implementation may
+  /// verify the prices on-chain in a state-changing, fee-paying call (eg.
+  /// Chainlink Data Streams `VerifierProxy.verify`, which checks DON
+  /// signatures and routes a fee). Implementations that need no side effects
+  /// (mocks, signed-price or pre-encoded oracles) may still declare the
+  /// stricter `view`/`pure` mutability and satisfy this interface. Callers
+  /// must therefore reach prices through a regular call, not a `staticcall`.
   /// @param currencies Currencies whose USD prices should be returned
   /// @param extraData Opaque data passed through from the caller
   /// @return prices USD prices for `currencies`, in the same order
-  function getUsdPrices(
+  function resolveUsdPrices(
     Currency[] calldata currencies,
     bytes calldata extraData
-  ) external view returns (Price[] memory prices);
+  ) external returns (Price[] memory prices);
 }

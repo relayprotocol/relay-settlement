@@ -40,7 +40,7 @@ contract MockPricingOracle is IPricingOracle {
   }
 
   /// @inheritdoc IPricingOracle
-  function getUsdPrices(
+  function resolveUsdPrices(
     Currency[] calldata currencies,
     bytes calldata
   ) external view returns (Price[] memory result) {

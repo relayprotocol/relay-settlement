@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {ChainlinkDataStreamsAdapter} from "../../contracts/price-adapters/ChainlinkDataStreamsAdapter.sol";
+import {MockVerifierProxy} from "../../contracts/mocks/MockVerifierProxy.sol";
 import {RelayPriceOracle} from "../../contracts/RelayPriceOracle.sol";
 import {PriceOraclePrecompile} from "../../contracts/precompiles/PriceOraclePrecompile.sol";
 import {
@@ -14,6 +15,7 @@ import {BaseTest} from "../utils/BaseTest.sol";
 ///         isolation and wired into `RelayPriceOracle` via the mock precompile.
 contract ChainlinkDataStreamsAdapterTest is BaseTest {
   ChainlinkDataStreamsAdapter internal adapter;
+  MockVerifierProxy internal verifierProxy;
 
   bytes32 internal constant PROVIDER_CHAINLINK = keccak256("chainlink");
   uint256 internal constant NOW = 1_700_000_000;
@@ -24,10 +26,11 @@ contract ChainlinkDataStreamsAdapterTest is BaseTest {
   function setUp() public override {
     super.setUp();
     vm.warp(NOW);
-    adapter = new ChainlinkDataStreamsAdapter();
+    verifierProxy = new MockVerifierProxy();
+    adapter = new ChainlinkDataStreamsAdapter(verifierProxy, address(0));
   }
 
-  function test_decodesV3Report() public view {
+  function test_decodesV3Report() public {
     bytes32 feedId = _v3FeedId(0x01);
     bytes memory report = _fullReport(
       feedId,
@@ -164,7 +167,7 @@ contract ChainlinkDataStreamsAdapterTest is BaseTest {
     );
     vm.stopPrank();
 
-    Price memory price = oracle.getUsdPrice(eth);
+    Price memory price = oracle.resolveUsdPrice(eth);
     assertEq(price.usdPrice, uint256(uint192(ETH_PRICE)));
     assertEq(price.usdPriceDecimals, 18);
     assertEq(price.currencyDecimals, ethDecimals);

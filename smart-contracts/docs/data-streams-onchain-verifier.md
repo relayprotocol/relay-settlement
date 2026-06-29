@@ -14,22 +14,18 @@ Relay price oracle.
 ## How this fits the Relay oracle
 
 The Chainlink Data Streams ingester (`crates/chainlink`) opens an authenticated
-WebSocket and caches each feed's raw `fullReport` envelope. There are then two
-ways to turn those bytes into a trusted on-chain price:
+WebSocket and caches each feed's raw `fullReport` envelope. The
+**Relay price precompile** (on our own chains) serves those cached bytes to
+`RelayPriceOracle` as the data source. To turn them into a *trusted* on-chain
+price, `ChainlinkDataStreamsAdapter` passes the `fullReport` to Chainlink's
+`VerifierProxy.verify(...)`, which checks the DON signatures and returns the
+decoded report. This is a **state-changing, fee-paying** call (LINK or native),
+so the `IPricingOracle` read path is no longer `view` (see the consumer section
+below). The input to `verify()` is exactly the `fullReport` the ingester caches
+— no re-encoding needed.
 
-1. **Relay price precompile** (our own chains) — the precompile decodes the
-   cached report and `RelayPriceOracle` reads it via a `view` call. No fee, no
-   DON-signature check on-chain (verification is handled off-chain / by the
-   precompile).
-2. **On-chain verification** (this document) — on a public EVM chain, or any
-   chain where we want the DON signatures checked in the EVM, the same
-   `fullReport` bytes are passed to Chainlink's `VerifierProxy.verify(...)`,
-   which checks the DON signatures and returns the decoded report. This is a
-   **state-changing, fee-paying** call (LINK or native), so it cannot sit
-   behind the `view` `IPricingOracle` interface unchanged.
-
-The input to `verify()` is exactly the `fullReport` our ingester already
-caches — no re-encoding needed.
+This document covers deploying and configuring the verifier Relay verifies
+against.
 
 ## Reference implementation
 
@@ -76,13 +72,20 @@ runbook; the verifier deployment lives in Chainlink's repo/toolchain.
 ## Relay-side consumer: the price adapter
 
 `ChainlinkDataStreamsAdapter` (`contracts/price-adapters/`) is the Relay side of
-this. On chains running the Relay price precompile, `RelayPriceOracle` hands the
-adapter the raw `fullReport` and it decodes the V3 report into
-`(usdPrice, 18 decimals, observationsTimestamp)` with structural checks (schema,
-feed-id binding, positive price, not-expired). It does **not** check DON
-signatures on-chain — that is the `VerifierProxy.verify` path above, for chains
-without the precompile. There, the same `fullReport` bytes are passed to
-`verify` first; the verified report can then be decoded the same way.
+this. `RelayPriceOracle` hands the adapter the raw `fullReport` (sourced from the
+precompile cache or any other ingester), and the adapter forwards it to
+`VerifierProxy.verify`, which checks the DON signatures on-chain and returns the
+decoded V3 report body. The adapter then applies structural checks on the
+verified report (schema, feed-id binding, positive price, not-expired) and
+returns `(usdPrice, 18 decimals, observationsTimestamp)`.
+
+Because `verify` is state-changing and fee-paying, `decodeAndVerify` — and the
+whole `RelayPriceOracle` read path (`resolveUsdPrices`/`resolveUsdPrice`, plus
+the `IPricingOracle.resolveUsdPrices` interface) — is **not** `view`. The
+adapter is constructed with the `VerifierProxy` address and the fee token, and
+assumes a zero-fee config or a LINK-fee config it is pre-funded/approved for;
+native (value-bearing) fees would require a `payable` path end-to-end and are
+out of scope here.
 
 ## Deployment sequence
 

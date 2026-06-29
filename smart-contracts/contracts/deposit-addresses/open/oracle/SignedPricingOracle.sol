@@ -17,7 +17,7 @@ contract SignedPricingOracle is IPricingOracle, EIP712 {
   /// @notice The only address whose signatures are accepted as valid prices.
   /// @dev Pinning the signer at construction prevents a different allowlisted
   ///      solver from producing valid prices for a deposit address derived
-  ///      with a different `derivationFields.solver`. `getUsdPrices` cannot
+  ///      with a different `derivationFields.solver`. `resolveUsdPrices` cannot
   ///      see `derivationFields.solver` (the IPricingOracle interface only
   ///      receives currencies and extraData), so this binding is the
   ///      on-chain check that the price was signed by the deposit address's
@@ -81,7 +81,7 @@ contract SignedPricingOracle is IPricingOracle, EIP712 {
   ///      at the same index, (2) not be past `expiration`, and (3) carry a
   ///      valid EIP-712 signature from `SOLVER`. `SignatureChecker` supports
   ///      both EOAs and ERC-1271 contract signers.
-  function getUsdPrices(
+  function resolveUsdPrices(
     Currency[] calldata currencies,
     bytes calldata extraData
   ) external view returns (Price[] memory prices) {

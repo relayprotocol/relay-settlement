@@ -14,6 +14,11 @@ import {PriceOraclePrecompile} from "./precompiles/PriceOraclePrecompile.sol";
 /// @notice Provider-specific adapter that verifies and decodes raw feed updates.
 interface IPriceFeedAdapter {
   /// @notice Verifies a raw provider update and returns normalized price data.
+  /// @dev Intentionally not `view`: an adapter may verify the update on-chain
+  ///      via a state-changing, fee-paying call (eg. Chainlink Data Streams
+  ///      `VerifierProxy.verify`, which checks DON signatures). Adapters that
+  ///      only decode and structurally validate may declare the stricter
+  ///      `view`/`pure` mutability and still satisfy this interface.
   /// @param feedId Provider-specific feed identifier expected by the caller.
   /// @param updateData Opaque provider update bytes returned by the precompile.
   /// @return usdPrice USD price scaled by `usdPriceDecimals`.
@@ -24,7 +29,6 @@ interface IPriceFeedAdapter {
     bytes calldata updateData
   )
     external
-    view
     returns (uint256 usdPrice, uint8 usdPriceDecimals, uint256 publishTime);
 }
 
@@ -216,37 +220,37 @@ contract RelayPriceOracle is Ownable, IPricingOracle {
 
   /// @inheritdoc IPricingOracle
   /// @dev `RelayPriceOracle` ignores `extraData`; direct callers can use the overload without it.
-  function getUsdPrices(
+  function resolveUsdPrices(
     Currency[] calldata currencies,
     bytes calldata
-  ) external view returns (Price[] memory prices) {
-    prices = _getUsdPrices(currencies);
+  ) external returns (Price[] memory prices) {
+    prices = _resolveUsdPrices(currencies);
   }
 
   /// @notice Returns USD prices for a batch of currencies via their configured provider feeds.
   /// @param currencies Currencies whose USD prices should be returned.
   /// @return prices USD price data for `currencies`, in the same order.
-  function getUsdPrices(
+  function resolveUsdPrices(
     Currency[] calldata currencies
-  ) external view returns (Price[] memory prices) {
-    prices = _getUsdPrices(currencies);
+  ) external returns (Price[] memory prices) {
+    prices = _resolveUsdPrices(currencies);
   }
 
   /// @notice Returns the USD price for a currency via its configured provider feed.
   /// @param currency Currency whose USD price should be returned.
   /// @return price USD price data for `currency`.
-  function getUsdPrice(
+  function resolveUsdPrice(
     Currency calldata currency
-  ) external view returns (Price memory price) {
-    price = _getUsdPrice(currency);
+  ) external returns (Price memory price) {
+    price = _resolveUsdPrice(currency);
   }
 
   /// @notice Returns USD prices for a batch of currencies via their configured provider feeds.
   /// @param currencies Currencies whose USD prices should be returned.
   /// @return prices USD price data for `currencies`, in the same order.
-  function _getUsdPrices(
+  function _resolveUsdPrices(
     Currency[] calldata currencies
-  ) internal view returns (Price[] memory prices) {
+  ) internal returns (Price[] memory prices) {
     uint256 length = currencies.length;
     if (length > MAX_PRICE_BATCH_SIZE) {
       revert PriceBatchTooLarge(length, MAX_PRICE_BATCH_SIZE);
@@ -255,7 +259,7 @@ contract RelayPriceOracle is Ownable, IPricingOracle {
     prices = new Price[](length);
 
     for (uint256 i; i < length; ++i) {
-      prices[i] = _getUsdPrice(currencies[i]);
+      prices[i] = _resolveUsdPrice(currencies[i]);
     }
   }
 
@@ -301,9 +305,9 @@ contract RelayPriceOracle is Ownable, IPricingOracle {
   /// @notice Returns the configured USD price for a currency.
   /// @param currency Currency whose USD price should be returned.
   /// @return price USD price data for `currency`.
-  function _getUsdPrice(
+  function _resolveUsdPrice(
     Currency calldata currency
-  ) internal view returns (Price memory price) {
+  ) internal returns (Price memory price) {
     bytes32 key = currencyKey(currency);
     FeedRoute memory route = feedRoutes[key];
     if (!route.exists) {

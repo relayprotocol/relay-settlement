@@ -8,8 +8,8 @@ Unlike Chainlink Data Streams and Pyth, where one feed maps to a single signed
 blob, a RedStone price is backed by several independent signer nodes. The
 service polls the gateway, verifies each signer's data package, assembles the
 self-contained RedStone payload that the on-chain RedStone verifier consumes,
-caches the latest payload per feed, and serves it to a single sequencer
-subscriber over an IPC connection (TCP by default).
+caches the latest payload per feed, and serves it to sequencer
+subscribers over a TCP connection.
 
 ## How it works
 
@@ -28,8 +28,8 @@ subscriber over an IPC connection (TCP by default).
   canonical RedStone payload (`signed data packages ‖ unsigned metadata ‖
   marker`) and stores it in an in-memory map keyed by feed, keeping only the
   latest payload per feed.
-- It listens on the configured endpoint (`INGESTER_TRANSPORT`, TCP by default)
-  for a sequencer connection and streams updates to it.
+- It listens on the configured TCP address (`INGESTER_SOCKET_ADDRESS`) for
+  sequencer connections and streams updates to them.
 - Gateway errors retry with jittered exponential backoff (1s up to 30s).
 - The ingester and the IPC listener run as independent tasks. If either stops
   with an error it is restarted in place after a short delay. On `SIGINT` or
@@ -37,8 +37,7 @@ subscriber over an IPC connection (TCP by default).
 
 ## IPC protocol
 
-The connection speaks the `price-oracle-ipc` frame protocol, over TCP or a Unix
-socket depending on `INGESTER_TRANSPORT`.
+The connection speaks the `price-oracle-ipc` frame protocol over TCP.
 A connected subscriber receives, in order:
 
 - A `Hello` frame with the protocol version, provider id, and subscribed feeds.
@@ -46,13 +45,15 @@ A connected subscriber receives, in order:
 - Live `PriceUpdate` frames as new payloads are assembled.
 - Periodic `Heartbeat` frames every `INGESTER_HEARTBEAT_SEC`.
 
-Only one subscriber is served at a time.
-Additional connection attempts are rejected while a subscriber is connected.
-If a subscriber lags behind the broadcast buffer, the full snapshot is resent.
+Multiple subscribers are served concurrently, up to a fixed connection limit;
+connections beyond the limit are rejected. Each subscriber has an independent
+view, and if one lags behind the broadcast buffer the full snapshot is resent to
+it.
 
 The `PriceUpdate` payload is the canonical RedStone payload bytes, forwarded
 opaquely. The `ingested_at` timestamp is the time the ingester received the
-update (seconds).
+update, and `source_time` is the data package timestamp from the gateway (both
+seconds).
 
 The provider id is `keccak256("redstone")`.
 
@@ -96,11 +97,10 @@ The `.env.example` contains example values.
 - `REDSTONE_FEED_IDS` - required, comma-separated RedStone feed symbols (e.g. `ETH,BTC`).
 - `REDSTONE_MIN_SIGNERS` - optional, minimum unique self-verified signers required to cache a feed, defaults to 3.
 - `REDSTONE_POLL_INTERVAL_MS` - optional, gateway poll interval in milliseconds, defaults to 1000.
-- `INGESTER_TRANSPORT` - optional, `tcp` (default) or `unix`, selects the listener type.
-- `INGESTER_SOCKET_ADDRESS` - TCP listen address, defaults to `127.0.0.1:9803` (used when transport is `tcp`).
-- `INGESTER_SOCKET_PATH` - Unix socket path, defaults to `/run/relay/redstone.sock` (used when transport is `unix`).
+- `INGESTER_TRANSPORT` - optional, `tcp` (default). Reserved for future transports.
+- `INGESTER_SOCKET_ADDRESS` - TCP listen address, defaults to `127.0.0.1:9803`.
 - `INGESTER_HEARTBEAT_SEC` - optional, heartbeat interval in seconds, defaults to 10.
-- `INGESTER_WRITE_TIMEOUT_SEC` - optional, per-write timeout in seconds, defaults to 3x the heartbeat interval. A subscriber that stops reading is dropped once a single write exceeds this, freeing the slot.
+- `INGESTER_WRITE_TIMEOUT_SEC` - optional, per-write timeout in seconds, defaults to 3x the heartbeat interval. A subscriber that stops reading is dropped once a single write exceeds this.
 - `RUST_LOG` - optional, tracing filter, defaults to `info`.
 
 ## How to build

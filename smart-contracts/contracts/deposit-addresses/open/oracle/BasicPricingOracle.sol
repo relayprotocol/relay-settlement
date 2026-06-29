@@ -13,7 +13,7 @@ contract BasicPricingOracle is IPricingOracle {
   error PriceCountMismatch(uint256 currencyCount, uint256 priceCount);
 
   /// @inheritdoc IPricingOracle
-  function getUsdPrices(
+  function resolveUsdPrices(
     Currency[] calldata currencies,
     bytes calldata extraData
   ) external pure returns (Price[] memory prices) {

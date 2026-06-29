@@ -15,12 +15,14 @@ use crate::Context;
 use crate::cache::{FeedCache, now_unix, provider_id};
 use crate::telemetry::TRACE_TARGET;
 
+const MAX_SUBSCRIBERS: usize = 32;
+
 #[instrument(skip_all)]
 pub async fn run(ctx: Context) -> Result<()> {
-    let listener = BoundListener::bind(ctx.config.listen_endpoint.clone())
+    let listener = BoundListener::bind(ctx.config.listen_address.clone())
         .await
-        .context("failed to bind listener endpoint")?;
-    info!(endpoint = %listener.endpoint(), "listening for sequencer connections");
+        .context("failed to bind listener address")?;
+    info!(address = %listener.address(), "listening for sequencer connections");
 
     let mut shutdown = ctx.shutdown.subscribe();
     loop {
@@ -30,12 +32,17 @@ pub async fn run(ctx: Context) -> Result<()> {
             result = listener.accept() => result.context("failed to accept connection")?,
         };
 
-        if ctx.cache.subscriber_connected.swap(true, Ordering::SeqCst) {
-            warn!("rejecting sequencer connection, a subscriber is already connected");
+        let subscribers = ctx.cache.subscribers.fetch_add(1, Ordering::SeqCst) + 1;
+        if subscribers > MAX_SUBSCRIBERS {
+            ctx.cache.subscribers.fetch_sub(1, Ordering::SeqCst);
+            warn!(
+                max = MAX_SUBSCRIBERS,
+                "rejecting sequencer connection, subscriber limit reached"
+            );
             drop(stream);
             continue;
         }
-        info!("sequencer subscriber connected");
+        info!(subscribers, "sequencer subscriber connected");
 
         let cache = ctx.cache.clone();
         let feeds = ctx.config.feed_ids.clone();
@@ -56,7 +63,7 @@ pub async fn run(ctx: Context) -> Result<()> {
                 Ok(()) | Err(IpcError::Closed) => info!("sequencer subscriber disconnected"),
                 Err(other) => warn!(error = %other, "subscriber connection ended with error"),
             }
-            cache.subscriber_connected.store(false, Ordering::SeqCst);
+            cache.subscribers.fetch_sub(1, Ordering::SeqCst);
         });
     }
 }
@@ -151,39 +158,40 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicBool;
-
     use super::*;
-    use crate::cache::FeedKey;
-    use price_oracle_ipc::{Endpoint, connect, read_frame};
+    use crate::cache::{CachedPrice, FeedKey};
+    use price_oracle_ipc::{connect, read_frame};
+
+    async fn spawn_server(cache: Arc<FeedCache>, shutdown: broadcast::Sender<()>) -> String {
+        let listener = BoundListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.address().to_string();
+        tokio::spawn(async move {
+            while let Ok(stream) = listener.accept().await {
+                let cache = cache.clone();
+                let serve_shutdown = shutdown.subscribe();
+                tokio::spawn(async move {
+                    let _ = serve(
+                        stream,
+                        cache,
+                        vec![B256::repeat_byte(0x03)],
+                        Duration::from_secs(60),
+                        Duration::from_secs(60),
+                        serve_shutdown,
+                    )
+                    .await;
+                });
+            }
+        });
+        address
+    }
 
     #[tokio::test]
     async fn subscriber_receives_hello_first() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("svc.sock");
-
         let cache = Arc::new(FeedCache::new());
         let (shutdown, _) = broadcast::channel(1);
-        let listener = BoundListener::bind(Endpoint::unix(path.clone()))
-            .await
-            .unwrap();
+        let address = spawn_server(cache, shutdown).await;
 
-        let serve_cache = cache.clone();
-        let serve_shutdown = shutdown.subscribe();
-        tokio::spawn(async move {
-            let stream = listener.accept().await.unwrap();
-            let _ = serve(
-                stream,
-                serve_cache,
-                vec![B256::repeat_byte(0x03)],
-                Duration::from_secs(60),
-                Duration::from_secs(60),
-                serve_shutdown,
-            )
-            .await;
-        });
-
-        let mut client = connect(&Endpoint::unix(path.clone())).await.unwrap();
+        let mut client = connect(&address).await.unwrap();
         let hello = read_frame(&mut client).await.unwrap();
         match hello {
             OracleFrame::Hello {
@@ -200,36 +208,20 @@ mod tests {
 
     #[tokio::test]
     async fn snapshot_replays_existing_payload_on_connect() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("svc.sock");
-
         let cache = Arc::new(FeedCache::new());
         let (shutdown, _) = broadcast::channel(1);
         let key = FeedKey::new(provider_id(), B256::repeat_byte(0x03));
-        cache
-            .latest
-            .lock()
-            .insert(key, (vec![0xde, 0xad, 0xbe, 0xef], 1_700_000_000));
+        cache.latest.lock().insert(
+            key,
+            CachedPrice {
+                payload: vec![0xde, 0xad, 0xbe, 0xef],
+                ingested_at: 1_700_000_000,
+                source_time: 1_699_999_999,
+            },
+        );
+        let address = spawn_server(cache, shutdown).await;
 
-        let listener = BoundListener::bind(Endpoint::unix(path.clone()))
-            .await
-            .unwrap();
-        let serve_cache = cache.clone();
-        let serve_shutdown = shutdown.subscribe();
-        tokio::spawn(async move {
-            let stream = listener.accept().await.unwrap();
-            let _ = serve(
-                stream,
-                serve_cache,
-                vec![],
-                Duration::from_secs(60),
-                Duration::from_secs(60),
-                serve_shutdown,
-            )
-            .await;
-        });
-
-        let mut client = connect(&Endpoint::unix(path.clone())).await.unwrap();
+        let mut client = connect(&address).await.unwrap();
         let _hello = read_frame(&mut client).await.unwrap();
         let update = read_frame(&mut client).await.unwrap();
         assert_eq!(
@@ -239,65 +231,39 @@ mod tests {
                 feed_id: key.feed_id,
                 payload: vec![0xde, 0xad, 0xbe, 0xef],
                 ingested_at: 1_700_000_000,
+                source_time: 1_699_999_999,
             }
         );
     }
 
     #[tokio::test]
-    async fn second_subscriber_is_rejected() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("svc.sock");
-
+    async fn multiple_subscribers_each_receive_updates() {
         let cache = Arc::new(FeedCache::new());
         let (shutdown, _) = broadcast::channel(1);
-        let listener = BoundListener::bind(Endpoint::unix(path.clone()))
-            .await
-            .unwrap();
-        let busy = Arc::new(AtomicBool::new(false));
+        let address = spawn_server(cache.clone(), shutdown).await;
 
-        let accept_cache = cache.clone();
-        let accept_busy = busy.clone();
-        let accept_shutdown = shutdown.clone();
-        tokio::spawn(async move {
-            loop {
-                let stream = listener.accept().await.unwrap();
-                if accept_busy.swap(true, Ordering::SeqCst) {
-                    drop(stream);
-                    continue;
-                }
-                let cache = accept_cache.clone();
-                let busy = accept_busy.clone();
-                let serve_shutdown = accept_shutdown.subscribe();
-                tokio::spawn(async move {
-                    let _ = serve(
-                        stream,
-                        cache,
-                        vec![],
-                        Duration::from_secs(60),
-                        Duration::from_secs(60),
-                        serve_shutdown,
-                    )
-                    .await;
-                    busy.store(false, Ordering::SeqCst);
-                });
-            }
-        });
-
-        let mut first = connect(&Endpoint::unix(path.clone())).await.unwrap();
-        let _ = read_frame(&mut first).await.unwrap();
-
-        let mut second = connect(&Endpoint::unix(path.clone())).await.unwrap();
+        let mut first = connect(&address).await.unwrap();
+        let mut second = connect(&address).await.unwrap();
         assert!(matches!(
-            read_frame(&mut second).await,
-            Err(IpcError::Closed)
+            read_frame(&mut first).await.unwrap(),
+            OracleFrame::Hello { .. }
         ));
+        assert!(matches!(
+            read_frame(&mut second).await.unwrap(),
+            OracleFrame::Hello { .. }
+        ));
+
         cache
             .live
-            .send(OracleFrame::Heartbeat { sent_at_unix: 1 })
+            .send(OracleFrame::Heartbeat { sent_at_unix: 7 })
             .unwrap();
         assert_eq!(
             read_frame(&mut first).await.unwrap(),
-            OracleFrame::Heartbeat { sent_at_unix: 1 }
+            OracleFrame::Heartbeat { sent_at_unix: 7 }
+        );
+        assert_eq!(
+            read_frame(&mut second).await.unwrap(),
+            OracleFrame::Heartbeat { sent_at_unix: 7 }
         );
     }
 }

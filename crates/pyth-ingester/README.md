@@ -1,11 +1,11 @@
 # Pyth ingester
 
 Standalone oracle service that streams signed Pyth price updates from Hermes and
-forwards them to the sequencer over a local Unix socket.
+forwards them to sequencer subscribers over a TCP connection.
 
 The service opens one Server-Sent Events stream per feed against Hermes, caches
-the latest signed accumulator blob for each feed, and serves those blobs to a
-single sequencer subscriber over an IPC socket. Each blob is structurally
+the latest signed accumulator blob for each feed, and serves those blobs to
+sequencer subscribers over a TCP connection. Each blob is structurally
 verified before it is cached, then forwarded opaquely.
 
 ## How it works
@@ -15,8 +15,8 @@ verified before it is cached, then forwarded opaquely.
 - Each incoming update's signed blob is verified (see below) and, if it passes,
   stored in an in-memory map keyed by feed, keeping only the latest payload per
   feed.
-- It listens on the configured endpoint (`INGESTER_TRANSPORT`, TCP by default)
-  for a sequencer connection and streams updates to it.
+- It listens on the configured TCP address (`INGESTER_SOCKET_ADDRESS`) for
+  sequencer connections and streams updates to them.
 - Each per-feed stream reconnects automatically with jittered exponential backoff
   (1s up to 30s). Pyth closes idle SSE streams periodically, so reconnects are
   routine. The jitter keeps feeds from reconnecting in lockstep and tripping the
@@ -27,8 +27,7 @@ verified before it is cached, then forwarded opaquely.
 
 ## IPC protocol
 
-The connection speaks the `price-oracle-ipc` frame protocol, over TCP or a Unix
-socket depending on `INGESTER_TRANSPORT`.
+The connection speaks the `price-oracle-ipc` frame protocol over TCP.
 A connected subscriber receives, in order:
 
 - A `Hello` frame with the protocol version, provider id, and subscribed feeds.
@@ -36,9 +35,10 @@ A connected subscriber receives, in order:
 - Live `PriceUpdate` frames as new updates arrive.
 - Periodic `Heartbeat` frames every `INGESTER_HEARTBEAT_SEC`.
 
-Only one subscriber is served at a time.
-Additional connection attempts are rejected while a subscriber is connected.
-If a subscriber lags behind the broadcast buffer, the full snapshot is resent.
+Multiple subscribers are served concurrently, up to a fixed connection limit;
+connections beyond the limit are rejected. Each subscriber has an independent
+view, and if one lags behind the broadcast buffer the full snapshot is resent to
+it.
 
 The provider id is `keccak256("pyth")`.
 
@@ -72,11 +72,10 @@ The `.env.example` contains example values.
 - `HERMES_API_KEY` - optional, sent as a bearer token. Hermes is currently
   keyless. A Pyth Core API key can be set here without code changes.
 - `PYTH_FEED_IDS` - required, comma-separated 32-byte hex Pyth feed ids (`0x` prefix optional).
-- `INGESTER_TRANSPORT` - optional, `tcp` (default) or `unix`, selects the listener type.
-- `INGESTER_SOCKET_ADDRESS` - TCP listen address, defaults to `127.0.0.1:9802` (used when transport is `tcp`).
-- `INGESTER_SOCKET_PATH` - Unix socket path, defaults to `/run/relay/pyth.sock` (used when transport is `unix`).
+- `INGESTER_TRANSPORT` - optional, `tcp` (default). Reserved for future transports.
+- `INGESTER_SOCKET_ADDRESS` - TCP listen address, defaults to `127.0.0.1:9802`.
 - `INGESTER_HEARTBEAT_SEC` - optional, heartbeat interval in seconds, defaults to 10.
-- `INGESTER_WRITE_TIMEOUT_SEC` - optional, per-write timeout in seconds, defaults to 3x the heartbeat interval. A subscriber that stops reading is dropped once a single write exceeds this, freeing the slot.
+- `INGESTER_WRITE_TIMEOUT_SEC` - optional, per-write timeout in seconds, defaults to 3x the heartbeat interval. A subscriber that stops reading is dropped once a single write exceeds this.
 - `RUST_LOG` - optional, tracing filter, defaults to `info`.
 
 ## How to build

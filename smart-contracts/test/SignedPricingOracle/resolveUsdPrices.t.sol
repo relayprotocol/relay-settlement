@@ -6,7 +6,7 @@ import {SignedPricingOracle} from "../../contracts/deposit-addresses/open/oracle
 import {Currency, Price} from "../../contracts/deposit-addresses/open/oracle/IPricingOracle.sol";
 
 /// @notice Port of test/SignedPricingOracle/getUsdPrices.ts.
-contract SignedPricingOracleGetUsdPricesTest is SignedPricingOracleBase {
+contract SignedPricingOracleResolveUsdPricesTest is SignedPricingOracleBase {
     string internal constant INPUT_CHAIN = "1";
     string internal constant OUTPUT_CHAIN = "10";
     bytes internal constant INPUT_CURRENCY_BYTES =
@@ -82,7 +82,7 @@ contract SignedPricingOracleGetUsdPricesTest is SignedPricingOracleBase {
         currencies[0] = _inputCurrency();
         currencies[1] = _outputCurrency();
 
-        Price[] memory prices = oracle.getUsdPrices(currencies, _encode(signed));
+        Price[] memory prices = oracle.resolveUsdPrices(currencies, _encode(signed));
         assertEq(prices.length, 2);
         assertEq(prices[0].usdPrice, INPUT_USD_PRICE);
         assertEq(prices[0].usdPriceDecimals, INPUT_USD_DECIMALS);
@@ -123,7 +123,7 @@ contract SignedPricingOracleGetUsdPricesTest is SignedPricingOracleBase {
                 uint256(1)
             )
         );
-        oracle.getUsdPrices(currencies, _encode(signed));
+        oracle.resolveUsdPrices(currencies, _encode(signed));
     }
 
     function test_revertsWithCurrencyMismatchWhenEmbeddedChainIdDiffers()
@@ -150,7 +150,7 @@ contract SignedPricingOracleGetUsdPricesTest is SignedPricingOracleBase {
                 uint256(0)
             )
         );
-        oracle.getUsdPrices(currencies, _encode(signed));
+        oracle.resolveUsdPrices(currencies, _encode(signed));
     }
 
     function test_revertsWithCurrencyMismatchWhenEmbeddedCurrencyDiffers()
@@ -177,7 +177,7 @@ contract SignedPricingOracleGetUsdPricesTest is SignedPricingOracleBase {
                 uint256(0)
             )
         );
-        oracle.getUsdPrices(currencies, _encode(signed));
+        oracle.resolveUsdPrices(currencies, _encode(signed));
     }
 
     function test_revertsWithPriceExpiredWhenAttestationIsPastExpiration()
@@ -207,7 +207,7 @@ contract SignedPricingOracleGetUsdPricesTest is SignedPricingOracleBase {
                 expiration
             )
         );
-        oracle.getUsdPrices(currencies, _encode(signed));
+        oracle.resolveUsdPrices(currencies, _encode(signed));
     }
 
     function test_revertsWithInvalidSignatureWhenSignedByNonSolver() public {
@@ -232,7 +232,7 @@ contract SignedPricingOracleGetUsdPricesTest is SignedPricingOracleBase {
                 uint256(0)
             )
         );
-        oracle.getUsdPrices(currencies, _encode(signed));
+        oracle.resolveUsdPrices(currencies, _encode(signed));
     }
 
     function test_revertsWithInvalidSignatureWhenUsdPriceTampered() public {
@@ -252,7 +252,7 @@ contract SignedPricingOracleGetUsdPricesTest is SignedPricingOracleBase {
                 uint256(0)
             )
         );
-        oracle.getUsdPrices(currencies, _encode(signed));
+        oracle.resolveUsdPrices(currencies, _encode(signed));
     }
 
     function test_revertsWithInvalidSignatureWhenSignatureIsEmpty() public {
@@ -280,6 +280,6 @@ contract SignedPricingOracleGetUsdPricesTest is SignedPricingOracleBase {
                 uint256(0)
             )
         );
-        oracle.getUsdPrices(currencies, _encode(signed));
+        oracle.resolveUsdPrices(currencies, _encode(signed));
     }
 }

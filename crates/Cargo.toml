@@ -44,4 +44,4 @@ tracing = { version = "0.1.44", default-features = false, features = ["attribute
 tracing-opentelemetry = "0.33"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
-price-oracle-ipc = { git = "https://github.com/unevenlabs/relay-chain", rev = "a7541d22bec8d10595a8d0cac362c48171cc4460" }
+price-oracle-ipc = { git = "https://github.com/unevenlabs/relay-chain", rev = "f6261c913eb1b25111bbe340345111547ab866be" }

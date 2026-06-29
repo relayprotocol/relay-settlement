@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use alloy_primitives::{B256, keccak256};
@@ -28,6 +28,7 @@ pub struct SignedPriceUpdate {
     pub key: FeedKey,
     pub payload: Vec<u8>,
     pub received_at: u64,
+    pub source_time: u64,
 }
 
 pub trait PriceUpdateSink: Send + Sync {
@@ -42,12 +43,19 @@ pub struct Report {
     pub oldest_sec: u32,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct CachedPrice {
+    pub payload: Vec<u8>,
+    pub ingested_at: u64,
+    pub source_time: u64,
+}
+
 pub struct FeedCache {
-    pub(crate) latest: Mutex<BTreeMap<FeedKey, (Vec<u8>, u64)>>,
+    pub(crate) latest: Mutex<BTreeMap<FeedKey, CachedPrice>>,
     pub(crate) live: broadcast::Sender<OracleFrame>,
     ingested: AtomicU64,
     pub(crate) sent: AtomicU64,
-    pub(crate) subscriber_connected: AtomicBool,
+    pub(crate) subscribers: AtomicUsize,
 }
 
 impl FeedCache {
@@ -58,17 +66,17 @@ impl FeedCache {
             live,
             ingested: AtomicU64::new(0),
             sent: AtomicU64::new(0),
-            subscriber_connected: AtomicBool::new(false),
+            subscribers: AtomicUsize::new(0),
         }
     }
 
     pub fn report(&self) -> Report {
         let latest = self.latest.lock();
-        let oldest_received_at = latest.values().map(|(_, ts)| *ts).min();
+        let oldest_received_at = latest.values().map(|p| p.ingested_at).min();
         Report {
             ingested: self.ingested.load(Ordering::Relaxed),
             sent: self.sent.load(Ordering::Relaxed),
-            consumer_connected: self.subscriber_connected.load(Ordering::Relaxed),
+            consumer_connected: self.subscribers.load(Ordering::Relaxed) > 0,
             feeds: latest.len(),
             oldest_sec: oldest_received_at
                 .map(|ts| now_unix().saturating_sub(ts) as u32)
@@ -80,11 +88,12 @@ impl FeedCache {
         self.latest
             .lock()
             .iter()
-            .map(|(key, (payload, ts))| OracleFrame::PriceUpdate {
+            .map(|(key, price)| OracleFrame::PriceUpdate {
                 provider_id: key.provider_id,
                 feed_id: key.feed_id,
-                payload: payload.clone(),
-                ingested_at: *ts,
+                payload: price.payload.clone(),
+                ingested_at: price.ingested_at,
+                source_time: price.source_time,
             })
             .collect()
     }
@@ -113,11 +122,16 @@ impl PriceUpdateSink for IpcServerSink {
             feed_id: update.key.feed_id,
             payload: update.payload.clone(),
             ingested_at: update.received_at,
+            source_time: update.source_time,
         };
-        self.cache
-            .latest
-            .lock()
-            .insert(update.key, (update.payload, update.received_at));
+        self.cache.latest.lock().insert(
+            update.key,
+            CachedPrice {
+                payload: update.payload,
+                ingested_at: update.received_at,
+                source_time: update.source_time,
+            },
+        );
         self.cache.ingested.fetch_add(1, Ordering::Relaxed);
         let _ = self.cache.live.send(frame);
     }

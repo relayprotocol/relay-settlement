@@ -72,7 +72,23 @@ export function registerSubmit(program: Command) {
           })
         }
 
-        const nonce = await safe.getNonce()
+        // Use the next nonce after the last *pending* Safe transaction so we
+        // don't collide with transactions that are already proposed but not yet
+        // executed (e.g. a queued tx with nonce 10 means we must use 11). Falls
+        // back to the on-chain nonce if the transaction service is unavailable.
+        let nonce: number
+        try {
+          nonce = Number(
+            await safe.apiKit.getNextNonce(checksumAddress(safeMultisigAddress))
+          )
+        } catch (error) {
+          console.warn(
+            `⚠️  Could not fetch next nonce from the Safe transaction service, falling back to on-chain nonce: ${
+              (error as Error).message
+            }`
+          )
+          nonce = await safe.getNonce()
+        }
         console.log("📦 Submitting hashes to be signed")
 
         const safeTransaction = await safe.protocolKit.createTransaction({

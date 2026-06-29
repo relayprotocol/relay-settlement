@@ -141,7 +141,7 @@ impl HermesClient {
         {
             let mut qp = url.query_pairs_mut();
             qp.append_pair("encoding", "hex");
-            qp.append_pair("parsed", "false");
+            qp.append_pair("parsed", "true");
             qp.append_pair("ids[]", &format!("0x{}", hex::encode(feed.as_slice())));
         }
         Ok(url)
@@ -156,7 +156,7 @@ pub struct HermesUpdateStream {
 }
 
 impl HermesUpdateStream {
-    pub async fn next_blob(&mut self) -> Option<Result<Vec<Vec<u8>>, StreamError>> {
+    pub async fn next_blob(&mut self) -> Option<Result<(Vec<Vec<u8>>, u64), StreamError>> {
         loop {
             if let Some(event) = take_sse_event(&mut self.buffer) {
                 if let Some(data) = sse_data_payload(&event) {
@@ -165,7 +165,7 @@ impl HermesUpdateStream {
                     }
                     debug!(payload_len = data.len(), "received hermes SSE update");
                     return Some(
-                        parse_stream_message(&data).and_then(HermesStreamMessage::into_blobs),
+                        parse_stream_message(&data).and_then(HermesStreamMessage::into_update),
                     );
                 }
                 continue;
@@ -265,7 +265,7 @@ async fn pump_feed(
     info!(%feed, "hermes stream connected");
     while let Some(item) = stream.next_blob().await {
         match item {
-            Ok(blobs) => cache_blobs(sink, feed, blobs),
+            Ok((blobs, source_time)) => cache_blobs(sink, feed, blobs, source_time),
             Err(StreamError::Malformed(m)) => warn!(%feed, error = %m, "skipping malformed update"),
             Err(e) => return Err(e),
         }
@@ -273,7 +273,7 @@ async fn pump_feed(
     Ok(())
 }
 
-fn cache_blobs(sink: &dyn PriceUpdateSink, feed: B256, blobs: Vec<Vec<u8>>) {
+fn cache_blobs(sink: &dyn PriceUpdateSink, feed: B256, blobs: Vec<Vec<u8>>, source_time: u64) {
     if blobs.len() > 1 {
         warn!(%feed, count = blobs.len(), "expected one blob per feed, using the first");
     }
@@ -289,6 +289,7 @@ fn cache_blobs(sink: &dyn PriceUpdateSink, feed: B256, blobs: Vec<Vec<u8>>) {
         key: FeedKey::new(provider_id(), feed),
         payload,
         received_at: now_secs(),
+        source_time,
     });
 }
 
@@ -300,6 +301,8 @@ fn jittered(delay: Duration) -> Duration {
 #[derive(Debug, Deserialize)]
 struct HermesStreamMessage {
     binary: HermesBinary,
+    #[serde(default)]
+    parsed: Vec<HermesParsed>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -308,22 +311,40 @@ struct HermesBinary {
     data: Vec<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct HermesParsed {
+    price: HermesPrice,
+}
+
+#[derive(Debug, Deserialize)]
+struct HermesPrice {
+    publish_time: u64,
+}
+
 impl HermesStreamMessage {
-    fn into_blobs(self) -> Result<Vec<Vec<u8>>, StreamError> {
+    fn into_update(self) -> Result<(Vec<Vec<u8>>, u64), StreamError> {
         if self.binary.encoding != "hex" {
             return Err(StreamError::Malformed(format!(
                 "expected hex encoding, got {}",
                 self.binary.encoding
             )));
         }
-        self.binary
+        let blobs = self
+            .binary
             .data
             .iter()
             .map(|blob| {
                 hex::decode(blob.strip_prefix("0x").unwrap_or(blob))
                     .map_err(|e| StreamError::Malformed(format!("invalid hex blob: {e}")))
             })
-            .collect()
+            .collect::<Result<Vec<_>, _>>()?;
+        let source_time = self
+            .parsed
+            .iter()
+            .map(|entry| entry.price.publish_time)
+            .max()
+            .unwrap_or(0);
+        Ok((blobs, source_time))
     }
 }
 

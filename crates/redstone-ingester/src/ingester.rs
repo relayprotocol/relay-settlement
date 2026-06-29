@@ -221,6 +221,7 @@ fn build_feed_update(
         key: FeedKey::new(provider_id(), feed.feed_id),
         payload,
         received_at: now_secs,
+        source_time: timestamp_secs,
     })
 }
 
@@ -410,6 +411,7 @@ mod tests {
         let update = build_feed_update(&feed("ETH"), &packages, 3, 1_700_000_000).unwrap();
         assert_eq!(update.key.feed_id, eth());
         assert_eq!(update.received_at, 1_700_000_000);
+        assert_eq!(update.source_time, 1_700_000_000);
         assert_eq!(
             &update.payload[update.payload.len() - 9..],
             &[0, 0, 2, 0xed, 0x57, 1, 0x1e, 0, 0]

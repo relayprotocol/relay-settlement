@@ -3,19 +3,17 @@ use std::time::Duration;
 
 use alloy_primitives::B256;
 use anyhow::{Context as _, Result, anyhow};
-use price_oracle_ipc::Endpoint;
 use tracing::instrument;
 
 const DEFAULT_HERMES_ENDPOINT: &str = "https://hermes.pyth.network";
 const DEFAULT_TRANSPORT: &str = "tcp";
 const DEFAULT_SOCKET_ADDRESS: &str = "127.0.0.1:9802";
-const DEFAULT_SOCKET_PATH: &str = "/run/relay/pyth.sock";
 const DEFAULT_HEARTBEAT_SEC: u64 = 10;
 const DEFAULT_OTEL_SAMPLE_RATIO: f64 = 1.0;
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    pub listen_endpoint: Endpoint,
+    pub listen_address: String,
     pub hermes_endpoint: String,
     pub api_key: Option<String>,
     pub feed_ids: Vec<B256>,
@@ -35,7 +33,7 @@ pub struct TelemetryConfig {
 pub fn get() -> Result<Config> {
     let heartbeat_interval = parse_heartbeat_interval()?;
     Ok(Config {
-        listen_endpoint: parse_endpoint()?,
+        listen_address: parse_listen_address()?,
         hermes_endpoint: optional_env("HERMES_ENDPOINT")
             .unwrap_or_else(|| DEFAULT_HERMES_ENDPOINT.to_string()),
         api_key: optional_env("HERMES_API_KEY"),
@@ -93,19 +91,14 @@ fn parse_sample_ratio() -> Result<f64> {
     Ok(ratio)
 }
 
-fn parse_endpoint() -> Result<Endpoint> {
+fn parse_listen_address() -> Result<String> {
     let transport =
         optional_env("INGESTER_TRANSPORT").unwrap_or_else(|| DEFAULT_TRANSPORT.to_string());
     match transport.as_str() {
-        "tcp" => Ok(Endpoint::tcp(
-            optional_env("INGESTER_SOCKET_ADDRESS")
-                .unwrap_or_else(|| DEFAULT_SOCKET_ADDRESS.to_string()),
-        )),
-        "unix" => Ok(Endpoint::unix(
-            optional_env("INGESTER_SOCKET_PATH").unwrap_or_else(|| DEFAULT_SOCKET_PATH.to_string()),
-        )),
+        "tcp" => Ok(optional_env("INGESTER_SOCKET_ADDRESS")
+            .unwrap_or_else(|| DEFAULT_SOCKET_ADDRESS.to_string())),
         other => Err(anyhow!(
-            "INGESTER_TRANSPORT must be \"tcp\" or \"unix\", got \"{other}\""
+            "INGESTER_TRANSPORT must be \"tcp\", got \"{other}\""
         )),
     }
 }

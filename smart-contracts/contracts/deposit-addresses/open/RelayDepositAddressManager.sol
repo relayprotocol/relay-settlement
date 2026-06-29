@@ -106,7 +106,7 @@ contract RelayDepositAddressManager {
     }
 
     Price[] memory prices = IPricingOracle(derivationFields.pricingOracle)
-      .getUsdPrices(currencies, extraData);
+      .resolveUsdPrices(currencies, extraData);
 
     bytes32 triggerHash = _hashTrigger(
       input,

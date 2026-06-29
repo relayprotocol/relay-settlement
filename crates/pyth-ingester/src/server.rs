@@ -15,12 +15,14 @@ use crate::Context;
 use crate::cache::{FeedCache, now_unix, provider_id};
 use crate::telemetry::TRACE_TARGET;
 
+const MAX_SUBSCRIBERS: usize = 32;
+
 #[instrument(skip_all)]
 pub async fn run(ctx: Context) -> Result<()> {
-    let listener = BoundListener::bind(ctx.config.listen_endpoint.clone())
+    let listener = BoundListener::bind(ctx.config.listen_address.clone())
         .await
-        .context("failed to bind listener endpoint")?;
-    info!(endpoint = %listener.endpoint(), "listening for sequencer connections");
+        .context("failed to bind listener address")?;
+    info!(address = %listener.address(), "listening for sequencer connections");
 
     let mut shutdown = ctx.shutdown.subscribe();
     loop {
@@ -30,12 +32,17 @@ pub async fn run(ctx: Context) -> Result<()> {
             result = listener.accept() => result.context("failed to accept connection")?,
         };
 
-        if ctx.cache.subscriber_connected.swap(true, Ordering::SeqCst) {
-            warn!("rejecting sequencer connection, a subscriber is already connected");
+        let subscribers = ctx.cache.subscribers.fetch_add(1, Ordering::SeqCst) + 1;
+        if subscribers > MAX_SUBSCRIBERS {
+            ctx.cache.subscribers.fetch_sub(1, Ordering::SeqCst);
+            warn!(
+                max = MAX_SUBSCRIBERS,
+                "rejecting sequencer connection, subscriber limit reached"
+            );
             drop(stream);
             continue;
         }
-        info!("sequencer subscriber connected");
+        info!(subscribers, "sequencer subscriber connected");
 
         let cache = ctx.cache.clone();
         let feeds = ctx.config.feed_ids.clone();
@@ -56,7 +63,7 @@ pub async fn run(ctx: Context) -> Result<()> {
                 Ok(()) | Err(IpcError::Closed) => info!("sequencer subscriber disconnected"),
                 Err(other) => warn!(error = %other, "subscriber connection ended with error"),
             }
-            cache.subscriber_connected.store(false, Ordering::SeqCst);
+            cache.subscribers.fetch_sub(1, Ordering::SeqCst);
         });
     }
 }
