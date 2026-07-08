@@ -53,22 +53,17 @@ Each environment config contains non-secret build-time configuration:
 Bundling creates separate Lit Action code for each environment:
 
 ```txt
-dist/actions/dev/ethereum.js
-dist/actions/dev/solana.js
-dist/actions/dev/ton.js
-dist/actions/dev/hyperliquid.js
-dist/actions/dev/lighter.js
-dist/actions/stag/ethereum.js
-dist/actions/stag/solana.js
-dist/actions/stag/ton.js
-dist/actions/stag/hyperliquid.js
-dist/actions/stag/lighter.js
-dist/actions/prod/ethereum.js
-dist/actions/prod/solana.js
-dist/actions/prod/ton.js
-dist/actions/prod/hyperliquid.js
-dist/actions/prod/lighter.js
+dist/actions/<env>/ethereum.js
+dist/actions/<env>/tron.js
+dist/actions/<env>/solana.js
+dist/actions/<env>/ton.js
+dist/actions/<env>/bitcoin.js
+dist/actions/<env>/hyperliquid.js
+dist/actions/<env>/lighter.js
+dist/actions/<env>/xrp.js
 ```
+
+…one such set per environment (`dev`, `stag`, `prod`).
 
 Because each bundle hardcodes the allocator address, oracle allowlist, and signature threshold, each environment has distinct action code/CIDs and can be registered under different Lit accounts, wallets, and groups.
 
@@ -104,11 +99,18 @@ npm run setup -- --env dev --mode chain-secured \
   --private-key 0x<admin-wallet-key> \
   (--create-pkp | --pkp-id <address>) \
   [--dry-run]
+
+# MPC/multisig-owned (ChainSecured) account — emit calldata to relay, don't broadcast
+npm run setup -- --env dev --mode chain-secured --calldata \
+  --account-api-key <account-api-key> \
+  --pkp-id 0x<existing-pkp>
 ```
 
 In ChainSecured mode the account hash queried on-chain is `keccak256(toUtf8Bytes(accountApiKey))`, so the same `--account-api-key` identifies the account in both modes. Shared setup backend constants live in `../lit-helpers/src/setup/backend-chain-secured.ts`; shared account-helper script constants live in `../lit-helpers/src/chainSecured.ts`.
 
 Pass `--dry-run` to perform read-only discovery and print which PKPs, groups, actions, and usage keys already exist, plus which resources would be created, updated, or pruned in a normal run.
+
+Pass `--calldata` (ChainSecured only) when the account is owned by an MPC/multisig wallet: setup runs read-only discovery and prints the contract calldata for whatever is out of sync as a batch to relay through the owner, instead of broadcasting. It requires `--pkp-id` and an already-provisioned usage key (PKP/usage-key minting need a live admin signature). See the [lit-helpers calldata mode docs](../lit-helpers/README.md#calldata-mode-mpc--multisig-owned-accounts).
 
 Setup is idempotent and will:
 
@@ -275,13 +277,13 @@ Client CLIs invoke the deployed actions via the Chipotle REST API:
 npm run wallet -- --env dev \
   --usage-api-key <usage-api-key> \
   --pkp-id <pkp-address> \
-  --vm-type <ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm>
+  --vm-type <ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm>
 
 # Verify an oracle attestation and sign every hash it attests
 npm run sign -- --env dev \
   --usage-api-key <usage-api-key> \
   --pkp-id <pkp-address> \
-  --vm-type <ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm> \
+  --vm-type <ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm> \
   --input request.json
 
 # Sign a Lighter gateway changePubKey transaction for API-key setup
@@ -349,6 +351,8 @@ Response:
 
 For each requested `hashIndex` the oracle resolves `allocator.hashesToSign[withdrawRequestHash][hashIndex]` on-chain and includes the resulting bytes32 in `hashesToSign`. The Lit Action verifies the oracle's EIP-712 signatures, then signs every hash in `hashesToSign` with the VM-derived key, returning one signature per hash.
 
+The `xrp-vm` `wallet` action additionally returns a `signingPubKey` field (the 33-byte compressed secp256k1 public key), because XRPL embeds the signing key verbatim in every transaction's `SigningPubKey` field. That same key is the value baked into `XrpVmPayloadBuilder`'s `SIGNING_PUBKEY` constructor argument on chain. It is a fixed per-PKP constant needed once at deploy time, so it is surfaced only on `wallet` and not repeated on every `sign` response. XRP signatures are canonical, low-S, DER-encoded ECDSA (the encoding XRPL's `TxnSignature` expects) rather than the fixed-width `r ‖ s ‖ v` form the other secp256k1 actions emit.
+
 ## Programmatic Usage
 
 ```typescript
@@ -398,6 +402,7 @@ src/                                 # Lit Action source (bundled into dist/)
     ton-vm.ts                        # TON Lit Action (Ed25519 signing, 0:<hex> address)
     hyperliquid-vm.ts                # Hyperliquid Lit Action (secp256k1 signing, EVM address)
     lighter-vm.ts                    # Lighter Lit Action (secp256k1 signing + ChangePubKey)
+    xrp-vm.ts                        # XRP Ledger Lit Action (secp256k1 DER signing, r... address)
 
 scripts/
   bundle-actions.ts                  # Bundles src/vm/*.ts into dist/actions/<env>/*.js
@@ -435,6 +440,7 @@ The `setup` script uses the shared `SetupBackend` interface and implementations 
 | Info (TON)         | `"ton-vm"`             |
 | Info (Hyperliquid) | `"hyperliquid-vm"`     |
 | Info (Lighter)     | `"lighter-vm"`         |
+| Info (XRP)         | `"xrp-vm"`             |
 | Output             | 32 bytes               |
 
 All VM actions use the same HKDF implementation from `src/common/crypto.ts`.

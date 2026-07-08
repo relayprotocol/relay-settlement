@@ -31,10 +31,12 @@
 import { addr } from "micro-eth-signer"
 import {
   bytesToBigInt,
+  CalldataCollector,
   DEFAULT_ACCOUNT_CONFIG_ADDRESS,
   DEFAULT_BASE_CHAIN_ID,
   DEFAULT_BASE_RPC_URL,
   keccak,
+  printCalldataBatch,
   sendTransaction,
   writeContract,
 } from "../src/chainSecured.js"
@@ -44,7 +46,13 @@ const USAGE =
   "  tsx scripts/transfer-ownership.ts " +
   "--account-api-key <key> " +
   "--current-admin-private-key 0x... " +
-  "(--new-admin-address 0x... | --new-admin-private-key 0x...)"
+  "(--new-admin-address 0x... | --new-admin-private-key 0x...)\n" +
+  "  tsx scripts/transfer-ownership.ts " +
+  "--account-api-key <key> --calldata " +
+  "(--new-admin-address 0x... | --new-admin-private-key 0x...)\n" +
+  "\n" +
+  "  --calldata: emit the transfer calldata to relay via the current owner\n" +
+  "              (MPC/multisig) instead of broadcasting. No current-admin key needed."
 
 /** Read a CLI flag value accepting `--name value` or `--name=value`. */
 function getOption(args: string[], name: string): string | undefined {
@@ -62,18 +70,21 @@ async function main() {
   const currentAdminPrivateKey = getOption(args, "--current-admin-private-key")
   const newAdminAddressArg = getOption(args, "--new-admin-address")
   const newAdminPrivateKey = getOption(args, "--new-admin-private-key")
+  const calldataMode = args.includes("--calldata")
 
   const missing: string[] = []
   if (!accountApiKey) {
     missing.push("--account-api-key <key>")
   }
-  if (!currentAdminPrivateKey) {
-    missing.push("--current-admin-private-key 0x...")
+  // In calldata mode there is no local current-admin signer: the current
+  // owner (MPC/multisig) relays the emitted calldata itself.
+  if (!currentAdminPrivateKey && !calldataMode) {
+    missing.push("--current-admin-private-key 0x... (or --calldata)")
   }
   if (!newAdminAddressArg && !newAdminPrivateKey) {
     missing.push("--new-admin-address 0x... or --new-admin-private-key 0x...")
   }
-  if (missing.length > 0 || !accountApiKey || !currentAdminPrivateKey) {
+  if (missing.length > 0 || !accountApiKey) {
     console.error(`Missing ${missing.join(", ")}.\n\n${USAGE}`)
     process.exit(1)
   }
@@ -112,11 +123,17 @@ async function main() {
     }
   }
 
-  const normalizedPk = currentAdminPrivateKey.startsWith("0x")
-    ? currentAdminPrivateKey
-    : `0x${currentAdminPrivateKey}`
-  const currentAdminAddress = addr.fromPrivateKey(normalizedPk).toLowerCase()
-  if (currentAdminAddress === newAdminAddressLc) {
+  // Resolve the current admin address for the self-transfer guard + logging.
+  // In calldata mode we may not have the current admin key locally.
+  const normalizedPk = currentAdminPrivateKey
+    ? currentAdminPrivateKey.startsWith("0x")
+      ? currentAdminPrivateKey
+      : `0x${currentAdminPrivateKey}`
+    : undefined
+  const currentAdminAddress = normalizedPk
+    ? addr.fromPrivateKey(normalizedPk).toLowerCase()
+    : undefined
+  if (currentAdminAddress && currentAdminAddress === newAdminAddressLc) {
     console.error(
       "--new-admin-address must differ from the address derived from --current-admin-private-key"
     )
@@ -136,10 +153,13 @@ async function main() {
   console.log(
     `   account API key hash: 0x${apiKeyHash.toString(16).padStart(64, "0")}`
   )
-  console.log(`   current admin:        ${currentAdminAddress}`)
+  console.log(
+    `   current admin:        ${currentAdminAddress ?? "(relayed via owner)"}`
+  )
   console.log(`   new admin:            ${newAdminAddressLc}`)
   console.log(`   contract:             ${DEFAULT_ACCOUNT_CONFIG_ADDRESS}`)
   console.log(`   chain id:             ${DEFAULT_BASE_CHAIN_ID}`)
+  console.log(`   mode:                 ${calldataMode ? "calldata" : "broadcast"}`)
   console.log()
 
   const calldata =
@@ -148,13 +168,27 @@ async function main() {
       newAdminWalletAddress: newAdminAddressLc,
     })
 
+  const collector = calldataMode ? new CalldataCollector() : undefined
   const txHash = await sendTransaction(
     DEFAULT_BASE_RPC_URL,
     DEFAULT_BASE_CHAIN_ID,
-    normalizedPk,
+    normalizedPk ?? "",
     DEFAULT_ACCOUNT_CONFIG_ADDRESS,
-    calldata
+    calldata,
+    {
+      collector,
+      description: `transferChainSecuredAccountOwnership -> ${newAdminAddressLc}`,
+    }
   )
+
+  if (collector) {
+    printCalldataBatch(collector)
+    console.log(
+      `  After relay, ChainSecured admin writes must be signed by ${newAdminAddressLc}.`
+    )
+    console.log()
+    return
+  }
 
   console.log()
   console.log(`✓ Ownership transferred.`)

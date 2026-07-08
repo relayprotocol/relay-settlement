@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: MIT
-// ABOUTME: Oracle contract: MINT/BURN/TRANSFER plus the fast-finality FAST_MINT action (fee split + rate-limit).
-// ABOUTME: Dedups against the old oracle's idempotency keys so keys settled there can't replay here.
 pragma solidity ^0.8.28;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
@@ -10,7 +8,7 @@ import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 
 import {RelayHub} from "./RelayHub.sol";
 import {RelayOracle} from "./RelayOracle.sol";
-import {RelayFastRateLimiter} from "./RelayFastRateLimiter.sol";
+import {IRateLimiter} from "./rate-limiters/IRateLimiter.sol";
 
 /// @title RelayOracleV2
 /// @author Relay Protocol
@@ -45,8 +43,10 @@ contract RelayOracleV2 is AccessControl, EIP712 {
   /// @notice Emitted when an action failed to execute in a batch
   event ExecutionFailed(bytes32 indexed idempotencyKey, bytes[] actions);
 
-  /// @notice Emitted when the fast-mint rate limiter address is set
-  event RateLimiterSet(address indexed rateLimiter);
+  /// @notice Emitted when a rate limiter is added to the FAST_MINT allowlist
+  event RateLimiterAdded(address indexed rateLimiter);
+  /// @notice Emitted when a rate limiter is removed from the FAST_MINT allowlist
+  event RateLimiterRemoved(address indexed rateLimiter);
 
   /// @notice Emitted on a FAST_MINT for observability. Not consumed by settlement: the recipient
   ///         holds exactly the net amount, which is the attested deposit amount, so
@@ -71,7 +71,7 @@ contract RelayOracleV2 is AccessControl, EIP712 {
   error UnauthorizedOracle(address oracle);
   error InvalidSignature(address oracle);
   error InvalidActionType(uint8 actionType);
-  error RateLimiterNotSet();
+  error RateLimiterNotAllowed(address rateLimiter);
   error InvalidFeeBps(uint256 feeBps);
   error InvalidFeeRecipient();
   /// @notice A FAST_MINT was rejected by the rate limiter (over budget / fast unavailable). The
@@ -110,9 +110,10 @@ contract RelayOracleV2 is AccessControl, EIP712 {
   /// @notice Mapping of idempotency key to execution status
   mapping(bytes32 => bool) public isExecuted;
 
-  /// @notice Rate limiter consulted on every `FAST_MINT`. Settable by the admin (swappable); a
-  ///         zero address disables fast minting (fail-closed).
-  RelayFastRateLimiter public rateLimiter;
+  /// @notice Allowlist of rate limiters a `FAST_MINT` may invoke. The action names which limiter to
+  ///         call; the admin adds/removes them, so a new limiter type needs no change here. An empty
+  ///         allowlist — or naming a non-allowlisted limiter — fails closed.
+  mapping(address => bool) public isRateLimiter;
 
   // Constructor
 
@@ -204,13 +205,23 @@ contract RelayOracleV2 is AccessControl, EIP712 {
 
   // Admin methods
 
-  /// @notice Sets the fast-mint rate limiter
-  /// @param newRateLimiter The rate limiter address (zero disables fast minting)
-  function setRateLimiter(
-    address newRateLimiter
+  /// @notice Adds a rate limiter to the FAST_MINT allowlist
+  /// @param rateLimiter The rate limiter address
+  function addRateLimiter(address rateLimiter) external onlyRole(ADMIN_ROLE) {
+    if (rateLimiter == address(0)) {
+      revert ZeroAddress();
+    }
+    isRateLimiter[rateLimiter] = true;
+    emit RateLimiterAdded(rateLimiter);
+  }
+
+  /// @notice Removes a rate limiter from the FAST_MINT allowlist
+  /// @param rateLimiter The rate limiter address
+  function removeRateLimiter(
+    address rateLimiter
   ) external onlyRole(ADMIN_ROLE) {
-    rateLimiter = RelayFastRateLimiter(newRateLimiter);
-    emit RateLimiterSet(newRateLimiter);
+    isRateLimiter[rateLimiter] = false;
+    emit RateLimiterRemoved(rateLimiter);
   }
 
   // Internal methods
@@ -274,16 +285,17 @@ contract RelayOracleV2 is AccessControl, EIP712 {
     }
   }
 
-  /// @notice Executes a `FAST_MINT`: rate-limit the full at-risk USD value, then split the gross
-  ///         deposit and mint both parts — the fee to the fee recipient and the net amount to the
-  ///         recipient.
-  /// @dev Carries the hub token id (both legs mint it directly) plus the origin `chainId` (the
-  ///      limiter's per-chain bucket key) and the off-chain-priced `usdValue` the attesting oracle
-  ///      computed. It consumes that full `usdValue` (the at-risk value of the gross deposit) before
-  ///      minting, so
-  ///      a limiter rejection reverts the whole execution → nothing minted, key not consumed → the
-  ///      deposit can be re-attested as slow. No per-deposit state is written: the recipient holds
-  ///      exactly the net amount, which is the attested deposit amount settlement uses.
+  /// @notice Executes a `FAST_MINT`: rate-limit the full at-risk deposit amount, then split the
+  ///         gross deposit and mint both parts — the fee to the fee recipient and the net amount to
+  ///         the recipient.
+  /// @dev Carries the mint params (`hubTo`, `hubTokenId`, `amount`, `feeBps`, `feeRecipient`) plus the
+  ///      `limiter` to call and its opaque `data`. `hubTokenId` is supplied directly (as MINT does);
+  ///      the origin `(chainId, currency)` live inside the limiter's `data`, not on the action. The
+  ///      allowlisted `limiter` decodes `data` and rate-limits before minting, so a rejection reverts
+  ///      the whole execution → nothing minted, key not consumed → re-attestable as slow. A zero
+  ///      `limiter` skips rate limiting entirely (no allowlist check, no `consume` call). No
+  ///      per-deposit state is written: the recipient holds exactly the net amount, which is the
+  ///      attested deposit amount settlement uses.
   /// @param action The ABI-encoded FAST_MINT action
   /// @param idempotencyKey The execution's idempotency key (emitted in the FastMint event)
   function _executeFastMint(
@@ -294,14 +306,14 @@ contract RelayOracleV2 is AccessControl, EIP712 {
       ,
       address hubToAddress,
       uint256 hubTokenId,
-      string memory chainId, // the rate limiter's per-chain bucket key
       uint256 amount,
       uint256 feeBps,
       address feeRecipient,
-      uint256 usdValue
+      address limiter,
+      bytes memory data
     ) = abi.decode(
         action,
-        (uint8, address, uint256, string, uint256, uint256, address, uint256)
+        (uint8, address, uint256, uint256, uint256, address, address, bytes)
       );
 
     if (feeBps > BPS_DENOMINATOR) {
@@ -320,17 +332,22 @@ contract RelayOracleV2 is AccessControl, EIP712 {
       revert InvalidFeeRecipient();
     }
 
-    // Rate-limit the full at-risk USD value before minting. A false result (over budget / fast
-    // unavailable / zero usdValue) reverts the whole execution → nothing minted, key not consumed →
-    // re-attestable as slow. `executeMultiple` catches the revert and surfaces the selector via
-    // ExecutionFailed. The oracle prices `usdValue` off-chain (it has chainId + currency there).
-    RelayFastRateLimiter limiter = rateLimiter;
-    if (address(limiter) == address(0)) {
-      revert RateLimiterNotSet();
-    }
-    // slither-disable-next-line calls-loop
-    if (!limiter.consume(chainId, usdValue)) {
-      revert FastMintRejected();
+    // Rate-limit via the allowlisted limiter named in the action; it decodes `data` itself, so a new
+    // limiter type needs no change here. A false result (over budget / zero amount) reverts the whole
+    // execution → nothing minted, key not consumed → re-attestable as slow; `executeMultiple` catches
+    // the revert and surfaces the selector via ExecutionFailed.
+    //
+    // A zero-address limiter opts out of rate limiting entirely: no allowlist check and no `consume`
+    // call are performed. This is only reachable when the oracle attests `limiter == address(0)`, so
+    // the rate-limit bypass is an explicit, per-deposit decision made by the trusted oracle.
+    if (limiter != address(0)) {
+      if (!isRateLimiter[limiter]) {
+        revert RateLimiterNotAllowed(limiter);
+      }
+      // slither-disable-next-line calls-loop
+      if (!IRateLimiter(limiter).consume(data)) {
+        revert FastMintRejected();
+      }
     }
 
     if (feeAmount != 0) {

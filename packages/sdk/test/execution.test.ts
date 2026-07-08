@@ -5,6 +5,7 @@ import {
   ActionType,
   encodeAction,
   decodeAction,
+  encodeAmountLimiterData,
 } from "../src/messages/v2.2/execution"
 
 const actions = [
@@ -37,12 +38,16 @@ const actions = [
     type: ActionType.FAST_MINT,
     data: {
       hubToAddress: "0x3333333333333333333333333333333333333333",
-      hubTokenId: 777n,
-      chainId: "8453",
+      hubTokenId: 123456789n,
       amount: "1000000",
       feeBps: "10000000000000000", // 1% (1e16 / 1e18)
       feeRecipient: "0x4444444444444444444444444444444444444444",
-      usdValue: "1000000",
+      limiter: "0x5555555555555555555555555555555555555555",
+      limiterData: encodeAmountLimiterData(
+        "8453",
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "1000000"
+      ),
     },
   },
 ]
@@ -97,15 +102,15 @@ describe("execution", () => {
     if (decoded.type !== ActionType.FAST_MINT) throw new Error("wrong type")
     expect(decoded.data.hubToAddress).toBe(action.data.hubToAddress)
     expect(decoded.data.hubTokenId).toBe(action.data.hubTokenId)
-    expect(decoded.data.chainId).toBe(action.data.chainId)
     expect(decoded.data.amount).toBe(action.data.amount)
     expect(decoded.data.feeBps).toBe(action.data.feeBps)
     expect(decoded.data.feeRecipient).toBe(action.data.feeRecipient)
-    expect(decoded.data.usdValue).toBe(action.data.usdValue)
+    expect(decoded.data.limiter).toBe(action.data.limiter)
+    expect(decoded.data.limiterData).toBe(action.data.limiterData)
   })
 
   // The encoded layout must match exactly what RelayOracleV2._executeFastMint decodes —
-  // abi.decode(action, (uint8, address, uint256, string, uint256, uint256, address, uint256)).
+  // abi.decode(action, (uint8, address, uint256, uint256, uint256, address, address, bytes)).
   it("FAST_MINT layout matches the contract decode tuple", () => {
     const action = actions[3]
     const encoded = encodeAction(action as any)
@@ -114,14 +119,14 @@ describe("execution", () => {
       type,
       hubTo,
       hubTokenId,
-      chainId,
       amount,
       feeBps,
       feeRecipient,
-      usdValue,
+      limiter,
+      data,
     ] = decodeAbiParameters(
       parseAbiParameters(
-        "uint8, address, uint256, string, uint256, uint256, address, uint256"
+        "uint8, address, uint256, uint256, uint256, address, address, bytes"
       ),
       encoded as `0x${string}`
     )
@@ -129,12 +134,29 @@ describe("execution", () => {
     expect(type).toBe(ActionType.FAST_MINT)
     expect((hubTo as string).toLowerCase()).toBe(action.data.hubToAddress)
     expect(hubTokenId).toBe(action.data.hubTokenId)
-    expect(chainId).toBe(action.data.chainId)
     expect(amount).toBe(1000000n)
     expect(feeBps).toBe(10000000000000000n)
     expect((feeRecipient as string).toLowerCase()).toBe(
       action.data.feeRecipient
     )
-    expect(usdValue).toBe(1000000n)
+    expect((limiter as string).toLowerCase()).toBe(action.data.limiter)
+    expect(data).toBe(action.data.limiterData)
+  })
+
+  it("encodeAmountLimiterData round-trips through the limiter's decode tuple", () => {
+    const encoded = encodeAmountLimiterData(
+      "8453",
+      "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "1000000"
+    )
+    const [chainId, currency, amount] = decodeAbiParameters(
+      parseAbiParameters("string, bytes, uint256"),
+      encoded as `0x${string}`
+    )
+    expect(chainId).toBe("8453")
+    expect((currency as string).toLowerCase()).toBe(
+      "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+    )
+    expect(amount).toBe(1000000n)
   })
 })

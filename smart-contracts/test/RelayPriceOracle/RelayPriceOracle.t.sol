@@ -448,6 +448,39 @@ contract RelayPriceOracleTest is BaseTest {
     config.resolveUsdPrice(eth);
   }
 
+  function test_resolveUsdPriceRevertsWhenPriceExpired() public {
+    Currency memory eth = _eth();
+
+    _mockFeed(
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      _encodeUpdate(PYTH_ETH_FEED, 3500e8, USD_PRICE_DECIMALS, ETH_PUBLISH_TIME)
+    );
+
+    vm.startPrank(owner);
+    config.setPriceFeedAdapter(PROVIDER_PYTH, address(adapter));
+    config.setFeedRoute(
+      eth,
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      ETH_DECIMALS,
+      MAX_AGE_SECONDS
+    );
+    vm.stopPrank();
+
+    uint256 expiration = ETH_PUBLISH_TIME + MAX_AGE_SECONDS;
+    vm.warp(expiration + 1);
+
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        RelayPriceOracle.PriceExpired.selector,
+        expiration,
+        expiration + 1
+      )
+    );
+    config.resolveUsdPrice(eth);
+  }
+
   function test_resolveUsdPricesRevertsForMissingRoute() public {
     Currency[] memory currencies = new Currency[](1);
     currencies[0] = _eth();

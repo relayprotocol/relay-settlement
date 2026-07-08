@@ -209,6 +209,24 @@ class ApiKeyBackend implements SetupBackend {
     }))
   }
 
+  async listActionsInGroup(groupId: bigint): Promise<ActionInfo[]> {
+    // Best-effort: not every Chipotle deployment exposes this endpoint. When
+    // it is unavailable we return `[]`, which simply makes the caller fall
+    // back to (idempotent) re-attach + permission sync rather than skipping.
+    try {
+      const raw = await listAll<RawActionInfo>(
+        `/list_actions_in_group?group_id=${groupId}`,
+        this.apiKey
+      )
+      return raw.flatMap((a) => {
+        const info = toActionInfo(a)
+        return info ? [info] : []
+      })
+    } catch {
+      return []
+    }
+  }
+
   // ── Writes ──────────────────────────────────────────────────────────────
   async createPkp(): Promise<{ walletAddress: string }> {
     const before = await this.listPkps()
@@ -228,12 +246,19 @@ class ApiKeyBackend implements SetupBackend {
     return { walletAddress: created.walletAddress }
   }
 
-  async addGroup(name: string, description: string): Promise<bigint> {
+  async addGroup(
+    name: string,
+    description: string,
+    cidHashes: bigint[] = [],
+    pkpIds: string[] = []
+  ): Promise<bigint> {
     await apiCall("POST", "/add_group", this.apiKey, {
       group_name: name,
       group_description: description,
-      pkp_ids_permitted: [],
-      cid_hashes_permitted: [],
+      pkp_ids_permitted: pkpIds,
+      cid_hashes_permitted: cidHashes.map(
+        (h) => `0x${h.toString(16).padStart(64, "0")}`
+      ),
     })
     const groups = await this.listGroups()
     const created = groups.find((g) => g.name === name)

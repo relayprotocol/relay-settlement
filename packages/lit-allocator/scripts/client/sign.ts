@@ -9,7 +9,7 @@
  *     --env <name> \
  *     --usage-api-key <key> \
  *     --pkp-id <pkp-address> \
- *     --vm-type <ethereum-vm | tron-vm | solana-vm | ton-vm | bitcoin-vm | hyperliquid-vm | lighter-vm> \
+ *     --vm-type <ethereum-vm | tron-vm | solana-vm | ton-vm | bitcoin-vm | hyperliquid-vm | lighter-vm | xrp-vm> \
  *     --input <path-to-request.json>
  *
  * Example request.json:
@@ -44,7 +44,7 @@ import { CHIPOTLE_API_BASE_URL, executeLitAction } from "./index.js";
 
 const usage =
   "Usage:\n" +
-  "  tsx scripts/client/sign.ts --env <name> --usage-api-key <key> --pkp-id <address> --vm-type <ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm> --input <path>";
+  "  tsx scripts/client/sign.ts --env <name> --usage-api-key <key> --pkp-id <address> --vm-type <ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm> --input <path>";
 
 function getOption(args: string[], name: string): string | undefined {
   const idx = args.indexOf(name);
@@ -70,7 +70,7 @@ if (!pkpId) {
 }
 if (!vmTypeArg) {
   missing.push(
-    "--vm-type <ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm>",
+    "--vm-type <ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm>",
   );
 }
 if (!inputPath) {

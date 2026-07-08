@@ -59,10 +59,17 @@ already exist, plus which resources would be created, updated, or pruned in a
 normal run. The script prints the `LIT_API_KEY`, `LIT_PKP_ID`, and per-VM
 `LIT_DEPOSIT_ADDRESSES_ACTION_CID_<VM>` values you'll need to execute the actions.
 
+For accounts owned by an MPC/multisig wallet, pass `--calldata` (ChainSecured
+only) instead of `--private-key`: setup runs read-only discovery and prints the
+contract calldata for whatever is out of sync as a batch to relay through the
+owner, instead of broadcasting. It requires `--pkp-id` and an already-provisioned
+usage key. See the [lit-helpers calldata mode docs](../lit-helpers/README.md#calldata-mode-mpc--multisig-owned-accounts).
+
 ```sh
 yarn setup -- --env dev --mode api-key --account-api-key <key> --create-pkp
 yarn setup -- --env dev --mode api-key --account-api-key <key> --pkp-id 0x... --dry-run
 yarn setup -- --env dev --mode chain-secured --account-api-key <key> --private-key 0x... --pkp-id 0x...
+yarn setup -- --env dev --mode chain-secured --calldata --account-api-key <key> --pkp-id 0x...
 ```
 
 To mint an additional usage API key for the existing environment group:

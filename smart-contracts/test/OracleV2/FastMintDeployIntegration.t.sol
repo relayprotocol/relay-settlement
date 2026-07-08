@@ -7,21 +7,21 @@ import {Eip712} from "../utils/Eip712.sol";
 import {RelayHub} from "../../contracts/RelayHub.sol";
 import {RelayOracle} from "../../contracts/RelayOracle.sol";
 import {RelayOracleV2} from "../../contracts/RelayOracleV2.sol";
-import {RelayFastRateLimiter} from "../../contracts/RelayFastRateLimiter.sol";
-import {DeployRelayFastRateLimiter} from "../../script/DeployRelayFastRateLimiter.s.sol";
+import {RelayAmountRateLimiter} from "../../contracts/rate-limiters/RelayAmountRateLimiter.sol";
+import {DeployRelayAmountRateLimiter} from "../../script/DeployRelayAmountRateLimiter.s.sol";
 import {DeployRelayOracleV2} from "../../script/DeployRelayOracleV2.s.sol";
 
 /// @notice End-to-end deploy + wiring integration: runs the Foundry deploy scripts for the limiter
 ///         and RelayOracleV2, applies the full on-chain wiring a fast deposit needs (RelayHub
-///         OPERATOR_ROLE, ORACLE_ROLE, limiter CONSUMER_ROLE, setRateLimiter, setBucketConfig), then
+///         OPERATOR_ROLE, ORACLE_ROLE, limiter CONSUMER_ROLE, addRateLimiter, setBucketConfig), then
 ///         drives a FAST_MINT through executeMultiple — both the happy path (split + bucket consume)
-///         and the fail-closed path (zero usdValue → ExecutionFailed, nothing minted). This pins the
+///         and the fail-closed path (zero amount → ExecutionFailed, nothing minted). This pins the
 ///         deploy scripts and the wiring sequence so the dev e2e doesn't discover them one at a time.
 contract FastMintDeployIntegrationTest is BaseTest {
   RelayHub internal hub;
   RelayOracle internal oldOracle;
   RelayOracleV2 internal v2;
-  RelayFastRateLimiter internal limiter;
+  RelayAmountRateLimiter internal limiter;
 
   address internal deployer;
   uint256 internal deployerPk;
@@ -56,7 +56,7 @@ contract FastMintDeployIntegrationTest is BaseTest {
     vm.setEnv("DEPLOYER_PRIVATE_KEY", vm.toString(deployerPk));
     vm.setEnv("HUB", vm.toString(address(hub)));
     vm.setEnv("OLD_ORACLE", vm.toString(address(oldOracle)));
-    limiter = new DeployRelayFastRateLimiter().run();
+    limiter = new DeployRelayAmountRateLimiter().run();
     v2 = new DeployRelayOracleV2().run();
 
     // The wiring checklist a fast deposit needs (all admin-gated; deployer holds every admin role).
@@ -64,10 +64,11 @@ contract FastMintDeployIntegrationTest is BaseTest {
     hub.grantRole(hub.OPERATOR_ROLE(), address(v2)); // V2 must mint on the hub
     v2.grantRole(v2.ORACLE_ROLE(), oracleSigner); // signer of the execution
     limiter.grantRole(limiter.CONSUMER_ROLE(), address(v2)); // V2 may consume budget
-    v2.setRateLimiter(address(limiter));
+    v2.addRateLimiter(address(limiter));
     limiter.setBucketConfig(
-      RelayFastRateLimiter.BucketConfig({
+      RelayAmountRateLimiter.BucketConfig({
         chainId: CHAIN_ID,
+        currency: CURRENCY,
         isEnabled: true,
         capacity: type(uint128).max,
         rate: 0
@@ -95,19 +96,18 @@ contract FastMintDeployIntegrationTest is BaseTest {
   function _fastMintAction(
     uint256 amount,
     uint256 feeBps,
-    address recipient,
-    uint256 usdValue
+    address recipient
   ) internal view returns (bytes memory) {
     return
       abi.encode(
         uint8(RelayOracleV2.ActionType.FAST_MINT),
         orderAddr,
         _tokenId(CHAIN_ID, CURRENCY),
-        CHAIN_ID,
         amount,
         feeBps,
         recipient,
-        usdValue
+        address(limiter),
+        abi.encode(CHAIN_ID, CURRENCY, amount)
       );
   }
 
@@ -142,13 +142,13 @@ contract FastMintDeployIntegrationTest is BaseTest {
   function test_deployWireFastMint_happyPath() public {
     uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
     uint256 amount = 100e8; // 1% fee → 1 fee, 99 order input
-    uint256 usdValue = amount; // off-chain priced; nonzero so the limiter consumes
-    RelayFastRateLimiter.TokenBucket memory before_ = limiter.getBucket(
-      CHAIN_ID
+    RelayAmountRateLimiter.TokenBucket memory before_ = limiter.getBucket(
+      CHAIN_ID,
+      CURRENCY
     );
 
     bytes[] memory actions = new bytes[](1);
-    actions[0] = _fastMintAction(amount, 1e16, feeRecipient, usdValue); // feeBps 1% = 1e16/1e18
+    actions[0] = _fastMintAction(amount, 1e16, feeRecipient); // feeBps 1% = 1e16/1e18
     (RelayOracleV2.Execution[] memory execs, bytes[] memory sigs) = _exec(
       keccak256("deploy-fast-happy"),
       actions
@@ -159,23 +159,26 @@ contract FastMintDeployIntegrationTest is BaseTest {
     // split: fee -> feeRecipient, order input -> order address
     assertEq(hub.balanceOf(feeRecipient, tokenId), 1e8);
     assertEq(hub.balanceOf(orderAddr, tokenId), amount - 1e8);
-    // bucket consumed exactly the provided usdValue
-    assertEq(before_.tokens - limiter.getBucket(CHAIN_ID).tokens, usdValue);
+    // bucket consumed exactly the gross amount
+    assertEq(
+      before_.tokens - limiter.getBucket(CHAIN_ID, CURRENCY).tokens,
+      amount
+    );
     assertTrue(v2.isExecuted(keccak256("deploy-fast-happy")));
   }
 
-  function test_deployWireFastMint_failClosedZeroUsdValue() public {
+  function test_deployWireFastMint_failClosedZeroAmount() public {
     uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
     bytes32 key = keccak256("deploy-fast-zero");
 
     bytes[] memory actions = new bytes[](1);
-    actions[0] = _fastMintAction(101e8, 100, feeRecipient, 0); // usdValue 0 -> fail-closed
+    actions[0] = _fastMintAction(0, 0, feeRecipient); // amount 0 -> fail-closed
     (RelayOracleV2.Execution[] memory execs, bytes[] memory sigs) = _exec(
       key,
       actions
     );
 
-    // The limiter rejects (usdValue 0), V2 reverts FastMintRejected, executeMultiple isolates it.
+    // The limiter rejects (amount 0), V2 reverts FastMintRejected, executeMultiple isolates it.
     vm.expectEmit(true, false, false, true, address(v2));
     emit RelayOracleV2.ExecutionFailed(key, actions);
     v2.executeMultiple(execs, oracleSigner, sigs);

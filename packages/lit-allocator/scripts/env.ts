@@ -147,6 +147,7 @@ export const VM_TYPES = [
   "bitcoin-vm",
   "hyperliquid-vm",
   "lighter-vm",
+  "xrp-vm",
 ] as const;
 export type VmType = (typeof VM_TYPES)[number];
 
@@ -158,6 +159,7 @@ const ACTION_BASENAMES: Record<VmType, string> = {
   "ton-vm": "ton",
   "hyperliquid-vm": "hyperliquid",
   "lighter-vm": "lighter",
+  "xrp-vm": "xrp",
 };
 
 /** Map a VmType to the `src/vm/*.ts` entry / bundle output basename. */

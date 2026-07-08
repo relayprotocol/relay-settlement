@@ -67,6 +67,8 @@ export interface SetupReads {
   listActions(): Promise<ActionInfo[]>
   listUsageApiKeys(): Promise<UsageKeyInfo[]>
   listPkpsInGroup(groupId: bigint): Promise<PkpInfo[]>
+  /** Actions currently attached to a group (its permitted CID hashes). */
+  listActionsInGroup(groupId: bigint): Promise<ActionInfo[]>
 }
 
 /** Write surface — same shape for every backend, different transport. */
@@ -74,8 +76,17 @@ export interface SetupWrites {
   /** Mint a fresh PKP and register it to the account. */
   createPkp(): Promise<{ walletAddress: string }>
 
-  /** Register a new group. Returns the new group's id. */
-  addGroup(name: string, description: string): Promise<bigint>
+  /**
+   * Register a new group, optionally pre-populated with its permitted action
+   * hashes and PKPs so no follow-up group calls are needed. Returns the new
+   * group's id (a sentinel in calldata mode, where the id cannot be read back).
+   */
+  addGroup(
+    name: string,
+    description: string,
+    cidHashes?: bigint[],
+    pkpIds?: string[]
+  ): Promise<bigint>
 
   /** Attach a PKP to a group. */
   addPkpToGroup(groupId: bigint, pkpId: string): Promise<void>

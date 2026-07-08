@@ -3,7 +3,9 @@ pragma solidity ^0.8.28;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {
+  BidAsk,
   Currency,
+  IBidAskOracle,
   IPricingOracle,
   Price
 } from "./deposit-addresses/open/oracle/IPricingOracle.sol";
@@ -21,21 +23,31 @@ interface IPriceFeedAdapter {
   ///      `view`/`pure` mutability and still satisfy this interface.
   /// @param feedId Provider-specific feed identifier expected by the caller.
   /// @param updateData Opaque provider update bytes returned by the precompile.
-  /// @return usdPrice USD price scaled by `usdPriceDecimals`.
-  /// @return usdPriceDecimals Fixed-point precision used by `usdPrice`.
+  /// @return usdPrice USD (mid) price scaled by `usdPriceDecimals`.
+  /// @return bid Best bid price scaled by `usdPriceDecimals`, or `0` when the
+  ///         provider has no bid/ask available.
+  /// @return ask Best ask price scaled by `usdPriceDecimals`, or `0` when the
+  ///         provider has no bid/ask available.
+  /// @return usdPriceDecimals Fixed-point precision used by `usdPrice`, `bid` and `ask`.
   /// @return publishTime Provider-signed Unix timestamp for the returned price.
   function decodeAndVerify(
     bytes32 feedId,
     bytes calldata updateData
   )
     external
-    returns (uint256 usdPrice, uint8 usdPriceDecimals, uint256 publishTime);
+    returns (
+      uint256 usdPrice,
+      uint256 bid,
+      uint256 ask,
+      uint8 usdPriceDecimals,
+      uint256 publishTime
+    );
 }
 
 /// @title RelayPriceOracle
 /// @author Relay Protocol
 /// @notice Ownable currency-to-feed routing table that delegates feed price reads to the precompile.
-contract RelayPriceOracle is Ownable, IPricingOracle {
+contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
   /// @notice Maximum number of currencies accepted in one price query.
   uint256 public constant MAX_PRICE_BATCH_SIZE = 32;
 
@@ -121,6 +133,14 @@ contract RelayPriceOracle is Ownable, IPricingOracle {
 
   /// @notice Thrown when a price query batch is larger than the configured cap.
   error PriceBatchTooLarge(uint256 length, uint256 maxLength);
+
+  /// @notice Thrown when a resolved price is past its `maxAgeSeconds` window.
+  /// @dev Distinct from the adapter's `ReportExpired`, which guards the
+  ///      provider report's own expiry; this guards the per-route freshness
+  ///      window (`publishTime + maxAgeSeconds`).
+  /// @param expiration Timestamp after which the price must not be used.
+  /// @param blockTimestamp Current block timestamp.
+  error PriceExpired(uint256 expiration, uint256 blockTimestamp);
 
   /// @notice Creates a new price oracle contract.
   /// @param _owner Owner that can update feed routes.
@@ -245,6 +265,33 @@ contract RelayPriceOracle is Ownable, IPricingOracle {
     price = _resolveUsdPrice(currency);
   }
 
+  /// @inheritdoc IBidAskOracle
+  /// @dev `RelayPriceOracle` ignores `extraData`; direct callers can use the overload without it.
+  function resolveBidAskPrices(
+    Currency[] calldata currencies,
+    bytes calldata
+  ) external returns (BidAsk[] memory bidAsks) {
+    bidAsks = _resolveBidAskPrices(currencies);
+  }
+
+  /// @notice Returns the mid + bid/ask band for a batch of currencies via their configured feeds.
+  /// @param currencies Currencies whose bid/ask bands should be returned.
+  /// @return bidAsks Mid + bid/ask data for `currencies`, in the same order.
+  function resolveBidAskPrices(
+    Currency[] calldata currencies
+  ) external returns (BidAsk[] memory bidAsks) {
+    bidAsks = _resolveBidAskPrices(currencies);
+  }
+
+  /// @notice Returns the mid + bid/ask band for a currency via its configured feed.
+  /// @param currency Currency whose bid/ask band should be returned.
+  /// @return bidAsk Mid + bid/ask data for `currency`.
+  function resolveBidAskPrice(
+    Currency calldata currency
+  ) external returns (BidAsk memory bidAsk) {
+    bidAsk = _resolveBidAskPrice(currency);
+  }
+
   /// @notice Returns USD prices for a batch of currencies via their configured provider feeds.
   /// @param currencies Currencies whose USD prices should be returned.
   /// @return prices USD price data for `currencies`, in the same order.
@@ -260,6 +307,24 @@ contract RelayPriceOracle is Ownable, IPricingOracle {
 
     for (uint256 i; i < length; ++i) {
       prices[i] = _resolveUsdPrice(currencies[i]);
+    }
+  }
+
+  /// @notice Returns the mid + bid/ask band for a batch of currencies via their configured feeds.
+  /// @param currencies Currencies whose bid/ask bands should be returned.
+  /// @return bidAsks Mid + bid/ask data for `currencies`, in the same order.
+  function _resolveBidAskPrices(
+    Currency[] calldata currencies
+  ) internal returns (BidAsk[] memory bidAsks) {
+    uint256 length = currencies.length;
+    if (length > MAX_PRICE_BATCH_SIZE) {
+      revert PriceBatchTooLarge(length, MAX_PRICE_BATCH_SIZE);
+    }
+
+    bidAsks = new BidAsk[](length);
+
+    for (uint256 i; i < length; ++i) {
+      bidAsks[i] = _resolveBidAskPrice(currencies[i]);
     }
   }
 
@@ -302,12 +367,28 @@ contract RelayPriceOracle is Ownable, IPricingOracle {
     );
   }
 
-  /// @notice Returns the configured USD price for a currency.
-  /// @param currency Currency whose USD price should be returned.
-  /// @return price USD price data for `currency`.
-  function _resolveUsdPrice(
+  /// @notice Resolves a currency's feed: routes it, reads the precompile, and
+  ///         verifies/decodes the provider update into normalized fields.
+  /// @param currency Currency whose feed should be resolved.
+  /// @return usdPrice Mid (benchmark) price scaled by `usdPriceDecimals`.
+  /// @return bid Best bid scaled by `usdPriceDecimals`, or `0` if unavailable.
+  /// @return ask Best ask scaled by `usdPriceDecimals`, or `0` if unavailable.
+  /// @return usdPriceDecimals Fixed-point precision of `usdPrice`, `bid` and `ask`.
+  /// @return currencyDecimals Number of decimals the currency itself uses.
+  /// @return expiration Unix timestamp after which the price must not be used.
+  function _resolveFeed(
     Currency calldata currency
-  ) internal returns (Price memory price) {
+  )
+    internal
+    returns (
+      uint256 usdPrice,
+      uint256 bid,
+      uint256 ask,
+      uint8 usdPriceDecimals,
+      uint8 currencyDecimals,
+      uint256 expiration
+    )
+  {
     bytes32 key = currencyKey(currency);
     FeedRoute memory route = feedRoutes[key];
     if (!route.exists) {
@@ -324,17 +405,68 @@ contract RelayPriceOracle is Ownable, IPricingOracle {
       route.feedId
     );
 
+    uint256 publishTime;
+    (usdPrice, bid, ask, usdPriceDecimals, publishTime) = IPriceFeedAdapter(
+      adapter
+    ).decodeAndVerify(route.feedId, updateData);
+
+    currencyDecimals = route.currencyDecimals;
+    expiration = publishTime + route.maxAgeSeconds;
+
+    // Fail early on a stale price rather than returning one past its freshness
+    // window, so no consumer can act on it. The adapter already rejects reports
+    // past the provider's own expiry; this enforces the tighter per-route
+    // `maxAgeSeconds` window.
+    if (block.timestamp > expiration) {
+      revert PriceExpired(expiration, block.timestamp);
+    }
+  }
+
+  /// @notice Returns the configured USD (mid) price for a currency.
+  /// @param currency Currency whose USD price should be returned.
+  /// @return price USD price data for `currency`.
+  function _resolveUsdPrice(
+    Currency calldata currency
+  ) internal returns (Price memory price) {
     (
       uint256 usdPrice,
+      ,
+      ,
       uint8 usdPriceDecimals,
-      uint256 publishTime
-    ) = IPriceFeedAdapter(adapter).decodeAndVerify(route.feedId, updateData);
+      uint8 currencyDecimals,
+      uint256 expiration
+    ) = _resolveFeed(currency);
 
     price = Price({
       usdPrice: usdPrice,
       usdPriceDecimals: usdPriceDecimals,
-      currencyDecimals: route.currencyDecimals,
-      expiration: publishTime + route.maxAgeSeconds
+      currencyDecimals: currencyDecimals,
+      expiration: expiration
+    });
+  }
+
+  /// @notice Returns the configured mid + bid/ask band for a currency.
+  /// @param currency Currency whose bid/ask band should be returned.
+  /// @return bidAsk Mid + bid/ask data for `currency`.
+  function _resolveBidAskPrice(
+    Currency calldata currency
+  ) internal returns (BidAsk memory bidAsk) {
+    (
+      uint256 usdPrice,
+      uint256 bid,
+      uint256 ask,
+      uint8 usdPriceDecimals,
+      uint8 currencyDecimals,
+      uint256 expiration
+    ) = _resolveFeed(currency);
+
+    bidAsk = BidAsk({
+      midPrice: usdPrice,
+      bidPrice: bid,
+      askPrice: ask,
+      usdPriceDecimals: usdPriceDecimals,
+      currencyDecimals: currencyDecimals,
+      expiration: expiration
     });
   }
 

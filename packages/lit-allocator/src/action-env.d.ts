@@ -15,6 +15,11 @@
 declare module "https://cdn.jsdelivr.net/npm/@noble/curves@2.0.1/secp256k1.js/+esm" {
   export const secp256k1: {
     getPublicKey(privateKey: Uint8Array, isCompressed?: boolean): Uint8Array;
+    sign(
+      hash: Uint8Array,
+      privateKey: Uint8Array,
+      opts?: { prehash?: boolean; lowS?: boolean; format?: "compact" | "recovered" | "der" },
+    ): Uint8Array;
   };
 }
 

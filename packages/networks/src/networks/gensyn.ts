@@ -10,7 +10,8 @@ export const gensyn: NetworkConfig = {
   hubChainId: "685689",
   isTestnet: false,
   name: "Gensyn",
-  // RPC must be provided via RPC_685689 — no public default available.
-  rpc: [process.env.RPC_685689 ?? ""],
+  rpc: process.env.RPC_685689
+    ? [process.env.RPC_685689]
+    : ["https://gensyn-mainnet.g.alchemy.com/public"],
   slug: "gensyn",
 }

@@ -12,13 +12,23 @@
  *     (--name <usage-key-name> | --usage-api-key-hash 0x...)
  */
 
-import { removeUsageApiKey } from "../src/setup/index.js"
+import {
+  CalldataCollector,
+  printCalldataBatch,
+  removeUsageApiKey,
+} from "../src/setup/index.js"
 
 const USAGE =
   "Usage:\n" +
   "  tsx scripts/remove-usage-key.ts " +
   "--account-api-key <key> --admin-private-key 0x... " +
-  "(--name <usage-key-name> | --usage-api-key-hash 0x...)"
+  "(--name <usage-key-name> | --usage-api-key-hash 0x...)\n" +
+  "  tsx scripts/remove-usage-key.ts " +
+  "--account-api-key <key> --calldata " +
+  "(--name <usage-key-name> | --usage-api-key-hash 0x...)\n" +
+  "\n" +
+  "  --calldata: emit the removeUsageApiKey calldata to relay via the account owner\n" +
+  "              (MPC/multisig) instead of broadcasting. No admin key needed."
 
 /** Read a CLI flag value accepting `--name value` or `--name=value`. */
 function getOption(args: string[], name: string): string | undefined {
@@ -47,11 +57,15 @@ async function main() {
   const args = process.argv.slice(2)
   const accountApiKey = getOption(args, "--account-api-key")
   const adminPrivateKey = getOption(args, "--admin-private-key")
+  const calldataMode = args.includes("--calldata")
   const name = getOption(args, "--name")
   const usageApiKeyHashArg = getOption(args, "--usage-api-key-hash")
 
-  if (!accountApiKey || !adminPrivateKey) {
-    fail("Missing --account-api-key or --admin-private-key")
+  if (!accountApiKey) {
+    fail("Missing --account-api-key")
+  }
+  if (!adminPrivateKey && !calldataMode) {
+    fail("Missing --admin-private-key (or --calldata)")
   }
   if (!name && !usageApiKeyHashArg) {
     fail("Missing --name or --usage-api-key-hash")
@@ -71,13 +85,21 @@ async function main() {
 
   console.log("🗑  Removing usage API key")
   console.log(`   target: ${name ?? `hash=${usageApiKeyHashArg}`}`)
+  console.log(`   mode:   ${calldataMode ? "calldata" : "broadcast"}`)
   console.log()
 
+  const collector = calldataMode ? new CalldataCollector() : undefined
   const txHash = await removeUsageApiKey({
     privateKey: adminPrivateKey,
     accountApiKey,
     target,
+    collector,
   })
+
+  if (collector) {
+    printCalldataBatch(collector)
+    return
+  }
 
   console.log(`✓ Transaction broadcast: ${txHash}`)
 }

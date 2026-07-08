@@ -77,7 +77,20 @@ precompile cache or any other ingester), and the adapter forwards it to
 `VerifierProxy.verify`, which checks the DON signatures on-chain and returns the
 decoded V3 report body. The adapter then applies structural checks on the
 verified report (schema, feed-id binding, positive price, not-expired) and
-returns `(usdPrice, 18 decimals, observationsTimestamp)`.
+returns `(usdPrice, bid, ask, 18 decimals, observationsTimestamp)` — the V3
+report carries the consensus benchmark (mid) price plus the bid/ask band.
+
+`RelayPriceOracle` exposes these through two paths so the common, mid-only
+consumers stay simple:
+
+- `IPricingOracle.resolveUsdPrices` / `resolveUsdPrice` → `Price` (mid only).
+- `IBidAskOracle.resolveBidAskPrices` → `BidAsk` (mid + bid/ask) for consumers
+  such as the AMM that need the liquidity distribution. Both paths share the
+  single `verify`, so a consumer pays at most one verification fee per call.
+
+Feeds that omit bid/ask (non-positive) report `0` to signal the band is
+unavailable, so consumers treat the band as: either `bidPrice == askPrice == 0`
+(unavailable) or `bidPrice <= midPrice <= askPrice`.
 
 Because `verify` is state-changing and fee-paying, `decodeAndVerify` — and the
 whole `RelayPriceOracle` read path (`resolveUsdPrices`/`resolveUsdPrice`, plus

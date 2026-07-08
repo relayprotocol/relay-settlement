@@ -1,17 +1,15 @@
 import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
 
-export const corn: NetworkConfig = {
-  chainId: 21000000n,
+export const arc: NetworkConfig = {
+  chainId: 5042n,
   contracts: {
     prod: { depository: "0x4cD00E387622C35bDDB9b4c962C136462338BC31" },
     stag: { depository: "0x9ddC6a541e8F8B50B0996786A3eC275AB4d3A76C" },
   },
   family: "ethereum-vm",
-  hubChainId: "21000000",
+  hubChainId: "5042",
   isTestnet: false,
-  name: "Corn",
-  rpc: process.env.RPC_21000000
-    ? [process.env.RPC_21000000]
-    : ["https://maizenet-rpc.usecorn.com"],
-  slug: "corn",
+  name: "Arc",
+  rpc: [process.env.RPC_5042 ?? ""],
+  slug: "arc",
 }

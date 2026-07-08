@@ -13,6 +13,6 @@ export const polygon: NetworkConfig = {
   name: "Polygon",
   rpc: process.env.RPC_137
     ? [process.env.RPC_137]
-    : ["https://polygon-rpc.com", "https://rpc.ankr.com/polygon"],
+    : ["https://polygon-public.nodies.app", "https://rpc.ankr.com/polygon"],
   slug: "polygon",
 }

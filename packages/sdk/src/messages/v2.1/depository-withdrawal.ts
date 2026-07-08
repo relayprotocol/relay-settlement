@@ -24,6 +24,7 @@ export {
   DecodedSolanaVmWithdrawal,
   DecodedTonVmWithdrawal,
   DecodedTronVmWithdrawal,
+  DecodedXrpVmWithdrawal,
   DecodedWithdrawal,
   DecodedWithdrawalFor,
   LighterTransferParams,

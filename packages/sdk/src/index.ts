@@ -20,6 +20,7 @@ import {
   DecodedLighterVmWithdrawal,
   DecodedTonVmWithdrawal,
   DecodedTronVmWithdrawal,
+  DecodedXrpVmWithdrawal,
   DecodedWithdrawal,
   LighterTransferParams,
   DepositoryWithdrawalMessage,
@@ -53,6 +54,7 @@ import {
   getExecutionMessageId,
   encodeAction,
   decodeAction,
+  encodeAmountLimiterData,
 } from "./messages/v2.2/execution"
 
 import {
@@ -90,6 +92,8 @@ import {
   BitcoinVmWithdrawRequestAdditionalData,
   WithdrawRequestAdditionalData,
   DenormalizedWithdrawRequest,
+  ExecuteAndWithdrawFee,
+  ExecuteAndWithdrawRequest,
   getWithdrawRequestHash,
   normalizeWithdrawRequest,
 } from "./messages/v2.3/withdrawal"
@@ -98,6 +102,7 @@ import {
   VmType,
   decodeAddress,
   decodeTransactionId,
+  decodeXrpDestination,
   encodeAddress,
   encodeAddressToHex,
   encodeBytes,
@@ -133,6 +138,7 @@ export {
   VmType,
   decodeAddress,
   decodeTransactionId,
+  decodeXrpDestination,
   encodeAddress,
   encodeAddressToHex,
   encodeBytes,
@@ -153,6 +159,7 @@ export {
   DecodedLighterVmWithdrawal,
   DecodedTonVmWithdrawal,
   DecodedTronVmWithdrawal,
+  DecodedXrpVmWithdrawal,
   DecodedWithdrawal,
   LighterTransferParams,
   DepositoryWithdrawalMessage,
@@ -185,6 +192,7 @@ export {
   getExecutionMessageId,
   encodeAction,
   decodeAction,
+  encodeAmountLimiterData,
 
   // Generic mapping
   GenericMappingMessage,
@@ -220,6 +228,8 @@ export {
   BitcoinVmWithdrawRequestAdditionalData,
   WithdrawRequestAdditionalData,
   DenormalizedWithdrawRequest,
+  ExecuteAndWithdrawFee,
+  ExecuteAndWithdrawRequest,
   getWithdrawRequestHash,
   normalizeWithdrawRequest,
 

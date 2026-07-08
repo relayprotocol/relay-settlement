@@ -10,6 +10,11 @@ export type {
   UsageKeyInfo,
 } from "./backend.js"
 export { createApiKeyBackend } from "./backend-api-key.js"
+export {
+  CalldataCollector,
+  printCalldataBatch,
+  type EncodedCall,
+} from "../chainSecured.js"
 export { runCreateUsageApiKeyCli } from "./create-usage-api-key.js"
 export type { CreateUsageApiKeyCliOptions } from "./create-usage-api-key.js"
 export {

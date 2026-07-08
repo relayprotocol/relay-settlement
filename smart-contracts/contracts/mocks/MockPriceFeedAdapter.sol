@@ -13,13 +13,20 @@ contract MockPriceFeedAdapter is IPriceFeedAdapter {
   error FeedIdMismatch(bytes32 expected, bytes32 actual);
 
   /// @inheritdoc IPriceFeedAdapter
+  /// @dev This mock has no bid/ask spread, so it returns `bid = ask = 0`.
   function decodeAndVerify(
     bytes32 feedId,
     bytes calldata updateData
   )
     external
     pure
-    returns (uint256 usdPrice, uint8 usdPriceDecimals, uint256 publishTime)
+    returns (
+      uint256 usdPrice,
+      uint256 bid,
+      uint256 ask,
+      uint8 usdPriceDecimals,
+      uint256 publishTime
+    )
   {
     bytes32 actualFeedId;
     (actualFeedId, usdPrice, usdPriceDecimals, publishTime) = abi.decode(
@@ -30,5 +37,7 @@ contract MockPriceFeedAdapter is IPriceFeedAdapter {
     if (actualFeedId != feedId) {
       revert FeedIdMismatch(feedId, actualFeedId);
     }
+
+    // No bid/ask spread: `bid` and `ask` default to 0 (unavailable).
   }
 }

@@ -4,20 +4,23 @@ pragma solidity ^0.8.28;
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {SafeCastLib} from "solady/utils/SafeCastLib.sol";
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
+import {IRateLimiter} from "./IRateLimiter.sol";
 
-/// @title RelayFastRateLimiter
+/// @title RelayUsdRateLimiter
 /// @author Relay Protocol
 /// @notice Per-chain token-bucket rate limiter. It caps the RATE at which USD-denominated value can
 ///         be consumed per chain — it is NOT a flat ceiling: over a window T, peak in-flight
 ///         consumption is ~ capacity + rate*T. Size `rate` accordingly (e.g. rate <= capacity /
 ///         (k * T)). One bucket per chain; all consumption on a chain shares the budget.
 /// @dev    Budget is USD scaled by USD_DECIMALS. The USD value is priced off-chain by the caller and
-///         passed in — there is no on-chain pricing. The bucket key is the raw `chainId` string with
-///         no normalization — config and callers MUST use one canonical chainId form, else a lookup
-///         miss returns false. Fail-closed: consumption requires an enabled bucket AND a nonzero
-///         usdValue; an unconfigured/disabled chain (or a zero usdValue) returns false. "Unlimited"
-///         = a deliberately high capacity.
-contract RelayFastRateLimiter is AccessControl {
+///         passed in — there is no on-chain pricing. `consume` decodes (chainId, usdValue) from the
+///         opaque `data` the oracle passes. The bucket key is the raw `chainId` string with no
+///         normalization — config and callers MUST use one canonical chainId form, else a lookup miss
+///         returns false. Fail-closed: consumption requires an enabled bucket AND a nonzero usdValue;
+///         an unconfigured/disabled chain (or a zero usdValue) returns false. "Unlimited" = a
+///         deliberately high capacity. Implements the generic `IRateLimiter`, so it is a drop-in
+///         behind RelayOracleV2's limiter allowlist with no oracle/SDK change.
+contract RelayUsdRateLimiter is AccessControl, IRateLimiter {
   using SafeCastLib for uint256;
 
   // Structs
@@ -101,21 +104,23 @@ contract RelayFastRateLimiter is AccessControl {
 
   // Consumer methods
 
-  /// @notice Try to consume `usdValue` of budget for a chain; returns whether it was consumed.
+  /// @notice Try to consume USD budget for a fast deposit; returns whether it was consumed.
   /// @dev Authoritative, trustless enforcement. Does NOT revert on rejection: the caller owns the
   ///      revert decision so it can carry its own context. Returns false (no deduct) when the budget
   ///      is unavailable — disabled chain, zero usdValue, or over budget (fail-closed). A zero
   ///      usdValue is rejected (NOT a no-op): with no on-chain pricing, a 0 on an enabled bucket
   ///      would consume nothing and always pass = unlimited. A caller's accept/reject choice must
   ///      NOT depend on live budget (see canConsume).
-  /// @param chainId Chain id (raw, VM-specific, e.g. "1", "8453")
-  /// @param usdValue Off-chain-priced USD value (scaled by USD_DECIMALS). Trusted — the caller
-  ///        prices it off-chain.
+  /// @param data abi.encode(string chainId, uint256 usdValue) — the oracle constructs it; usdValue is
+  ///        off-chain priced (trusted), chainId is the attested origin chain.
   /// @return consumed True if the budget was consumed; false otherwise
   function consume(
-    string calldata chainId,
-    uint256 usdValue
-  ) external onlyRole(CONSUMER_ROLE) returns (bool consumed) {
+    bytes calldata data
+  ) external override onlyRole(CONSUMER_ROLE) returns (bool consumed) {
+    (string memory chainId, uint256 usdValue) = abi.decode(
+      data,
+      (string, uint256)
+    );
     TokenBucket storage bucket = chainBuckets[_chainKey(chainId)];
     if (!bucket.isEnabled) {
       // Fail-closed: requires an explicitly enabled budget; otherwise return false.
@@ -224,7 +229,7 @@ contract RelayFastRateLimiter is AccessControl {
   /// @notice Bucket key for a chain
   /// @return key Storage key for the chain's bucket
   function _chainKey(
-    string calldata chainId
+    string memory chainId
   ) internal pure returns (bytes32 key) {
     return keccak256(bytes(chainId));
   }

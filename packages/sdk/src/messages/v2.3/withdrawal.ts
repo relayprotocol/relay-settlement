@@ -51,6 +51,27 @@ export type DenormalizedWithdrawRequest = Omit<WithdrawRequest, "data"> & {
   additionalData?: WithdrawRequestAdditionalData
 }
 
+// Mirrors `RelayExecutor.Fee`
+export type ExecuteAndWithdrawFee = {
+  recipient: string // Hub account (alias) that receives the fee
+  amount: string // Fee amount denominated in the input currency
+}
+
+// Mirrors `RelayExecutor.ExecuteAndWithdrawRequest`
+export type ExecuteAndWithdrawRequest = {
+  inChainId: string
+  inCurrency: string
+  outChainId: string
+  outCurrency: string
+  outAmountMinimum: string
+  depository: string
+  orderAddress: string
+  receiver: string
+  data: string
+  fees: ExecuteAndWithdrawFee[]
+  nonce: string
+}
+
 export const getWithdrawRequestHash = (request: WithdrawRequest) => {
   const encoded = encodeAbiParameters(
     parseAbiParameters([

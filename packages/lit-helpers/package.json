@@ -9,6 +9,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "lint": "tsc --noEmit && eslint .",
+    "create-pkp": "tsx scripts/create-pkp.ts",
     "convert-to-chain-secured": "tsx scripts/convert-to-chain-secured.ts",
     "transfer-ownership": "tsx scripts/transfer-ownership.ts",
     "verify-ownership": "tsx scripts/verify-ownership.ts",

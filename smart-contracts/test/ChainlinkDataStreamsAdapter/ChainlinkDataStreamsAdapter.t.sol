@@ -6,6 +6,7 @@ import {MockVerifierProxy} from "../../contracts/mocks/MockVerifierProxy.sol";
 import {RelayPriceOracle} from "../../contracts/RelayPriceOracle.sol";
 import {PriceOraclePrecompile} from "../../contracts/precompiles/PriceOraclePrecompile.sol";
 import {
+  BidAsk,
   Currency,
   Price
 } from "../../contracts/deposit-addresses/open/oracle/IPricingOracle.sol";
@@ -39,12 +40,88 @@ contract ChainlinkDataStreamsAdapterTest is BaseTest {
       EXPIRES_AT
     );
 
-    (uint256 usdPrice, uint8 usdPriceDecimals, uint256 publishTime) = adapter
-      .decodeAndVerify(feedId, report);
+    (
+      uint256 usdPrice,
+      uint256 bid,
+      uint256 ask,
+      uint8 usdPriceDecimals,
+      uint256 publishTime
+    ) = adapter.decodeAndVerify(feedId, report);
 
     assertEq(usdPrice, uint256(uint192(ETH_PRICE)));
+    assertEq(bid, uint256(uint192(ETH_PRICE)));
+    assertEq(ask, uint256(uint192(ETH_PRICE)));
     assertEq(usdPriceDecimals, 18);
     assertEq(publishTime, OBSERVATIONS_TIME);
+  }
+
+  function test_returnsBidAndAskBand() public {
+    bytes32 feedId = _v3FeedId(0x01);
+    int192 bidPrice = ETH_PRICE - 5e18;
+    int192 askPrice = ETH_PRICE + 5e18;
+    bytes memory report = _fullReport(
+      feedId,
+      ETH_PRICE,
+      bidPrice,
+      askPrice,
+      OBSERVATIONS_TIME,
+      EXPIRES_AT
+    );
+
+    (uint256 usdPrice, uint256 bid, uint256 ask, , ) = adapter.decodeAndVerify(
+      feedId,
+      report
+    );
+
+    assertEq(usdPrice, uint256(uint192(ETH_PRICE)));
+    assertEq(bid, uint256(uint192(bidPrice)));
+    assertEq(ask, uint256(uint192(askPrice)));
+  }
+
+  function test_reportsZeroBandWhenBidAskMissing() public {
+    bytes32 feedId = _v3FeedId(0x01);
+    // A feed with no bid/ask info reports them as zero; the adapter surfaces 0
+    // to signal the band is unavailable rather than fabricating a band.
+    bytes memory report = _fullReport(
+      feedId,
+      ETH_PRICE,
+      int192(0),
+      int192(0),
+      OBSERVATIONS_TIME,
+      EXPIRES_AT
+    );
+
+    (uint256 usdPrice, uint256 bid, uint256 ask, , ) = adapter.decodeAndVerify(
+      feedId,
+      report
+    );
+
+    assertEq(usdPrice, uint256(uint192(ETH_PRICE)));
+    assertEq(bid, 0);
+    assertEq(ask, 0);
+  }
+
+  function test_reportsZeroBandWhenOneSideMissing() public {
+    bytes32 feedId = _v3FeedId(0x01);
+    // Only the ask side is present; the band must be reported as fully
+    // unavailable rather than one-sided, to hold the consumer invariant.
+    bytes memory report = _fullReport(
+      feedId,
+      ETH_PRICE,
+      int192(0),
+      ETH_PRICE + 5e18,
+      OBSERVATIONS_TIME,
+      EXPIRES_AT
+    );
+
+    (uint256 usdPrice, uint256 bid, uint256 ask, , ) = adapter.decodeAndVerify(
+      feedId,
+      report
+    );
+
+    assertEq(usdPrice, uint256(uint192(ETH_PRICE)));
+    assertEq(bid, 0);
+    assertEq(ask, 0);
   }
 
   function test_revertsOnFeedIdMismatch() public {
@@ -167,11 +244,59 @@ contract ChainlinkDataStreamsAdapterTest is BaseTest {
     );
     vm.stopPrank();
 
+    // The mid-only path returns just the benchmark price.
     Price memory price = oracle.resolveUsdPrice(eth);
     assertEq(price.usdPrice, uint256(uint192(ETH_PRICE)));
     assertEq(price.usdPriceDecimals, 18);
     assertEq(price.currencyDecimals, ethDecimals);
     assertEq(price.expiration, OBSERVATIONS_TIME + maxAgeSeconds);
+
+    // The bid/ask path returns the mid plus the band from the same report.
+    BidAsk memory bidAsk = oracle.resolveBidAskPrice(eth);
+    assertEq(bidAsk.midPrice, uint256(uint192(ETH_PRICE)));
+    assertEq(bidAsk.bidPrice, uint256(uint192(ETH_PRICE)));
+    assertEq(bidAsk.askPrice, uint256(uint192(ETH_PRICE)));
+    assertEq(bidAsk.usdPriceDecimals, 18);
+    assertEq(bidAsk.currencyDecimals, ethDecimals);
+    assertEq(bidAsk.expiration, OBSERVATIONS_TIME + maxAgeSeconds);
+  }
+
+  function test_resolveBidAskReturnsDistinctBandThroughOracle() public {
+    bytes32 feedId = _v3FeedId(0x0f);
+    uint32 maxAgeSeconds = 60;
+    int192 bidPrice = ETH_PRICE - 5e18;
+    int192 askPrice = ETH_PRICE + 5e18;
+
+    RelayPriceOracle oracle = new RelayPriceOracle(owner);
+    Currency memory eth = Currency({
+      chainId: "ethereum",
+      currency: abi.encodePacked(address(0))
+    });
+
+    vm.mockCall(
+      PriceOraclePrecompile.PRECOMPILE,
+      abi.encodePacked(PROVIDER_CHAINLINK, feedId),
+      _fullReport(
+        feedId,
+        ETH_PRICE,
+        bidPrice,
+        askPrice,
+        OBSERVATIONS_TIME,
+        EXPIRES_AT
+      )
+    );
+
+    vm.startPrank(owner);
+    oracle.setPriceFeedAdapter(PROVIDER_CHAINLINK, address(adapter));
+    oracle.setFeedRoute(eth, PROVIDER_CHAINLINK, feedId, 18, maxAgeSeconds);
+    vm.stopPrank();
+
+    BidAsk memory bidAsk = oracle.resolveBidAskPrice(eth);
+    assertEq(bidAsk.midPrice, uint256(uint192(ETH_PRICE)));
+    assertEq(bidAsk.bidPrice, uint256(uint192(bidPrice)));
+    assertEq(bidAsk.askPrice, uint256(uint192(askPrice)));
+    assertEq(bidAsk.currencyDecimals, 18);
+    assertEq(bidAsk.expiration, OBSERVATIONS_TIME + maxAgeSeconds);
   }
 
   /// @notice Builds a V3-tagged feed ID (`0x0003` prefix) from a salt.
@@ -179,10 +304,30 @@ contract ChainlinkDataStreamsAdapterTest is BaseTest {
     return bytes32((uint256(0x0003) << 240) | salt);
   }
 
-  /// @notice ABI-encodes a V3 `ReportDataV3` body.
+  /// @notice ABI-encodes a V3 `ReportDataV3` body with `bid = ask = benchmark`.
   function _reportBlob(
     bytes32 feedId,
     int192 benchmarkPrice,
+    uint32 observationsTimestamp,
+    uint32 expiresAt
+  ) internal pure returns (bytes memory) {
+    return
+      _reportBlob(
+        feedId,
+        benchmarkPrice,
+        benchmarkPrice,
+        benchmarkPrice,
+        observationsTimestamp,
+        expiresAt
+      );
+  }
+
+  /// @notice ABI-encodes a V3 `ReportDataV3` body with an explicit bid/ask band.
+  function _reportBlob(
+    bytes32 feedId,
+    int192 benchmarkPrice,
+    int192 bid,
+    int192 ask,
     uint32 observationsTimestamp,
     uint32 expiresAt
   ) internal pure returns (bytes memory) {
@@ -195,16 +340,37 @@ contract ChainlinkDataStreamsAdapterTest is BaseTest {
         uint192(0), // linkFee
         expiresAt,
         benchmarkPrice,
-        benchmarkPrice, // bid
-        benchmarkPrice // ask
+        bid,
+        ask
       );
   }
 
-  /// @notice Wraps a report body in the Data Streams `fullReport` envelope with
-  ///         empty (unverified) signatures.
+  /// @notice Wraps a `bid = ask = benchmark` report body in the `fullReport`
+  ///         envelope with empty (unverified) signatures.
   function _fullReport(
     bytes32 feedId,
     int192 benchmarkPrice,
+    uint32 observationsTimestamp,
+    uint32 expiresAt
+  ) internal pure returns (bytes memory) {
+    return
+      _fullReport(
+        feedId,
+        benchmarkPrice,
+        benchmarkPrice,
+        benchmarkPrice,
+        observationsTimestamp,
+        expiresAt
+      );
+  }
+
+  /// @notice Wraps a report body with an explicit bid/ask band in the
+  ///         `fullReport` envelope with empty (unverified) signatures.
+  function _fullReport(
+    bytes32 feedId,
+    int192 benchmarkPrice,
+    int192 bid,
+    int192 ask,
     uint32 observationsTimestamp,
     uint32 expiresAt
   ) internal pure returns (bytes memory) {
@@ -214,7 +380,14 @@ contract ChainlinkDataStreamsAdapterTest is BaseTest {
     return
       abi.encode(
         reportContext,
-        _reportBlob(feedId, benchmarkPrice, observationsTimestamp, expiresAt),
+        _reportBlob(
+          feedId,
+          benchmarkPrice,
+          bid,
+          ask,
+          observationsTimestamp,
+          expiresAt
+        ),
         rs,
         ss,
         bytes32(0)

@@ -3,10 +3,15 @@ pragma solidity ^0.8.28;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import {
+  ReentrancyGuard
+} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {
+  SignatureChecker
+} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 
 import {RelayAllocator} from "./RelayAllocator.sol";
+import {RelayCallExecutor} from "./RelayCallExecutor.sol";
 import {RelayHub} from "./RelayHub.sol";
 import {Utils} from "./Utils.sol";
 
@@ -52,14 +57,6 @@ contract RelayExecutor is AccessControl, EIP712, ReentrancyGuard {
     bytes32 nonce;
   }
 
-  /// @notice Unsigned arbitrary call executed between funding and withdrawal
-  /// @param to Call target
-  /// @param data Calldata to pass to the target
-  struct Call {
-    address to;
-    bytes data;
-  }
-
   // Events
 
   /// @notice Emitted after an execute and withdraw request is executed and submitted to the allocator
@@ -91,15 +88,15 @@ contract RelayExecutor is AccessControl, EIP712, ReentrancyGuard {
     uint256 amount
   );
 
-  /// @notice Thrown when an arbitrary call reverts
-  error CallFailed(uint256 index, address target, bytes reason);
-
   /// @notice Thrown when the final withdrawal currency balance is below the signed minimum
   error InsufficientMinimumAmount(
     uint256 tokenId,
     uint256 balance,
     uint256 outAmountMinimum
   );
+
+  /// @notice Thrown when an oracle authorization has already been consumed
+  error RequestAlreadyExecuted(bytes32 digest);
 
   // Roles
 
@@ -117,6 +114,9 @@ contract RelayExecutor is AccessControl, EIP712, ReentrancyGuard {
   /// @notice Allocator contract
   RelayAllocator public immutable ALLOCATOR;
 
+  /// @notice Sandbox contract that runs untrusted, caller-supplied calls
+  RelayCallExecutor public immutable CALL_EXECUTOR;
+
   /// @notice Spender chain id used for allocator withdrawals initiated by this contract
   string private constant _SPENDER_CHAIN_ID = "relay";
 
@@ -132,6 +132,12 @@ contract RelayExecutor is AccessControl, EIP712, ReentrancyGuard {
 
   /// @notice Mapping of allocator withdraw request hash to source order address
   mapping(bytes32 => address) public orderAddressByWithdrawRequestHash;
+
+  /// @notice Tracks consumed oracle authorizations keyed by their EIP-712 digest
+  /// @dev The digest commits to request.nonce and orderAddress, making each
+  ///      oracle authorization single-use regardless of the caller-supplied
+  ///      calls array or the resulting withdrawal amount.
+  mapping(bytes32 => bool) public usedRequests;
 
   /// @notice Tracks order addresses that have already been charged fees
   mapping(address => bool) public feesChargedByOrderAddress;
@@ -153,6 +159,7 @@ contract RelayExecutor is AccessControl, EIP712, ReentrancyGuard {
 
     HUB = RelayHub(hub);
     ALLOCATOR = RelayAllocator(allocator);
+    CALL_EXECUTOR = new RelayCallExecutor(hub, address(this));
   }
 
   // Public methods
@@ -166,7 +173,7 @@ contract RelayExecutor is AccessControl, EIP712, ReentrancyGuard {
   /// @return withdrawRequestHash Hash of the allocator withdrawal request
   function execute(
     ExecuteAndWithdrawRequest calldata request,
-    Call[] calldata calls,
+    RelayCallExecutor.Call[] calldata calls,
     address oracle,
     bytes calldata signature
   ) external nonReentrant returns (bytes32 withdrawRequestHash) {
@@ -174,12 +181,14 @@ contract RelayExecutor is AccessControl, EIP712, ReentrancyGuard {
       revert UnauthorizedOracle(oracle);
     }
 
-    if (
-      !oracle.isValidSignatureNow(
-        _executeAndWithdrawRequestDigest(request),
-        signature
-      )
-    ) {
+    bytes32 digest = _executeAndWithdrawRequestDigest(request);
+
+    if (usedRequests[digest]) {
+      revert RequestAlreadyExecuted(digest);
+    }
+    usedRequests[digest] = true;
+
+    if (!oracle.isValidSignatureNow(digest, signature)) {
       revert InvalidSignature(oracle);
     }
 
@@ -191,12 +200,13 @@ contract RelayExecutor is AccessControl, EIP712, ReentrancyGuard {
 
     _chargeFees(request.orderAddress, tokenInId, request.fees);
 
-    _executeCalls(calls);
-
     uint256 tokenOutId = Utils.generateTokenId(
       request.outChainId,
       request.outCurrency
     );
+
+    _runCalls(calls, tokenInId, tokenOutId);
+
     uint256 withdrawAmount = HUB.balanceOf(address(this), tokenOutId);
     if (withdrawAmount < request.outAmountMinimum) {
       revert InsufficientMinimumAmount(
@@ -236,17 +246,34 @@ contract RelayExecutor is AccessControl, EIP712, ReentrancyGuard {
 
   // Internal methods
 
-  /// @notice Executes unsigned arbitrary calls
-  function _executeCalls(Call[] calldata calls) internal {
-    uint256 callsLength = calls.length;
-    for (uint256 i; i < callsLength; ++i) {
-      Call calldata call_ = calls[i];
-      // slither-disable-next-line calls-loop
-      (bool success, bytes memory result) = call_.to.call(call_.data);
-      if (!success) {
-        revert CallFailed(i, call_.to, result);
+  /// @notice Pushes the pulled input into the sandbox, runs the untrusted calls
+  ///         there, then sweeps the input and output currencies back
+  /// @dev Running the caller-supplied calls in an isolated, privilege-less
+  ///      sandbox that only holds this order's input funds bounds the impact of
+  ///      a malicious call to the current order. If the input is diverted the
+  ///      output falls below the signed minimum and the transaction reverts.
+  function _runCalls(
+    RelayCallExecutor.Call[] calldata calls,
+    uint256 tokenInId,
+    uint256 tokenOutId
+  ) internal {
+    uint256 netInput = HUB.balanceOf(address(this), tokenInId);
+    if (netInput != 0) {
+      if (!HUB.transfer(address(CALL_EXECUTOR), tokenInId, netInput)) {
+        revert HubTransferFailed(
+          address(this),
+          address(CALL_EXECUTOR),
+          tokenInId,
+          netInput
+        );
       }
     }
+
+    uint256[] memory sweepTokenIds = new uint256[](2);
+    sweepTokenIds[0] = tokenInId;
+    sweepTokenIds[1] = tokenOutId;
+
+    CALL_EXECUTOR.run(calls, sweepTokenIds);
   }
 
   /// @notice Pulls the entire source currency balance from an order address
@@ -341,9 +368,7 @@ contract RelayExecutor is AccessControl, EIP712, ReentrancyGuard {
 
   /// @notice Computes the EIP-712 hash of the fees array
   /// @return hash Hash of the encoded fees array
-  function _hashFees(
-    Fee[] calldata fees
-  ) internal pure returns (bytes32 hash) {
+  function _hashFees(Fee[] calldata fees) internal pure returns (bytes32 hash) {
     uint256 feesLength = fees.length;
     bytes32[] memory feeHashes = new bytes32[](feesLength);
     for (uint256 i; i < feesLength; ++i) {

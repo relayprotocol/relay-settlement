@@ -37,6 +37,16 @@ library Eip712 {
     }
 
     /// @notice Computes the typed-data digest from a domain separator and a
+    /// pre-hashed struct.
+    function digest(
+        bytes32 separator,
+        bytes32 structHash
+    ) internal pure returns (bytes32) {
+        return
+            keccak256(abi.encodePacked("\x19\x01", separator, structHash));
+    }
+
+    /// @notice Computes the typed-data digest from a domain separator and a
     /// pre-hashed struct, then signs it with the given private key.
     function sign(
         uint256 privateKey,

@@ -191,20 +191,106 @@ export function signChainSecuredTypedData(
   return { typed_data: typedData, signature }
 }
 
+// ─── Calldata (MPC relay) mode ───────────────────────────────────────────────
+
+/** A single contract call captured for later relay through an external signer. */
+export interface EncodedCall {
+  /** Target contract (the AccountConfig diamond on Base). */
+  to: string
+  /** 0x-prefixed calldata. */
+  data: string
+  /** Wei value; always "0x0" for AccountConfig writes. */
+  value: string
+  /** Human-readable label describing the operation. */
+  description?: string
+}
+
+/**
+ * Collects contract writes as raw calldata instead of broadcasting them, so
+ * they can be relayed later through an external signer — e.g. an MPC or
+ * multisig wallet that now owns the ChainSecured account. `msg.sender` at
+ * relay time must be the account's admin wallet (the new owner); the calldata
+ * itself is signer-agnostic.
+ */
+export class CalldataCollector {
+  readonly to: string
+  readonly chainId: bigint
+  readonly calls: EncodedCall[] = []
+
+  constructor(opts?: { to?: string; chainId?: bigint }) {
+    this.to = opts?.to ?? DEFAULT_ACCOUNT_CONFIG_ADDRESS
+    this.chainId = opts?.chainId ?? DEFAULT_BASE_CHAIN_ID
+  }
+
+  /**
+   * Record one call. Returns a deterministic zero placeholder in place of the
+   * real tx hash so existing broadcast-mode call sites keep type-checking.
+   */
+  record(to: string, calldata: Uint8Array, description?: string): string {
+    const data = toHex(calldata)
+    this.calls.push({ to, data, value: "0x0", description })
+    console.log(
+      `     collected calldata${description ? ` (${description})` : ""}: ${to} ${data}`
+    )
+    return `0x${"00".repeat(32)}`
+  }
+}
+
+/** Pretty-print collected calldata as a batch ready to relay via the owner. */
+export function printCalldataBatch(collector: CalldataCollector): void {
+  const { calls } = collector
+  console.log("═══════════════════════════════════════════════════════")
+  if (calls.length === 0) {
+    console.log("  Calldata mode: nothing to relay — already in sync.")
+    console.log("═══════════════════════════════════════════════════════")
+    return
+  }
+  console.log(
+    `  Calldata mode — ${calls.length} transaction(s) to relay via the account owner`
+  )
+  console.log(`  Chain id: ${collector.chainId}`)
+  console.log("═══════════════════════════════════════════════════════")
+  calls.forEach((c, i) => {
+    console.log()
+    console.log(`  [${i + 1}] ${c.description ?? "call"}`)
+    console.log(`      to:    ${c.to}`)
+    console.log(`      value: ${c.value}`)
+    console.log(`      data:  ${c.data}`)
+  })
+  console.log()
+  console.log("  Batch (JSON):")
+  console.log(
+    JSON.stringify(
+      calls.map((c) => ({ to: c.to, value: c.value, data: c.data })),
+      null,
+      2
+    )
+  )
+  console.log()
+}
+
 // ─── Transaction sending ─────────────────────────────────────────────────────
 
 /**
  * Build, sign, and broadcast an EIP-1559 transaction; wait for the receipt.
  * Prints the equivalent `cast call` line first so reverts can be reproduced
  * offline.
+ *
+ * When `options.collector` is provided the transaction is NOT broadcast:
+ * the calldata is recorded on the collector and a placeholder hash is
+ * returned. In that mode `privateKey` may be an empty string.
  */
 export async function sendTransaction(
   rpcUrl: string,
   chainId: bigint,
   privateKey: string,
   to: string,
-  calldata: Uint8Array
+  calldata: Uint8Array,
+  options?: { collector?: CalldataCollector; description?: string }
 ): Promise<string> {
+  if (options?.collector) {
+    return options.collector.record(to, calldata, options.description)
+  }
   const fromAddress = addr.fromPrivateKey(privateKey)
   const calldataHex = toHex(calldata)
   console.log(

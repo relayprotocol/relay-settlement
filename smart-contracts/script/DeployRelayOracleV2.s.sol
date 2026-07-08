@@ -12,8 +12,8 @@ import {ScriptBase} from "./utils/ScriptBase.sol";
 ///   OLD_ORACLE           – optional, the predecessor RelayOracle whose idempotency
 ///                          keys must be honoured (zero when there is none; a
 ///                          non-zero value must be a live RelayOracle)
-/// Role wiring (ORACLE_ROLE grant, RelayHub OPERATOR_ROLE, RelayFastRateLimiter
-/// CONSUMER_ROLE + setRateLimiter) is a separate post-deploy step.
+/// Role wiring (ORACLE_ROLE grant, RelayHub OPERATOR_ROLE, RelayAmountRateLimiter
+/// CONSUMER_ROLE + addRateLimiter) is a separate post-deploy step.
 contract DeployRelayOracleV2 is ScriptBase {
     function run() external returns (RelayOracleV2 oracle) {
         address admin = _envAddressOrDeployer("ADMIN");

@@ -57,11 +57,15 @@ async function ensureFunding(
   const amountToBridge =
     shortfall > minimumBridgeAmount ? shortfall : minimumBridgeAmount
 
+  const destinationChainName =
+    networks[destinationChainId.toString()]?.name ||
+    `chain ${destinationChainId}`
+
   console.log(
     `💰 Need to fund ${tx.from} with ${formatEther(amountToBridge)} native tokens`
   )
   console.log(
-    `   Current: ${formatEther(currentBalance)}, Required: ${formatEther(requiredAmount)}, Bridging: ${formatEther(amountToBridge)}`
+    `   Current: ${formatEther(currentBalance)}, Required: ${formatEther(requiredAmount)}, Amount: ${formatEther(amountToBridge)}`
   )
 
   const deployerPrivateKey =
@@ -76,6 +80,48 @@ async function ensureFunding(
     formattedPrivateKey as `0x${string}`
   )
   const deployerAddress = deployerAccount.address
+
+  // If the deployer already holds enough native funds on the destination chain,
+  // fund the target with a basic transfer instead of bridging via Relay.
+  const deployerBalance = await networkClient.getBalance({
+    address: deployerAddress,
+  })
+  // Keep headroom for the funding transaction's own gas.
+  if (deployerBalance >= amountToBridge + estimatedGasCost) {
+    console.log(
+      `💸 Deployer has sufficient funds on ${destinationChainName}; sending a direct transfer`
+    )
+    const directWalletClient = createWalletClient({
+      account: deployerAccount,
+      chain: {
+        id: destinationChainId,
+        name: destinationChainName,
+        nativeCurrency: { decimals: 18, name: "ETH", symbol: "ETH" },
+        rpcUrls: {
+          default: { http: [tx.rpc] },
+          public: { http: [tx.rpc] },
+        },
+      },
+      transport: http(tx.rpc),
+    })
+
+    const transferHash = await directWalletClient.sendTransaction({
+      to: tx.from,
+      value: amountToBridge,
+    })
+    console.log(`   Transfer tx: ${transferHash}`)
+    await networkClient.waitForTransactionReceipt({ hash: transferHash })
+
+    const newBalance = await networkClient.getBalance({ address: tx.from })
+    console.log(
+      `✅ Funding complete via direct transfer! New balance: ${formatEther(newBalance)}`
+    )
+    return
+  }
+
+  console.log(
+    `🤵 Deployer lacks funds on ${destinationChainName}; bridging via Relay instead`
+  )
 
   const preferredSourceChains = [
     8453, // Base
@@ -102,11 +148,8 @@ async function ensureFunding(
     )
   }
 
-  const destChainName =
-    networks[destinationChainId.toString()]?.name ||
-    `chain ${destinationChainId}`
   console.log(
-    `🌉 Using Relay to bridge from ${sourceChainConfig.name} to ${destChainName}`
+    `🌉 Using Relay to bridge from ${sourceChainConfig.name} to ${destinationChainName}`
   )
 
   const quoteResponse = await fetch("https://api.relay.link/quote", {

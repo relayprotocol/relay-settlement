@@ -13,6 +13,6 @@ export const ethereum: NetworkConfig = {
   name: "Ethereum",
   rpc: process.env.RPC_1
     ? [process.env.RPC_1]
-    : ["https://eth.llamarpc.com", "https://rpc.ankr.com/eth"],
+    : ["https://eth.rpc.blxrbdn.com", "https://rpc.ankr.com/eth"],
   slug: "ethereum",
 }

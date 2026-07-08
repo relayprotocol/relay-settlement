@@ -9,17 +9,17 @@ import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {RelayHub} from "../../contracts/RelayHub.sol";
 import {RelayOracle} from "../../contracts/RelayOracle.sol";
 import {RelayOracleV2} from "../../contracts/RelayOracleV2.sol";
-import {RelayFastRateLimiter} from "../../contracts/RelayFastRateLimiter.sol";
+import {RelayAmountRateLimiter} from "../../contracts/rate-limiters/RelayAmountRateLimiter.sol";
 
 /// @notice Scenario coverage for RelayOracleV2's FAST_MINT action: fee/input split (incl. dust),
-///         rate-limit integration (consume the off-chain-priced usdValue; revert leaves no key →
-///         slow re-attest), fail-closed paths (limiter unset, fast disabled, zero usdValue, bad
+///         rate-limit integration (consume the gross amount; revert leaves no key →
+///         slow re-attest), fail-closed paths (limiter unset, fast disabled, zero amount, bad
 ///         fee), dual-key dedup against the old oracle, MINT/BURN/TRANSFER parity, split-inv fuzz.
 contract RelayOracleV2Test is BaseTest {
   RelayHub internal hub;
   RelayOracle internal oldOracle;
   RelayOracleV2 internal v2;
-  RelayFastRateLimiter internal limiter;
+  RelayAmountRateLimiter internal limiter;
 
   address internal admin;
   address internal oracleSigner;
@@ -36,7 +36,7 @@ contract RelayOracleV2Test is BaseTest {
     keccak256("Execution(bytes32 idempotencyKey,bytes[] actions)");
 
   string internal constant CHAIN_ID = "8453"; // base
-  // 8-dec currency priced at identity $1 => usdValue(amount) == amount
+  // 8-dec currency (e.g. USDC); the limiter buckets per (chainId, currency) in base units
   bytes internal constant CURRENCY =
     hex"833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 
@@ -54,7 +54,7 @@ contract RelayOracleV2Test is BaseTest {
     oldOracle = new RelayOracle(admin, address(hub));
     v2 = new RelayOracleV2(admin, address(hub), address(oldOracle));
 
-    limiter = new RelayFastRateLimiter(admin);
+    limiter = new RelayAmountRateLimiter(admin);
 
     bytes32 operatorRole = hub.OPERATOR_ROLE();
     vm.startPrank(admin);
@@ -64,14 +64,15 @@ contract RelayOracleV2Test is BaseTest {
     oldOracle.grantRole(oldOracle.ORACLE_ROLE(), oracleSigner);
     limiter.grantRole(limiter.CONSUMER_ROLE(), address(v2));
     limiter.setBucketConfig(
-      RelayFastRateLimiter.BucketConfig({
+      RelayAmountRateLimiter.BucketConfig({
         chainId: CHAIN_ID,
+        currency: CURRENCY,
         isEnabled: true,
         capacity: type(uint128).max,
         rate: 0
       })
     );
-    v2.setRateLimiter(address(limiter));
+    v2.addRateLimiter(address(limiter));
     vm.stopPrank();
 
     v2Domain = Eip712.domainSeparator(
@@ -148,41 +149,19 @@ contract RelayOracleV2Test is BaseTest {
     uint256 amount,
     uint256 feeBps,
     address recipient
-  ) internal pure returns (bytes memory) {
-    // Default usdValue = amount (nonzero so the limiter consumes; a zero usdValue is rejected).
-    return
-      _fastMintActionUsd(
-        hubToAddress,
-        chainId,
-        currency,
-        amount,
-        feeBps,
-        recipient,
-        amount
-      );
-  }
-
-  function _fastMintActionUsd(
-    address hubToAddress,
-    string memory chainId,
-    bytes memory currency,
-    uint256 amount,
-    uint256 feeBps,
-    address recipient,
-    uint256 usdValue
-  ) internal pure returns (bytes memory) {
-    // The action carries the hub token id (both mint legs use it) + chainId (limiter bucket key);
-    // currency is just the test's convenience input to derive the same token id the oracle would.
+  ) internal view returns (bytes memory) {
+    // Matches RelayOracleV2._executeFastMint's decode tuple: mint params (hubTokenId direct) + the
+    // limiter to call + its opaque data (the amount limiter's abi.encode(chainId, currency, amount)).
     return
       abi.encode(
         uint8(RelayOracleV2.ActionType.FAST_MINT),
         hubToAddress,
         _tokenId(chainId, currency),
-        chainId,
         amount,
         feeBps,
         recipient,
-        usdValue
+        address(limiter),
+        abi.encode(chainId, currency, amount)
       );
   }
 
@@ -306,6 +285,31 @@ contract RelayOracleV2Test is BaseTest {
     assertEq(hub.balanceOf(feeRecipient, tokenId), 0);
   }
 
+  function test_fastMint_zeroFee_withNonZeroRecipient_chargesNothing() public {
+    // feeBps == 0 charges no fee regardless of feeRecipient: the recipient receives the full amount
+    // and the (non-zero) fee recipient is never credited. Confirms the fee guard keys off feeAmount,
+    // not the recipient address, so a fee-free attestation always settles.
+    bytes32 key = keccak256("fast-zero-fee-real-recipient");
+    uint256 amount = 50e8;
+    uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
+
+    bytes[] memory actions = new bytes[](1);
+    actions[0] = _fastMintAction(
+      orderAddr,
+      CHAIN_ID,
+      CURRENCY,
+      amount,
+      0, // no fee
+      feeRecipient // real recipient, but nothing is owed
+    );
+
+    _runFast(key, actions);
+
+    assertEq(hub.balanceOf(orderAddr, tokenId), amount);
+    assertEq(hub.balanceOf(feeRecipient, tokenId), 0);
+    assertTrue(v2.isExecuted(key));
+  }
+
   function test_fastMint_maxFeeRate_allToFee() public {
     bytes32 key = keccak256("fast-max-fee-rate");
     uint256 amount = 60e8; // 100% fee → all to fee, zero order input
@@ -358,32 +362,32 @@ contract RelayOracleV2Test is BaseTest {
 
   // FAST_MINT — rate limiter integration
 
-  function test_fastMint_consumesProvidedUsdValue() public {
-    RelayFastRateLimiter.TokenBucket memory before_ = limiter.getBucket(
-      CHAIN_ID
+  function test_fastMint_consumesGrossAmount() public {
+    RelayAmountRateLimiter.TokenBucket memory before_ = limiter.getBucket(
+      CHAIN_ID,
+      CURRENCY
     );
 
     bytes32 key = keccak256("fast-consume");
     uint256 amount = 101e8; // 100 order input + 1 fee
-    uint256 usdValue = 50e8; // off-chain-priced value, independent of the gross amount
     bytes[] memory actions = new bytes[](1);
-    actions[0] = _fastMintActionUsd(
+    actions[0] = _fastMintAction(
       orderAddr,
       CHAIN_ID,
       CURRENCY,
       amount,
-      100, // fee does NOT change what is consumed
-      feeRecipient,
-      usdValue
+      1e16, // 1% fee does NOT change what is consumed (the gross amount is rate-limited)
+      feeRecipient
     );
 
     _runFast(key, actions);
 
-    RelayFastRateLimiter.TokenBucket memory after_ = limiter.getBucket(
-      CHAIN_ID
+    RelayAmountRateLimiter.TokenBucket memory after_ = limiter.getBucket(
+      CHAIN_ID,
+      CURRENCY
     );
-    // The limiter consumes exactly the off-chain-priced usdValue carried in the action.
-    assertEq(before_.tokens - after_.tokens, usdValue);
+    // The limiter consumes the full gross amount (the at-risk value), independent of the fee.
+    assertEq(before_.tokens - after_.tokens, amount);
     // The mint still splits on the gross amount.
     assertEq(
       hub.balanceOf(orderAddr, _tokenId(CHAIN_ID, CURRENCY)) +
@@ -398,16 +402,17 @@ contract RelayOracleV2Test is BaseTest {
     // Shrink the bucket so the request exceeds capacity outright.
     vm.prank(admin);
     limiter.setBucketConfig(
-      RelayFastRateLimiter.BucketConfig({
+      RelayAmountRateLimiter.BucketConfig({
         chainId: CHAIN_ID,
+        currency: CURRENCY,
         isEnabled: true,
-        capacity: 1e8, // $1
+        capacity: 1e8, // small cap (base units)
         rate: 0
       })
     );
 
     bytes32 key = keccak256("fast-overbudget");
-    uint256 amount = 1000e8; // $1000 > $1 capacity
+    uint256 amount = 1000e8; // 1000e8 > 1e8 capacity
     uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
 
     bytes[] memory fast = new bytes[](1);
@@ -446,8 +451,9 @@ contract RelayOracleV2Test is BaseTest {
   {
     vm.prank(admin);
     limiter.setBucketConfig(
-      RelayFastRateLimiter.BucketConfig({
+      RelayAmountRateLimiter.BucketConfig({
         chainId: CHAIN_ID,
+        currency: CURRENCY,
         isEnabled: true,
         capacity: 1e8,
         rate: 0
@@ -500,13 +506,56 @@ contract RelayOracleV2Test is BaseTest {
     assertEq(hub.balanceOf(orderAddr, tokenId), 1000e8);
   }
 
+  // FAST_MINT — zero-address limiter opts out of rate limiting
+
+  function test_fastMint_zeroLimiter_skipsRateLimiting() public {
+    // A zero-address limiter bypasses the allowlist check and the consume call entirely: the mint
+    // proceeds without touching any rate limiter. Only reachable when the oracle attests limiter == 0.
+    bytes32 key = keccak256("fast-zero-limiter");
+    uint256 amount = 100e8;
+    uint256 feeBps = 1e16; // 1%
+    uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
+
+    bytes[] memory actions = new bytes[](1);
+    actions[0] = abi.encode(
+      uint8(RelayOracleV2.ActionType.FAST_MINT),
+      orderAddr,
+      tokenId,
+      amount,
+      feeBps,
+      feeRecipient,
+      address(0), // no limiter → rate limiting skipped
+      bytes("")
+    );
+
+    // The limiter bucket must be untouched by a zero-limiter fast mint.
+    RelayAmountRateLimiter.TokenBucket memory before_ = limiter.getBucket(
+      CHAIN_ID,
+      CURRENCY
+    );
+
+    _runFast(key, actions);
+
+    uint256 fee = 1e8; // 100e8 * 1e16 / 1e18
+    assertEq(hub.balanceOf(feeRecipient, tokenId), fee);
+    assertEq(hub.balanceOf(orderAddr, tokenId), amount - fee);
+    assertTrue(v2.isExecuted(key));
+
+    RelayAmountRateLimiter.TokenBucket memory after_ = limiter.getBucket(
+      CHAIN_ID,
+      CURRENCY
+    );
+    assertEq(after_.tokens, before_.tokens);
+  }
+
   // FAST_MINT — fail-closed
 
-  function test_fastMint_revertsWhenRateLimiterUnset() public {
+  function test_fastMint_revertsWhenLimiterNotAllowed() public {
+    // Remove the limiter from the allowlist; the action still names it → RateLimiterNotAllowed.
     vm.prank(admin);
-    v2.setRateLimiter(address(0));
+    v2.removeRateLimiter(address(limiter));
 
-    bytes32 key = keccak256("fast-no-limiter");
+    bytes32 key = keccak256("fast-not-allowed");
     bytes[] memory actions = new bytes[](1);
     actions[0] = _fastMintAction(
       orderAddr,
@@ -518,7 +567,12 @@ contract RelayOracleV2Test is BaseTest {
     );
     bytes memory sig = _sign(oracleSignerPk, v2Domain, key, actions);
 
-    vm.expectRevert(RelayOracleV2.RateLimiterNotSet.selector);
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        RelayOracleV2.RateLimiterNotAllowed.selector,
+        address(limiter)
+      )
+    );
     v2.execute(_v2Exec(key, actions), oracleSigner, sig);
     assertFalse(v2.isExecuted(key));
   }
@@ -542,20 +596,18 @@ contract RelayOracleV2Test is BaseTest {
     assertFalse(v2.isExecuted(key));
   }
 
-  function test_fastMint_revertsWhenUsdValueZero() public {
-    // Fail-closed: a zero usdValue (the producer's placeholder until the off-chain price source is
-    // live) makes the limiter reject → V2 reverts → the deposit re-attests slow. Without this, a 0
-    // usdValue on an enabled bucket would be unlimited fast.
-    bytes32 key = keccak256("fast-zero-usd");
+  function test_fastMint_revertsWhenAmountZero() public {
+    // Fail-closed: a zero amount makes the limiter reject → V2 reverts → the deposit re-attests
+    // slow. Without this, a 0 amount on an enabled bucket would be unlimited fast.
+    bytes32 key = keccak256("fast-zero-amount");
     bytes[] memory actions = new bytes[](1);
-    actions[0] = _fastMintActionUsd(
+    actions[0] = _fastMintAction(
       orderAddr,
       CHAIN_ID,
       CURRENCY,
-      10e8,
-      100,
-      feeRecipient,
-      0 // usdValue
+      0, // amount
+      0,
+      feeRecipient
     );
     bytes memory sig = _sign(oracleSignerPk, v2Domain, key, actions);
 
@@ -887,7 +939,7 @@ contract RelayOracleV2Test is BaseTest {
 
   // Admin
 
-  function test_setRateLimiter_revertsForNonAdmin() public {
+  function test_addRateLimiter_revertsForNonAdmin() public {
     address rando = makeAddr("rando");
     vm.expectRevert(
       abi.encodeWithSelector(
@@ -897,16 +949,23 @@ contract RelayOracleV2Test is BaseTest {
       )
     );
     vm.prank(rando);
-    v2.setRateLimiter(address(0));
+    v2.addRateLimiter(makeAddr("someLimiter"));
   }
 
-  function test_setRateLimiter_setsAndEmits() public {
+  function test_addAndRemoveRateLimiter_togglesAllowlistAndEmits() public {
     address newLimiter = makeAddr("newLimiter");
-    vm.expectEmit(false, false, false, true, address(v2));
-    emit RelayOracleV2.RateLimiterSet(newLimiter);
+
+    vm.expectEmit(true, false, false, false, address(v2));
+    emit RelayOracleV2.RateLimiterAdded(newLimiter);
     vm.prank(admin);
-    v2.setRateLimiter(newLimiter);
-    assertEq(address(v2.rateLimiter()), newLimiter);
+    v2.addRateLimiter(newLimiter);
+    assertTrue(v2.isRateLimiter(newLimiter));
+
+    vm.expectEmit(true, false, false, false, address(v2));
+    emit RelayOracleV2.RateLimiterRemoved(newLimiter);
+    vm.prank(admin);
+    v2.removeRateLimiter(newLimiter);
+    assertFalse(v2.isRateLimiter(newLimiter));
   }
 
   // Fuzz
@@ -915,8 +974,8 @@ contract RelayOracleV2Test is BaseTest {
     uint256 amount,
     uint256 feeBps
   ) public {
-    // amount >= 1 so the gross (and the helper's default usdValue) is nonzero; a zero-amount fast
-    // mint is rejected by the limiter (fail-closed). feeBps in [0, 1e18] = [0%, 100%].
+    // amount >= 1 so the gross is nonzero; a zero-amount fast mint is rejected by the limiter
+    // (fail-closed). feeBps in [0, 1e18] = [0%, 100%].
     amount = bound(amount, 1, 1e24);
     feeBps = bound(feeBps, 0, 1e18);
     uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);

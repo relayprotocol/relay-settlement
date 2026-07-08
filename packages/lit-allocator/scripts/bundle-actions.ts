@@ -19,6 +19,7 @@
  *   dist/actions/<env>/ton.js       (from src/vm/ton-vm.ts)
  *   dist/actions/<env>/hyperliquid.js (from src/vm/hyperliquid-vm.ts)
  *   dist/actions/<env>/lighter.js (from src/vm/lighter-vm.ts)
+ *   dist/actions/<env>/xrp.js       (from src/vm/xrp-vm.ts)
  */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";

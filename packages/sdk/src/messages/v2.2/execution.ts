@@ -86,15 +86,15 @@ export type DecodedAction =
         hubToAddress: string
         // Hub token id (both mint legs use it); same value MINT carries
         hubTokenId: bigint
-        // Origin chain id — the rate limiter's per-chain bucket key
-        chainId: string
         // Gross deposit amount; the contract splits it into the net amount (amount-fee) + fee
         amount: string
         // Fee as a 1e18-scaled fraction of amount (1% = 1e16); fee = amount * feeBps / 1e18
         feeBps: string
         feeRecipient: string
-        // Off-chain-priced USD value for the rate limiter (scaled by 1e18); the oracle prices it
-        usdValue: string
+        // Rate limiter to call; must be on the oracle's allowlist
+        limiter: string
+        // Opaque limiter input; for RelayAmountRateLimiter use encodeAmountLimiterData()
+        limiterData: string
       }
     }
 
@@ -159,21 +159,21 @@ export const encodeAction = (action: DecodedAction): string => {
           "uint8 type",
           "address hubToAddress",
           "uint256 hubTokenId",
-          "string chainId",
           "uint256 amount",
           "uint256 feeBps",
           "address feeRecipient",
-          "uint256 usdValue",
+          "address limiter",
+          "bytes limiterData",
         ]),
         [
           action.type,
           action.data.hubToAddress as `0x${string}`,
           action.data.hubTokenId,
-          action.data.chainId,
           BigInt(action.data.amount),
           BigInt(action.data.feeBps),
           action.data.feeRecipient as `0x${string}`,
-          BigInt(action.data.usdValue),
+          action.data.limiter as `0x${string}`,
+          action.data.limiterData as `0x${string}`,
         ]
       )
     }
@@ -263,11 +263,11 @@ export const decodeAction = (action: string): DecodedAction => {
           "uint8 type",
           "address hubToAddress",
           "uint256 hubTokenId",
-          "string chainId",
           "uint256 amount",
           "uint256 feeBps",
           "address feeRecipient",
-          "uint256 usdValue",
+          "address limiter",
+          "bytes limiterData",
         ]),
         action as Hex
       )
@@ -277,11 +277,11 @@ export const decodeAction = (action: string): DecodedAction => {
         data: {
           hubToAddress: result[1].toString(),
           hubTokenId: result[2],
-          chainId: result[3],
-          amount: result[4].toString(),
-          feeBps: result[5].toString(),
-          feeRecipient: result[6].toString(),
-          usdValue: result[7].toString(),
+          amount: result[3].toString(),
+          feeBps: result[4].toString(),
+          feeRecipient: result[5].toString(),
+          limiter: result[6].toString(),
+          limiterData: result[7],
         },
       }
     }
@@ -291,3 +291,16 @@ export const decodeAction = (action: string): DecodedAction => {
     }
   }
 }
+
+// Encodes the `data` blob for RelayAmountRateLimiter's consume(bytes) —
+// abi.encode(string chainId, bytes currency, uint256 amount). The oracle and the limiter MUST agree
+// on this layout; a roundtrip test pins it.
+export const encodeAmountLimiterData = (
+  chainId: string,
+  currency: string,
+  amount: string
+): string =>
+  encodeAbiParameters(
+    parseAbiParameters(["string chainId", "bytes currency", "uint256 amount"]),
+    [chainId, currency as `0x${string}`, BigInt(amount)]
+  )

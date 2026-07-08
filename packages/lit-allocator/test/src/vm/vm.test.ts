@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, type Mock } from "vitest";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
+import { secp256k1 } from "@noble/curves/secp256k1.js";
 
 /** Decode a 0x-prefixed hex string into a Uint8Array. */
 function hexToBytes(hex: string): Uint8Array {
@@ -67,6 +68,7 @@ async function loadActions() {
     { main: bitcoinMain },
     { main: hyperliquidMain },
     { main: lighterMain },
+    { main: xrpMain },
   ] = await Promise.all([
     import("../../../src/vm/ethereum-vm.js"),
     import("../../../src/vm/tron-vm.js"),
@@ -75,8 +77,18 @@ async function loadActions() {
     import("../../../src/vm/bitcoin-vm.js"),
     import("../../../src/vm/hyperliquid-vm.js"),
     import("../../../src/vm/lighter-vm.js"),
+    import("../../../src/vm/xrp-vm.js"),
   ]);
-  return { ethereumMain, tronMain, solanaMain, tonMain, bitcoinMain, hyperliquidMain, lighterMain };
+  return {
+    ethereumMain,
+    tronMain,
+    solanaMain,
+    tonMain,
+    bitcoinMain,
+    hyperliquidMain,
+    lighterMain,
+    xrpMain,
+  };
 }
 
 /** Install a mock Lit runtime that returns deterministic PKP key material. */
@@ -536,5 +548,106 @@ describe("ton-vm action", () => {
     const pubKey = hexToBytes(result.address.slice("0:".length));
     const msg = hexToBytes(hashToSign);
     expect(nacl.sign.detached.verify(msg, sigBytes, pubKey)).toBe(true);
+  });
+});
+
+describe("xrp-vm action", () => {
+  it("returns the HKDF-derived XRPL address and signing public key", async () => {
+    const lit = mockLit();
+    const { xrpMain } = await loadActions();
+
+    const result = await xrpMain({ pkpId: PKP_ID, action: "wallet" });
+
+    expect(lit.Actions.getPrivateKey).toHaveBeenCalledWith({ pkpId: PKP_ID });
+    expect(result).toEqual({
+      vmType: "xrp-vm",
+      address: "rs5YPnwapsg4kspq5JuFEhYFBvkV2XL8DP",
+      signingPubKey: "0x0363a2fd2d8434e91271d3b5f3aef73b7eb8cc9e4238e9b78a9196a0a97e1a3c06",
+    });
+  });
+
+  it("derives a distinct keypair from bitcoin-vm", async () => {
+    mockLit();
+    const { bitcoinMain, xrpMain } = await loadActions();
+
+    const bitcoin = (await bitcoinMain({ pkpId: PKP_ID, action: "wallet" })) as {
+      address: string;
+    };
+    const xrp = (await xrpMain({ pkpId: PKP_ID, action: "wallet" })) as { address: string };
+    expect(xrp.address).not.toBe(bitcoin.address);
+  });
+
+  it("rejects unknown actions", async () => {
+    mockLit();
+    const { xrpMain } = await loadActions();
+    await expect(xrpMain({ pkpId: PKP_ID, action: "unknown" })).rejects.toThrow("unknown action");
+  });
+
+  it("requires withdrawRequest and attestation for sign", async () => {
+    mockLit();
+    const { xrpMain } = await loadActions();
+    await expect(xrpMain({ pkpId: PKP_ID, action: "sign" })).rejects.toThrow(
+      "withdrawRequest is required",
+    );
+    await expect(
+      xrpMain({ pkpId: PKP_ID, action: "sign", withdrawRequest: {} as never }),
+    ).rejects.toThrow("attestation is required");
+  });
+
+  it("emits canonical low-S DER secp256k1 signatures over the given digest", async () => {
+    mockLit();
+    const { xrpMain } = await loadActions();
+
+    // Minimal withdraw request whose hash the attestation claims to cover.
+    // allowedOracles=[] + threshold=0 lets the attestation through without
+    // any oracle signatures.
+    const withdrawRequest = {
+      chainId: "xrp",
+      depository: "0x0000000000000000000000000000000000000000",
+      currency: "0x0000000000000000000000000000000000000000",
+      amount: "0",
+      spenderChainId: "xrp",
+      spender: "0x0000000000000000000000000000000000000000",
+      receiver: "0x0000000000000000000000000000000000000000",
+      data: "0x",
+      nonce: `0x${"00".repeat(32)}`,
+    };
+    const { computeWithdrawRequestHash } = await import("../../../src/common/abi.js");
+    const withdrawRequestHash = `0x${bytesToHex(computeWithdrawRequestHash(withdrawRequest))}`;
+    const hashToSign = `0x${"11".repeat(32)}`;
+
+    const result = (await xrpMain({
+      pkpId: PKP_ID,
+      action: "sign",
+      withdrawRequest,
+      attestation: {
+        chainId: 421614,
+        allocator: "0x0000000000000000000000000000000000000000",
+        withdrawRequestHash,
+        hashesToSign: [hashToSign],
+        signatures: [],
+      },
+    })) as {
+      results: Array<{ hash: string; signature: string }>;
+    };
+
+    expect(result.results).toHaveLength(1);
+    const signature = result.results[0].signature;
+    expect(signature.startsWith("0x30")).toBe(true); // DER SEQUENCE tag
+
+    // The signing public key is only exposed on the wallet action (it is a
+    // fixed per-PKP constant used once at deploy time), so fetch it there and
+    // verify the DER signature against it without re-hashing (the digest is
+    // already the XRPL single-signing hash).
+    const wallet = (await xrpMain({ pkpId: PKP_ID, action: "wallet" })) as {
+      signingPubKey: string;
+    };
+    const der = hexToBytes(signature);
+    const pubKey = hexToBytes(wallet.signingPubKey);
+    const digest = hexToBytes(hashToSign);
+    expect(secp256k1.verify(der, digest, pubKey, { prehash: false, format: "der" })).toBe(true);
+    // Low-S canonical form: s must be in the lower half of the curve order.
+    const parsed = secp256k1.Signature.fromBytes(der, "der");
+    expect(parsed.hasHighS()).toBe(false);
   });
 });

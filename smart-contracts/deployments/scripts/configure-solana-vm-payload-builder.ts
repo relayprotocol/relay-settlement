@@ -16,11 +16,15 @@
  *   CONFIG              Config contract address
  *   PAYLOAD_BUILDER     SolanaVmPayloadBuilder contract address
  *   CHAIN_ID            Relay chain id string
- *   DEPOSITORY          Solana depository address (SDK-encoded by this script)
- *   DOMAIN              32-byte Solana payload domain hex value
- *   VAULT_ADDRESS       Solana vault address (SDK-encoded by this script)
+ *   DEPOSITORY          Solana depository (program) address (SDK-encoded by this script)
  *
  * Optional env vars:
+ *   SOLANA_RPC_URL      Solana RPC endpoint used to derive DOMAIN from the depository
+ *                       (required for the Config step unless DOMAIN is provided)
+ *   DOMAIN              Override the 32-byte Solana payload domain (otherwise derived
+ *                       from the on-chain relay_depository account)
+ *   VAULT_ADDRESS       Override the Solana vault address (otherwise derived as the
+ *                       depository program's "vault" PDA); SDK-encoded by this script
  *   EXPIRATION_SECONDS  Set request expiration delay in seconds
  *   SKIP_BUILDER        Set to "1" to skip allocator.setPayloadBuilder
  *   SKIP_CONFIG         Set to "1" to skip Config.setConfigValues
@@ -39,6 +43,7 @@ import {
 } from "viem"
 import { privateKeyToAccount } from "viem/accounts"
 import { encodeAddress } from "@relay-protocol/settlement-sdk"
+import { Connection, PublicKey } from "@solana/web3.js"
 
 const allocatorAbi = parseAbi([
   "function setPayloadBuilder(string chainId, bytes depository, address builder)",
@@ -54,6 +59,48 @@ const solanaPayloadBuilderAbi = parseAbi([
   "function getExpirationKey() view returns (bytes32)",
 ])
 
+// Seeds for the on-chain relay_depository program PDAs.
+const RELAY_DEPOSITORY_SEED = Buffer.from("relay_depository")
+const VAULT_SEED = Buffer.from("vault")
+
+// Derive the Solana vault PDA (seed "vault") owned by the depository program.
+function deriveVaultAddress(programId: string): string {
+  const [vault] = PublicKey.findProgramAddressSync(
+    [VAULT_SEED],
+    new PublicKey(programId)
+  )
+  return vault.toBase58()
+}
+
+// Read the domain separator stored in the on-chain relay_depository account.
+// Account layout: discriminator(8) + owner(32) + allocator(32) + vault_bump(1)
+//   + Option<[u8; 32]> domain_separator (1-byte flag + 32 bytes when present).
+async function readDomainSeparator(
+  rpcUrl: string,
+  programId: string
+): Promise<Hex> {
+  const connection = new Connection(rpcUrl, "confirmed")
+  const program = new PublicKey(programId)
+  const [pda] = PublicKey.findProgramAddressSync(
+    [RELAY_DEPOSITORY_SEED],
+    program
+  )
+  const info = await connection.getAccountInfo(pda)
+  if (!info) {
+    throw new Error(
+      `relay_depository account not found at ${pda.toBase58()} — is ${programId} initialized?`
+    )
+  }
+  const flagOffset = 8 + 32 + 32 + 1
+  if (info.data[flagOffset] !== 1) {
+    throw new Error(
+      "relay_depository has no domain_separator set (run migrate_domain_separator, or pass DOMAIN explicitly)"
+    )
+  }
+  const separator = info.data.subarray(flagOffset + 1, flagOffset + 1 + 32)
+  return bytesToHex(new Uint8Array(separator))
+}
+
 type Env = {
   rpcUrl: string
   privateKey?: Hex
@@ -62,8 +109,9 @@ type Env = {
   payloadBuilder: Address
   chainId: string
   depository: string
-  domain: Hex
-  vaultAddress: string
+  solanaRpcUrl?: string
+  domainOverride?: Hex
+  vaultAddressOverride?: string
   expirationSeconds?: bigint
   skipBuilder: boolean
   skipConfig: boolean
@@ -133,19 +181,22 @@ function parseEnv(): Env {
   }
 
   return {
-    rpcUrl: requireEnv("RPC_URL"),
-    privateKey: privateKey as Hex | undefined,
     allocator: asAddress(requireEnv("ALLOCATOR"), "ALLOCATOR"),
-    config: asAddress(requireEnv("CONFIG"), "CONFIG"),
-    payloadBuilder: asAddress(requireEnv("PAYLOAD_BUILDER"), "PAYLOAD_BUILDER"),
     chainId: requireEnv("CHAIN_ID"),
+    config: asAddress(requireEnv("CONFIG"), "CONFIG"),
     depository: requireEnv("DEPOSITORY"),
-    domain: asBytes32(requireEnv("DOMAIN"), "DOMAIN"),
-    vaultAddress: requireEnv("VAULT_ADDRESS"),
+    domainOverride: process.env.DOMAIN
+      ? asBytes32(process.env.DOMAIN, "DOMAIN")
+      : undefined,
+    dryRun,
     expirationSeconds: parseOptionalUintEnv("EXPIRATION_SECONDS"),
+    payloadBuilder: asAddress(requireEnv("PAYLOAD_BUILDER"), "PAYLOAD_BUILDER"),
+    privateKey: privateKey as Hex | undefined,
+    rpcUrl: requireEnv("RPC_URL"),
     skipBuilder: optionalFlag("SKIP_BUILDER"),
     skipConfig: optionalFlag("SKIP_CONFIG"),
-    dryRun,
+    solanaRpcUrl: process.env.SOLANA_RPC_URL,
+    vaultAddressOverride: process.env.VAULT_ADDRESS,
   }
 }
 
@@ -167,8 +218,8 @@ async function sendOrPrintTx(args: {
     transport: http(args.env.rpcUrl),
   }) as any
   const hash = await walletClient.sendTransaction({
-    to: args.to,
     data: args.data,
+    to: args.to,
   })
   console.log(`    tx: ${hash}`)
   const receipt = await args.publicClient.waitForTransactionReceipt({ hash })
@@ -184,10 +235,34 @@ async function main() {
     bytesToHex(encodeAddress(env.depository, "solana-vm")),
     "SDK-encoded depository"
   )
-  const vaultAddress = asBytes32(
-    bytesToHex(encodeAddress(env.vaultAddress, "solana-vm")),
-    "SDK-encoded vault address"
-  )
+
+  // Domain and vault address are derived from the depository program unless
+  // explicitly overridden. They are only needed for the Config step.
+  let domain: Hex | undefined
+  let vaultAddressBase58: string | undefined
+  let vaultAddress: Hex | undefined
+  if (!env.skipConfig) {
+    vaultAddressBase58 =
+      env.vaultAddressOverride ?? deriveVaultAddress(env.depository)
+    vaultAddress = asBytes32(
+      bytesToHex(encodeAddress(vaultAddressBase58, "solana-vm")),
+      "SDK-encoded vault address"
+    )
+
+    if (env.domainOverride) {
+      domain = env.domainOverride
+    } else {
+      if (!env.solanaRpcUrl) {
+        throw new Error(
+          "set SOLANA_RPC_URL to derive DOMAIN from the depository (or pass DOMAIN explicitly)"
+        )
+      }
+      domain = asBytes32(
+        await readDomainSeparator(env.solanaRpcUrl, env.depository),
+        "derived domain"
+      )
+    }
+  }
 
   console.log(
     "════════════════════════════════════════════════════════════════════════"
@@ -199,9 +274,17 @@ async function main() {
   console.log(`  allocator:          ${env.allocator}`)
   console.log(`  config:             ${env.config}`)
   console.log(`  payloadBuilder:     ${env.payloadBuilder}`)
-  console.log(`  domain:             ${env.domain}`)
-  console.log(`  vaultAddress:       ${env.vaultAddress}`)
-  console.log(`  vaultEncoded:       ${vaultAddress}`)
+  console.log(
+    `  domain:             ${domain ?? "n/a (config skipped)"}${
+      domain && !env.domainOverride ? " (derived)" : ""
+    }`
+  )
+  console.log(
+    `  vaultAddress:       ${vaultAddressBase58 ?? "n/a (config skipped)"}${
+      vaultAddressBase58 && !env.vaultAddressOverride ? " (derived)" : ""
+    }`
+  )
+  console.log(`  vaultEncoded:       ${vaultAddress ?? "n/a (config skipped)"}`)
   console.log(`  expirationSeconds:  ${env.expirationSeconds ?? "unchanged"}`)
   console.log(`  dryRun:             ${env.dryRun ? "1" : "0"}`)
   console.log(
@@ -212,10 +295,10 @@ async function main() {
     console.log("==> Setting allocator payload builder")
     const data = encodeFunctionData({
       abi: allocatorAbi,
-      functionName: "setPayloadBuilder",
       args: [env.chainId, depository, env.payloadBuilder],
+      functionName: "setPayloadBuilder",
     })
-    await sendOrPrintTx({ env, to: env.allocator, data, publicClient })
+    await sendOrPrintTx({ data, env, publicClient, to: env.allocator })
   } else {
     console.log("==> Skipping allocator.setPayloadBuilder (SKIP_BUILDER=1)")
   }
@@ -228,29 +311,29 @@ async function main() {
 
     const [domainKey, vaultAddressKey] = await Promise.all([
       publicClient.readContract({
-        address: env.payloadBuilder,
         abi: solanaPayloadBuilderAbi,
-        functionName: "getDomainKey",
+        address: env.payloadBuilder,
         args: [env.chainId],
+        functionName: "getDomainKey",
       }),
       publicClient.readContract({
-        address: env.payloadBuilder,
         abi: solanaPayloadBuilderAbi,
-        functionName: "getVaultAddressKey",
+        address: env.payloadBuilder,
         args: [env.chainId],
+        functionName: "getVaultAddressKey",
       }),
     ])
 
     keys.push(domainKey, vaultAddressKey)
-    values.push(env.domain, vaultAddress)
+    values.push(domain!, vaultAddress!)
 
-    console.log(`    domain       key=${domainKey} value=${env.domain}`)
+    console.log(`    domain       key=${domainKey} value=${domain}`)
     console.log(`    vaultAddress key=${vaultAddressKey} value=${vaultAddress}`)
 
     if (env.expirationSeconds !== undefined) {
       const expirationKey = await publicClient.readContract({
-        address: env.payloadBuilder,
         abi: solanaPayloadBuilderAbi,
+        address: env.payloadBuilder,
         functionName: "getExpirationKey",
       })
       const expirationValue = uint256Word(env.expirationSeconds)
@@ -266,10 +349,10 @@ async function main() {
     console.log(`==> Sending Config.setConfigValues to ${env.config}`)
     const data = encodeFunctionData({
       abi: configAbi,
-      functionName: "setConfigValues",
       args: [keys, values],
+      functionName: "setConfigValues",
     })
-    await sendOrPrintTx({ env, to: env.config, data, publicClient })
+    await sendOrPrintTx({ data, env, publicClient, to: env.config })
   } else {
     console.log("==> Skipping Config.setConfigValues (SKIP_CONFIG=1)")
   }

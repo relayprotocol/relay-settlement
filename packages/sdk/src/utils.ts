@@ -4,6 +4,13 @@ import * as bitcoin from "bitcoinjs-lib"
 import bs58 from "bs58"
 import { Address as TonAddress } from "@ton/core"
 import * as tronweb from "tronweb"
+import {
+  decodeAccountID,
+  encodeAccountID,
+  isValidClassicAddress,
+  isValidXAddress,
+  xAddressToClassicAddress,
+} from "ripple-address-codec"
 
 export type VmType =
   | "bitcoin-vm"
@@ -13,6 +20,7 @@ export type VmType =
   | "ton-vm"
   | "tron-vm"
   | "lighter-vm"
+  | "xrp-vm"
 
 export type ChainIdToVmType = Record<string, VmType>
 
@@ -45,6 +53,12 @@ export const getVmTypeNativeCurrency = (vmType: VmType) => {
       return "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb"
     case "lighter-vm":
       return "0"
+    case "xrp-vm":
+      // ACCOUNT_ZERO: the classic address for the all-zero 20-byte account id.
+      // Native XRP has no issuer/currency contract, so the zero account is used
+      // as the native-currency sentinel (mirrors the zero-address sentinel used
+      // by the other VMs). Encodes to 20 zero bytes via `encodeAddress`.
+      return "rrrrrrrrrrrrrrrrrrrrrhoLvTp"
     default:
       throw new Error(`Native currency not available for vm type ${vmType}`)
   }
@@ -159,6 +173,27 @@ export const encodeAddress = (address: string, vmType: VmType): Uint8Array => {
       return hexToBytes(`0x${Number(address).toString(16).padStart(32, "0")}`)
     }
 
+    case "xrp-vm": {
+      // 20-byte AccountID encoding. Classic ("r...") addresses decode directly;
+      // X-addresses are accepted only when they carry no destination tag — a
+      // tag is not part of the account and must be conveyed as a separate
+      // DestinationTag field, not folded into the 20-byte account slot.
+      let classicAddress = address
+      if (isValidXAddress(address)) {
+        const decoded = xAddressToClassicAddress(address)
+        if (decoded.tag !== false) {
+          throw new Error(
+            "XRP X-address carries a destination tag; supply the tag separately and use the classic address"
+          )
+        }
+        classicAddress = decoded.classicAddress
+      }
+      if (!isValidClassicAddress(classicAddress)) {
+        throw new Error(`Invalid XRP address: ${address}`)
+      }
+      return Uint8Array.from(decodeAccountID(classicAddress))
+    }
+
     default: {
       throw new Error(`Vm type not implemented (encodeAddress)`)
     }
@@ -227,7 +262,37 @@ export const decodeAddress = (address: Uint8Array, vmType: VmType): string => {
     case "lighter-vm": {
       return Number("0x" + Buffer.from(address).toString("hex")).toString()
     }
+
+    case "xrp-vm": {
+      if (address.length !== 20) {
+        throw new Error(
+          `Invalid XRP account id byte length ${address.length}; expected 20`
+        )
+      }
+      return encodeAccountID(Buffer.from(address))
+    }
   }
+}
+
+// Decomposes an XRP destination into its account and optional destination tag.
+// Classic ("r...") addresses carry no tag; X-addresses may embed one. The tag
+// is payment-critical (it identifies the end user for custodial/exchange
+// deposits) and must travel in the transaction's DestinationTag field, never
+// folded into the 20-byte account. Callers should therefore set both
+// `destination = account` and `destinationTag = tag` from the result, rather
+// than passing an X-address straight into `encodeAddress` (which is
+// account-only and rejects tagged X-addresses to prevent a silent tag drop).
+export const decodeXrpDestination = (
+  address: string
+): { account: string; tag?: number } => {
+  if (isValidXAddress(address)) {
+    const { classicAddress, tag } = xAddressToClassicAddress(address)
+    return { account: classicAddress, tag: tag === false ? undefined : tag }
+  }
+  if (!isValidClassicAddress(address)) {
+    throw new Error(`Invalid XRP address: ${address}`)
+  }
+  return { account: address }
 }
 
 // Transaction encoding
@@ -276,6 +341,18 @@ export const encodeTransactionId = (
     case "lighter-vm": {
       return hexToBytes(`0x${transactionId}`)
     }
+
+    case "xrp-vm": {
+      // XRPL transaction ids are the 32-byte hash rendered as 64 hex chars
+      // (canonically uppercase). Accept either case but reject 0x-prefixed or
+      // wrong-length input so it can't silently zero-pad.
+      if (!/^[0-9a-fA-F]{64}$/.test(transactionId)) {
+        throw new Error(
+          `Invalid XRP transaction id ${transactionId}; expected 64 hex chars`
+        )
+      }
+      return hexToBytes(`0x${transactionId}`)
+    }
   }
 }
 
@@ -310,6 +387,11 @@ export const decodeTransactionId = (
 
     case "lighter-vm": {
       return bytesToHex(transactionId).slice(2)
+    }
+
+    case "xrp-vm": {
+      // Canonical XRPL rendering is uppercase, no 0x prefix.
+      return bytesToHex(transactionId).slice(2).toUpperCase()
     }
   }
 }

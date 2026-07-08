@@ -17,6 +17,7 @@ import {
   type ContractABI,
 } from "micro-eth-signer/advanced/abi.js"
 import { keccak_256 } from "@noble/hashes/sha3.js"
+import { CalldataCollector } from "../chainSecured.js"
 import type {
   ActionInfo,
   GroupInfo,
@@ -269,6 +270,26 @@ const VIEW_ABI: ContractABI = [
   {
     inputs: [
       { name: "accountApiKeyHash", type: "uint256" },
+      { name: "groupId", type: "uint256" },
+      { name: "pageNumber", type: "uint256" },
+      { name: "pageSize", type: "uint256" },
+    ],
+    name: "listActionsInGroup",
+    outputs: [
+      {
+        type: "tuple[]",
+        components: [
+          { name: "id", type: "uint256" },
+          { name: "name", type: "string" },
+          { name: "description", type: "string" },
+        ],
+      },
+    ],
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "accountApiKeyHash", type: "uint256" },
       { name: "pageNumber", type: "uint256" },
       { name: "pageSize", type: "uint256" },
     ],
@@ -446,6 +467,7 @@ interface ViewContract {
   listPkps: ViewMethod
   listActions: ViewMethod
   listWalletsInGroup: ViewMethod
+  listActionsInGroup: ViewMethod
   listApiKeys: ViewMethod
 }
 
@@ -553,14 +575,22 @@ export function signChainSecuredTypedData(
  * Build, sign, and broadcast an EIP-1559 transaction; wait for the receipt.
  * Prints the equivalent `cast call` line first so reverts can be reproduced
  * offline.
+ *
+ * When `options.collector` is provided the transaction is NOT broadcast: the
+ * calldata is recorded on the collector for later relay through the account
+ * owner, and a placeholder hash is returned. `privateKey` may be empty then.
  */
 export async function sendTransaction(
   rpcUrl: string,
   chainId: bigint,
   privateKey: string,
   to: string,
-  calldata: Uint8Array
+  calldata: Uint8Array,
+  options?: { collector?: CalldataCollector; description?: string }
 ): Promise<string> {
+  if (options?.collector) {
+    return options.collector.record(to, calldata, options.description)
+  }
   const fromAddress = addr.fromPrivateKey(privateKey)
   const calldataHex = toHex(calldata)
   console.log(
@@ -688,10 +718,21 @@ async function addUsageApiKeyWithSignature(
 
 // ─── Backend ─────────────────────────────────────────────────────────────────
 
+/**
+ * Sentinel returned by `addGroup` in calldata mode, where the on-chain group id
+ * cannot be read back before the batch is relayed. Callers must create the group
+ * fully populated and never depend on this value.
+ */
+export const PLACEHOLDER_GROUP_ID = -1n
+
 /** Configuration required by the ChainSecured backend. */
 export interface ChainSecuredBackendOptions {
-  /** Admin wallet private key (0x-prefixed). Signs every contract write. */
-  privateKey: string
+  /**
+   * Admin wallet private key (0x-prefixed). Signs every contract write.
+   * Optional only when `collector` is set (calldata mode), where writes are
+   * captured rather than broadcast and no local signer is needed.
+   */
+  privateKey?: string
   /**
    * Master account API key. Used solely to derive the on-chain account hash
    * (`keccak256(toUtf8Bytes(accountApiKey))`) so the same key identifies the
@@ -701,6 +742,13 @@ export interface ChainSecuredBackendOptions {
   /** Metadata to register when this backend mints a fresh PKP. */
   pkpName: string
   pkpDescription: string
+  /**
+   * When provided, contract writes are recorded here as calldata instead of
+   * being signed and broadcast — for accounts owned by an MPC / multisig
+   * wallet that relays the calldata itself. Signature-gated flows that need a
+   * local admin key (PKP / usage-key minting) are rejected in this mode.
+   */
+  collector?: CalldataCollector
 }
 
 /**
@@ -711,6 +759,11 @@ export interface ChainSecuredBackendOptions {
 export function createChainSecuredBackend(
   opts: ChainSecuredBackendOptions
 ): SetupBackend {
+  if (!opts.privateKey && !opts.collector) {
+    throw new Error(
+      "createChainSecuredBackend requires either a privateKey (broadcast) or a collector (calldata mode)"
+    )
+  }
   return new ChainSecuredBackend({
     privateKey: opts.privateKey,
     adminHash: bytesToBigInt(
@@ -721,18 +774,20 @@ export function createChainSecuredBackend(
     rpcUrl: DEFAULT_BASE_RPC_URL,
     pkpName: opts.pkpName,
     pkpDescription: opts.pkpDescription,
+    collector: opts.collector,
   })
 }
 
 /** Internal config the class actually uses. */
 interface InternalOptions {
-  privateKey: string
+  privateKey?: string
   adminHash: bigint
   contractAddress: string
   chainId: bigint
   rpcUrl: string
   pkpName: string
   pkpDescription: string
+  collector?: CalldataCollector
 }
 
 class ChainSecuredBackend implements SetupBackend {
@@ -740,22 +795,32 @@ class ChainSecuredBackend implements SetupBackend {
   private readonly adminWalletAddress: string
 
   constructor(private readonly opts: InternalOptions) {
-    const normalized = opts.privateKey.startsWith("0x")
-      ? opts.privateKey
-      : `0x${opts.privateKey}`
-    this.adminWalletAddress = addr.fromPrivateKey(normalized).toLowerCase()
-    // Keep the normalized key in opts so later signers don't have to re-normalize.
-    this.opts = { ...opts, privateKey: normalized }
+    if (opts.privateKey) {
+      const normalized = opts.privateKey.startsWith("0x")
+        ? opts.privateKey
+        : `0x${opts.privateKey}`
+      this.adminWalletAddress = addr.fromPrivateKey(normalized).toLowerCase()
+      // Keep the normalized key so later signers don't have to re-normalize.
+      this.opts = { ...opts, privateKey: normalized }
+    } else {
+      // Calldata mode: no local signer. `adminWalletAddress` is only used by
+      // the signature-gated flows, which are rejected before reaching it.
+      this.adminWalletAddress = ""
+    }
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────
-  private async send(calldata: Uint8Array): Promise<string> {
+  private async send(
+    calldata: Uint8Array,
+    description?: string
+  ): Promise<string> {
     return sendTransaction(
       this.opts.rpcUrl,
       this.opts.chainId,
-      this.opts.privateKey,
+      this.opts.privateKey ?? "",
       this.opts.contractAddress,
-      calldata
+      calldata,
+      { collector: this.opts.collector, description }
     )
   }
 
@@ -855,6 +920,35 @@ class ChainSecuredBackend implements SetupBackend {
     return rows.map((r) => ({ name: r.metadata.name }))
   }
 
+  async listActionsInGroup(groupId: bigint): Promise<ActionInfo[]> {
+    const rows = await readAll(
+      this.opts.rpcUrl,
+      this.opts.contractAddress,
+      (page, size) =>
+        viewContract.listActionsInGroup.encodeInput({
+          accountApiKeyHash: this.opts.adminHash,
+          groupId,
+          pageNumber: page,
+          pageSize: size,
+        }),
+      (data) =>
+        viewContract.listActionsInGroup.decodeOutput(data) as Array<{
+          id: bigint
+          name: string
+          description: string
+        }>
+    )
+    // As with `listActions`, the contract sets `id = actionHash`; tombstones
+    // (id === 0n) are excluded.
+    return rows
+      .filter((r) => r.id !== 0n)
+      .map((r) => ({
+        actionHash: r.id,
+        name: r.name,
+        description: r.description,
+      }))
+  }
+
   async listPkpsInGroup(groupId: bigint): Promise<PkpInfo[]> {
     const rows = await readAll(
       this.opts.rpcUrl,
@@ -882,11 +976,22 @@ class ChainSecuredBackend implements SetupBackend {
   }
 
   // ── Writes ──────────────────────────────────────────────────────────────
+  /** Guard flows that need a live admin EIP-712 signature (unavailable in calldata mode). */
+  private assertCanSign(op: string): void {
+    if (this.opts.collector || !this.opts.privateKey) {
+      throw new Error(
+        `${op} needs an admin signature and cannot be emitted as calldata. ` +
+          `Provision it before transferring ownership, or run in broadcast mode with a private key.`
+      )
+    }
+  }
+
   async createPkp(): Promise<{ walletAddress: string }> {
+    this.assertCanSign("createPkp")
     const minted = await createWalletWithSignature(
       this.adminWalletAddress,
       Number(this.opts.chainId),
-      this.opts.privateKey
+      this.opts.privateKey! // guaranteed by assertCanSign
     )
 
     const calldata = writeContract.registerWalletDerivation.encodeInput({
@@ -896,19 +1001,37 @@ class ChainSecuredBackend implements SetupBackend {
       name: this.opts.pkpName,
       description: this.opts.pkpDescription,
     })
-    await this.send(calldata)
+    await this.send(calldata, "registerWalletDerivation (PKP)")
     return { walletAddress: minted.wallet_address }
   }
 
-  async addGroup(name: string, description: string): Promise<bigint> {
+  async addGroup(
+    name: string,
+    description: string,
+    cidHashes: bigint[] = [],
+    pkpIds: string[] = []
+  ): Promise<bigint> {
+    // Create the group already populated with its permitted actions/PKPs so a
+    // fresh group needs no follow-up group calls (addPkpToGroup /
+    // addActionToGroup / updateGroup). This matters in calldata mode: the new
+    // group id is assigned on-chain and cannot be read back before the batch is
+    // relayed, so any follow-up call that references the id could not be encoded.
+    // A single self-contained addGroup call sidesteps that entirely.
     const calldata = writeContract.addGroup.encodeInput({
       apiKeyHash: this.opts.adminHash,
       name,
       description,
-      cidHashes: [],
-      pkpIds: [],
+      cidHashes,
+      pkpIds,
     })
-    await this.send(calldata)
+    await this.send(calldata, `addGroup "${name}"`)
+
+    // In calldata mode the write is only recorded, not broadcast, so the new id
+    // cannot be read back yet. Callers must create the group fully populated (as
+    // above) and not depend on the returned id.
+    if (this.opts.collector) {
+      return PLACEHOLDER_GROUP_ID
+    }
 
     // Re-read to discover the new id.
     const groups = await this.listGroups()
@@ -925,7 +1048,7 @@ class ChainSecuredBackend implements SetupBackend {
       groupId,
       pkpId,
     })
-    await this.send(calldata)
+    await this.send(calldata, `addPkpToGroup (group ${groupId})`)
   }
 
   async addAction(
@@ -939,7 +1062,7 @@ class ChainSecuredBackend implements SetupBackend {
       description,
       actionHash: hashCidToBigInt(cid),
     })
-    await this.send(calldata)
+    await this.send(calldata, `addAction "${name}"`)
   }
 
   async addActionToGroup(groupId: bigint, cid: string): Promise<void> {
@@ -948,7 +1071,7 @@ class ChainSecuredBackend implements SetupBackend {
       groupId,
       action: hashCidToBigInt(cid),
     })
-    await this.send(calldata)
+    await this.send(calldata, `addActionToGroup (group ${groupId})`)
   }
 
   async removeActionFromGroup(
@@ -961,7 +1084,7 @@ class ChainSecuredBackend implements SetupBackend {
         groupId,
         action: actionHash,
       })
-      await this.send(calldata)
+      await this.send(calldata, `removeActionFromGroup (group ${groupId})`)
     } catch (e: unknown) {
       const msg = (e instanceof Error ? e.message : String(e)).split("\n")[0]
       console.log(`     (skipped removeActionFromGroup: ${msg})`)
@@ -974,7 +1097,7 @@ class ChainSecuredBackend implements SetupBackend {
         accountApiKeyHash: this.opts.adminHash,
         actionHash,
       })
-      await this.send(calldata)
+      await this.send(calldata, "removeAction")
     } catch (e: unknown) {
       const msg = (e instanceof Error ? e.message : String(e)).split("\n")[0]
       console.log(`     (skipped removeAction: ${msg})`)
@@ -990,7 +1113,7 @@ class ChainSecuredBackend implements SetupBackend {
       cidHashes: params.cidHashesPermitted,
       pkpIds: params.pkpIdsPermitted,
     })
-    await this.send(calldata)
+    await this.send(calldata, `updateGroup (group ${groupId})`)
   }
 
   async createUsageApiKey(
@@ -998,11 +1121,12 @@ class ChainSecuredBackend implements SetupBackend {
     description: string,
     executeInGroupIds: bigint[]
   ): Promise<string> {
+    this.assertCanSign("createUsageApiKey")
     // Mint the wallet behind the usage key via DStack MPC.
     const minted = await addUsageApiKeyWithSignature(
       this.adminWalletAddress,
       Number(this.opts.chainId),
-      this.opts.privateKey
+      this.opts.privateKey! // guaranteed by assertCanSign
     )
 
     // Register the new wallet derivation on-chain.
@@ -1013,7 +1137,7 @@ class ChainSecuredBackend implements SetupBackend {
       name,
       description,
     })
-    await this.send(regCalldata)
+    await this.send(regCalldata, "registerWalletDerivation (usage key)")
 
     // Match Chipotle's `api_key_hash`: keccak256 over the UTF-8 bytes of the
     // base64-encoded usage API key string. Hashing the base64-decoded bytes
@@ -1039,7 +1163,7 @@ class ChainSecuredBackend implements SetupBackend {
       removePkpFromGroups: [],
       executeInGroups: executeInGroupIds,
     })
-    await this.send(setCalldata)
+    await this.send(setCalldata, `setUsageApiKey "${name}"`)
 
     return minted.usage_api_key
   }
@@ -1066,14 +1190,28 @@ export interface UsageKeyTarget {
 }
 
 export interface SetUsageApiKeyBalanceOptions {
-  /** Admin wallet private key authorized to write to the account. */
-  privateKey: string
+  /**
+   * Admin wallet private key authorized to write to the account. Optional
+   * only when `collector` is set (calldata mode).
+   */
+  privateKey?: string
   /** Master account API key (used to derive the on-chain account hash). */
   accountApiKey: string
   /** Which usage key to update. Exactly one of `name` or `usageApiKeyHash`. */
   target: UsageKeyTarget
-  /** Absolute new balance to write. */
-  newBalance: bigint
+  /**
+   * Absolute new balance to write. Required unless `preserveBalance` is set.
+   */
+  newBalance?: bigint
+  /**
+   * Re-submit the existing on-chain balance unchanged. Useful for a no-op
+   * `setUsageApiKey` write (e.g. to verify an owner/multisig can execute
+   * admin writes) without altering any state. Mutually exclusive with
+   * `newBalance`.
+   */
+  preserveBalance?: boolean
+  /** When set, record the write as calldata instead of broadcasting it. */
+  collector?: CalldataCollector
   /**
    * Optional new absolute Unix-seconds expiration. Pass `0n` to clear it
    * (no expiration). Omit to preserve whatever is currently on-chain.
@@ -1118,9 +1256,26 @@ export async function setUsageApiKeyBalance(
     )
   }
 
-  const normalizedKey = opts.privateKey.startsWith("0x")
-    ? opts.privateKey
-    : `0x${opts.privateKey}`
+  if (!opts.privateKey && !opts.collector) {
+    throw new Error(
+      "setUsageApiKeyBalance requires either privateKey (broadcast) or collector (calldata mode)"
+    )
+  }
+  if (opts.newBalance === undefined && !opts.preserveBalance) {
+    throw new Error(
+      "setUsageApiKeyBalance requires either newBalance or preserveBalance"
+    )
+  }
+  if (opts.newBalance !== undefined && opts.preserveBalance) {
+    throw new Error(
+      "setUsageApiKeyBalance: pass either newBalance or preserveBalance, not both"
+    )
+  }
+  const normalizedKey = opts.privateKey
+    ? opts.privateKey.startsWith("0x")
+      ? opts.privateKey
+      : `0x${opts.privateKey}`
+    : ""
   const adminHash = bytesToBigInt(
     keccak(new TextEncoder().encode(opts.accountApiKey))
   )
@@ -1144,11 +1299,15 @@ export async function setUsageApiKeyBalance(
     )
   }
 
+  // A no-op write re-submits the exact on-chain balance; otherwise use the
+  // requested new balance.
+  const balance = opts.preserveBalance ? target.balance : opts.newBalance!
+
   const calldata = writeContract.setUsageApiKey.encodeInput({
     accountApiKeyHash: adminHash,
     usageApiKeyHash: target.apiKeyHash,
     expiration: opts.newExpiration ?? target.expiration,
-    balance: opts.newBalance,
+    balance,
     name: target.metadata.name,
     description: target.metadata.description,
     createGroups: target.createGroups,
@@ -1165,17 +1324,28 @@ export async function setUsageApiKeyBalance(
     DEFAULT_BASE_CHAIN_ID,
     normalizedKey,
     DEFAULT_ACCOUNT_CONFIG_ADDRESS,
-    calldata
+    calldata,
+    {
+      collector: opts.collector,
+      description: `setUsageApiKey "${target.metadata.name}"${
+        opts.preserveBalance ? " (no-op)" : " (balance)"
+      }`,
+    }
   )
 }
 
 export interface RemoveUsageApiKeyOptions {
-  /** Admin wallet private key authorized to write to the account. */
-  privateKey: string
+  /**
+   * Admin wallet private key authorized to write to the account. Optional
+   * only when `collector` is set (calldata mode).
+   */
+  privateKey?: string
   /** Master account API key (used to derive the on-chain account hash). */
   accountApiKey: string
   /** Which usage key to remove. Exactly one of `name` or `usageApiKeyHash`. */
   target: UsageKeyTarget
+  /** When set, record the write as calldata instead of broadcasting it. */
+  collector?: CalldataCollector
 }
 
 /**
@@ -1199,9 +1369,16 @@ export async function removeUsageApiKey(
     )
   }
 
-  const normalizedKey = opts.privateKey.startsWith("0x")
-    ? opts.privateKey
-    : `0x${opts.privateKey}`
+  if (!opts.privateKey && !opts.collector) {
+    throw new Error(
+      "removeUsageApiKey requires either privateKey (broadcast) or collector (calldata mode)"
+    )
+  }
+  const normalizedKey = opts.privateKey
+    ? opts.privateKey.startsWith("0x")
+      ? opts.privateKey
+      : `0x${opts.privateKey}`
+    : ""
   const adminHash = bytesToBigInt(
     keccak(new TextEncoder().encode(opts.accountApiKey))
   )
@@ -1230,6 +1407,7 @@ export async function removeUsageApiKey(
     DEFAULT_BASE_CHAIN_ID,
     normalizedKey,
     DEFAULT_ACCOUNT_CONFIG_ADDRESS,
-    calldata
+    calldata,
+    { collector: opts.collector, description: "removeUsageApiKey" }
   )
 }

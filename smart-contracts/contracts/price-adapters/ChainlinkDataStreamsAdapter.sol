@@ -105,7 +105,13 @@ contract ChainlinkDataStreamsAdapter is IPriceFeedAdapter {
     bytes calldata updateData
   )
     external
-    returns (uint256 usdPrice, uint8 usdPriceDecimals, uint256 publishTime)
+    returns (
+      uint256 usdPrice,
+      uint256 bid,
+      uint256 ask,
+      uint8 usdPriceDecimals,
+      uint256 publishTime
+    )
   {
     // On-chain DON-signature verification. `verify` reverts unless the report
     // is signed by the verifier's configured DON; it returns the decoded
@@ -119,7 +125,9 @@ contract ChainlinkDataStreamsAdapter is IPriceFeedAdapter {
       bytes32 reportFeedId,
       uint32 observationsTimestamp,
       uint32 expiresAt,
-      int192 benchmarkPrice
+      int192 benchmarkPrice,
+      int192 reportBid,
+      int192 reportAsk
     ) = _decodeReport(verifiedReport);
 
     if (reportFeedId != feedId) {
@@ -139,7 +147,18 @@ contract ChainlinkDataStreamsAdapter is IPriceFeedAdapter {
       revert ReportExpired(expiresAt, block.timestamp);
     }
 
+    // The DON-verified report carries the consensus benchmark (mid) price plus
+    // the bid/ask band; surface all three so consumers can use the liquidity
+    // distribution, not just the mid. A V3 report always includes bid/ask, but
+    // if a feed omits either side (non-positive), report the band as fully
+    // unavailable (`bid == ask == 0`) rather than a one-sided band. This holds
+    // the consumer invariant: either `bid == ask == 0` (unavailable) or
+    // `bid <= usdPrice <= ask` (ordering guaranteed by the verified report).
     usdPrice = uint256(uint192(benchmarkPrice));
+    if (reportBid > 0 && reportAsk > 0) {
+      bid = uint256(uint192(reportBid));
+      ask = uint256(uint192(reportAsk));
+    }
     usdPriceDecimals = USD_PRICE_DECIMALS;
     publishTime = observationsTimestamp;
   }
@@ -149,7 +168,9 @@ contract ChainlinkDataStreamsAdapter is IPriceFeedAdapter {
   /// @return reportFeedId Feed ID declared in the report body.
   /// @return observationsTimestamp Report's latest observation timestamp.
   /// @return expiresAt Timestamp after which the report is no longer valid.
-  /// @return benchmarkPrice Benchmark price, scaled by `USD_PRICE_DECIMALS`.
+  /// @return benchmarkPrice Benchmark (mid) price, scaled by `USD_PRICE_DECIMALS`.
+  /// @return bid Best bid price, scaled by `USD_PRICE_DECIMALS`.
+  /// @return ask Best ask price, scaled by `USD_PRICE_DECIMALS`.
   function _decodeReport(
     bytes memory verifiedReport
   )
@@ -159,11 +180,13 @@ contract ChainlinkDataStreamsAdapter is IPriceFeedAdapter {
       bytes32 reportFeedId,
       uint32 observationsTimestamp,
       uint32 expiresAt,
-      int192 benchmarkPrice
+      int192 benchmarkPrice,
+      int192 bid,
+      int192 ask
     )
   {
     // Skip the fields not used for pricing: validFromTimestamp, nativeFee,
-    // linkFee, bid, ask.
+    // linkFee.
     (
       reportFeedId,
       ,
@@ -172,8 +195,8 @@ contract ChainlinkDataStreamsAdapter is IPriceFeedAdapter {
       ,
       expiresAt,
       benchmarkPrice,
-      ,
-
+      bid,
+      ask
     ) = abi.decode(
         verifiedReport,
         (

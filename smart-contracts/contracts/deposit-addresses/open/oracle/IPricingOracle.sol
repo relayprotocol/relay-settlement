@@ -26,13 +26,40 @@ struct Currency {
 ///
 ///             usd = rawAmount * usdPrice / (10 ** currencyDecimals)
 ///
-/// @param usdPrice         USD price of one whole unit of the currency,
-///                         scaled by `10 ** usdPriceDecimals`
+/// @param usdPrice         USD price of one whole unit of the currency — the
+///                         mid (benchmark) price — scaled by
+///                         `10 ** usdPriceDecimals`. The bid/ask band, when a
+///                         provider exposes one, is read separately via
+///                         `IBidAskOracle`.
 /// @param usdPriceDecimals Fixed-point precision of `usdPrice`
 /// @param currencyDecimals Number of decimals the currency itself uses
 /// @param expiration       Unix timestamp after which this price must not be used
 struct Price {
   uint256 usdPrice;
+  uint8 usdPriceDecimals;
+  uint8 currencyDecimals;
+  uint256 expiration;
+}
+
+/// @notice Mid price together with the bid/ask band for one unit of a currency.
+/// @dev Returned by `IBidAskOracle` for consumers (eg. an AMM) that need the
+///      market liquidity distribution, not just the mid. Keeping this separate
+///      from `Price` leaves the common mid-only path untouched.
+/// @param midPrice         Mid (benchmark) price, scaled by `10 ** usdPriceDecimals`
+/// @param bidPrice         Best bid price, scaled by `10 ** usdPriceDecimals`,
+///                         or `0` when no bid/ask is available. Invariant:
+///                         either `bidPrice == askPrice == 0` (unavailable) or
+///                         `bidPrice <= midPrice <= askPrice`. Consumers must
+///                         null-check before using `bidPrice`/`askPrice`.
+/// @param askPrice         Best ask price, scaled by `10 ** usdPriceDecimals`,
+///                         or `0` when no bid/ask is available (see `bidPrice`)
+/// @param usdPriceDecimals Fixed-point precision of `midPrice`, `bidPrice` and `askPrice`
+/// @param currencyDecimals Number of decimals the currency itself uses
+/// @param expiration       Unix timestamp after which this price must not be used
+struct BidAsk {
+  uint256 midPrice;
+  uint256 bidPrice;
+  uint256 askPrice;
   uint8 usdPriceDecimals;
   uint8 currencyDecimals;
   uint256 expiration;
@@ -61,4 +88,25 @@ interface IPricingOracle {
     Currency[] calldata currencies,
     bytes calldata extraData
   ) external returns (Price[] memory prices);
+}
+
+/// @title IBidAskOracle
+/// @author Relay Protocol
+/// @notice Optional oracle capability that exposes the bid/ask band alongside
+///         the mid price, for consumers (eg. an AMM) that need the market
+///         liquidity distribution. Only oracles backed by providers that carry
+///         a band (eg. Chainlink Data Streams) implement this; the common
+///         mid-only path stays on `IPricingOracle`.
+interface IBidAskOracle {
+  /// @notice Returns the mid price and bid/ask band for a batch of currencies.
+  /// @dev Like `IPricingOracle.resolveUsdPrices`, this is intentionally not
+  ///      `view` (it may verify on-chain in a fee-paying call) and resolves the
+  ///      band in the same verification, so a consumer needs only one call.
+  /// @param currencies Currencies whose bid/ask bands should be returned
+  /// @param extraData Opaque data passed through from the caller
+  /// @return bidAsks Mid + bid/ask for `currencies`, in the same order
+  function resolveBidAskPrices(
+    Currency[] calldata currencies,
+    bytes calldata extraData
+  ) external returns (BidAsk[] memory bidAsks);
 }

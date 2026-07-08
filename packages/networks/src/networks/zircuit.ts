@@ -12,6 +12,6 @@ export const zircuit: NetworkConfig = {
   name: "Zircuit",
   rpc: process.env.RPC_48900
     ? [process.env.RPC_48900]
-    : ["https://zircuit1-mainnet.p2pify.com"],
+    : ["https://mainnet.zircuit.com"],
   slug: "zircuit",
 }

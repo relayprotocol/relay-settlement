@@ -14,6 +14,7 @@ import {
 import { DecodedSolanaVmWithdrawal, solanaVmCodec } from "./solana-vm"
 import { DecodedTonVmWithdrawal, tonVmCodec } from "./ton-vm"
 import { DecodedTronVmWithdrawal, tronVmCodec } from "./tron-vm"
+import { DecodedXrpVmWithdrawal, xrpVmCodec } from "./xrp-vm"
 
 export {
   DecodedBitcoinVmWithdrawal,
@@ -23,6 +24,7 @@ export {
   DecodedSolanaVmWithdrawal,
   DecodedTonVmWithdrawal,
   DecodedTronVmWithdrawal,
+  DecodedXrpVmWithdrawal,
   LighterTransferParams,
 }
 export { buildLighterTransferL1Message } from "./lighter-vm"
@@ -36,6 +38,7 @@ export type DecodedWithdrawal =
   | DecodedHyperliquidVmWithdrawal
   | DecodedLighterVmWithdrawal
   | DecodedTonVmWithdrawal
+  | DecodedXrpVmWithdrawal
 
 export type DecodedWithdrawalFor<V extends VmType> = Extract<
   DecodedWithdrawal,
@@ -55,6 +58,7 @@ const codecs: {
   "solana-vm": solanaVmCodec,
   "ton-vm": tonVmCodec,
   "tron-vm": tronVmCodec,
+  "xrp-vm": xrpVmCodec,
 }
 
 export const getWithdrawalCodec = <V extends VmType>(

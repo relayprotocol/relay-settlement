@@ -8,7 +8,7 @@
  *     --env <name> \
  *     --usage-api-key <key> \
  *     --pkp-id <pkp-address> \
- *     --vm-type <ethereum-vm | tron-vm | solana-vm | ton-vm | bitcoin-vm | hyperliquid-vm | lighter-vm>
+ *     --vm-type <ethereum-vm | tron-vm | solana-vm | ton-vm | bitcoin-vm | hyperliquid-vm | lighter-vm | xrp-vm>
  */
 
 import { VM_TYPES, loadEnvironment, parseEnvArg, type VmType } from "../env.js";
@@ -16,7 +16,7 @@ import { CHIPOTLE_API_BASE_URL, executeLitAction } from "./index.js";
 
 const usage =
   "Usage:\n" +
-  "  tsx scripts/client/wallet.ts --env <name> --usage-api-key <key> --pkp-id <address> --vm-type <ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm>";
+  "  tsx scripts/client/wallet.ts --env <name> --usage-api-key <key> --pkp-id <address> --vm-type <ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm>";
 
 function getOption(args: string[], name: string): string | undefined {
   const idx = args.indexOf(name);
@@ -41,7 +41,7 @@ if (!pkpId) {
 }
 if (!vmTypeArg) {
   missing.push(
-    "--vm-type <ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm>",
+    "--vm-type <ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm>",
   );
 }
 if (missing.length > 0 || !apiKey || !pkpId || !vmTypeArg) {

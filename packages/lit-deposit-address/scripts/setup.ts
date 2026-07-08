@@ -36,8 +36,10 @@ import {
   type VmType,
 } from "./env.js";
 import {
+  CalldataCollector,
   createApiKeyBackend,
   createChainSecuredBackend,
+  printCalldataBatch,
   type SetupBackend,
   type SetupMode,
 } from "@relay-protocol/lit-helpers/setup";
@@ -114,8 +116,16 @@ async function getLitActionIpfsCid(code: string): Promise<string> {
 
 // ─── Backend selection ──────────────────────────────────────────────────────
 
-/** Build the backend the user asked for, validating mode-specific args. */
-function buildBackend(args: string[]): SetupBackend {
+/**
+ * Build the backend the user asked for, validating mode-specific args. When
+ * `--calldata` is set (chain-secured only), contract writes are collected on
+ * the returned `collector` for relay through an MPC/multisig owner instead of
+ * being broadcast, so no `--private-key` is required.
+ */
+function buildBackend(args: string[]): {
+  backend: SetupBackend;
+  collector?: CalldataCollector;
+} {
   const mode = getOption(args, "--mode") as SetupMode | undefined;
   if (mode !== "api-key" && mode !== "chain-secured") {
     throw new Error("setup requires --mode api-key or --mode chain-secured");
@@ -126,20 +136,40 @@ function buildBackend(args: string[]): SetupBackend {
     throw new Error("setup requires --account-api-key <key>");
   }
 
+  const calldata = args.includes("--calldata");
+
   if (mode === "api-key") {
-    return createApiKeyBackend(accountApiKey);
+    if (calldata) {
+      throw new Error("--calldata is only supported with --mode chain-secured");
+    }
+    return { backend: createApiKeyBackend(accountApiKey) };
+  }
+
+  if (calldata) {
+    const collector = new CalldataCollector();
+    return {
+      backend: createChainSecuredBackend({
+        accountApiKey,
+        collector,
+        pkpName: "Deposit Address PKP",
+        pkpDescription: "Lit Deposit Address PKP",
+      }),
+      collector,
+    };
   }
 
   const privateKey = getOption(args, "--private-key");
   if (!privateKey) {
-    throw new Error("--mode chain-secured requires --private-key <hex>");
+    throw new Error("--mode chain-secured requires --private-key <hex> (or --calldata)");
   }
-  return createChainSecuredBackend({
-    privateKey,
-    accountApiKey,
-    pkpName: "Deposit Address PKP",
-    pkpDescription: "Lit Deposit Address PKP",
-  });
+  return {
+    backend: createChainSecuredBackend({
+      privateKey,
+      accountApiKey,
+      pkpName: "Deposit Address PKP",
+      pkpDescription: "Lit Deposit Address PKP",
+    }),
+  };
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────
@@ -147,7 +177,12 @@ function buildBackend(args: string[]): SetupBackend {
 const USAGE =
   "Usage:\n" +
   "  tsx scripts/setup.ts --env <name> --mode api-key       --account-api-key <key> (--create-pkp | --pkp-id <address>) [--dry-run]\n" +
-  "  tsx scripts/setup.ts --env <name> --mode chain-secured --account-api-key <key> --private-key 0x... (--create-pkp | --pkp-id <address>) [--dry-run]";
+  "  tsx scripts/setup.ts --env <name> --mode chain-secured --account-api-key <key> --private-key 0x... (--create-pkp | --pkp-id <address>) [--dry-run]\n" +
+  "  tsx scripts/setup.ts --env <name> --mode chain-secured --account-api-key <key> --calldata --pkp-id <address>\n" +
+  "\n" +
+  "  --calldata: emit the contract calldata to relay via the account owner (MPC/multisig)\n" +
+  "              instead of broadcasting. Requires --pkp-id and an already-provisioned\n" +
+  "              usage key (PKP/usage-key minting need a live admin signature).";
 
 async function main() {
   const { envName, rest: args } = parseEnvArg(process.argv.slice(2));
@@ -167,16 +202,29 @@ async function main() {
   const managedActionNames = new Set(VM_TYPES.map(actionNameForVm));
 
   const dryRun = args.includes("--dry-run");
+  const calldataMode = args.includes("--calldata");
   const createPkp = args.includes("--create-pkp");
   const providedPkpId = getOption(args, "--pkp-id")?.trim();
   if (createPkp === Boolean(providedPkpId)) {
     console.error("setup requires exactly one of --create-pkp or --pkp-id <address>.\n\n" + USAGE);
     process.exit(1);
   }
+  if (calldataMode && dryRun) {
+    console.error("--calldata and --dry-run are mutually exclusive.\n\n" + USAGE);
+    process.exit(1);
+  }
+  if (calldataMode && createPkp) {
+    console.error(
+      "--calldata cannot mint a PKP (it needs a live admin signature); pass --pkp-id <address>.\n\n" +
+        USAGE,
+    );
+    process.exit(1);
+  }
 
   let backend: SetupBackend;
+  let collector: CalldataCollector | undefined;
   try {
-    backend = buildBackend(args);
+    ({ backend, collector } = buildBackend(args));
   } catch (e) {
     console.error(`${e instanceof Error ? e.message : e}\n\n${USAGE}`);
     process.exit(1);
@@ -184,7 +232,7 @@ async function main() {
 
   console.log(`🔥 Lit Deposit Address Setup (idempotent${dryRun ? ", dry run" : ""})`);
   console.log(`   Environment: ${env.name}`);
-  console.log(`   Mode: ${backend.mode}`);
+  console.log(`   Mode: ${backend.mode}${calldataMode ? " (calldata — no broadcast)" : ""}`);
   console.log(`   Dry run: ${dryRun ? "yes — no writes will be performed" : "no"}`);
   console.log(`   Deposit address manager: ${env.depositAddressManagerAddress}`);
   console.log(`   Hub chain id: ${env.hubEvmChainId}`);
@@ -218,23 +266,23 @@ async function main() {
   // ── 2. Ensure group exists ─────────────────────────────────────────────
   console.log("2. Checking for existing group...");
   const groups = await backend.listGroups();
+  // `group` stays undefined until it exists on-chain. A missing group is
+  // created fully populated in step 4 with a single addGroup call, so we never
+  // need to know its id up front — this is what lets calldata mode emit one
+  // self-contained batch (create group + permissions) instead of two.
   let group = groups.find((g) => g.name === groupName);
+  const groupExists = group !== undefined;
 
-  if (group) {
-    console.log(`   ✓ Exists — using group: "${group.name}" (id=${group.id})`);
+  if (groupExists) {
+    console.log(`   ✓ Exists — using group: "${group!.name}" (id=${group!.id})`);
   } else if (dryRun) {
-    console.log(`   Would create group "${groupName}"`);
+    console.log(`   Would create group "${groupName}" (fully populated)`);
   } else {
-    console.log(`   Creating group "${groupName}"...`);
-    const groupId = await backend.addGroup(groupName, "Lit Deposit Address signing group");
-    group = { id: groupId, name: groupName, description: "Lit Deposit Address signing group" };
-    console.log(`   ✓ Group created: id=${group.id}`);
+    console.log(`   Group "${groupName}" is missing — will create it fully populated below`);
   }
   const requireGroup = () => {
     if (!group) {
-      throw new Error(
-        `group "${groupName}" does not exist yet; rerun without --dry-run to create it`,
-      );
+      throw new Error(`group "${groupName}" does not exist yet`);
     }
     return group;
   };
@@ -242,12 +290,17 @@ async function main() {
 
   // ── 3. Ensure PKP is in the group ──────────────────────────────────────
   console.log("3. Checking if PKP is in group...");
-  const walletsInGroup = group ? await backend.listPkpsInGroup(group.id) : [];
-  const pkpInGroup = walletsInGroup.some(
-    (w) => w.walletAddress.toLowerCase() === pkpId.toLowerCase(),
-  );
+  const walletsInGroup = groupExists ? await backend.listPkpsInGroup(requireGroup().id) : [];
+  // Track the group's permitted PKPs locally so writes performed during this
+  // run (addPkpToGroup) are reflected without a re-read. This lets the later
+  // permission-sync check skip a redundant updateGroup call for changes we have
+  // already emitted individually.
+  const currentPkpSet = new Set(walletsInGroup.map((w) => w.walletAddress.toLowerCase()));
+  const pkpInGroup = currentPkpSet.has(pkpId.toLowerCase());
 
-  if (pkpInGroup) {
+  if (!groupExists) {
+    console.log("   Group missing — PKP will be included when the group is created");
+  } else if (pkpInGroup) {
     console.log("   ✓ Exists — PKP already in group");
   } else if (dryRun) {
     console.log(
@@ -256,6 +309,7 @@ async function main() {
   } else {
     console.log("   Adding PKP to group...");
     await backend.addPkpToGroup(requireGroup().id, pkpId);
+    currentPkpSet.add(pkpId.toLowerCase());
     console.log("   ✓ PKP added to group");
   }
   console.log();
@@ -265,6 +319,11 @@ async function main() {
 
   const existingActions = await backend.listActions();
   console.log(`   account has ${existingActions.length} action(s) before sync`);
+
+  // Actions already attached to the group (its permitted CID hashes) so we can
+  // skip on-chain writes when everything is already in place.
+  const actionsInGroup = groupExists ? await backend.listActionsInGroup(requireGroup().id) : [];
+  const attachedHashes = new Set(actionsInGroup.map((a) => a.actionHash));
 
   // Compute target CIDs/hashes for every VM up front so group permissions can
   // be synced once against the union of all current CIDs.
@@ -300,7 +359,10 @@ async function main() {
       `   ${dryRun ? "Would prune" : "pruning"} stale action: name=${action.name ?? "<unnamed>"} hash=${formatHash(action.actionHash)}`,
     );
     if (!dryRun) {
-      await backend.removeActionFromGroup(requireGroup().id, action.actionHash);
+      if (groupExists) {
+        await backend.removeActionFromGroup(requireGroup().id, action.actionHash);
+        attachedHashes.delete(action.actionHash);
+      }
       await backend.removeAction(action.actionHash);
     }
   }
@@ -319,36 +381,86 @@ async function main() {
       console.log(`   ✓ ${vmType}: action registered in account`);
     }
 
-    if (dryRun) {
+    // Attaching to an existing group happens here; a missing group is created
+    // with every action already attached below, so skip per-action writes.
+    if (!groupExists) {
+      continue;
+    }
+    if (attachedHashes.has(actionHash)) {
+      console.log(`   ✓ ${vmType}: action already attached to group`);
+    } else if (dryRun) {
       console.log(`   Would attach ${vmType} action to group "${groupName}"`);
     } else {
       await backend.addActionToGroup(requireGroup().id, cid);
+      attachedHashes.add(actionHash);
       console.log(`   ✓ ${vmType}: action attached to group`);
     }
   }
 
-  // Sync group permissions once — the cidHashesPermitted array is the union
-  // of every per-VM target hash so the group never goes empty.
-  console.log(`   ${dryRun ? "Would sync" : "Syncing"} group permissions...`);
+  // The permitted sets the group should end up with.
   const permittedPkpIds = Array.from(
     new Set([...walletsInGroup.map((w) => w.walletAddress), pkpId]),
   );
-  if (dryRun) {
-    console.log(`   Would set permitted PKPs: ${permittedPkpIds.join(", ")}`);
-    console.log(
-      `   Would set permitted action hashes: ${[...targetCids.values()]
-        .map((t) => formatHash(t.actionHash))
-        .join(", ")}`,
-    );
+  const targetActionHashes = [...targetCids.values()].map((t) => t.actionHash);
+
+  if (!groupExists) {
+    // Fresh group: create it fully populated in a single call. No id is needed,
+    // so this is one self-contained transaction that also works in calldata
+    // mode (where the new id can't be read back mid-batch).
+    if (dryRun) {
+      console.log("   Would create group fully populated:");
+      console.log(`   Would set permitted PKPs: ${permittedPkpIds.join(", ")}`);
+      console.log(
+        `   Would set permitted action hashes: ${targetActionHashes.map(formatHash).join(", ")}`,
+      );
+    } else {
+      console.log(`   Creating group "${groupName}" with permissions...`);
+      const newId = await backend.addGroup(
+        groupName,
+        "Lit Deposit Address signing group",
+        targetActionHashes,
+        permittedPkpIds,
+      );
+      // In calldata mode the id is a sentinel (unreadable until relayed); leave
+      // `group` undefined there so nothing downstream mistakes it for real.
+      if (!calldataMode) {
+        group = {
+          id: newId,
+          name: groupName,
+          description: "Lit Deposit Address signing group",
+        };
+      }
+      console.log("   ✓ Group created with permissions");
+    }
   } else {
-    const currentGroup = requireGroup();
-    await backend.updateGroup(currentGroup.id, {
-      name: currentGroup.name,
-      description: currentGroup.description ?? "Lit Deposit Address signing group",
-      pkpIdsPermitted: permittedPkpIds,
-      cidHashesPermitted: [...targetCids.values()].map((t) => t.actionHash),
-    });
-    console.log("   ✓ Group permissions synced");
+    // Existing group: sync only what is out of date. Because the individual
+    // addPkpToGroup / addActionToGroup writes above were tracked locally, a
+    // fully-synced group emits no updateGroup call.
+    const pkpsInSync = permittedPkpIds.every((p) => currentPkpSet.has(p.toLowerCase()));
+    const actionsSynced =
+      attachedHashes.size === targetHashes.size &&
+      [...targetHashes].every((h) => attachedHashes.has(h));
+    const permissionsInSync = pkpsInSync && actionsSynced;
+
+    if (permissionsInSync) {
+      console.log("   ✓ Group permissions already in sync");
+    } else if (dryRun) {
+      console.log("   Would sync group permissions...");
+      console.log(`   Would set permitted PKPs: ${permittedPkpIds.join(", ")}`);
+      console.log(
+        `   Would set permitted action hashes: ${targetActionHashes.map(formatHash).join(", ")}`,
+      );
+    } else {
+      console.log("   Syncing group permissions...");
+      const currentGroup = requireGroup();
+      await backend.updateGroup(currentGroup.id, {
+        name: currentGroup.name,
+        description: currentGroup.description ?? "Lit Deposit Address signing group",
+        pkpIdsPermitted: permittedPkpIds,
+        cidHashesPermitted: targetActionHashes,
+      });
+      console.log("   ✓ Group permissions synced");
+    }
   }
   console.log();
 
@@ -366,6 +478,10 @@ async function main() {
     console.log(
       `   Would create usage API key "${usageKeyName}" with execute access to group "${groupName}"`,
     );
+  } else if (calldataMode) {
+    console.log(`   ⚠️  usage key "${usageKeyName}" is missing and cannot be minted in`);
+    console.log("      calldata mode (it needs a live admin signature). Mint it in");
+    console.log("      broadcast mode before/after transferring ownership.");
   } else {
     console.log(`   Creating usage API key "${usageKeyName}"...`);
     usageApiKeyValue = await backend.createUsageApiKey(
@@ -378,13 +494,20 @@ async function main() {
   }
   console.log();
 
+  // ── Calldata batch (MPC relay) ──────────────────────────────────────────
+  if (collector) {
+    printCalldataBatch(collector);
+  }
+
   // ── Summary ────────────────────────────────────────────────────────────
   console.log("═══════════════════════════════════════════════════════");
   console.log(
     `  ${
       dryRun
         ? "Dry run complete — no changes were made. Target environment values:"
-        : "Setup complete! Add these to your environment:"
+        : calldataMode
+          ? "Calldata emitted above — relay it via the account owner. Environment values:"
+          : "Setup complete! Add these to your environment:"
     }`,
   );
   console.log("═══════════════════════════════════════════════════════");

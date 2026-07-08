@@ -327,13 +327,29 @@ export const buildEvmTransaction = async (
 
   nonceOffsets[tx.from][chainId] = (nonceOffsets[tx.from][chainId] || 0) + 1
 
+  // Pick the correct transaction type from the manifest's fee fields. Not
+  // every chain supports EIP-1559 (e.g. Metis), and those chains can only
+  // process legacy transactions priced with `gasPrice`. The manifest signals
+  // this: a `gasPrice` means a legacy (type 0) transaction, otherwise an
+  // EIP-1559 (type 2) transaction. We must forward only the fields matching
+  // the chosen type — mixing them makes viem infer the wrong type, producing a
+  // signed payload that can never be broadcast.
+  const feeFields: {
+    gasPrice?: bigint
+    maxFeePerGas?: bigint
+    maxPriorityFeePerGas?: bigint
+  } = tx.gasPrice
+    ? { gasPrice: BigInt(tx.gasPrice) }
+    : {
+        maxFeePerGas: tx.maxFeePerGas ? BigInt(tx.maxFeePerGas) : undefined,
+        maxPriorityFeePerGas: tx.maxPriorityFeePerGas
+          ? BigInt(tx.maxPriorityFeePerGas)
+          : undefined,
+      }
+
   const transaction = {
     ...raw,
-    gasPrice: tx.gasPrice ? BigInt(tx.gasPrice) : undefined,
-    maxFeePerGas: tx.maxFeePerGas ? BigInt(tx.maxFeePerGas) : undefined,
-    maxPriorityFeePerGas: tx.maxPriorityFeePerGas
-      ? BigInt(tx.maxPriorityFeePerGas)
-      : undefined,
+    ...feeFields,
   }
 
   const payload = serializeTransaction(transaction as any)

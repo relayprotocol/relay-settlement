@@ -12,6 +12,6 @@ export const monad: NetworkConfig = {
   name: "Monad",
   rpc: process.env.RPC_143
     ? [process.env.RPC_143]
-    : ["https://monad-mainnet.drpc.org", "https://rpc.monad.xyz"],
+    : ["https://rpc-mainnet.monadinfra.com", "https://rpc.monad.xyz"],
   slug: "monad",
 }
