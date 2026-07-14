@@ -21,6 +21,16 @@
         "internalType": "uint256"
       },
       {
+        "name": "bid",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "ask",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
         "name": "usdPriceDecimals",
         "type": "uint8",
         "internalType": "uint8"

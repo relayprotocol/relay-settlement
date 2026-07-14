@@ -18,7 +18,9 @@ use tokio_tungstenite::{
 use tracing::{debug, info, instrument, warn};
 
 use crate::Context;
-use crate::cache::{FeedKey, IpcServerSink, PriceUpdateSink, SignedPriceUpdate, provider_id};
+use crate::cache::{
+    FeedKey, IpcServerSink, PriceUpdateSink, SignedPriceUpdate, now_unix_ms, provider_id,
+};
 
 const WS_PATH: &str = "/api/v1/ws";
 const DEFAULT_RECONNECT_BACKOFF: Duration = Duration::from_secs(1);
@@ -44,13 +46,6 @@ pub async fn run(ctx: Context) -> Result<()> {
     );
     ingester.run().await;
     Ok(())
-}
-
-fn now_secs() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -91,7 +86,7 @@ impl StreamConfig {
 pub struct RawReport {
     pub feed_id: B256,
     pub full_report: Vec<u8>,
-    pub source_time: u64,
+    pub source_time_ms: u64,
 }
 
 pub struct ChainlinkStream {
@@ -210,11 +205,11 @@ impl StreamIngester {
     }
 
     fn cache_report(&self, report: RawReport) {
-        let received_at = now_secs();
+        let delivery_time_ms = now_unix_ms();
         if let Err(e) = crate::verification::verify(
             report.feed_id,
             &report.full_report,
-            received_at,
+            delivery_time_ms / 1000,
             self.max_age_sec,
         ) {
             warn!(feed_id = %report.feed_id, error = %e, "dropping report that failed verification");
@@ -228,8 +223,12 @@ impl StreamIngester {
         self.sink.insert(SignedPriceUpdate {
             key: FeedKey::new(provider_id(), report.feed_id),
             payload: report.full_report,
-            received_at,
-            source_time: report.source_time,
+            delivery_time_ms,
+            source_time_ms: if report.source_time_ms == 0 {
+                delivery_time_ms
+            } else {
+                report.source_time_ms
+            },
         });
     }
 }
@@ -254,7 +253,7 @@ fn parse_report_message(bytes: &[u8]) -> Result<RawReport, StreamError> {
     Ok(RawReport {
         feed_id,
         full_report,
-        source_time: message.report.observations_timestamp,
+        source_time_ms: message.report.observations_timestamp * 1000,
     })
 }
 
@@ -327,7 +326,7 @@ mod tests {
         let report = parse_report_message(json.as_bytes()).unwrap();
         assert_eq!(report.feed_id, feed(0x01));
         assert_eq!(report.full_report, vec![0xde, 0xad, 0xbe, 0xef]);
-        assert_eq!(report.source_time, 1718998800);
+        assert_eq!(report.source_time_ms, 1_718_998_800_000);
     }
 
     #[test]

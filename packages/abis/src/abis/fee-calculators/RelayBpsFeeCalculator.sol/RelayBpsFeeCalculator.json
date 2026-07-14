@@ -1,0 +1,96 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "priceOracle",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "PRICE_ORACLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract RelayPriceOracle"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "calculateFee",
+    "inputs": [
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "data",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "feeCurrency",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "feeAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "feeRecipient",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "feePayer",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "error",
+    "name": "InvalidFeeBps",
+    "inputs": [
+      {
+        "name": "feeBps",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidFeePayer",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidFeeRecipient",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroAddress",
+    "inputs": []
+  }
+]

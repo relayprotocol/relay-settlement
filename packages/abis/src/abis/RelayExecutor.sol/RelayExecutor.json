@@ -135,7 +135,7 @@
       {
         "name": "request",
         "type": "tuple",
-        "internalType": "struct RelayExecutor.ExecuteAndWithdrawRequest",
+        "internalType": "struct ExecuteAndWithdrawRequest",
         "components": [
           {
             "name": "inChainId",
@@ -185,7 +185,7 @@
           {
             "name": "fees",
             "type": "tuple[]",
-            "internalType": "struct RelayExecutor.Fee[]",
+            "internalType": "struct Fee[]",
             "components": [
               {
                 "name": "recipient",
@@ -203,25 +203,23 @@
             "name": "nonce",
             "type": "bytes32",
             "internalType": "bytes32"
+          },
+          {
+            "name": "deadline",
+            "type": "uint256",
+            "internalType": "uint256"
           }
         ]
       },
       {
-        "name": "calls",
-        "type": "tuple[]",
-        "internalType": "struct RelayExecutor.Call[]",
-        "components": [
-          {
-            "name": "to",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "data",
-            "type": "bytes",
-            "internalType": "bytes"
-          }
-        ]
+        "name": "callResolver",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "callResolverData",
+        "type": "bytes",
+        "internalType": "bytes"
       },
       {
         "name": "oracle",
@@ -325,6 +323,99 @@
   },
   {
     "type": "function",
+    "name": "hashExecuteAndWithdrawRequest",
+    "inputs": [
+      {
+        "name": "request",
+        "type": "tuple",
+        "internalType": "struct ExecuteAndWithdrawRequest",
+        "components": [
+          {
+            "name": "inChainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "inCurrency",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "outChainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "outCurrency",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "outAmountMinimum",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "depository",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "orderAddress",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "receiver",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "data",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "fees",
+            "type": "tuple[]",
+            "internalType": "struct Fee[]",
+            "components": [
+              {
+                "name": "recipient",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "amount",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "nonce",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "deadline",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "digest",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "orderAddressByWithdrawRequestHash",
     "inputs": [
       {
@@ -386,6 +477,25 @@
         "name": "interfaceId",
         "type": "bytes4",
         "internalType": "bytes4"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "usedRequests",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "outputs": [
@@ -544,27 +654,6 @@
   },
   {
     "type": "error",
-    "name": "CallFailed",
-    "inputs": [
-      {
-        "name": "index",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "target",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "reason",
-        "type": "bytes",
-        "internalType": "bytes"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "EmptyOrderBalance",
     "inputs": [
       {
@@ -646,6 +735,28 @@
     "type": "error",
     "name": "ReentrancyGuardReentrantCall",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RequestAlreadyExecuted",
+    "inputs": [
+      {
+        "name": "digest",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "RequestExpired",
+    "inputs": [
+      {
+        "name": "deadline",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   },
   {
     "type": "error",

@@ -1,0 +1,46 @@
+[
+  {
+    "type": "function",
+    "name": "calculateFee",
+    "inputs": [
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "data",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "feeCurrency",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "feeAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "feeRecipient",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "feePayer",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  }
+]

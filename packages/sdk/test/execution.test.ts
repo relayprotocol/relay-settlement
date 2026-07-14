@@ -1,12 +1,33 @@
-import { decodeAbiParameters, parseAbiParameters } from "viem"
+import {
+  decodeAbiParameters,
+  encodeAbiParameters,
+  parseAbiParameters,
+} from "viem"
 import { describe, it, expect } from "vitest"
 
 import {
   ActionType,
   encodeAction,
   decodeAction,
-  encodeAmountLimiterData,
 } from "../src/messages/v2.2/execution"
+
+const encodeTestFeeCalculatorData = (
+  feeCurrency: string | bigint,
+  feeBps: string | bigint,
+  feeRecipient: string,
+  feePayer: string
+) =>
+  encodeAbiParameters(
+    parseAbiParameters(
+      "uint256 feeCurrency, uint256 feeBps, address feeRecipient, address feePayer"
+    ),
+    [
+      BigInt(feeCurrency),
+      BigInt(feeBps),
+      feeRecipient as `0x${string}`,
+      feePayer as `0x${string}`,
+    ]
+  )
 
 const actions = [
   {
@@ -40,14 +61,15 @@ const actions = [
       hubToAddress: "0x3333333333333333333333333333333333333333",
       hubTokenId: 123456789n,
       amount: "1000000",
-      feeBps: "10000000000000000", // 1% (1e16 / 1e18)
-      feeRecipient: "0x4444444444444444444444444444444444444444",
-      limiter: "0x5555555555555555555555555555555555555555",
-      limiterData: encodeAmountLimiterData(
-        "8453",
-        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-        "1000000"
-      ),
+      feeCalculator: "0x6666666666666666666666666666666666666666",
+      feeCalculatorData: encodeTestFeeCalculatorData(
+        123456789n,
+        "10000000000000000",
+        "0x4444444444444444444444444444444444444444",
+        "0x3333333333333333333333333333333333333333"
+      ), // 1% (1e16 / 1e18)
+      rateLimiter: "0x5555555555555555555555555555555555555555",
+      rateLimiterData: "0x",
     },
   },
 ]
@@ -103,14 +125,14 @@ describe("execution", () => {
     expect(decoded.data.hubToAddress).toBe(action.data.hubToAddress)
     expect(decoded.data.hubTokenId).toBe(action.data.hubTokenId)
     expect(decoded.data.amount).toBe(action.data.amount)
-    expect(decoded.data.feeBps).toBe(action.data.feeBps)
-    expect(decoded.data.feeRecipient).toBe(action.data.feeRecipient)
-    expect(decoded.data.limiter).toBe(action.data.limiter)
-    expect(decoded.data.limiterData).toBe(action.data.limiterData)
+    expect(decoded.data.feeCalculator).toBe(action.data.feeCalculator)
+    expect(decoded.data.feeCalculatorData).toBe(action.data.feeCalculatorData)
+    expect(decoded.data.rateLimiter).toBe(action.data.rateLimiter)
+    expect(decoded.data.rateLimiterData).toBe(action.data.rateLimiterData)
   })
 
   // The encoded layout must match exactly what RelayOracleV2._executeFastMint decodes —
-  // abi.decode(action, (uint8, address, uint256, uint256, uint256, address, address, bytes)).
+  // abi.decode(action, (uint8, address, uint256, uint256, address, bytes, address, bytes)).
   it("FAST_MINT layout matches the contract decode tuple", () => {
     const action = actions[3]
     const encoded = encodeAction(action as any)
@@ -120,13 +142,13 @@ describe("execution", () => {
       hubTo,
       hubTokenId,
       amount,
-      feeBps,
-      feeRecipient,
-      limiter,
-      data,
+      feeCalculator,
+      feeCalculatorData,
+      rateLimiter,
+      rateLimiterData,
     ] = decodeAbiParameters(
       parseAbiParameters(
-        "uint8, address, uint256, uint256, uint256, address, address, bytes"
+        "uint8, address, uint256, uint256, address, bytes, address, bytes"
       ),
       encoded as `0x${string}`
     )
@@ -135,28 +157,36 @@ describe("execution", () => {
     expect((hubTo as string).toLowerCase()).toBe(action.data.hubToAddress)
     expect(hubTokenId).toBe(action.data.hubTokenId)
     expect(amount).toBe(1000000n)
-    expect(feeBps).toBe(10000000000000000n)
-    expect((feeRecipient as string).toLowerCase()).toBe(
-      action.data.feeRecipient
+    expect((feeCalculator as string).toLowerCase()).toBe(
+      action.data.feeCalculator
     )
-    expect((limiter as string).toLowerCase()).toBe(action.data.limiter)
-    expect(data).toBe(action.data.limiterData)
+    expect(feeCalculatorData).toBe(action.data.feeCalculatorData)
+    expect((rateLimiter as string).toLowerCase()).toBe(action.data.rateLimiter)
+    expect(rateLimiterData).toBe(action.data.rateLimiterData)
   })
 
-  it("encodeAmountLimiterData round-trips through the limiter's decode tuple", () => {
-    const encoded = encodeAmountLimiterData(
-      "8453",
-      "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-      "1000000"
+  it("test fee calculator data round-trips through the default fee calculator decode tuple", () => {
+    const feeCurrency = 123456789n
+    const feeRecipient = "0x4444444444444444444444444444444444444444"
+    const feePayer = "0x3333333333333333333333333333333333333333"
+    const encoded = encodeTestFeeCalculatorData(
+      feeCurrency,
+      "10000000000000000",
+      feeRecipient,
+      feePayer
     )
-    const [chainId, currency, amount] = decodeAbiParameters(
-      parseAbiParameters("string, bytes, uint256"),
-      encoded as `0x${string}`
-    )
-    expect(chainId).toBe("8453")
-    expect((currency as string).toLowerCase()).toBe(
-      "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
-    )
-    expect(amount).toBe(1000000n)
+    const [decodedCurrency, feeBps, decodedRecipient, decodedPayer] =
+      decodeAbiParameters(
+        parseAbiParameters("uint256, uint256, address, address"),
+        encoded as `0x${string}`
+      )
+    expect(decodedCurrency).toBe(feeCurrency)
+    expect(feeBps).toBe(10000000000000000n)
+    expect((decodedRecipient as string).toLowerCase()).toBe(feeRecipient)
+    expect((decodedPayer as string).toLowerCase()).toBe(feePayer)
+  })
+
+  it("uses empty data for the default token-id keyed amount rate limiter", () => {
+    expect(actions[3].data.rateLimiterData).toBe("0x")
   })
 })

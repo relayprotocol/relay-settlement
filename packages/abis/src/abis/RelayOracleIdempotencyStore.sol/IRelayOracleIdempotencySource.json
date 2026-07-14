@@ -1,0 +1,21 @@
+[
+  {
+    "type": "function",
+    "name": "isExecuted",
+    "inputs": [
+      {
+        "name": "idempotencyKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  }
+]

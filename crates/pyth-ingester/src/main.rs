@@ -180,6 +180,7 @@ async fn run_reporter(ctx: Context) -> Result<()> {
                     ingested_total = report.ingested,
                     sent,
                     sent_total = report.sent,
+                    regressed_total = report.regressed,
                     consumer = if report.consumer_connected { "connected" } else { "none" },
                     feeds = report.feeds,
                     expected = ctx.config.feed_ids.len(),

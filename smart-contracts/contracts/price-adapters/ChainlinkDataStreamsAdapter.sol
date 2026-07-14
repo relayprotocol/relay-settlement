@@ -45,6 +45,12 @@ interface IVerifierProxy {
 ///      config the adapter is pre-funded and pre-approved for (see
 ///      `docs/data-streams-onchain-verifier.md`). Native (value-bearing) fees
 ///      would require a `payable` path end-to-end and are out of scope here.
+///
+///      Cache: the adapter keeps the decoded fields of the last verified
+///      report per feed in `cachedReports`. Repeat calls with byte-identical
+///      `updateData` skip the fee-paying `verify` call and reuse the cached
+///      fields. The expiry and structural checks still run on every call -
+///      a cache hit is as strict as a fresh verification.
 contract ChainlinkDataStreamsAdapter is IPriceFeedAdapter {
   /// @notice Schema version carried in the high 2 bytes of a feed ID for V3
   ///         (Crypto Streams) reports.
@@ -52,6 +58,33 @@ contract ChainlinkDataStreamsAdapter is IPriceFeedAdapter {
 
   /// @notice Fixed-point precision of a Data Streams V3 benchmark price.
   uint8 public constant USD_PRICE_DECIMALS = 18;
+
+  /// @notice Cached pricing fields of the last verified report for a feed.
+  /// @dev Packs into 4 storage slots: `reportHash` (32), then
+  ///      `benchmarkPrice`/`observationsTimestamp`/`expiresAt` (24+4+4), then
+  ///      `bid` and `ask` (24 each).
+  /// @param reportHash keccak256 of the raw `fullReport` bytes the entry was
+  ///        decoded from. Matching it against the hash of the bytes currently
+  ///        served by the precompile detects a cache hit.
+  /// @param benchmarkPrice Benchmark (mid) price, scaled by `USD_PRICE_DECIMALS`.
+  /// @param observationsTimestamp Report's latest observation timestamp.
+  /// @param expiresAt Timestamp after which the report is no longer valid.
+  /// @param bid Best bid price, scaled by `USD_PRICE_DECIMALS`.
+  /// @param ask Best ask price, scaled by `USD_PRICE_DECIMALS`.
+  struct CachedReport {
+    bytes32 reportHash;
+    int192 benchmarkPrice;
+    uint32 observationsTimestamp;
+    uint32 expiresAt;
+    int192 bid;
+    int192 ask;
+  }
+
+  /// @notice Last verified report per feed, keyed by feed ID.
+  /// @dev One live entry per feed: a new report overwrites the previous entry.
+  ///      Entries hold raw decoded report fields, so the time-based validity
+  ///      checks run identically on cached and freshly verified data.
+  mapping(bytes32 feedId => CachedReport report) public cachedReports;
 
   /// @notice Chainlink `VerifierProxy` that checks DON signatures on-chain.
   IVerifierProxy public immutable VERIFIER_PROXY;
@@ -113,9 +146,55 @@ contract ChainlinkDataStreamsAdapter is IPriceFeedAdapter {
       uint256 publishTime
     )
   {
+    bytes32 reportHash = keccak256(updateData);
+    CachedReport memory cached = cachedReports[feedId];
+
+    if (cached.reportHash != reportHash) {
+      cached = _verifyAndCache(feedId, updateData, reportHash);
+    }
+
+    uint16 schemaVersion = uint16(uint256(feedId) >> 240);
+    if (schemaVersion != REPORT_V3_SCHEMA) {
+      revert UnsupportedReportSchema(schemaVersion);
+    }
+
+    if (cached.benchmarkPrice <= 0) {
+      revert NonPositivePrice(cached.benchmarkPrice);
+    }
+
+    if (block.timestamp > cached.expiresAt) {
+      revert ReportExpired(cached.expiresAt, block.timestamp);
+    }
+
+    // The DON-verified report carries the consensus benchmark (mid) price plus
+    // the bid/ask band; surface all three so consumers can use the liquidity
+    // distribution, not just the mid. A V3 report always includes bid/ask, but
+    // if a feed omits either side (non-positive), report the band as fully
+    // unavailable (`bid == ask == 0`) rather than a one-sided band. This holds
+    // the consumer invariant: either `bid == ask == 0` (unavailable) or
+    // `bid <= usdPrice <= ask` (ordering guaranteed by the verified report).
+    usdPrice = uint256(uint192(cached.benchmarkPrice));
+    if (cached.bid > 0 && cached.ask > 0) {
+      bid = uint256(uint192(cached.bid));
+      ask = uint256(uint192(cached.ask));
+    }
+    usdPriceDecimals = USD_PRICE_DECIMALS;
+    publishTime = cached.observationsTimestamp;
+  }
+
+  /// @notice Verifies a report on-chain and caches its decoded pricing fields.
+  /// @param feedId Feed the report must belong to.
+  /// @param updateData Raw `fullReport` envelope to verify.
+  /// @param reportHash keccak256 of `updateData`, stored as the cache identity.
+  /// @return entry The cached entry written for `feedId`.
+  function _verifyAndCache(
+    bytes32 feedId,
+    bytes calldata updateData,
+    bytes32 reportHash
+  ) private returns (CachedReport memory entry) {
     // On-chain DON-signature verification. `verify` reverts unless the report
-    // is signed by the verifier's configured DON; it returns the decoded
-    // report body (not the signed envelope).
+    // is signed by the verifier's configured DON. It returns the decoded
+    // report body, not the signed envelope.
     bytes memory verifiedReport = VERIFIER_PROXY.verify(
       updateData,
       abi.encode(FEE_TOKEN)
@@ -126,41 +205,26 @@ contract ChainlinkDataStreamsAdapter is IPriceFeedAdapter {
       uint32 observationsTimestamp,
       uint32 expiresAt,
       int192 benchmarkPrice,
-      int192 reportBid,
-      int192 reportAsk
+      int192 bid,
+      int192 ask
     ) = _decodeReport(verifiedReport);
 
+    // Checked before caching, so every entry under `feedId` is known to
+    // belong to that feed. A revert later in `decodeAndVerify` rolls the
+    // write back, so nothing invalid is ever cached.
     if (reportFeedId != feedId) {
       revert FeedIdMismatch(feedId, reportFeedId);
     }
 
-    uint16 schemaVersion = uint16(uint256(reportFeedId) >> 240);
-    if (schemaVersion != REPORT_V3_SCHEMA) {
-      revert UnsupportedReportSchema(schemaVersion);
-    }
-
-    if (benchmarkPrice <= 0) {
-      revert NonPositivePrice(benchmarkPrice);
-    }
-
-    if (block.timestamp > expiresAt) {
-      revert ReportExpired(expiresAt, block.timestamp);
-    }
-
-    // The DON-verified report carries the consensus benchmark (mid) price plus
-    // the bid/ask band; surface all three so consumers can use the liquidity
-    // distribution, not just the mid. A V3 report always includes bid/ask, but
-    // if a feed omits either side (non-positive), report the band as fully
-    // unavailable (`bid == ask == 0`) rather than a one-sided band. This holds
-    // the consumer invariant: either `bid == ask == 0` (unavailable) or
-    // `bid <= usdPrice <= ask` (ordering guaranteed by the verified report).
-    usdPrice = uint256(uint192(benchmarkPrice));
-    if (reportBid > 0 && reportAsk > 0) {
-      bid = uint256(uint192(reportBid));
-      ask = uint256(uint192(reportAsk));
-    }
-    usdPriceDecimals = USD_PRICE_DECIMALS;
-    publishTime = observationsTimestamp;
+    entry = CachedReport({
+      reportHash: reportHash,
+      benchmarkPrice: benchmarkPrice,
+      observationsTimestamp: observationsTimestamp,
+      expiresAt: expiresAt,
+      bid: bid,
+      ask: ask
+    });
+    cachedReports[feedId] = entry;
   }
 
   /// @notice Decodes a verified V3 report body, keeping only the pricing fields.
@@ -185,8 +249,7 @@ contract ChainlinkDataStreamsAdapter is IPriceFeedAdapter {
       int192 ask
     )
   {
-    // Skip the fields not used for pricing: validFromTimestamp, nativeFee,
-    // linkFee.
+    // Skip the fields not used for pricing: validFromTimestamp, nativeFee, linkFee.
     (
       reportFeedId,
       ,

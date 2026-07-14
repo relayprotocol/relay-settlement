@@ -80,6 +80,16 @@ verified report (schema, feed-id binding, positive price, not-expired) and
 returns `(usdPrice, bid, ask, 18 decimals, observationsTimestamp)` — the V3
 report carries the consensus benchmark (mid) price plus the bid/ask band.
 
+The adapter caches the decoded fields of the last verified report per feed
+(`cachedReports`, keyed by feed ID, identified by the `keccak256` of the raw
+`fullReport` bytes). While the precompile keeps serving the same report —
+repeat calls within a transaction, block, or across blocks until the feed
+updates — the adapter skips the fee-paying `verify` call and reuses the cached
+fields. A new report misses the cache, verifies once, and overwrites the entry.
+The expiry and structural checks run on every call, so a cache hit is exactly
+as strict as a fresh verification, and a revert rolls back the cache write so
+nothing invalid is ever cached.
+
 `RelayPriceOracle` exposes these through two paths so the common, mid-only
 consumers stay simple:
 

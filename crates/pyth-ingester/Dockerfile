@@ -9,8 +9,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-ENV INGESTER_TRANSPORT=tcp
-ENV INGESTER_SOCKET_ADDRESS=0.0.0.0:9802
+ENV INGESTER_ADDRESS=0.0.0.0:9802
 EXPOSE 9802
 
 COPY --from=builder /src/target/release/pyth-ingester /usr/local/bin/pyth-ingester

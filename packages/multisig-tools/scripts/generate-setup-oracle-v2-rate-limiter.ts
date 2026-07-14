@@ -1,15 +1,18 @@
 // ABOUTME generate a manifest wiring RelayOracleV2 + RelayAmountRateLimiter on the
 // relay chain, to be submitted through RelayMultisigSigner. Covers the role/allowlist
-// setup only (NOT the per-(chain, currency) bucket config, which is a separate step):
+// setup only (NOT the per-token bucket config, which is a separate step):
 //   1. Hub                    grantRole(OPERATOR_ROLE, oracleV2)   -> V2 may mint/burn/transfer
 //   2. RelayOracleV2          grantRole(ORACLE_ROLE, oracleMultisig)-> accept the oracle signer
-//   3. RelayAmountRateLimiter grantRole(CONSUMER_ROLE, oracleV2)   -> V2 may consume budget
-//   4. RelayOracleV2          addRateLimiter(amountRateLimiter)    -> allowlist the limiter
-//   5. RelayAmountRateLimiter grantRole(ADMIN_ROLE, rateLimiterAdmin) [optional]
+//   3. IdempotencyStore       grantRole(WRITE_ROLE, oracleV2)      -> V2 may consume keys
+//   4. RelayAmountRateLimiter grantRole(CONSUMER_ROLE, oracleV2)   -> V2 may consume budget
+//   5. RelayOracleV2          addRateLimiter(amountRateLimiter)    -> allowlist the limiter
+//   6. RelayAmountRateLimiter grantRole(ADMIN_ROLE, rateLimiterAdmin) [optional]
 //      -> let a dedicated ops address set bucket configs
 //
 // Env:
 //   ENV                deployment env to target (dev | stag | prod). Defaults to "prod".
+//   IDEMPOTENCY_STORE  optional 0x idempotency store address. Defaults to
+//                      deployment.oracleV2IdempotencyStore when present.
 //   SIGNER             optional 0x signer address to use as `from`. When set, the
 //                      NEAR/MPC derivation is skipped.
 //   RATE_LIMITER_ADMIN optional 0x address to additionally grant ADMIN_ROLE on the
@@ -78,6 +81,13 @@ const buildCalls = (): Call[] => {
   const oracleV2 = deployment.oracleV2 as `0x${string}`
   const oracleMultisig = deployment.oracleMultisig as `0x${string}`
   const rateLimiter = deployment.amountRateLimiter as `0x${string}`
+  const idempotencyStore = (process.env.IDEMPOTENCY_STORE ??
+    deployment.oracleV2IdempotencyStore) as `0x${string}` | undefined
+  if (idempotencyStore && !/^0x[0-9a-fA-F]{40}$/.test(idempotencyStore)) {
+    throw new Error(
+      `IDEMPOTENCY_STORE is not a valid address: ${idempotencyStore}`
+    )
+  }
 
   const calls: Call[] = [
     {
@@ -98,6 +108,19 @@ const buildCalls = (): Call[] => {
       label: `oracleV2.grantRole(ORACLE_ROLE, oracleMultisig=${oracleMultisig})`,
       to: oracleV2,
     },
+    ...(idempotencyStore
+      ? [
+          {
+            calldata: encodeFunctionData({
+              abi: accessControlAbi,
+              args: [role("WRITE_ROLE"), oracleV2],
+              functionName: "grantRole",
+            }),
+            label: `idempotencyStore.grantRole(WRITE_ROLE, oracleV2=${oracleV2})`,
+            to: idempotencyStore,
+          },
+        ]
+      : []),
     {
       calldata: encodeFunctionData({
         abi: accessControlAbi,

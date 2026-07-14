@@ -81,7 +81,63 @@
   },
   {
     "type": "function",
-    "name": "getUsdPrices",
+    "name": "hashSignedPrice",
+    "inputs": [
+      {
+        "name": "price",
+        "type": "tuple",
+        "internalType": "struct SignedPricingOracle.SignedPrice",
+        "components": [
+          {
+            "name": "chainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "currency",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "usdPrice",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "usdPriceDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "currencyDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "expiration",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "signature",
+            "type": "bytes",
+            "internalType": "bytes"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "digest",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "resolveUsdPrices",
     "inputs": [
       {
         "name": "currencies",
@@ -133,62 +189,6 @@
             "internalType": "uint256"
           }
         ]
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "hashSignedPrice",
-    "inputs": [
-      {
-        "name": "price",
-        "type": "tuple",
-        "internalType": "struct SignedPricingOracle.SignedPrice",
-        "components": [
-          {
-            "name": "chainId",
-            "type": "string",
-            "internalType": "string"
-          },
-          {
-            "name": "currency",
-            "type": "bytes",
-            "internalType": "bytes"
-          },
-          {
-            "name": "usdPrice",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "usdPriceDecimals",
-            "type": "uint8",
-            "internalType": "uint8"
-          },
-          {
-            "name": "currencyDecimals",
-            "type": "uint8",
-            "internalType": "uint8"
-          },
-          {
-            "name": "expiration",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "signature",
-            "type": "bytes",
-            "internalType": "bytes"
-          }
-        ]
-      }
-    ],
-    "outputs": [
-      {
-        "name": "digest",
-        "type": "bytes32",
-        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"

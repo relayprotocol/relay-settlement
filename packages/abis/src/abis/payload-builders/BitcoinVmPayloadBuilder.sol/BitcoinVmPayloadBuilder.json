@@ -28,12 +28,12 @@
     "name": "buildPayload",
     "inputs": [
       {
-        "name": "",
+        "name": "chainId",
         "type": "string",
         "internalType": "string"
       },
       {
-        "name": "",
+        "name": "depository",
         "type": "bytes",
         "internalType": "bytes"
       },

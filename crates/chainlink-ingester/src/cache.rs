@@ -16,19 +16,19 @@ pub fn provider_id() -> B256 {
     keccak256("chainlink")
 }
 
-pub(crate) fn now_unix() -> u64 {
+pub fn now_unix_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs()
+        .as_millis() as u64
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignedPriceUpdate {
     pub key: FeedKey,
     pub payload: Vec<u8>,
-    pub received_at: u64,
-    pub source_time: u64,
+    pub delivery_time_ms: u64,
+    pub source_time_ms: u64,
 }
 
 pub trait PriceUpdateSink: Send + Sync {
@@ -38,24 +38,26 @@ pub trait PriceUpdateSink: Send + Sync {
 pub struct Report {
     pub ingested: u64,
     pub sent: u64,
+    pub regressed: u64,
     pub consumer_connected: bool,
     pub feeds: usize,
     pub oldest_sec: u32,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct CachedPrice {
+pub struct CachedPrice {
     pub payload: Vec<u8>,
-    pub ingested_at: u64,
-    pub source_time: u64,
+    pub delivery_time_ms: u64,
+    pub source_time_ms: u64,
 }
 
 pub struct FeedCache {
-    pub(crate) latest: Mutex<BTreeMap<FeedKey, CachedPrice>>,
-    pub(crate) live: broadcast::Sender<OracleFrame>,
+    pub latest: Mutex<BTreeMap<FeedKey, CachedPrice>>,
+    pub live: broadcast::Sender<OracleFrame>,
     ingested: AtomicU64,
-    pub(crate) sent: AtomicU64,
-    pub(crate) subscribers: AtomicUsize,
+    regressed: AtomicU64,
+    pub sent: AtomicU64,
+    pub subscribers: AtomicUsize,
 }
 
 impl FeedCache {
@@ -65,6 +67,7 @@ impl FeedCache {
             latest: Mutex::new(BTreeMap::new()),
             live,
             ingested: AtomicU64::new(0),
+            regressed: AtomicU64::new(0),
             sent: AtomicU64::new(0),
             subscribers: AtomicUsize::new(0),
         }
@@ -72,28 +75,27 @@ impl FeedCache {
 
     pub fn report(&self) -> Report {
         let latest = self.latest.lock();
-        let oldest_received_at = latest.values().map(|p| p.ingested_at).min();
+        let oldest_delivery_time_ms = latest.values().map(|p| p.delivery_time_ms).min();
         Report {
             ingested: self.ingested.load(Ordering::Relaxed),
+            regressed: self.regressed.load(Ordering::Relaxed),
             sent: self.sent.load(Ordering::Relaxed),
             consumer_connected: self.subscribers.load(Ordering::Relaxed) > 0,
             feeds: latest.len(),
-            oldest_sec: oldest_received_at
-                .map(|ts| now_unix().saturating_sub(ts) as u32)
+            oldest_sec: oldest_delivery_time_ms
+                .map(|ts| (now_unix_ms().saturating_sub(ts) / 1000) as u32)
                 .unwrap_or(0),
         }
     }
 
-    pub(crate) fn snapshot(&self) -> Vec<OracleFrame> {
+    pub fn snapshot(&self) -> Vec<OracleFrame> {
         self.latest
             .lock()
             .iter()
             .map(|(key, price)| OracleFrame::PriceUpdate {
-                provider_id: key.provider_id,
                 feed_id: key.feed_id,
                 payload: price.payload.clone(),
-                ingested_at: price.ingested_at,
-                source_time: price.source_time,
+                source_time_ms: price.source_time_ms,
             })
             .collect()
     }
@@ -105,8 +107,8 @@ impl Default for FeedCache {
     }
 }
 
-pub(crate) struct IpcServerSink {
-    pub(crate) cache: Arc<FeedCache>,
+pub struct IpcServerSink {
+    pub cache: Arc<FeedCache>,
 }
 
 impl PriceUpdateSink for IpcServerSink {
@@ -117,21 +119,36 @@ impl PriceUpdateSink for IpcServerSink {
             feed_id = %update.key.feed_id,
         )
         .entered();
+        {
+            let mut latest = self.cache.latest.lock();
+            if let Some(existing) = latest.get(&update.key)
+                && update.source_time_ms != 0
+                && existing.source_time_ms != 0
+                && update.source_time_ms < existing.source_time_ms
+            {
+                self.cache.regressed.fetch_add(1, Ordering::Relaxed);
+                tracing::debug!(
+                    feed_id = %update.key.feed_id,
+                    incoming_ms = update.source_time_ms,
+                    cached_ms = existing.source_time_ms,
+                    "dropping update older than the cached entry"
+                );
+                return;
+            }
+            latest.insert(
+                update.key,
+                CachedPrice {
+                    payload: update.payload.clone(),
+                    delivery_time_ms: update.delivery_time_ms,
+                    source_time_ms: update.source_time_ms,
+                },
+            );
+        }
         let frame = OracleFrame::PriceUpdate {
-            provider_id: update.key.provider_id,
             feed_id: update.key.feed_id,
-            payload: update.payload.clone(),
-            ingested_at: update.received_at,
-            source_time: update.source_time,
+            payload: update.payload,
+            source_time_ms: update.source_time_ms,
         };
-        self.cache.latest.lock().insert(
-            update.key,
-            CachedPrice {
-                payload: update.payload,
-                ingested_at: update.received_at,
-                source_time: update.source_time,
-            },
-        );
         self.cache.ingested.fetch_add(1, Ordering::Relaxed);
         let _ = self.cache.live.send(frame);
     }

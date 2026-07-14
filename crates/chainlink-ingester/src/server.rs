@@ -5,17 +5,19 @@ use std::time::Duration;
 use alloy_primitives::B256;
 use anyhow::{Context as _, Result};
 use price_oracle_ipc::{
-    BoundListener, IpcError, OracleFrame, OracleStream, PROTOCOL_VERSION, write_frame_with_timeout,
+    BoundListener, HEARTBEAT_INTERVAL, IpcError, OracleFrame, OracleStream, PROTOCOL_VERSION,
+    write_frame_with_timeout,
 };
 use tokio::io::{AsyncReadExt, AsyncWrite};
 use tokio::sync::broadcast;
 use tracing::{Instrument as _, Span, info, info_span, instrument, warn};
 
 use crate::Context;
-use crate::cache::{FeedCache, now_unix, provider_id};
+use crate::cache::{FeedCache, provider_id};
 use crate::telemetry::TRACE_TARGET;
 
 const MAX_SUBSCRIBERS: usize = 32;
+const WRITE_TIMEOUT: Duration = HEARTBEAT_INTERVAL;
 
 #[instrument(skip_all)]
 pub async fn run(ctx: Context) -> Result<()> {
@@ -46,20 +48,9 @@ pub async fn run(ctx: Context) -> Result<()> {
 
         let cache = ctx.cache.clone();
         let feeds = ctx.config.feed_ids.clone();
-        let heartbeat = ctx.config.heartbeat_interval;
-        let write_timeout = ctx.config.write_timeout;
         let shutdown = ctx.shutdown.subscribe();
         tokio::spawn(async move {
-            match serve(
-                stream,
-                cache.clone(),
-                feeds,
-                heartbeat,
-                write_timeout,
-                shutdown,
-            )
-            .await
-            {
+            match serve(stream, cache.clone(), feeds, shutdown).await {
                 Ok(()) | Err(IpcError::Closed) => info!("sequencer subscriber disconnected"),
                 Err(other) => warn!(error = %other, "subscriber connection ended with error"),
             }
@@ -73,8 +64,6 @@ async fn serve(
     stream: OracleStream,
     cache: Arc<FeedCache>,
     feeds: Vec<B256>,
-    heartbeat_interval: Duration,
-    write_timeout: Duration,
     mut shutdown: broadcast::Receiver<()>,
 ) -> Result<(), IpcError> {
     let (mut read_half, mut write) = tokio::io::split(stream);
@@ -88,16 +77,15 @@ async fn serve(
             protocol_version: PROTOCOL_VERSION,
             provider_id: provider_id(),
             feeds,
-            heartbeat_interval_sec: heartbeat_interval.as_secs() as u32,
         },
-        write_timeout,
+        WRITE_TIMEOUT,
     )
     .await?;
     for frame in &snapshot {
-        write_frame_with_timeout(&mut write, frame, write_timeout).await?;
+        write_frame_with_timeout(&mut write, frame, WRITE_TIMEOUT).await?;
     }
 
-    let mut heartbeat = tokio::time::interval(heartbeat_interval);
+    let mut heartbeat = tokio::time::interval(HEARTBEAT_INTERVAL);
     heartbeat.tick().await;
 
     let mut discard = [0u8; 64];
@@ -106,7 +94,7 @@ async fn serve(
             biased;
             _ = shutdown.recv() => return Ok(()),
             _ = heartbeat.tick() => {
-                write_frame_with_timeout(&mut write, &OracleFrame::Heartbeat { sent_at_unix: now_unix() }, write_timeout).await?;
+                write_frame_with_timeout(&mut write, &OracleFrame::Heartbeat, WRITE_TIMEOUT).await?;
             }
             res = read_half.read(&mut discard) => match res {
                 Ok(0) => return Err(IpcError::Closed),
@@ -125,7 +113,7 @@ async fn serve(
                         _ => Span::none(),
                     };
                     async {
-                        write_frame_with_timeout(&mut write, &frame, write_timeout).await?;
+                        write_frame_with_timeout(&mut write, &frame, WRITE_TIMEOUT).await?;
                         cache.sent.fetch_add(1, Ordering::Relaxed);
                         Ok::<(), IpcError>(())
                     }
@@ -134,7 +122,7 @@ async fn serve(
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
                     warn!(skipped = n, "subscriber lagged, resending snapshot");
-                    send_snapshot(&mut write, &cache, write_timeout).await?;
+                    send_snapshot(&mut write, &cache).await?;
                 }
                 Err(broadcast::error::RecvError::Closed) => return Ok(()),
             },
@@ -142,16 +130,12 @@ async fn serve(
     }
 }
 
-async fn send_snapshot<W>(
-    write: &mut W,
-    cache: &FeedCache,
-    write_timeout: Duration,
-) -> Result<(), IpcError>
+async fn send_snapshot<W>(write: &mut W, cache: &FeedCache) -> Result<(), IpcError>
 where
     W: AsyncWrite + Unpin,
 {
     for frame in &cache.snapshot() {
-        write_frame_with_timeout(write, frame, write_timeout).await?;
+        write_frame_with_timeout(write, frame, WRITE_TIMEOUT).await?;
     }
     Ok(())
 }
@@ -170,15 +154,8 @@ mod tests {
                 let cache = cache.clone();
                 let serve_shutdown = shutdown.subscribe();
                 tokio::spawn(async move {
-                    let _ = serve(
-                        stream,
-                        cache,
-                        vec![B256::repeat_byte(0x03)],
-                        Duration::from_secs(60),
-                        Duration::from_secs(60),
-                        serve_shutdown,
-                    )
-                    .await;
+                    let _ =
+                        serve(stream, cache, vec![B256::repeat_byte(0x03)], serve_shutdown).await;
                 });
             }
         });
@@ -215,8 +192,8 @@ mod tests {
             key,
             CachedPrice {
                 payload: vec![0xde, 0xad, 0xbe, 0xef],
-                ingested_at: 1_700_000_000,
-                source_time: 1_699_999_999,
+                delivery_time_ms: 1_700_000_000_000,
+                source_time_ms: 1_699_999_999_500,
             },
         );
         let address = spawn_server(cache, shutdown).await;
@@ -227,11 +204,9 @@ mod tests {
         assert_eq!(
             update,
             OracleFrame::PriceUpdate {
-                provider_id: key.provider_id,
                 feed_id: key.feed_id,
                 payload: vec![0xde, 0xad, 0xbe, 0xef],
-                ingested_at: 1_700_000_000,
-                source_time: 1_699_999_999,
+                source_time_ms: 1_699_999_999_500,
             }
         );
     }
@@ -253,17 +228,14 @@ mod tests {
             OracleFrame::Hello { .. }
         ));
 
-        cache
-            .live
-            .send(OracleFrame::Heartbeat { sent_at_unix: 7 })
-            .unwrap();
+        cache.live.send(OracleFrame::Heartbeat).unwrap();
         assert_eq!(
             read_frame(&mut first).await.unwrap(),
-            OracleFrame::Heartbeat { sent_at_unix: 7 }
+            OracleFrame::Heartbeat
         );
         assert_eq!(
             read_frame(&mut second).await.unwrap(),
-            OracleFrame::Heartbeat { sent_at_unix: 7 }
+            OracleFrame::Heartbeat
         );
     }
 }

@@ -86,15 +86,16 @@ export type DecodedAction =
         hubToAddress: string
         // Hub token id (both mint legs use it); same value MINT carries
         hubTokenId: bigint
-        // Gross deposit amount; the contract splits it into the net amount (amount-fee) + fee
+        // Gross deposit amount; fees are charged on top of this amount
         amount: string
-        // Fee as a 1e18-scaled fraction of amount (1% = 1e16); fee = amount * feeBps / 1e18
-        feeBps: string
-        feeRecipient: string
+        // Fee calculator to call. Zero address skips fee calculation for this action.
+        feeCalculator: string
+        // Opaque fee calculator input.
+        feeCalculatorData: string
         // Rate limiter to call; must be on the oracle's allowlist
-        limiter: string
-        // Opaque limiter input; for RelayAmountRateLimiter use encodeAmountLimiterData()
-        limiterData: string
+        rateLimiter: string
+        // Opaque rate limiter input.
+        rateLimiterData: string
       }
     }
 
@@ -160,20 +161,20 @@ export const encodeAction = (action: DecodedAction): string => {
           "address hubToAddress",
           "uint256 hubTokenId",
           "uint256 amount",
-          "uint256 feeBps",
-          "address feeRecipient",
-          "address limiter",
-          "bytes limiterData",
+          "address feeCalculator",
+          "bytes feeCalculatorData",
+          "address rateLimiter",
+          "bytes rateLimiterData",
         ]),
         [
           action.type,
           action.data.hubToAddress as `0x${string}`,
           action.data.hubTokenId,
           BigInt(action.data.amount),
-          BigInt(action.data.feeBps),
-          action.data.feeRecipient as `0x${string}`,
-          action.data.limiter as `0x${string}`,
-          action.data.limiterData as `0x${string}`,
+          action.data.feeCalculator as `0x${string}`,
+          action.data.feeCalculatorData as `0x${string}`,
+          action.data.rateLimiter as `0x${string}`,
+          action.data.rateLimiterData as `0x${string}`,
         ]
       )
     }
@@ -264,10 +265,10 @@ export const decodeAction = (action: string): DecodedAction => {
           "address hubToAddress",
           "uint256 hubTokenId",
           "uint256 amount",
-          "uint256 feeBps",
-          "address feeRecipient",
-          "address limiter",
-          "bytes limiterData",
+          "address feeCalculator",
+          "bytes feeCalculatorData",
+          "address rateLimiter",
+          "bytes rateLimiterData",
         ]),
         action as Hex
       )
@@ -278,10 +279,10 @@ export const decodeAction = (action: string): DecodedAction => {
           hubToAddress: result[1].toString(),
           hubTokenId: result[2],
           amount: result[3].toString(),
-          feeBps: result[4].toString(),
-          feeRecipient: result[5].toString(),
-          limiter: result[6].toString(),
-          limiterData: result[7],
+          feeCalculator: result[4].toString(),
+          feeCalculatorData: result[5],
+          rateLimiter: result[6].toString(),
+          rateLimiterData: result[7],
         },
       }
     }
@@ -291,16 +292,3 @@ export const decodeAction = (action: string): DecodedAction => {
     }
   }
 }
-
-// Encodes the `data` blob for RelayAmountRateLimiter's consume(bytes) —
-// abi.encode(string chainId, bytes currency, uint256 amount). The oracle and the limiter MUST agree
-// on this layout; a roundtrip test pins it.
-export const encodeAmountLimiterData = (
-  chainId: string,
-  currency: string,
-  amount: string
-): string =>
-  encodeAbiParameters(
-    parseAbiParameters(["string chainId", "bytes currency", "uint256 amount"]),
-    [chainId, currency as `0x${string}`, BigInt(amount)]
-  )

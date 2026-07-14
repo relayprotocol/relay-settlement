@@ -3,20 +3,38 @@ pragma solidity ^0.8.28;
 
 import {BaseTest} from "../utils/BaseTest.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
+import {Price} from "../../contracts/deposit-addresses/open/oracle/IPricingOracle.sol";
 import {IRateLimiter} from "../../contracts/rate-limiters/IRateLimiter.sol";
 import {RelayUsdRateLimiter} from "../../contracts/rate-limiters/RelayUsdRateLimiter.sol";
 
+contract MockTokenUsdPriceOracle {
+  mapping(uint256 => Price) internal prices;
+
+  function setPrice(uint256 tokenId, Price memory price) external {
+    prices[tokenId] = price;
+  }
+
+  function resolveUsdPrice(
+    uint256 tokenId
+  ) external view returns (Price memory price) {
+    return prices[tokenId];
+  }
+}
+
 /// @notice Scenario coverage for the per-chain USD token-bucket rate limiter: config lifecycle,
-///         consume accept/reject (incl. zero-usdValue fail-closed), per-chain budget, rolling
-///         refill, views, role gating, fuzz. USD value is priced off-chain and passed straight in.
+///         consume accept/reject, per-chain budget, rolling refill, views, role gating, fuzz. USD
+///         value is resolved from the pricing oracle using the token id and amount.
 contract RelayUsdRateLimiterTest is BaseTest {
   RelayUsdRateLimiter internal policy;
+  MockTokenUsdPriceOracle internal priceOracle;
   address internal consumer;
   bytes32 internal adminRole;
   bytes32 internal consumerRole;
 
   string internal constant CHAIN_ID = "8453"; // base
   string internal constant CHAIN_ID_2 = "42161"; // arbitrum
+  uint256 internal constant TOKEN_ID = 1;
+  uint256 internal constant TOKEN_ID_2 = 2;
 
   // Budget is USD scaled by USD_DECIMALS (18). $1 = 1e18.
   uint128 internal constant CAPACITY = 1_000_000e18; // $1M max in-flight
@@ -27,7 +45,11 @@ contract RelayUsdRateLimiterTest is BaseTest {
     // Realistic timestamp: lastUpdated==0 is the "never configured" sentinel.
     vm.warp(1_700_000_000);
 
-    policy = new RelayUsdRateLimiter(owner);
+    priceOracle = new MockTokenUsdPriceOracle();
+    _setUsdPrice(TOKEN_ID, 1e18, 18, 18);
+    _setUsdPrice(TOKEN_ID_2, 1e18, 18, 18);
+
+    policy = new RelayUsdRateLimiter(owner, address(priceOracle));
     adminRole = policy.ADMIN_ROLE();
     consumerRole = policy.CONSUMER_ROLE();
     consumer = makeAddr("consumer");
@@ -61,12 +83,30 @@ contract RelayUsdRateLimiterTest is BaseTest {
     policy.setBucketConfig(_config(chainId, true, capacity, rate));
   }
 
-  // consume takes opaque bytes; the USD limiter decodes abi.encode(chainId, usdValue).
+  function _setUsdPrice(
+    uint256 tokenId,
+    uint256 usdPrice,
+    uint8 usdPriceDecimals,
+    uint8 currencyDecimals
+  ) internal {
+    priceOracle.setPrice(
+      tokenId,
+      Price({
+        usdPrice: usdPrice,
+        usdPriceDecimals: usdPriceDecimals,
+        currencyDecimals: currencyDecimals,
+        expiration: block.timestamp + 1 days
+      })
+    );
+  }
+
+  // Tests use a default 1:1 price, so `amount` also represents the expected
+  // USD value scaled by 1e18.
   function _consume(
     string memory chainId,
-    uint256 usdValue
+    uint256 amount
   ) internal returns (bool) {
-    return policy.consume(abi.encode(chainId, usdValue));
+    return policy.consume(TOKEN_ID, amount, abi.encode(chainId));
   }
 
   // ----------------------------------------------------------------------
@@ -206,13 +246,54 @@ contract RelayUsdRateLimiterTest is BaseTest {
     );
   }
 
-  function test_consumeZeroUsdValueFailsClosed() public {
+  function test_consumeZeroAmountFailsClosed() public {
     _enable(CHAIN_ID, CAPACITY, RATE);
 
-    // Fail-closed: with no on-chain pricing, a 0 usdValue on an enabled bucket would otherwise
-    // consume nothing and always pass (= unlimited fast). Reject it; nothing is consumed.
+    // Fail-closed: a 0 amount on an enabled bucket would otherwise consume nothing and always pass
+    // (= unlimited fast). Reject it; nothing is consumed.
     vm.prank(consumer);
-    assertFalse(_consume(CHAIN_ID, 0), "zero usdValue => not consumed");
+    assertFalse(_consume(CHAIN_ID, 0), "zero amount => not consumed");
+    assertEq(policy.getBucket(CHAIN_ID).tokens, CAPACITY, "unchanged");
+  }
+
+  function test_consumePricesAmountThroughOracle() public {
+    _enable(CHAIN_ID, CAPACITY, RATE);
+    _setUsdPrice(TOKEN_ID, 2e8, 8, 6); // $2.00, 6-decimal token
+
+    vm.prank(consumer);
+    assertTrue(
+      policy.consume(TOKEN_ID, 50_000e6, abi.encode(CHAIN_ID)),
+      "priced amount consumed"
+    );
+
+    assertEq(
+      policy.getBucket(CHAIN_ID).tokens,
+      CAPACITY - 100_000e18,
+      "50k tokens * $2"
+    );
+  }
+
+  function test_consumeUsesTokenIdForPricing() public {
+    _enable(CHAIN_ID, CAPACITY, RATE);
+    _setUsdPrice(TOKEN_ID, 1e18, 18, 18);
+    _setUsdPrice(TOKEN_ID_2, 5e18, 18, 18);
+
+    vm.prank(consumer);
+    assertTrue(policy.consume(TOKEN_ID_2, 10_000e18, abi.encode(CHAIN_ID)));
+
+    assertEq(
+      policy.getBucket(CHAIN_ID).tokens,
+      CAPACITY - 50_000e18,
+      "token id selects its price"
+    );
+  }
+
+  function test_consumeZeroPricedValueFailsClosed() public {
+    _enable(CHAIN_ID, CAPACITY, RATE);
+    _setUsdPrice(TOKEN_ID, 0, 18, 18);
+
+    vm.prank(consumer);
+    assertFalse(_consume(CHAIN_ID, 1e18), "zero priced value => not consumed");
     assertEq(policy.getBucket(CHAIN_ID).tokens, CAPACITY, "unchanged");
   }
 
@@ -358,9 +439,9 @@ contract RelayUsdRateLimiterTest is BaseTest {
   }
 
   function test_canConsumeZeroUsdValueIsFalse() public {
-    // Mirrors consume's fail-closed: a zero usdValue can never be consumed.
+    // Mirrors consume's fail-closed: a zero USD value can never be consumed.
     _enable(CHAIN_ID, CAPACITY, RATE);
-    assertFalse(policy.canConsume(CHAIN_ID, 0), "zero usdValue => cannot");
+    assertFalse(policy.canConsume(CHAIN_ID, 0), "zero USD value => cannot");
   }
 
   // ----------------------------------------------------------------------
@@ -463,7 +544,12 @@ contract RelayUsdRateLimiterTest is BaseTest {
 
   function test_constructorRejectsZeroAdmin() public {
     vm.expectRevert(RelayUsdRateLimiter.ZeroAddress.selector);
-    new RelayUsdRateLimiter(address(0));
+    new RelayUsdRateLimiter(address(0), address(priceOracle));
+  }
+
+  function test_constructorRejectsZeroPriceOracle() public {
+    vm.expectRevert(RelayUsdRateLimiter.ZeroAddress.selector);
+    new RelayUsdRateLimiter(owner, address(0));
   }
 
   // ----------------------------------------------------------------------
@@ -477,7 +563,7 @@ contract RelayUsdRateLimiterTest is BaseTest {
     IRateLimiter limiter = IRateLimiter(address(policy));
     vm.prank(consumer);
     assertTrue(
-      limiter.consume(abi.encode(CHAIN_ID, uint256(CAPACITY))),
+      limiter.consume(TOKEN_ID, CAPACITY, abi.encode(CHAIN_ID)),
       "consume via IRateLimiter"
     );
     assertEq(policy.getBucket(CHAIN_ID).tokens, 0, "budget deducted");

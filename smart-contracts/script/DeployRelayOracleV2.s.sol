@@ -9,21 +9,20 @@ import {ScriptBase} from "./utils/ScriptBase.sol";
 ///   DEPLOYER_PRIVATE_KEY – deployer key (required)
 ///   ADMIN                – optional, defaults to the deployer
 ///   HUB                  – required, RelayHub address the oracle reports to
-///   OLD_ORACLE           – optional, the predecessor RelayOracle whose idempotency
-///                          keys must be honoured (zero when there is none; a
-///                          non-zero value must be a live RelayOracle)
-/// Role wiring (ORACLE_ROLE grant, RelayHub OPERATOR_ROLE, RelayAmountRateLimiter
-/// CONSUMER_ROLE + addRateLimiter) is a separate post-deploy step.
+///   IDEMPOTENCY_STORE    – required, shared idempotency store address
+/// Role wiring (ORACLE_ROLE grant, RelayHub OPERATOR_ROLE, idempotency store
+/// WRITE_ROLE, RelayAmountRateLimiter CONSUMER_ROLE, addRateLimiter,
+/// addFeeCalculator) is a separate post-deploy step.
 contract DeployRelayOracleV2 is ScriptBase {
-    function run() external returns (RelayOracleV2 oracle) {
-        address admin = _envAddressOrDeployer("ADMIN");
-        address hub = _requireEnvAddress("HUB");
-        address oldOracle = vm.envOr("OLD_ORACLE", address(0));
+  function run() external returns (RelayOracleV2 oracle) {
+    address admin = _envAddressOrDeployer("ADMIN");
+    address hub = _requireEnvAddress("HUB");
+    address idempotencyStore = _requireEnvAddress("IDEMPOTENCY_STORE");
 
-        vm.startBroadcast(_deployerKey());
-        oracle = new RelayOracleV2(admin, hub, oldOracle);
-        vm.stopBroadcast();
+    vm.startBroadcast(_deployerKey());
+    oracle = new RelayOracleV2(admin, hub, idempotencyStore);
+    vm.stopBroadcast();
 
-        _logDeployment("RelayOracleV2", address(oracle));
-    }
+    _logDeployment("RelayOracleV2", address(oracle));
+  }
 }

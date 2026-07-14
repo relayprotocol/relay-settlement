@@ -9,8 +9,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-ENV INGESTER_TRANSPORT=tcp
-ENV INGESTER_SOCKET_ADDRESS=0.0.0.0:9803
+ENV INGESTER_ADDRESS=0.0.0.0:9803
 EXPOSE 9803
 
 COPY --from=builder /src/target/release/redstone-ingester /usr/local/bin/redstone-ingester

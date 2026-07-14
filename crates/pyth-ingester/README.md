@@ -15,7 +15,7 @@ verified before it is cached, then forwarded opaquely.
 - Each incoming update's signed blob is verified (see below) and, if it passes,
   stored in an in-memory map keyed by feed, keeping only the latest payload per
   feed.
-- It listens on the configured TCP address (`INGESTER_SOCKET_ADDRESS`) for
+- It listens on the configured TCP address (`INGESTER_ADDRESS`) for
   sequencer connections and streams updates to them.
 - Each per-feed stream reconnects automatically with jittered exponential backoff
   (1s up to 30s). Pyth closes idle SSE streams periodically, so reconnects are
@@ -33,7 +33,7 @@ A connected subscriber receives, in order:
 - A `Hello` frame with the protocol version, provider id, and subscribed feeds.
 - A snapshot of the latest cached blob for every feed seen so far.
 - Live `PriceUpdate` frames as new updates arrive.
-- Periodic `Heartbeat` frames every `INGESTER_HEARTBEAT_SEC`.
+- Periodic `Heartbeat` frames every `HEARTBEAT_INTERVAL` (5s, fixed by the protocol).
 
 Multiple subscribers are served concurrently, up to a fixed connection limit;
 connections beyond the limit are rejected. Each subscriber has an independent
@@ -72,10 +72,7 @@ The `.env.example` contains example values.
 - `HERMES_API_KEY` - optional, sent as a bearer token. Hermes is currently
   keyless. A Pyth Core API key can be set here without code changes.
 - `PYTH_FEED_IDS` - required, comma-separated 32-byte hex Pyth feed ids (`0x` prefix optional).
-- `INGESTER_TRANSPORT` - optional, `tcp` (default). Reserved for future transports.
-- `INGESTER_SOCKET_ADDRESS` - TCP listen address, defaults to `127.0.0.1:9802`.
-- `INGESTER_HEARTBEAT_SEC` - optional, heartbeat interval in seconds, defaults to 10.
-- `INGESTER_WRITE_TIMEOUT_SEC` - optional, per-write timeout in seconds, defaults to 3x the heartbeat interval. A subscriber that stops reading is dropped once a single write exceeds this.
+- `INGESTER_ADDRESS` - TCP listen address, defaults to `127.0.0.1:9802`.
 - `RUST_LOG` - optional, tracing filter, defaults to `info`.
 
 ## How to build

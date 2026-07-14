@@ -1,0 +1,26 @@
+[
+  {
+    "type": "function",
+    "name": "verify",
+    "inputs": [
+      {
+        "name": "payload",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "parameterPayload",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "verifierResponse",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "stateMutability": "payable"
+  }
+]

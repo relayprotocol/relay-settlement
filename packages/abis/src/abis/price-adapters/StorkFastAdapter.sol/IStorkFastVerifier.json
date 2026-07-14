@@ -1,0 +1,45 @@
+[
+  {
+    "type": "function",
+    "name": "verifyAndDeserializeSignedECDSAPayload",
+    "inputs": [
+      {
+        "name": "payload",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "assets",
+        "type": "tuple[]",
+        "internalType": "struct IStorkFastVerifier.Asset[]",
+        "components": [
+          {
+            "name": "assetID",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "temporalNumericValue",
+            "type": "tuple",
+            "internalType": "struct IStorkFastVerifier.TemporalNumericValue",
+            "components": [
+              {
+                "name": "timestampNs",
+                "type": "uint64",
+                "internalType": "uint64"
+              },
+              {
+                "name": "quantizedValue",
+                "type": "int192",
+                "internalType": "int192"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "stateMutability": "payable"
+  }
+]

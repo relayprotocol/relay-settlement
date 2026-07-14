@@ -1,6 +1,6 @@
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use alloy_primitives::B256;
 use anyhow::Result;
@@ -13,7 +13,9 @@ use tokio::time::sleep;
 use tracing::{debug, info, instrument, warn};
 
 use crate::Context;
-use crate::cache::{FeedKey, IpcServerSink, PriceUpdateSink, SignedPriceUpdate, provider_id};
+use crate::cache::{
+    FeedKey, IpcServerSink, PriceUpdateSink, SignedPriceUpdate, now_unix_ms, provider_id,
+};
 
 const DEFAULT_RECONNECT_BACKOFF: Duration = Duration::from_secs(1);
 const DEFAULT_MAX_RECONNECT_BACKOFF: Duration = Duration::from_secs(30);
@@ -38,13 +40,6 @@ pub async fn run(ctx: Context) -> Result<()> {
     );
     ingester.run(ctx.shutdown.clone()).await;
     Ok(())
-}
-
-fn now_secs() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -265,7 +260,7 @@ async fn pump_feed(
     info!(%feed, "hermes stream connected");
     while let Some(item) = stream.next_blob().await {
         match item {
-            Ok((blobs, source_time)) => cache_blobs(sink, feed, blobs, source_time),
+            Ok((blobs, source_time_ms)) => cache_blobs(sink, feed, blobs, source_time_ms),
             Err(StreamError::Malformed(m)) => warn!(%feed, error = %m, "skipping malformed update"),
             Err(e) => return Err(e),
         }
@@ -273,7 +268,7 @@ async fn pump_feed(
     Ok(())
 }
 
-fn cache_blobs(sink: &dyn PriceUpdateSink, feed: B256, blobs: Vec<Vec<u8>>, source_time: u64) {
+fn cache_blobs(sink: &dyn PriceUpdateSink, feed: B256, blobs: Vec<Vec<u8>>, source_time_ms: u64) {
     if blobs.len() > 1 {
         warn!(%feed, count = blobs.len(), "expected one blob per feed, using the first");
     }
@@ -285,11 +280,16 @@ fn cache_blobs(sink: &dyn PriceUpdateSink, feed: B256, blobs: Vec<Vec<u8>>, sour
         return;
     }
     debug!(%feed, payload_len = payload.len(), "cached hermes update");
+    let delivery_time_ms = now_unix_ms();
     sink.insert(SignedPriceUpdate {
         key: FeedKey::new(provider_id(), feed),
         payload,
-        received_at: now_secs(),
-        source_time,
+        delivery_time_ms,
+        source_time_ms: if source_time_ms == 0 {
+            delivery_time_ms
+        } else {
+            source_time_ms
+        },
     });
 }
 
@@ -338,13 +338,14 @@ impl HermesStreamMessage {
                     .map_err(|e| StreamError::Malformed(format!("invalid hex blob: {e}")))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let source_time = self
+        let source_time_ms = self
             .parsed
             .iter()
             .map(|entry| entry.price.publish_time)
             .max()
-            .unwrap_or(0);
-        Ok((blobs, source_time))
+            .unwrap_or(0)
+            * 1000;
+        Ok((blobs, source_time_ms))
     }
 }
 

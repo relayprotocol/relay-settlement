@@ -12,7 +12,7 @@ use tracing::{debug, info, instrument, warn};
 
 use crate::Context;
 use crate::cache::{
-    FeedKey, IpcServerSink, PriceUpdateSink, SignedPriceUpdate, now_unix, provider_id,
+    FeedKey, IpcServerSink, PriceUpdateSink, SignedPriceUpdate, now_unix_ms, provider_id,
 };
 use crate::config::{Config, RedstoneFeed};
 use crate::payload::{
@@ -144,7 +144,7 @@ fn process_response(response: &GatewayResponse, config: &Config, sink: &dyn Pric
             warn!(symbol = %feed.symbol, "feed missing from gateway response");
             continue;
         };
-        if let Some(update) = build_feed_update(feed, packages, config.min_signers, now_unix()) {
+        if let Some(update) = build_feed_update(feed, packages, config.min_signers, now_unix_ms()) {
             sink.insert(update);
         }
     }
@@ -154,7 +154,7 @@ fn build_feed_update(
     feed: &RedstoneFeed,
     packages: &[GatewayPackage],
     min_signers: usize,
-    now_secs: u64,
+    now_ms: u64,
 ) -> Option<SignedPriceUpdate> {
     let mut verified: Vec<(Vec<u8>, Address, u64)> = Vec::with_capacity(packages.len());
 
@@ -188,12 +188,11 @@ fn build_feed_update(
         );
     }
 
-    let timestamp_secs = reference_ms / 1000;
-    if !timestamp_fresh(timestamp_secs, now_secs) {
+    if !timestamp_fresh(reference_ms, now_ms) {
         warn!(
             symbol = %feed.symbol,
-            timestamp_secs,
-            now_secs,
+            timestamp_ms = reference_ms,
+            now_ms,
             "dropping feed with stale or future timestamp"
         );
         return None;
@@ -220,16 +219,16 @@ fn build_feed_update(
     Some(SignedPriceUpdate {
         key: FeedKey::new(provider_id(), feed.feed_id),
         payload,
-        received_at: now_secs,
-        source_time: timestamp_secs,
+        delivery_time_ms: now_ms,
+        source_time_ms: reference_ms,
     })
 }
 
-fn timestamp_fresh(timestamp_secs: u64, now_secs: u64) -> bool {
-    if timestamp_secs > now_secs + MAX_TIMESTAMP_AHEAD.as_secs() {
+fn timestamp_fresh(timestamp_ms: u64, now_ms: u64) -> bool {
+    if timestamp_ms > now_ms + MAX_TIMESTAMP_AHEAD.as_millis() as u64 {
         return false;
     }
-    timestamp_secs + MAX_TIMESTAMP_AGE.as_secs() >= now_secs
+    timestamp_ms + MAX_TIMESTAMP_AGE.as_millis() as u64 >= now_ms
 }
 
 fn verify_package(
@@ -408,10 +407,10 @@ mod tests {
             1_700_000_000_000,
         ));
 
-        let update = build_feed_update(&feed("ETH"), &packages, 3, 1_700_000_000).unwrap();
+        let update = build_feed_update(&feed("ETH"), &packages, 3, 1_700_000_000_500).unwrap();
         assert_eq!(update.key.feed_id, eth());
-        assert_eq!(update.received_at, 1_700_000_000);
-        assert_eq!(update.source_time, 1_700_000_000);
+        assert_eq!(update.delivery_time_ms, 1_700_000_000_500);
+        assert_eq!(update.source_time_ms, 1_700_000_000_000);
         assert_eq!(
             &update.payload[update.payload.len() - 9..],
             &[0, 0, 2, 0xed, 0x57, 1, 0x1e, 0, 0]
@@ -422,7 +421,7 @@ mod tests {
     fn build_feed_update_below_threshold_returns_none() {
         let key = SigningKey::from_slice(&[0x22u8; 32]).unwrap();
         let packages = vec![signed_package(&key, "ETH", "3120.55", 1_700_000_000_000)];
-        assert!(build_feed_update(&feed("ETH"), &packages, 3, 1_700_000_000).is_none());
+        assert!(build_feed_update(&feed("ETH"), &packages, 3, 1_700_000_000_000).is_none());
     }
 
     #[test]
@@ -442,8 +441,8 @@ mod tests {
             1_699_999_990_000,
         ));
 
-        let update = build_feed_update(&feed("ETH"), &packages, 3, 1_700_000_000).unwrap();
-        assert_eq!(update.received_at, 1_700_000_000);
+        let update = build_feed_update(&feed("ETH"), &packages, 3, 1_700_000_000_000).unwrap();
+        assert_eq!(update.delivery_time_ms, 1_700_000_000_000);
     }
 
     #[test]
@@ -456,6 +455,6 @@ mod tests {
             .map(|k| signed_package(k, "ETH", "3120.55", 1_700_000_000_000))
             .collect();
 
-        assert!(build_feed_update(&feed("ETH"), &packages, 3, 1_700_001_000).is_none());
+        assert!(build_feed_update(&feed("ETH"), &packages, 3, 1_700_001_000_000).is_none());
     }
 }

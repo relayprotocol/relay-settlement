@@ -41,10 +41,19 @@ export type LighterVmWithdrawRequestAdditionalData = {
   usdcFee: number | bigint | string
 }
 
+export type XrpVmWithdrawRequestAdditionalData = {
+  sequence: number
+  fee: number | bigint | string // drops
+  lastLedgerSequence: number
+  flags?: number
+  destinationTag?: number
+}
+
 export type WithdrawRequestAdditionalData = {
   "bitcoin-vm"?: BitcoinVmWithdrawRequestAdditionalData
   "hyperliquid-vm"?: HyperliquidVmWithdrawRequestAdditionalData
   "lighter-vm"?: LighterVmWithdrawRequestAdditionalData
+  "xrp-vm"?: XrpVmWithdrawRequestAdditionalData
 }
 
 export type DenormalizedWithdrawRequest = Omit<WithdrawRequest, "data"> & {
@@ -70,6 +79,7 @@ export type ExecuteAndWithdrawRequest = {
   data: string
   fees: ExecuteAndWithdrawFee[]
   nonce: string
+  deadline: string
 }
 
 export const getWithdrawRequestHash = (request: WithdrawRequest) => {
@@ -253,6 +263,53 @@ export function normalizeWithdrawRequest(
             BigInt(lighterAdditionalData.usdcFee),
           ]
         ),
+        nonce: request.nonce,
+      }
+    }
+
+    case "xrp-vm": {
+      const xrpAdditionalData = request.additionalData?.["xrp-vm"]
+      if (!xrpAdditionalData) {
+        throw new Error("Additional data is required for xrp-vm")
+      }
+      if (xrpAdditionalData.sequence === undefined) {
+        throw new Error("sequence is required in xrp-vm additionalData")
+      }
+      if (xrpAdditionalData.fee === undefined) {
+        throw new Error("fee is required in xrp-vm additionalData")
+      }
+      if (xrpAdditionalData.lastLedgerSequence === undefined) {
+        throw new Error(
+          "lastLedgerSequence is required in xrp-vm additionalData"
+        )
+      }
+
+      // XrpVmPayloadBuilder decodes `data` as `abi.decode(data, (XrpRequestData))`
+      const data = encodeAbiParameters(
+        parseAbiParameters([
+          "(uint32 sequence, uint64 fee, uint32 lastLedgerSequence, uint32 flags, uint32 destinationTag, bool hasDestinationTag)",
+        ]),
+        [
+          {
+            sequence: xrpAdditionalData.sequence,
+            fee: BigInt(xrpAdditionalData.fee),
+            lastLedgerSequence: xrpAdditionalData.lastLedgerSequence,
+            flags: xrpAdditionalData.flags ?? 0,
+            destinationTag: xrpAdditionalData.destinationTag ?? 0,
+            hasDestinationTag: xrpAdditionalData.destinationTag !== undefined,
+          },
+        ]
+      )
+
+      return {
+        chainId: request.chainId,
+        depository: encodeAddressToHex(request.depository, request.vmType),
+        currency: encodeAddressToHex(request.currency, request.vmType),
+        amount: request.amount,
+        spenderChainId: request.spenderChainId,
+        spender: encodeAddressToHex(request.spender, request.spenderVmType),
+        receiver: encodeAddressToHex(request.receiver, request.vmType),
+        data,
         nonce: request.nonce,
       }
     }

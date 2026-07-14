@@ -16,7 +16,7 @@ and then forwarded as opaque signed blobs.
 - Each incoming report's signed blob is verified (see below) and, if it passes,
   stored in an in-memory map keyed by feed, keeping only the latest payload per
   feed. Reports that fail are dropped and logged.
-- It listens on the configured TCP address (`INGESTER_SOCKET_ADDRESS`) for
+- It listens on the configured TCP address (`INGESTER_ADDRESS`) for
   sequencer connections and streams updates to them.
 - The WebSocket reconnects automatically with exponential backoff (1s up to 30s)
   on transport errors.
@@ -32,7 +32,7 @@ A connected subscriber receives, in order:
 - A `Hello` frame with the protocol version, provider id, and subscribed feeds.
 - A snapshot of the latest cached report for every feed seen so far.
 - Live `PriceUpdate` frames as new reports arrive.
-- Periodic `Heartbeat` frames every `INGESTER_HEARTBEAT_SEC`.
+- Periodic `Heartbeat` frames every `HEARTBEAT_INTERVAL` (5s, fixed by the protocol).
 
 Multiple subscribers are served concurrently, up to a fixed connection limit;
 connections beyond the limit are rejected. Each subscriber has an independent
@@ -86,10 +86,7 @@ The `.env.example` contains example values.
 - `CHAINLINK_WS_ENDPOINT` - required, WebSocket endpoint, for example `wss://ws.dataengine.chain.link` (mainnet) or `wss://ws.testnet-dataengine.chain.link` (testnet).
 - `CHAINLINK_FEED_IDS` - required, comma-separated 32-byte hex feed ids (`0x` prefix optional).
 - `CHAINLINK_MAX_AGE_SEC` - optional, freshness window in seconds for a report's observations timestamp, defaults to 300. Reports older than this are dropped.
-- `INGESTER_TRANSPORT` - optional, `tcp` (default). Reserved for future transports.
-- `INGESTER_SOCKET_ADDRESS` - TCP listen address, defaults to `127.0.0.1:9801`.
-- `INGESTER_HEARTBEAT_SEC` - optional, heartbeat interval in seconds, defaults to 10.
-- `INGESTER_WRITE_TIMEOUT_SEC` - optional, per-write timeout in seconds, defaults to 3x the heartbeat interval. A subscriber that stops reading is dropped once a single write exceeds this.
+- `INGESTER_ADDRESS` - TCP listen address, defaults to `127.0.0.1:9801`.
 - `RUST_LOG` - optional, tracing filter, defaults to `info`.
 
 ## How to build

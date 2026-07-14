@@ -4,20 +4,20 @@ pragma solidity ^0.8.28;
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
-import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 
+import {IFeeCalculator} from "./fee-calculators/IFeeCalculator.sol";
 import {RelayHub} from "./RelayHub.sol";
-import {RelayOracle} from "./RelayOracle.sol";
+import {RelayOracleIdempotencyStore} from "./RelayOracleIdempotencyStore.sol";
 import {IRateLimiter} from "./rate-limiters/IRateLimiter.sol";
 
 /// @title RelayOracleV2
 /// @author Relay Protocol
 /// @notice Oracle contract that adds the fast-finality `FAST_MINT` action on top of the
 ///         MINT / BURN / TRANSFER actions of `RelayOracle`. A fast deposit is minted in two
-///         parts — a fee to the fee recipient and the net amount to the recipient — after the
-///         full at-risk amount clears the on-chain rate limiter.
-/// @dev    Idempotency is checked against both this contract's and the old oracle's `isExecuted`
-///         maps, so a key already settled on the old oracle cannot be replayed here.
+///         full deposited amount to the recipient, plus a fee transferred from the fee payer to the
+///         fee recipient, after the at-risk amount clears the on-chain rate limiter.
+/// @dev    Idempotency is checked against the shared idempotency store. Legacy oracle keys must be
+///         configured as store sources rather than being checked directly by this contract.
 contract RelayOracleV2 is AccessControl, EIP712 {
   using SignatureChecker for address;
 
@@ -35,6 +35,13 @@ contract RelayOracleV2 is AccessControl, EIP712 {
     bytes[] actions;
   }
 
+  struct FeeResult {
+    uint256 currency;
+    uint256 amount;
+    address recipient;
+    address payer;
+  }
+
   // Events
 
   /// @notice Emitted when actions were executed
@@ -47,33 +54,34 @@ contract RelayOracleV2 is AccessControl, EIP712 {
   event RateLimiterAdded(address indexed rateLimiter);
   /// @notice Emitted when a rate limiter is removed from the FAST_MINT allowlist
   event RateLimiterRemoved(address indexed rateLimiter);
+  /// @notice Emitted when a fee calculator is added to the FAST_MINT allowlist
+  event FeeCalculatorAdded(address indexed feeCalculator);
+  /// @notice Emitted when a fee calculator is removed from the FAST_MINT allowlist
+  event FeeCalculatorRemoved(address indexed feeCalculator);
 
   /// @notice Emitted on a FAST_MINT for observability. Not consumed by settlement: the recipient
-  ///         holds exactly the net amount, which is the attested deposit amount, so
-  ///         fill/refund/recover use the attested amount directly and never read the fee.
+  ///         holds the full attested deposit amount, and the fee is transferred from the fee payer in
+  ///         the returned fee currency.
   event FastMint(
     bytes32 indexed idempotencyKey,
     address hubToAddress,
     uint256 hubTokenId,
     uint256 amount,
-    uint256 feeBps,
-    address feeRecipient
+    uint256 feeCurrency,
+    uint256 feeAmount,
+    address feeRecipient,
+    address feePayer
   );
 
   // Errors
   error ZeroAddress();
-  /// @notice A non-zero `oldOracle` constructor argument did not respond as a live `RelayOracle`.
-  ///         `OLD_ORACLE` is immutable and consulted before every execution, so a wrong-type target
-  ///         would brick all execution with no recovery; this is caught at deploy time instead.
-  error InvalidOldOracle(address oldOracle);
-  error OldOracleHubMismatch(address oldOracle);
   error AlreadyExecuted(bytes32 idempotencyKey);
   error UnauthorizedOracle(address oracle);
   error InvalidSignature(address oracle);
   error InvalidActionType(uint8 actionType);
   error RateLimiterNotAllowed(address rateLimiter);
-  error InvalidFeeBps(uint256 feeBps);
-  error InvalidFeeRecipient();
+  error FeeCalculatorNotAllowed(address feeCalculator);
+  error InvalidIdempotencyStore(address idempotencyStore);
   /// @notice A FAST_MINT was rejected by the rate limiter (over budget / fast unavailable). The
   ///         whole execution reverts (nothing minted, idempotency key not consumed) so the deposit
   ///         can be re-attested as slow.
@@ -94,64 +102,47 @@ contract RelayOracleV2 is AccessControl, EIP712 {
   /// @notice Hub contract
   RelayHub public immutable HUB;
 
-  /// @notice Previous `RelayOracle` whose idempotency keys must still be honoured. May be the zero
-  ///         address when there is no predecessor, in which case only this contract's keys apply.
-  RelayOracle public immutable OLD_ORACLE;
-
-  /// @notice Denominator for `feeBps`, a 1e18-scaled fraction of the deposit amount (1% = 1e16);
-  ///         `fee = amount * feeBps / BPS_DENOMINATOR`.
-  uint256 public constant BPS_DENOMINATOR = 1e18;
+  /// @notice Shared idempotency-key storage for this oracle generation and future migrations.
+  RelayOracleIdempotencyStore public immutable IDEMPOTENCY_STORE;
 
   bytes32 private constant _EXECUTION_TYPEHASH =
     keccak256("Execution(bytes32 idempotencyKey,bytes[] actions)");
-
-  // Fields
-
-  /// @notice Mapping of idempotency key to execution status
-  mapping(bytes32 => bool) public isExecuted;
 
   /// @notice Allowlist of rate limiters a `FAST_MINT` may invoke. The action names which limiter to
   ///         call; the admin adds/removes them, so a new limiter type needs no change here. An empty
   ///         allowlist — or naming a non-allowlisted limiter — fails closed.
   mapping(address => bool) public isRateLimiter;
 
+  /// @notice Allowlist of fee calculators a `FAST_MINT` may invoke. A zero fee calculator skips fee
+  ///         calculation; any non-zero calculator must be allowlisted.
+  mapping(address => bool) public isFeeCalculator;
+
   // Constructor
 
   /// @notice Constructor
   /// @param admin The admin of the contract
   /// @param hub The hub contract
-  /// @param oldOracle The previous RelayOracle whose idempotency keys must be preserved (or zero)
+  /// @param idempotencyStore Shared idempotency-key storage
   constructor(
     address admin,
     address hub,
-    address oldOracle
+    address idempotencyStore
   ) EIP712("RelayOracle", "2") {
-    if (admin == address(0) || hub == address(0)) {
+    if (
+      admin == address(0) || hub == address(0) || idempotencyStore == address(0)
+    ) {
       revert ZeroAddress();
     }
-    // oldOracle is immutable and gates every execution — reject a bad one at deploy.
-    if (oldOracle != address(0)) {
-      // codeless target won't trigger the catch below, so reject it explicitly
-      if (oldOracle.code.length == 0) {
-        revert InvalidOldOracle(oldOracle);
-      }
-      try RelayOracle(oldOracle).isExecuted(bytes32(0)) returns (bool) {
-        // ok
-      } catch {
-        revert InvalidOldOracle(oldOracle);
-      }
-      // require the same hub: env-independent keys let a foreign-env oldOracle skip executions
-      if (address(RelayOracle(oldOracle).HUB()) != hub) {
-        revert OldOracleHubMismatch(oldOracle);
-      }
+    // idempotencyStore is immutable and gates every execution — reject a codeless address at deploy.
+    if (idempotencyStore.code.length == 0) {
+      revert InvalidIdempotencyStore(idempotencyStore);
     }
-
     _setRoleAdmin(ADMIN_ROLE, ADMIN_ROLE);
     _setRoleAdmin(ORACLE_ROLE, ADMIN_ROLE);
     _grantRole(ADMIN_ROLE, admin);
 
     HUB = RelayHub(hub);
-    OLD_ORACLE = RelayOracle(oldOracle);
+    IDEMPOTENCY_STORE = RelayOracleIdempotencyStore(idempotencyStore);
   }
 
   // Public methods
@@ -170,7 +161,7 @@ contract RelayOracleV2 is AccessControl, EIP712 {
       revert LengthMismatch();
     }
     for (uint256 i; i < executionsLength; i++) {
-      // skip if already executed (this contract or the old oracle)
+      // Error if the idempotency key is marked as executed
       if (_isExecuted(executions[i].idempotencyKey)) {
         continue;
       }
@@ -196,7 +187,7 @@ contract RelayOracleV2 is AccessControl, EIP712 {
     address oracle,
     bytes calldata signature
   ) external {
-    // Error if the idempotency key is marked as executed (this contract or the old oracle)
+    // Error if the idempotency key is marked as executed
     if (_isExecuted(execution.idempotencyKey)) {
       revert AlreadyExecuted(execution.idempotencyKey);
     }
@@ -224,24 +215,45 @@ contract RelayOracleV2 is AccessControl, EIP712 {
     emit RateLimiterRemoved(rateLimiter);
   }
 
+  /// @notice Adds a fee calculator to the FAST_MINT allowlist
+  /// @param feeCalculator The fee calculator address
+  function addFeeCalculator(
+    address feeCalculator
+  ) external onlyRole(ADMIN_ROLE) {
+    if (feeCalculator == address(0)) {
+      revert ZeroAddress();
+    }
+    isFeeCalculator[feeCalculator] = true;
+    emit FeeCalculatorAdded(feeCalculator);
+  }
+
+  /// @notice Removes a fee calculator from the FAST_MINT allowlist
+  /// @param feeCalculator The fee calculator address
+  function removeFeeCalculator(
+    address feeCalculator
+  ) external onlyRole(ADMIN_ROLE) {
+    isFeeCalculator[feeCalculator] = false;
+    emit FeeCalculatorRemoved(feeCalculator);
+  }
+
+  /// @notice Whether an idempotency key has already been executed.
+  /// @param idempotencyKey The execution idempotency key
+  /// @return executed True if the key was executed through the shared store
+  function isExecuted(
+    bytes32 idempotencyKey
+  ) public view returns (bool executed) {
+    return _isExecuted(idempotencyKey);
+  }
+
   // Internal methods
 
-  /// @notice Whether an idempotency key has already been executed by this contract or the old oracle
+  /// @notice Whether an idempotency key has already been executed.
   /// @param idempotencyKey The execution idempotency key
-  /// @return executed True if the key was executed here or on the old oracle
+  /// @return executed True if the key was executed through the shared store
   function _isExecuted(
     bytes32 idempotencyKey
   ) internal view returns (bool executed) {
-    if (isExecuted[idempotencyKey]) {
-      return true;
-    }
-    // slither-disable-next-line calls-loop
-    if (
-      address(OLD_ORACLE) != address(0) && OLD_ORACLE.isExecuted(idempotencyKey)
-    ) {
-      return true;
-    }
-    return false;
+    return IDEMPOTENCY_STORE.isExecuted(idempotencyKey);
   }
 
   /// @notice Executes a single action based on its encoded type and data.
@@ -259,11 +271,14 @@ contract RelayOracleV2 is AccessControl, EIP712 {
         action,
         (uint8, address, uint256, uint256)
       );
+      if (amount == 0) return;
+
       // slither-disable-next-line unused-return,calls-loop
       HUB.mint(hubToAddress, hubTokenId, amount);
     } else if (actionType == uint8(ActionType.BURN)) {
       (, address hubFromAddress, uint256 hubTokenId, uint256 amount) = abi
         .decode(action, (uint8, address, uint256, uint256));
+      if (amount == 0) return;
 
       // slither-disable-next-line unused-return,calls-loop
       HUB.burn(hubFromAddress, hubTokenId, amount);
@@ -275,6 +290,7 @@ contract RelayOracleV2 is AccessControl, EIP712 {
         uint256 hubTokenId,
         uint256 amount
       ) = abi.decode(action, (uint8, address, address, uint256, uint256));
+      if (amount == 0) return;
 
       // slither-disable-next-line unused-return,calls-loop
       HUB.transferFrom(hubFromAddress, hubToAddress, hubTokenId, amount);
@@ -285,17 +301,17 @@ contract RelayOracleV2 is AccessControl, EIP712 {
     }
   }
 
-  /// @notice Executes a `FAST_MINT`: rate-limit the full at-risk deposit amount, then split the
-  ///         gross deposit and mint both parts — the fee to the fee recipient and the net amount to
-  ///         the recipient.
-  /// @dev Carries the mint params (`hubTo`, `hubTokenId`, `amount`, `feeBps`, `feeRecipient`) plus the
-  ///      `limiter` to call and its opaque `data`. `hubTokenId` is supplied directly (as MINT does);
-  ///      the origin `(chainId, currency)` live inside the limiter's `data`, not on the action. The
-  ///      allowlisted `limiter` decodes `data` and rate-limits before minting, so a rejection reverts
-  ///      the whole execution → nothing minted, key not consumed → re-attestable as slow. A zero
-  ///      `limiter` skips rate limiting entirely (no allowlist check, no `consume` call). No
-  ///      per-deposit state is written: the recipient holds exactly the net amount, which is the
-  ///      attested deposit amount settlement uses.
+  /// @notice Executes a `FAST_MINT`: rate-limit the at-risk deposit amount, then mint the full
+  ///         deposit amount to the recipient and transfer the fee from the fee payer.
+  /// @dev Carries the mint params (`hubTo`, `hubTokenId`, `amount`), the `feeCalculator` to call
+  ///      plus its opaque `feeCalculatorData`, and the `rateLimiter` to call plus its opaque
+  ///      `rateLimiterData`. `hubTokenId` and `amount` are supplied directly and passed to both
+  ///      pluggable modules. The allowlisted `rateLimiter` decodes `rateLimiterData` and rate-limits
+  ///      before minting, so a rejection reverts the whole execution → nothing minted, key not
+  ///      consumed → re-attestable as slow. A zero `feeCalculator` skips fee calculation and only
+  ///      mints the full amount to the recipient. A zero `rateLimiter` skips rate limiting entirely
+  ///      (no allowlist check, no `consume` call). No per-deposit state is written: the recipient
+  ///      holds the full attested deposit amount, and fee accounting is emitted for observers.
   /// @param action The ABI-encoded FAST_MINT action
   /// @param idempotencyKey The execution's idempotency key (emitted in the FastMint event)
   function _executeFastMint(
@@ -307,56 +323,55 @@ contract RelayOracleV2 is AccessControl, EIP712 {
       address hubToAddress,
       uint256 hubTokenId,
       uint256 amount,
-      uint256 feeBps,
-      address feeRecipient,
-      address limiter,
-      bytes memory data
+      address feeCalculator,
+      bytes memory feeCalculatorData,
+      address rateLimiter,
+      bytes memory rateLimiterData
     ) = abi.decode(
         action,
-        (uint8, address, uint256, uint256, uint256, address, address, bytes)
+        (uint8, address, uint256, uint256, address, bytes, address, bytes)
       );
 
-    if (feeBps > BPS_DENOMINATOR) {
-      revert InvalidFeeBps(feeBps);
+    FeeResult memory fee;
+    // Fee computation is delegated to the action-provided module so future fee changes do not need
+    // to touch the oracle's execution and idempotency logic.
+    if (feeCalculator != address(0)) {
+      if (!isFeeCalculator[feeCalculator]) {
+        revert FeeCalculatorNotAllowed(feeCalculator);
+      }
+      (fee.currency, fee.amount, fee.recipient, fee.payer) = IFeeCalculator(
+        feeCalculator
+      ).calculateFee(hubTokenId, amount, feeCalculatorData);
     }
 
-    // Fee is a fraction of the deposit amount: fee = amount * feeBps / BPS_DENOMINATOR; the net
-    // amount is the remainder. Flooring the fee leaves no dust (feeAmount + netAmount == amount).
-    uint256 feeAmount = FixedPointMathLib.fullMulDiv(
-      amount,
-      feeBps,
-      BPS_DENOMINATOR
-    );
-    uint256 netAmount = amount - feeAmount;
-    if (feeAmount != 0 && feeRecipient == address(0)) {
-      revert InvalidFeeRecipient();
-    }
-
-    // Rate-limit via the allowlisted limiter named in the action; it decodes `data` itself, so a new
-    // limiter type needs no change here. A false result (over budget / zero amount) reverts the whole
-    // execution → nothing minted, key not consumed → re-attestable as slow; `executeMultiple` catches
-    // the revert and surfaces the selector via ExecutionFailed.
+    // Rate-limit via the allowlisted rateLimiter named in the action; it decodes `rateLimiterData`
+    // itself, so a new rate limiter type needs no change here. A false result (over budget / zero
+    // amount) reverts the whole execution → nothing minted, key not consumed → re-attestable as slow;
+    // `executeMultiple` catches the revert and surfaces the selector via ExecutionFailed.
     //
-    // A zero-address limiter opts out of rate limiting entirely: no allowlist check and no `consume`
-    // call are performed. This is only reachable when the oracle attests `limiter == address(0)`, so
-    // the rate-limit bypass is an explicit, per-deposit decision made by the trusted oracle.
-    if (limiter != address(0)) {
-      if (!isRateLimiter[limiter]) {
-        revert RateLimiterNotAllowed(limiter);
+    // A zero-address rateLimiter opts out of rate limiting entirely: no allowlist check and no
+    // `consume` call are performed. This is only reachable when the oracle attests
+    // `rateLimiter == address(0)`, so the rate-limit bypass is an explicit, per-deposit decision made
+    // by the trusted oracle.
+    if (rateLimiter != address(0)) {
+      if (!isRateLimiter[rateLimiter]) {
+        revert RateLimiterNotAllowed(rateLimiter);
       }
       // slither-disable-next-line calls-loop
-      if (!IRateLimiter(limiter).consume(data)) {
+      if (
+        !IRateLimiter(rateLimiter).consume(hubTokenId, amount, rateLimiterData)
+      ) {
         revert FastMintRejected();
       }
     }
 
-    if (feeAmount != 0) {
+    if (fee.amount != 0) {
       // slither-disable-next-line unused-return,calls-loop
-      HUB.mint(feeRecipient, hubTokenId, feeAmount);
+      HUB.transferFrom(fee.payer, fee.recipient, fee.currency, fee.amount);
     }
-    if (netAmount != 0) {
+    if (amount != 0) {
       // slither-disable-next-line unused-return,calls-loop
-      HUB.mint(hubToAddress, hubTokenId, netAmount);
+      HUB.mint(hubToAddress, hubTokenId, amount);
     }
 
     emit FastMint(
@@ -364,8 +379,10 @@ contract RelayOracleV2 is AccessControl, EIP712 {
       hubToAddress,
       hubTokenId,
       amount,
-      feeBps,
-      feeRecipient
+      fee.currency,
+      fee.amount,
+      fee.recipient,
+      fee.payer
     );
   }
 
@@ -391,8 +408,9 @@ contract RelayOracleV2 is AccessControl, EIP712 {
       revert InvalidSignature(oracle);
     }
 
-    // Mark the idempotency key as executed
-    isExecuted[idempotencyKey] = true;
+    // Mark the idempotency key as executed. If a later action reverts, this external write rolls
+    // back with the rest of the transaction.
+    IDEMPOTENCY_STORE.markExecuted(idempotencyKey);
 
     bytes[] calldata actions = execution.actions;
     unchecked {

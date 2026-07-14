@@ -1,14 +1,11 @@
 use std::env;
-use std::time::Duration;
 
 use alloy_primitives::B256;
 use anyhow::{Context as _, Result, anyhow};
 use tracing::instrument;
 
 const DEFAULT_HERMES_ENDPOINT: &str = "https://hermes.pyth.network";
-const DEFAULT_TRANSPORT: &str = "tcp";
-const DEFAULT_SOCKET_ADDRESS: &str = "127.0.0.1:9802";
-const DEFAULT_HEARTBEAT_SEC: u64 = 10;
+const DEFAULT_ADDRESS: &str = "127.0.0.1:9802";
 const DEFAULT_OTEL_SAMPLE_RATIO: f64 = 1.0;
 
 #[derive(Clone, Debug)]
@@ -17,8 +14,6 @@ pub struct Config {
     pub hermes_endpoint: String,
     pub api_key: Option<String>,
     pub feed_ids: Vec<B256>,
-    pub heartbeat_interval: Duration,
-    pub write_timeout: Duration,
     pub telemetry: Option<TelemetryConfig>,
 }
 
@@ -31,15 +26,12 @@ pub struct TelemetryConfig {
 
 #[instrument(skip_all)]
 pub fn get() -> Result<Config> {
-    let heartbeat_interval = parse_heartbeat_interval()?;
     Ok(Config {
-        listen_address: parse_listen_address()?,
+        listen_address: parse_listen_address(),
         hermes_endpoint: optional_env("HERMES_ENDPOINT")
             .unwrap_or_else(|| DEFAULT_HERMES_ENDPOINT.to_string()),
         api_key: optional_env("HERMES_API_KEY"),
         feed_ids: parse_feed_ids(&required_env("PYTH_FEED_IDS")?)?,
-        write_timeout: parse_write_timeout(heartbeat_interval)?,
-        heartbeat_interval,
         telemetry: parse_telemetry()?,
     })
 }
@@ -91,44 +83,8 @@ fn parse_sample_ratio() -> Result<f64> {
     Ok(ratio)
 }
 
-fn parse_listen_address() -> Result<String> {
-    let transport =
-        optional_env("INGESTER_TRANSPORT").unwrap_or_else(|| DEFAULT_TRANSPORT.to_string());
-    match transport.as_str() {
-        "tcp" => Ok(optional_env("INGESTER_SOCKET_ADDRESS")
-            .unwrap_or_else(|| DEFAULT_SOCKET_ADDRESS.to_string())),
-        other => Err(anyhow!(
-            "INGESTER_TRANSPORT must be \"tcp\", got \"{other}\""
-        )),
-    }
-}
-
-fn parse_write_timeout(heartbeat: Duration) -> Result<Duration> {
-    let Some(raw) = optional_env("INGESTER_WRITE_TIMEOUT_SEC") else {
-        return Ok(heartbeat * 3);
-    };
-    let secs = raw
-        .parse::<u64>()
-        .context("INGESTER_WRITE_TIMEOUT_SEC must be a positive integer")?;
-    if secs == 0 {
-        return Err(anyhow!(
-            "INGESTER_WRITE_TIMEOUT_SEC must be greater than zero"
-        ));
-    }
-    Ok(Duration::from_secs(secs))
-}
-
-fn parse_heartbeat_interval() -> Result<Duration> {
-    let Some(raw) = optional_env("INGESTER_HEARTBEAT_SEC") else {
-        return Ok(Duration::from_secs(DEFAULT_HEARTBEAT_SEC));
-    };
-    let secs = raw
-        .parse::<u64>()
-        .context("INGESTER_HEARTBEAT_SEC must be a positive integer")?;
-    if secs == 0 {
-        return Err(anyhow!("INGESTER_HEARTBEAT_SEC must be greater than zero"));
-    }
-    Ok(Duration::from_secs(secs))
+fn parse_listen_address() -> String {
+    optional_env("INGESTER_ADDRESS").unwrap_or_else(|| DEFAULT_ADDRESS.to_string())
 }
 
 fn required_env(name: &'static str) -> Result<String> {

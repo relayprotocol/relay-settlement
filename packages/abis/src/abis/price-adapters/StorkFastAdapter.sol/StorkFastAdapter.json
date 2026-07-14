@@ -1,0 +1,163 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "storkFastVerifier",
+        "type": "address",
+        "internalType": "contract IStorkFastVerifier"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "STORK_FAST_VERIFIER",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IStorkFastVerifier"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "USD_PRICE_DECIMALS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "cachedReports",
+    "inputs": [
+      {
+        "name": "feedId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "reportHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "quantizedValue",
+        "type": "int192",
+        "internalType": "int192"
+      },
+      {
+        "name": "publishTime",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "computeFeedId",
+    "inputs": [
+      {
+        "name": "taxonomyId",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "assetId",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "feedId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "decodeAndVerify",
+    "inputs": [
+      {
+        "name": "feedId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "updateData",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "usdPrice",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "bid",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "ask",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "usdPriceDecimals",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "publishTime",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "error",
+    "name": "FeedNotInPayload",
+    "inputs": [
+      {
+        "name": "feedId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidStorkFastVerifier",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NonPositivePrice",
+    "inputs": [
+      {
+        "name": "quantizedValue",
+        "type": "int192",
+        "internalType": "int192"
+      }
+    ]
+  }
+]

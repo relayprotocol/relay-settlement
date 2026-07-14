@@ -76,6 +76,7 @@ const KINDS: KindSpec[] = [
           { vmType: "solana-vm", distBasename: "solana" },
           { vmType: "ton-vm", distBasename: "ton" },
           { vmType: "tron-vm", distBasename: "tron" },
+          { vmType: "xrp-vm", distBasename: "xrp" },
         ],
       },
       {
@@ -89,6 +90,7 @@ const KINDS: KindSpec[] = [
           { vmType: "solana-vm", distBasename: "solana" },
           { vmType: "ton-vm", distBasename: "ton" },
           { vmType: "tron-vm", distBasename: "tron" },
+          { vmType: "xrp-vm", distBasename: "xrp" },
         ],
       },
       {
@@ -102,6 +104,7 @@ const KINDS: KindSpec[] = [
           { vmType: "solana-vm", distBasename: "solana" },
           { vmType: "ton-vm", distBasename: "ton" },
           { vmType: "tron-vm", distBasename: "tron" },
+          { vmType: "xrp-vm", distBasename: "xrp" },
         ],
       },
     ],

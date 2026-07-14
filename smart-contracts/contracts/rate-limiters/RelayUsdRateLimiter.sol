@@ -4,6 +4,8 @@ pragma solidity ^0.8.28;
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {SafeCastLib} from "solady/utils/SafeCastLib.sol";
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
+import {Price} from "../deposit-addresses/open/oracle/IPricingOracle.sol";
+import {RelayPriceOracle} from "../RelayPriceOracle.sol";
 import {IRateLimiter} from "./IRateLimiter.sol";
 
 /// @title RelayUsdRateLimiter
@@ -12,14 +14,14 @@ import {IRateLimiter} from "./IRateLimiter.sol";
 ///         be consumed per chain — it is NOT a flat ceiling: over a window T, peak in-flight
 ///         consumption is ~ capacity + rate*T. Size `rate` accordingly (e.g. rate <= capacity /
 ///         (k * T)). One bucket per chain; all consumption on a chain shares the budget.
-/// @dev    Budget is USD scaled by USD_DECIMALS. The USD value is priced off-chain by the caller and
-///         passed in — there is no on-chain pricing. `consume` decodes (chainId, usdValue) from the
-///         opaque `data` the oracle passes. The bucket key is the raw `chainId` string with no
-///         normalization — config and callers MUST use one canonical chainId form, else a lookup miss
-///         returns false. Fail-closed: consumption requires an enabled bucket AND a nonzero usdValue;
-///         an unconfigured/disabled chain (or a zero usdValue) returns false. "Unlimited" = a
-///         deliberately high capacity. Implements the generic `IRateLimiter`, so it is a drop-in
-///         behind RelayOracleV2's limiter allowlist with no oracle/SDK change.
+/// @dev    Budget is USD scaled by USD_DECIMALS. `consume` decodes the origin `chainId` from the
+///         opaque `data` the oracle passes, then prices `amount` by token id through PRICE_ORACLE.
+///         The bucket key is the raw `chainId` string with no normalization — config and callers
+///         MUST use one canonical chainId form, else a lookup miss returns false. Fail-closed:
+///         consumption requires an enabled bucket, a nonzero amount, and a nonzero priced USD value;
+///         an unconfigured/disabled chain (or zero value) returns false. "Unlimited" = a deliberately
+///         high capacity. Implements the generic `IRateLimiter`, so it is a drop-in behind
+///         RelayOracleV2's limiter allowlist.
 contract RelayUsdRateLimiter is AccessControl, IRateLimiter {
   using SafeCastLib for uint256;
 
@@ -60,6 +62,9 @@ contract RelayUsdRateLimiter is AccessControl, IRateLimiter {
   /// @notice Token-bucket state keyed by keccak256(chainId)
   mapping(bytes32 => TokenBucket) private chainBuckets;
 
+  /// @notice Oracle used to price a token amount into USD by Hub token id
+  RelayPriceOracle public immutable PRICE_ORACLE;
+
   // Events
 
   /// @notice Emitted when budget is consumed
@@ -93,10 +98,12 @@ contract RelayUsdRateLimiter is AccessControl, IRateLimiter {
 
   /// @notice Creates the rate limiter
   /// @param admin Address granted ADMIN_ROLE
-  constructor(address admin) {
-    if (admin == address(0)) {
+  /// @param priceOracle Address of the Relay price oracle
+  constructor(address admin, address priceOracle) {
+    if (admin == address(0) || priceOracle == address(0)) {
       revert ZeroAddress();
     }
+    PRICE_ORACLE = RelayPriceOracle(priceOracle);
     _setRoleAdmin(ADMIN_ROLE, ADMIN_ROLE);
     _setRoleAdmin(CONSUMER_ROLE, ADMIN_ROLE);
     _grantRole(ADMIN_ROLE, admin);
@@ -107,28 +114,33 @@ contract RelayUsdRateLimiter is AccessControl, IRateLimiter {
   /// @notice Try to consume USD budget for a fast deposit; returns whether it was consumed.
   /// @dev Authoritative, trustless enforcement. Does NOT revert on rejection: the caller owns the
   ///      revert decision so it can carry its own context. Returns false (no deduct) when the budget
-  ///      is unavailable — disabled chain, zero usdValue, or over budget (fail-closed). A zero
-  ///      usdValue is rejected (NOT a no-op): with no on-chain pricing, a 0 on an enabled bucket
-  ///      would consume nothing and always pass = unlimited. A caller's accept/reject choice must
-  ///      NOT depend on live budget (see canConsume).
-  /// @param data abi.encode(string chainId, uint256 usdValue) — the oracle constructs it; usdValue is
-  ///        off-chain priced (trusted), chainId is the attested origin chain.
+  ///      is unavailable — disabled chain, zero amount/price, or over budget (fail-closed). A zero
+  ///      USD value is rejected (NOT a no-op): it would consume nothing and always pass = unlimited.
+  ///      A caller's accept/reject choice must NOT depend on live budget (see canConsume).
+  /// @param tokenId The token id for the fast mint.
+  /// @param amount The gross deposit amount.
+  /// @param data abi.encode(string chainId) — the oracle constructs it; chainId is the attested
+  ///        origin chain.
   /// @return consumed True if the budget was consumed; false otherwise
   function consume(
+    uint256 tokenId,
+    uint256 amount,
     bytes calldata data
   ) external override onlyRole(CONSUMER_ROLE) returns (bool consumed) {
-    (string memory chainId, uint256 usdValue) = abi.decode(
-      data,
-      (string, uint256)
-    );
+    string memory chainId = abi.decode(data, (string));
     TokenBucket storage bucket = chainBuckets[_chainKey(chainId)];
     if (!bucket.isEnabled) {
       // Fail-closed: requires an explicitly enabled budget; otherwise return false.
       return false;
     }
+    if (amount == 0) {
+      // Fail-closed: a zero amount would price to zero and consume no budget.
+      return false;
+    }
+
+    uint256 usdValue = _toUsdValue(tokenId, amount);
     if (usdValue == 0) {
-      // Fail-closed: a zero usdValue on an enabled bucket would otherwise consume nothing and always
-      // pass (= unlimited). Reject it.
+      // Fail-closed: a zero USD value would otherwise consume nothing and always pass (= unlimited).
       return false;
     }
 
@@ -232,6 +244,28 @@ contract RelayUsdRateLimiter is AccessControl, IRateLimiter {
     string memory chainId
   ) internal pure returns (bytes32 key) {
     return keccak256(bytes(chainId));
+  }
+
+  /// @notice Converts a raw token amount into USD scaled by USD_DECIMALS.
+  /// @return usdValue USD value scaled by USD_DECIMALS.
+  function _toUsdValue(
+    uint256 tokenId,
+    uint256 amount
+  ) internal returns (uint256 usdValue) {
+    Price memory price = PRICE_ORACLE.resolveUsdPrice(tokenId);
+    usdValue = FixedPointMathLib.fullMulDiv(
+      amount,
+      price.usdPrice,
+      10 ** uint256(price.currencyDecimals)
+    );
+
+    if (price.usdPriceDecimals < USD_DECIMALS) {
+      return usdValue * (10 ** (USD_DECIMALS - price.usdPriceDecimals));
+    }
+    if (price.usdPriceDecimals > USD_DECIMALS) {
+      return usdValue / (10 ** (price.usdPriceDecimals - USD_DECIMALS));
+    }
+    return usdValue;
   }
 
   /// @notice (Re)configures a bucket; new buckets start full, existing ones refill then cap to new capacity

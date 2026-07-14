@@ -10,7 +10,13 @@ import {
 } from "../../contracts/RelayAllocator.sol";
 import {RelayHub} from "../../contracts/RelayHub.sol";
 import {RelayExecutor} from "../../contracts/RelayExecutor.sol";
-import {RelayCallExecutor} from "../../contracts/RelayCallExecutor.sol";
+import {Utils} from "../../contracts/Utils.sol";
+import {BasicCallResolver} from "../../contracts/call-resolvers/BasicCallResolver.sol";
+import {
+  ExecuteAndWithdrawRequest,
+  Fee,
+  ICallResolver
+} from "../../contracts/call-resolvers/ICallResolver.sol";
 
 contract MockPayloadBuilder is IPayloadBuilder {
   function buildPayload(
@@ -68,6 +74,83 @@ contract MockHubSwap {
   }
 }
 
+// A fully custom, solver-controlled call resolver that embeds its own logic
+// instead of running a generic list of calls. It swaps the entire funded input
+// through the swapper and returns the resulting output to the caller.
+contract CustomCallResolver is ICallResolver {
+  RelayHub internal immutable HUB;
+  MockHubSwap internal immutable SWAPPER;
+
+  constructor(RelayHub hub, MockHubSwap swapper) {
+    HUB = hub;
+    SWAPPER = swapper;
+  }
+
+  function execute(
+    ExecuteAndWithdrawRequest calldata request,
+    bool,
+    bytes calldata
+  ) external {
+    uint256 tokenInId = Utils.generateTokenId(
+      request.inChainId,
+      request.inCurrency
+    );
+    uint256 tokenOutId = Utils.generateTokenId(
+      request.outChainId,
+      request.outCurrency
+    );
+
+    uint256 input = HUB.balanceOf(address(this), tokenInId);
+    SWAPPER.swap(tokenInId, tokenOutId, input, input);
+
+    uint256 output = HUB.balanceOf(address(this), tokenOutId);
+    require(HUB.transfer(msg.sender, tokenOutId, output));
+  }
+}
+
+// A resolver that records the request context it is handed (including the
+// feesCharged flag) before swapping and returning the output.
+contract RecordingCallResolver is ICallResolver {
+  RelayHub internal immutable HUB;
+  MockHubSwap internal immutable SWAPPER;
+
+  bool public lastFeesCharged;
+  bytes32 public lastNonce;
+  uint256 public lastOutAmountMinimum;
+  uint256 public callCount;
+
+  constructor(RelayHub hub, MockHubSwap swapper) {
+    HUB = hub;
+    SWAPPER = swapper;
+  }
+
+  function execute(
+    ExecuteAndWithdrawRequest calldata request,
+    bool feesCharged,
+    bytes calldata
+  ) external {
+    lastFeesCharged = feesCharged;
+    lastNonce = request.nonce;
+    lastOutAmountMinimum = request.outAmountMinimum;
+    ++callCount;
+
+    uint256 tokenInId = Utils.generateTokenId(
+      request.inChainId,
+      request.inCurrency
+    );
+    uint256 tokenOutId = Utils.generateTokenId(
+      request.outChainId,
+      request.outCurrency
+    );
+
+    uint256 input = HUB.balanceOf(address(this), tokenInId);
+    SWAPPER.swap(tokenInId, tokenOutId, input, input);
+
+    uint256 output = HUB.balanceOf(address(this), tokenOutId);
+    require(HUB.transfer(msg.sender, tokenOutId, output));
+  }
+}
+
 contract RelayExecutorTest is BaseTest {
   string internal constant IN_CHAIN_ID = "ethereum-mainnet";
   string internal constant OUT_CHAIN_ID = "ethereum-mainnet";
@@ -75,7 +158,7 @@ contract RelayExecutorTest is BaseTest {
 
   bytes32 internal constant EXECUTE_AND_WITHDRAW_REQUEST_TYPEHASH =
     keccak256(
-      "ExecuteAndWithdrawRequest(string inChainId,bytes inCurrency,string outChainId,bytes outCurrency,uint256 outAmountMinimum,bytes depository,address orderAddress,bytes receiver,bytes data,Fee[] fees,bytes32 nonce)Fee(address recipient,uint256 amount)"
+      "ExecuteAndWithdrawRequest(string inChainId,bytes inCurrency,string outChainId,bytes outCurrency,uint256 outAmountMinimum,bytes depository,address orderAddress,bytes receiver,bytes data,Fee[] fees,bytes32 nonce,uint256 deadline)Fee(address recipient,uint256 amount)"
     );
 
   bytes32 internal constant FEE_TYPEHASH =
@@ -84,6 +167,7 @@ contract RelayExecutorTest is BaseTest {
   RelayHub internal hub;
   RelayAllocator internal allocator;
   RelayExecutor internal verifier;
+  BasicCallResolver internal callResolver;
   MockPayloadBuilder internal payloadBuilder;
 
   address internal oracleSigner;
@@ -109,6 +193,7 @@ contract RelayExecutorTest is BaseTest {
     hub = new RelayHub(owner);
     allocator = new RelayAllocator(owner, address(hub), address(0xbeef));
     verifier = new RelayExecutor(owner, address(hub), address(allocator));
+    callResolver = new BasicCallResolver(address(hub));
     payloadBuilder = new MockPayloadBuilder();
 
     vm.prank(owner);
@@ -141,7 +226,7 @@ contract RelayExecutorTest is BaseTest {
     vm.prank(owner);
     hub.mint(orderAddress, tokenInId, amount);
 
-    RelayExecutor.ExecuteAndWithdrawRequest memory request = _swapRequest(
+    ExecuteAndWithdrawRequest memory request = _swapRequest(
       orderAddress,
       100,
       bytes32(uint256(1))
@@ -157,12 +242,12 @@ contract RelayExecutorTest is BaseTest {
     vm.prank(owner);
     hub.grantRole(operatorRole, address(swapper));
 
-    RelayCallExecutor.Call[] memory calls = new RelayCallExecutor.Call[](2);
-    calls[0] = RelayCallExecutor.Call({
+    BasicCallResolver.Call[] memory calls = new BasicCallResolver.Call[](2);
+    calls[0] = BasicCallResolver.Call({
       to: address(target),
       data: abi.encodeCall(RecordingCall.record, (keccak256("called")))
     });
-    calls[1] = RelayCallExecutor.Call({
+    calls[1] = BasicCallResolver.Call({
       to: address(swapper),
       data: abi.encodeCall(
         MockHubSwap.swap,
@@ -173,7 +258,8 @@ contract RelayExecutorTest is BaseTest {
     vm.prank(relayer);
     bytes32 withdrawRequestHash = verifier.execute(
       request,
-      calls,
+      address(callResolver),
+      _encode(calls),
       oracleSigner,
       signature
     );
@@ -205,6 +291,45 @@ contract RelayExecutorTest is BaseTest {
     );
   }
 
+  function test_basicCallResolverSweepsSpecifiedTokenBalances() public {
+    address caller = otherAccounts[6];
+    address inputRecipient = otherAccounts[7];
+    address outputRecipient = otherAccounts[8];
+    uint256 emptyTokenId = _tokenId("empty-chain", abi.encodePacked(address(9)));
+    vm.startPrank(owner);
+    hub.mint(address(callResolver), tokenInId, 100);
+    hub.mint(address(callResolver), tokenOutId, 75);
+    vm.stopPrank();
+
+    BasicCallResolver.Call[] memory calls = new BasicCallResolver.Call[](0);
+    BasicCallResolver.Sweep[] memory sweeps = new BasicCallResolver.Sweep[](3);
+    sweeps[0] = BasicCallResolver.Sweep({
+      recipient: inputRecipient,
+      tokenId: tokenInId
+    });
+    sweeps[1] = BasicCallResolver.Sweep({
+      recipient: outputRecipient,
+      tokenId: tokenOutId
+    });
+    sweeps[2] = BasicCallResolver.Sweep({
+      recipient: outputRecipient,
+      tokenId: emptyTokenId
+    });
+
+    vm.prank(caller);
+    callResolver.execute(
+      _swapRequest(otherAccounts[3], 0, bytes32(uint256(81))),
+      false,
+      _encode(calls, sweeps)
+    );
+
+    assertEq(hub.balanceOf(address(callResolver), tokenInId), 0);
+    assertEq(hub.balanceOf(address(callResolver), tokenOutId), 0);
+    assertEq(hub.balanceOf(inputRecipient, tokenInId), 100);
+    assertEq(hub.balanceOf(outputRecipient, tokenOutId), 75);
+    assertEq(hub.balanceOf(outputRecipient, emptyTokenId), 0);
+  }
+
   function test_usesPostSwapBalanceAsWithdrawAmount() public {
     address orderAddress = otherAccounts[3];
     vm.prank(owner);
@@ -215,7 +340,7 @@ contract RelayExecutorTest is BaseTest {
     vm.prank(owner);
     hub.grantRole(operatorRole, address(swapper));
 
-    RelayExecutor.ExecuteAndWithdrawRequest memory request = _swapRequest(
+    ExecuteAndWithdrawRequest memory request = _swapRequest(
       orderAddress,
       95,
       bytes32(uint256(2))
@@ -225,15 +350,16 @@ contract RelayExecutorTest is BaseTest {
       request
     );
 
-    RelayCallExecutor.Call[] memory calls = new RelayCallExecutor.Call[](1);
-    calls[0] = RelayCallExecutor.Call({
+    BasicCallResolver.Call[] memory calls = new BasicCallResolver.Call[](1);
+    calls[0] = BasicCallResolver.Call({
       to: address(swapper),
       data: abi.encodeCall(MockHubSwap.swap, (tokenInId, tokenOutId, 100, 95))
     });
 
     bytes32 withdrawRequestHash = verifier.execute(
       request,
-      calls,
+      address(callResolver),
+      _encode(calls),
       oracleSigner,
       signature
     );
@@ -265,11 +391,11 @@ contract RelayExecutorTest is BaseTest {
     vm.prank(owner);
     hub.grantRole(operatorRole, address(swapper));
 
-    RelayExecutor.Fee[] memory fees = new RelayExecutor.Fee[](2);
-    fees[0] = RelayExecutor.Fee({recipient: feeRecipientA, amount: 7});
-    fees[1] = RelayExecutor.Fee({recipient: feeRecipientB, amount: 3});
+    Fee[] memory fees = new Fee[](2);
+    fees[0] = Fee({recipient: feeRecipientA, amount: 7});
+    fees[1] = Fee({recipient: feeRecipientB, amount: 3});
 
-    RelayExecutor.ExecuteAndWithdrawRequest memory request = _swapRequest(
+    ExecuteAndWithdrawRequest memory request = _swapRequest(
       orderAddress,
       90,
       bytes32(uint256(6)),
@@ -281,15 +407,16 @@ contract RelayExecutorTest is BaseTest {
     );
 
     // Only the post-fee balance (90) is available to the swap call
-    RelayCallExecutor.Call[] memory calls = new RelayCallExecutor.Call[](1);
-    calls[0] = RelayCallExecutor.Call({
+    BasicCallResolver.Call[] memory calls = new BasicCallResolver.Call[](1);
+    calls[0] = BasicCallResolver.Call({
       to: address(swapper),
       data: abi.encodeCall(MockHubSwap.swap, (tokenInId, tokenOutId, 90, 90))
     });
 
     bytes32 withdrawRequestHash = verifier.execute(
       request,
-      calls,
+      address(callResolver),
+      _encode(calls),
       oracleSigner,
       signature
     );
@@ -315,26 +442,29 @@ contract RelayExecutorTest is BaseTest {
     vm.prank(owner);
     hub.grantRole(operatorRole, address(swapper));
 
-    RelayExecutor.Fee[] memory fees = new RelayExecutor.Fee[](1);
-    fees[0] = RelayExecutor.Fee({recipient: feeRecipient, amount: 10});
+    Fee[] memory fees = new Fee[](1);
+    fees[0] = Fee({recipient: feeRecipient, amount: 10});
 
     // First execution charges the fee on the post-pull balance
     vm.prank(owner);
     hub.mint(orderAddress, tokenInId, 100);
-    RelayExecutor.ExecuteAndWithdrawRequest memory firstRequest = _swapRequest(
+    ExecuteAndWithdrawRequest memory firstRequest = _swapRequest(
       orderAddress,
       90,
       bytes32(uint256(8)),
       fees
     );
-    RelayCallExecutor.Call[] memory firstCalls = new RelayCallExecutor.Call[](1);
-    firstCalls[0] = RelayCallExecutor.Call({
+    BasicCallResolver.Call[] memory firstCalls = new BasicCallResolver.Call[](
+      1
+    );
+    firstCalls[0] = BasicCallResolver.Call({
       to: address(swapper),
       data: abi.encodeCall(MockHubSwap.swap, (tokenInId, tokenOutId, 90, 90))
     });
     verifier.execute(
       firstRequest,
-      firstCalls,
+      address(callResolver),
+      _encode(firstCalls),
       oracleSigner,
       _signExecuteAndWithdrawRequest(oracleSignerPk, firstRequest)
     );
@@ -345,21 +475,24 @@ contract RelayExecutorTest is BaseTest {
     // Re-fund the same order address and execute again with fees
     vm.prank(owner);
     hub.mint(orderAddress, tokenInId, 100);
-    RelayExecutor.ExecuteAndWithdrawRequest memory secondRequest = _swapRequest(
+    ExecuteAndWithdrawRequest memory secondRequest = _swapRequest(
       orderAddress,
       100,
       bytes32(uint256(9)),
       fees
     );
     // No fee is charged the second time, so the full balance is swappable
-    RelayCallExecutor.Call[] memory secondCalls = new RelayCallExecutor.Call[](1);
-    secondCalls[0] = RelayCallExecutor.Call({
+    BasicCallResolver.Call[] memory secondCalls = new BasicCallResolver.Call[](
+      1
+    );
+    secondCalls[0] = BasicCallResolver.Call({
       to: address(swapper),
       data: abi.encodeCall(MockHubSwap.swap, (tokenInId, tokenOutId, 100, 100))
     });
     verifier.execute(
       secondRequest,
-      secondCalls,
+      address(callResolver),
+      _encode(secondCalls),
       oracleSigner,
       _signExecuteAndWithdrawRequest(oracleSignerPk, secondRequest)
     );
@@ -376,10 +509,10 @@ contract RelayExecutorTest is BaseTest {
     vm.prank(owner);
     hub.mint(orderAddress, tokenInId, 100);
 
-    RelayExecutor.Fee[] memory fees = new RelayExecutor.Fee[](1);
-    fees[0] = RelayExecutor.Fee({recipient: feeRecipient, amount: 101});
+    Fee[] memory fees = new Fee[](1);
+    fees[0] = Fee({recipient: feeRecipient, amount: 101});
 
-    RelayExecutor.ExecuteAndWithdrawRequest memory request = _swapRequest(
+    ExecuteAndWithdrawRequest memory request = _swapRequest(
       orderAddress,
       0,
       bytes32(uint256(7)),
@@ -389,10 +522,16 @@ contract RelayExecutorTest is BaseTest {
       oracleSignerPk,
       request
     );
-    RelayCallExecutor.Call[] memory calls = new RelayCallExecutor.Call[](0);
+    BasicCallResolver.Call[] memory calls = new BasicCallResolver.Call[](0);
 
     vm.expectRevert();
-    verifier.execute(request, calls, oracleSigner, signature);
+    verifier.execute(
+      request,
+      address(callResolver),
+      _encode(calls),
+      oracleSigner,
+      signature
+    );
   }
 
   function test_revertsWhenReplayingWithRefundedOrderAddress() public {
@@ -403,7 +542,7 @@ contract RelayExecutorTest is BaseTest {
     vm.prank(owner);
     hub.grantRole(operatorRole, address(swapper));
 
-    RelayExecutor.ExecuteAndWithdrawRequest memory request = _swapRequest(
+    ExecuteAndWithdrawRequest memory request = _swapRequest(
       orderAddress,
       90,
       bytes32(uint256(42))
@@ -416,19 +555,29 @@ contract RelayExecutorTest is BaseTest {
     // First funding and execution succeeds
     vm.prank(owner);
     hub.mint(orderAddress, tokenInId, 100);
-    RelayCallExecutor.Call[] memory firstCalls = new RelayCallExecutor.Call[](1);
-    firstCalls[0] = RelayCallExecutor.Call({
+    BasicCallResolver.Call[] memory firstCalls = new BasicCallResolver.Call[](
+      1
+    );
+    firstCalls[0] = BasicCallResolver.Call({
       to: address(swapper),
       data: abi.encodeCall(MockHubSwap.swap, (tokenInId, tokenOutId, 100, 100))
     });
-    verifier.execute(request, firstCalls, oracleSigner, signature);
+    verifier.execute(
+      request,
+      address(callResolver),
+      _encode(firstCalls),
+      oracleSigner,
+      signature
+    );
 
     // Re-fund the same order address with a different amount so the resulting
     // withdraw request hash would differ, then replay the same authorization
     vm.prank(owner);
     hub.mint(orderAddress, tokenInId, 50);
-    RelayCallExecutor.Call[] memory secondCalls = new RelayCallExecutor.Call[](1);
-    secondCalls[0] = RelayCallExecutor.Call({
+    BasicCallResolver.Call[] memory secondCalls = new BasicCallResolver.Call[](
+      1
+    );
+    secondCalls[0] = BasicCallResolver.Call({
       to: address(swapper),
       data: abi.encodeCall(MockHubSwap.swap, (tokenInId, tokenOutId, 50, 50))
     });
@@ -439,7 +588,13 @@ contract RelayExecutorTest is BaseTest {
         _executeAndWithdrawRequestDigest(request)
       )
     );
-    verifier.execute(request, secondCalls, oracleSigner, signature);
+    verifier.execute(
+      request,
+      address(callResolver),
+      _encode(secondCalls),
+      oracleSigner,
+      signature
+    );
 
     // The order funds from the second funding remain untouched
     assertEq(hub.balanceOf(orderAddress, tokenInId), 50);
@@ -453,7 +608,7 @@ contract RelayExecutorTest is BaseTest {
     vm.prank(owner);
     hub.grantRole(operatorRole, address(swapper));
 
-    RelayExecutor.ExecuteAndWithdrawRequest memory request = _swapRequest(
+    ExecuteAndWithdrawRequest memory request = _swapRequest(
       orderAddress,
       90,
       bytes32(uint256(43))
@@ -465,18 +620,28 @@ contract RelayExecutorTest is BaseTest {
 
     vm.prank(owner);
     hub.mint(orderAddress, tokenInId, 100);
-    RelayCallExecutor.Call[] memory firstCalls = new RelayCallExecutor.Call[](1);
-    firstCalls[0] = RelayCallExecutor.Call({
+    BasicCallResolver.Call[] memory firstCalls = new BasicCallResolver.Call[](
+      1
+    );
+    firstCalls[0] = BasicCallResolver.Call({
       to: address(swapper),
       data: abi.encodeCall(MockHubSwap.swap, (tokenInId, tokenOutId, 100, 100))
     });
-    verifier.execute(request, firstCalls, oracleSigner, signature);
+    verifier.execute(
+      request,
+      address(callResolver),
+      _encode(firstCalls),
+      oracleSigner,
+      signature
+    );
 
     // Replay with calls that would produce a different tokenOut amount
     vm.prank(owner);
     hub.mint(orderAddress, tokenInId, 100);
-    RelayCallExecutor.Call[] memory secondCalls = new RelayCallExecutor.Call[](1);
-    secondCalls[0] = RelayCallExecutor.Call({
+    BasicCallResolver.Call[] memory secondCalls = new BasicCallResolver.Call[](
+      1
+    );
+    secondCalls[0] = BasicCallResolver.Call({
       to: address(swapper),
       data: abi.encodeCall(MockHubSwap.swap, (tokenInId, tokenOutId, 100, 95))
     });
@@ -487,7 +652,13 @@ contract RelayExecutorTest is BaseTest {
         _executeAndWithdrawRequestDigest(request)
       )
     );
-    verifier.execute(request, secondCalls, oracleSigner, signature);
+    verifier.execute(
+      request,
+      address(callResolver),
+      _encode(secondCalls),
+      oracleSigner,
+      signature
+    );
   }
 
   function test_marksRequestAsUsedAfterExecution() public {
@@ -500,7 +671,7 @@ contract RelayExecutorTest is BaseTest {
     vm.prank(owner);
     hub.grantRole(operatorRole, address(swapper));
 
-    RelayExecutor.ExecuteAndWithdrawRequest memory request = _swapRequest(
+    ExecuteAndWithdrawRequest memory request = _swapRequest(
       orderAddress,
       100,
       bytes32(uint256(44))
@@ -512,12 +683,18 @@ contract RelayExecutorTest is BaseTest {
     bytes32 digest = _executeAndWithdrawRequestDigest(request);
     assertFalse(verifier.usedRequests(digest));
 
-    RelayCallExecutor.Call[] memory calls = new RelayCallExecutor.Call[](1);
-    calls[0] = RelayCallExecutor.Call({
+    BasicCallResolver.Call[] memory calls = new BasicCallResolver.Call[](1);
+    calls[0] = BasicCallResolver.Call({
       to: address(swapper),
       data: abi.encodeCall(MockHubSwap.swap, (tokenInId, tokenOutId, 100, 100))
     });
-    verifier.execute(request, calls, oracleSigner, signature);
+    verifier.execute(
+      request,
+      address(callResolver),
+      _encode(calls),
+      oracleSigner,
+      signature
+    );
 
     assertTrue(verifier.usedRequests(digest));
   }
@@ -546,11 +723,11 @@ contract RelayExecutorTest is BaseTest {
     vm.prank(owner);
     hub.grantRole(operatorRole, address(swapper));
 
-    RelayExecutor.Fee[] memory fees = new RelayExecutor.Fee[](2);
-    fees[0] = RelayExecutor.Fee({recipient: feeRecipientA, amount: 7});
-    fees[1] = RelayExecutor.Fee({recipient: feeRecipientB, amount: 3});
+    Fee[] memory fees = new Fee[](2);
+    fees[0] = Fee({recipient: feeRecipientA, amount: 7});
+    fees[1] = Fee({recipient: feeRecipientB, amount: 3});
 
-    RelayExecutor.ExecuteAndWithdrawRequest memory request = _swapRequest(
+    ExecuteAndWithdrawRequest memory request = _swapRequest(
       orderAddress,
       90,
       bytes32(uint256(30)),
@@ -562,15 +739,16 @@ contract RelayExecutorTest is BaseTest {
     );
 
     // Only the post-fee balance (90) is available to the swap call
-    RelayCallExecutor.Call[] memory calls = new RelayCallExecutor.Call[](1);
-    calls[0] = RelayCallExecutor.Call({
+    BasicCallResolver.Call[] memory calls = new BasicCallResolver.Call[](1);
+    calls[0] = BasicCallResolver.Call({
       to: address(swapper),
       data: abi.encodeCall(MockHubSwap.swap, (tokenInId, tokenOutId, 90, 90))
     });
 
     bytes32 withdrawRequestHash = verifier.execute(
       request,
-      calls,
+      address(callResolver),
+      _encode(calls),
       oracleSigner,
       signature
     );
@@ -584,7 +762,7 @@ contract RelayExecutorTest is BaseTest {
     assertEq(hub.balanceOf(orderAddress, tokenInId), 0);
     assertEq(hub.balanceOf(address(verifier), tokenInId), 0);
     assertEq(hub.balanceOf(address(verifier), tokenOutId), 0);
-    assertEq(hub.balanceOf(address(verifier.CALL_EXECUTOR()), tokenInId), 0);
+    assertEq(hub.balanceOf(address(callResolver), tokenInId), 0);
     assertEq(hub.balanceOf(address(swapper), tokenInId), 90);
   }
 
@@ -603,10 +781,10 @@ contract RelayExecutorTest is BaseTest {
     vm.prank(owner);
     hub.grantRole(operatorRole, address(swapper));
 
-    RelayExecutor.Fee[] memory fees = new RelayExecutor.Fee[](1);
-    fees[0] = RelayExecutor.Fee({recipient: feeRecipient, amount: 25});
+    Fee[] memory fees = new Fee[](1);
+    fees[0] = Fee({recipient: feeRecipient, amount: 25});
 
-    RelayExecutor.ExecuteAndWithdrawRequest memory request = _swapRequest(
+    ExecuteAndWithdrawRequest memory request = _swapRequest(
       orderAddress,
       75,
       bytes32(uint256(31)),
@@ -619,26 +797,38 @@ contract RelayExecutorTest is BaseTest {
 
     // The sandbox only ever holds the post-fee amount (75); a swap that tries to
     // pull the full pre-fee amount (100) must fail for lack of funds.
-    RelayCallExecutor.Call[] memory tooMuch = new RelayCallExecutor.Call[](1);
-    tooMuch[0] = RelayCallExecutor.Call({
+    BasicCallResolver.Call[] memory tooMuch = new BasicCallResolver.Call[](1);
+    tooMuch[0] = BasicCallResolver.Call({
       to: address(swapper),
       data: abi.encodeCall(MockHubSwap.swap, (tokenInId, tokenOutId, 100, 100))
     });
     vm.expectRevert();
-    verifier.execute(request, tooMuch, oracleSigner, signature);
+    verifier.execute(
+      request,
+      address(callResolver),
+      _encode(tooMuch),
+      oracleSigner,
+      signature
+    );
 
     // Swapping exactly the post-fee amount succeeds, and the fee was paid
-    RelayCallExecutor.Call[] memory exact = new RelayCallExecutor.Call[](1);
-    exact[0] = RelayCallExecutor.Call({
+    BasicCallResolver.Call[] memory exact = new BasicCallResolver.Call[](1);
+    exact[0] = BasicCallResolver.Call({
       to: address(swapper),
       data: abi.encodeCall(MockHubSwap.swap, (tokenInId, tokenOutId, 75, 75))
     });
-    verifier.execute(request, exact, oracleSigner, signature);
+    verifier.execute(
+      request,
+      address(callResolver),
+      _encode(exact),
+      oracleSigner,
+      signature
+    );
 
     assertEq(hub.balanceOf(feeRecipient, tokenInId), 25);
     assertEq(hub.balanceOf(address(swapper), tokenInId), 75);
     assertEq(hub.balanceOf(orderAddress, tokenInId), 0);
-    assertEq(hub.balanceOf(address(verifier.CALL_EXECUTOR()), tokenInId), 0);
+    assertEq(hub.balanceOf(address(callResolver), tokenInId), 0);
   }
 
   function test_maliciousCallDivertingInputRevertsBelowMinimum() public {
@@ -648,7 +838,7 @@ contract RelayExecutorTest is BaseTest {
     vm.prank(owner);
     hub.mint(orderAddress, tokenInId, amount);
 
-    RelayExecutor.ExecuteAndWithdrawRequest memory request = _swapRequest(
+    ExecuteAndWithdrawRequest memory request = _swapRequest(
       orderAddress,
       95,
       bytes32(uint256(20))
@@ -662,8 +852,8 @@ contract RelayExecutorTest is BaseTest {
     // The sandbox holds the funds (msg.sender == sandbox), so the transfer would
     // succeed on its own, but it leaves no output, so the minimum-output check
     // reverts the entire transaction.
-    RelayCallExecutor.Call[] memory calls = new RelayCallExecutor.Call[](1);
-    calls[0] = RelayCallExecutor.Call({
+    BasicCallResolver.Call[] memory calls = new BasicCallResolver.Call[](1);
+    calls[0] = BasicCallResolver.Call({
       to: address(hub),
       data: abi.encodeCall(RelayHub.transfer, (attacker, tokenInId, amount))
     });
@@ -676,16 +866,19 @@ contract RelayExecutorTest is BaseTest {
         95
       )
     );
-    verifier.execute(request, calls, oracleSigner, signature);
+    verifier.execute(
+      request,
+      address(callResolver),
+      _encode(calls),
+      oracleSigner,
+      signature
+    );
 
     // Nothing was stolen and the order funds are restored by the revert
     assertEq(hub.balanceOf(attacker, tokenInId), 0);
     assertEq(hub.balanceOf(orderAddress, tokenInId), amount);
     assertEq(hub.balanceOf(address(verifier), tokenInId), 0);
-    assertEq(
-      hub.balanceOf(address(verifier.CALL_EXECUTOR()), tokenInId),
-      0
-    );
+    assertEq(hub.balanceOf(address(callResolver), tokenInId), 0);
   }
 
   function test_sandboxedCallsCannotUseExecutorPrivileges() public {
@@ -698,7 +891,7 @@ contract RelayExecutorTest is BaseTest {
     hub.mint(victim, tokenInId, amount);
     vm.stopPrank();
 
-    RelayExecutor.ExecuteAndWithdrawRequest memory request = _swapRequest(
+    ExecuteAndWithdrawRequest memory request = _swapRequest(
       orderAddress,
       95,
       bytes32(uint256(21))
@@ -711,8 +904,8 @@ contract RelayExecutorTest is BaseTest {
     // The executor is a Hub operator, but the sandbox is not. A call trying to
     // pull another account's funds via the Hub's operator path fails because
     // msg.sender is the privilege-less sandbox, not the executor.
-    RelayCallExecutor.Call[] memory calls = new RelayCallExecutor.Call[](1);
-    calls[0] = RelayCallExecutor.Call({
+    BasicCallResolver.Call[] memory calls = new BasicCallResolver.Call[](1);
+    calls[0] = BasicCallResolver.Call({
       to: address(hub),
       data: abi.encodeCall(
         RelayHub.transferFrom,
@@ -721,7 +914,13 @@ contract RelayExecutorTest is BaseTest {
     });
 
     vm.expectRevert();
-    verifier.execute(request, calls, oracleSigner, signature);
+    verifier.execute(
+      request,
+      address(callResolver),
+      _encode(calls),
+      oracleSigner,
+      signature
+    );
 
     // The victim's funds are untouched
     assertEq(hub.balanceOf(victim, tokenInId), amount);
@@ -729,7 +928,7 @@ contract RelayExecutorTest is BaseTest {
   }
 
   function test_revertsWhenSignedFieldsAreChanged() public {
-    RelayExecutor.ExecuteAndWithdrawRequest memory request = _swapRequest(
+    ExecuteAndWithdrawRequest memory request = _swapRequest(
       otherAccounts[3],
       100,
       bytes32(uint256(3))
@@ -740,14 +939,148 @@ contract RelayExecutorTest is BaseTest {
     );
     request.outAmountMinimum = 101;
 
-    RelayCallExecutor.Call[] memory calls = new RelayCallExecutor.Call[](0);
+    BasicCallResolver.Call[] memory calls = new BasicCallResolver.Call[](0);
     vm.expectRevert(
       abi.encodeWithSelector(
         RelayExecutor.InvalidSignature.selector,
         oracleSigner
       )
     );
-    verifier.execute(request, calls, oracleSigner, signature);
+    verifier.execute(
+      request,
+      address(callResolver),
+      _encode(calls),
+      oracleSigner,
+      signature
+    );
+  }
+
+  function test_exposesCanonicalRequestHash() public view {
+    ExecuteAndWithdrawRequest memory request = _swapRequest(
+      otherAccounts[3],
+      100,
+      bytes32(uint256(73))
+    );
+
+    assertEq(
+      verifier.hashExecuteAndWithdrawRequest(request),
+      _executeAndWithdrawRequestDigest(request)
+    );
+  }
+
+  function test_revertsWhenRequestIsExpired() public {
+    address orderAddress = otherAccounts[3];
+    vm.prank(owner);
+    hub.mint(orderAddress, tokenInId, 100);
+
+    ExecuteAndWithdrawRequest memory request = _swapRequest(
+      orderAddress,
+      100,
+      bytes32(uint256(70))
+    );
+    bytes memory signature = _signExecuteAndWithdrawRequest(
+      oracleSignerPk,
+      request
+    );
+
+    vm.warp(request.deadline + 1);
+
+    BasicCallResolver.Call[] memory calls = new BasicCallResolver.Call[](0);
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        RelayExecutor.RequestExpired.selector,
+        request.deadline
+      )
+    );
+    verifier.execute(
+      request,
+      address(callResolver),
+      _encode(calls),
+      oracleSigner,
+      signature
+    );
+
+    // The order funds are untouched
+    assertEq(hub.balanceOf(orderAddress, tokenInId), 100);
+  }
+
+  function test_executesAtExactDeadline() public {
+    address orderAddress = otherAccounts[3];
+    uint256 amount = 100;
+    vm.prank(owner);
+    hub.mint(orderAddress, tokenInId, amount);
+
+    MockHubSwap swapper = new MockHubSwap(hub);
+    bytes32 operatorRole = hub.OPERATOR_ROLE();
+    vm.prank(owner);
+    hub.grantRole(operatorRole, address(swapper));
+
+    ExecuteAndWithdrawRequest memory request = _swapRequest(
+      orderAddress,
+      amount,
+      bytes32(uint256(71))
+    );
+    bytes memory signature = _signExecuteAndWithdrawRequest(
+      oracleSignerPk,
+      request
+    );
+
+    // Executing exactly at the deadline is still valid
+    vm.warp(request.deadline);
+
+    BasicCallResolver.Call[] memory calls = new BasicCallResolver.Call[](1);
+    calls[0] = BasicCallResolver.Call({
+      to: address(swapper),
+      data: abi.encodeCall(
+        MockHubSwap.swap,
+        (tokenInId, tokenOutId, amount, amount)
+      )
+    });
+    verifier.execute(
+      request,
+      address(callResolver),
+      _encode(calls),
+      oracleSigner,
+      signature
+    );
+
+    assertEq(hub.balanceOf(orderAddress, tokenInId), 0);
+    assertEq(hub.balanceOf(address(swapper), tokenInId), amount);
+  }
+
+  function test_revertsWhenDeadlineIsTampered() public {
+    address orderAddress = otherAccounts[3];
+    vm.prank(owner);
+    hub.mint(orderAddress, tokenInId, 100);
+
+    ExecuteAndWithdrawRequest memory request = _swapRequest(
+      orderAddress,
+      100,
+      bytes32(uint256(72))
+    );
+    bytes memory signature = _signExecuteAndWithdrawRequest(
+      oracleSignerPk,
+      request
+    );
+
+    // Extending the deadline past what the oracle signed must invalidate the
+    // signature, otherwise an expired quote could be revived
+    request.deadline = request.deadline + 1 days;
+
+    BasicCallResolver.Call[] memory calls = new BasicCallResolver.Call[](0);
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        RelayExecutor.InvalidSignature.selector,
+        oracleSigner
+      )
+    );
+    verifier.execute(
+      request,
+      address(callResolver),
+      _encode(calls),
+      oracleSigner,
+      signature
+    );
   }
 
   function test_revertsWhenOutputIsBelowMinimum() public {
@@ -755,7 +1088,7 @@ contract RelayExecutorTest is BaseTest {
     vm.prank(owner);
     hub.mint(orderAddress, tokenInId, 100);
 
-    RelayExecutor.ExecuteAndWithdrawRequest memory request = _swapRequest(
+    ExecuteAndWithdrawRequest memory request = _swapRequest(
       orderAddress,
       101,
       bytes32(uint256(5))
@@ -764,7 +1097,7 @@ contract RelayExecutorTest is BaseTest {
       oracleSignerPk,
       request
     );
-    RelayCallExecutor.Call[] memory calls = new RelayCallExecutor.Call[](0);
+    BasicCallResolver.Call[] memory calls = new BasicCallResolver.Call[](0);
 
     vm.expectRevert(
       abi.encodeWithSelector(
@@ -774,14 +1107,126 @@ contract RelayExecutorTest is BaseTest {
         101
       )
     );
-    verifier.execute(request, calls, oracleSigner, signature);
+    verifier.execute(
+      request,
+      address(callResolver),
+      _encode(calls),
+      oracleSigner,
+      signature
+    );
+  }
+
+  function test_executesWithSolverSuppliedCallResolver() public {
+    address orderAddress = otherAccounts[3];
+    uint256 amount = 100;
+    vm.prank(owner);
+    hub.mint(orderAddress, tokenInId, amount);
+
+    MockHubSwap swapper = new MockHubSwap(hub);
+    bytes32 operatorRole = hub.OPERATOR_ROLE();
+    vm.prank(owner);
+    hub.grantRole(operatorRole, address(swapper));
+
+    // The solver deploys and supplies its own ICallResolver with bespoke
+    // logic. It is not a Hub operator, so it can only ever move the funds the
+    // executor pushes to it for this order.
+    CustomCallResolver resolver = new CustomCallResolver(hub, swapper);
+
+    ExecuteAndWithdrawRequest memory request = _swapRequest(
+      orderAddress,
+      amount,
+      bytes32(uint256(50))
+    );
+    bytes memory signature = _signExecuteAndWithdrawRequest(
+      oracleSignerPk,
+      request
+    );
+
+    bytes32 withdrawRequestHash = verifier.execute(
+      request,
+      address(resolver),
+      "",
+      oracleSigner,
+      signature
+    );
+
+    RelayAllocator.WithdrawRequest
+      memory allocatorRequest = _allocatorWithdrawRequest(request, amount);
+
+    assertEq(withdrawRequestHash, keccak256(abi.encode(allocatorRequest)));
+    assertEq(hub.balanceOf(orderAddress, tokenInId), 0);
+    assertEq(hub.balanceOf(address(verifier), tokenInId), 0);
+    assertEq(hub.balanceOf(address(verifier), tokenOutId), 0);
+    assertEq(hub.balanceOf(address(resolver), tokenInId), 0);
+    assertEq(hub.balanceOf(address(resolver), tokenOutId), 0);
+    assertEq(hub.balanceOf(address(swapper), tokenInId), amount);
+  }
+
+  function test_forwardsRequestAndFeesChargedFlagToResolver() public {
+    address orderAddress = otherAccounts[3];
+    address feeRecipient = otherAccounts[4];
+
+    MockHubSwap swapper = new MockHubSwap(hub);
+    bytes32 operatorRole = hub.OPERATOR_ROLE();
+    vm.prank(owner);
+    hub.grantRole(operatorRole, address(swapper));
+
+    RecordingCallResolver resolver = new RecordingCallResolver(hub, swapper);
+
+    Fee[] memory fees = new Fee[](1);
+    fees[0] = Fee({recipient: feeRecipient, amount: 10});
+
+    // First execution charges fees, so the resolver is told feesCharged == true
+    // and receives the post-fee input (90)
+    vm.prank(owner);
+    hub.mint(orderAddress, tokenInId, 100);
+    ExecuteAndWithdrawRequest memory firstRequest = _swapRequest(
+      orderAddress,
+      90,
+      bytes32(uint256(60)),
+      fees
+    );
+    verifier.execute(
+      firstRequest,
+      address(resolver),
+      "",
+      oracleSigner,
+      _signExecuteAndWithdrawRequest(oracleSignerPk, firstRequest)
+    );
+
+    assertTrue(resolver.lastFeesCharged());
+    assertEq(resolver.lastNonce(), bytes32(uint256(60)));
+    assertEq(resolver.lastOutAmountMinimum(), 90);
+
+    // A later execution on the same order address does not charge fees again, so
+    // the resolver is told feesCharged == false and receives the full input
+    vm.prank(owner);
+    hub.mint(orderAddress, tokenInId, 100);
+    ExecuteAndWithdrawRequest memory secondRequest = _swapRequest(
+      orderAddress,
+      100,
+      bytes32(uint256(61)),
+      fees
+    );
+    verifier.execute(
+      secondRequest,
+      address(resolver),
+      "",
+      oracleSigner,
+      _signExecuteAndWithdrawRequest(oracleSignerPk, secondRequest)
+    );
+
+    assertFalse(resolver.lastFeesCharged());
+    assertEq(resolver.lastNonce(), bytes32(uint256(61)));
+    assertEq(resolver.lastOutAmountMinimum(), 100);
+    assertEq(resolver.callCount(), 2);
   }
 
   function _swapRequest(
     address orderAddress,
     uint256 outAmountMinimum,
     bytes32 nonce
-  ) internal view returns (RelayExecutor.ExecuteAndWithdrawRequest memory) {
+  ) internal view returns (ExecuteAndWithdrawRequest memory) {
     return _swapRequest(orderAddress, outAmountMinimum, nonce, _noFees());
   }
 
@@ -789,10 +1234,10 @@ contract RelayExecutorTest is BaseTest {
     address orderAddress,
     uint256 outAmountMinimum,
     bytes32 nonce,
-    RelayExecutor.Fee[] memory fees
-  ) internal view returns (RelayExecutor.ExecuteAndWithdrawRequest memory) {
+    Fee[] memory fees
+  ) internal view returns (ExecuteAndWithdrawRequest memory) {
     return
-      RelayExecutor.ExecuteAndWithdrawRequest({
+      ExecuteAndWithdrawRequest({
         inChainId: IN_CHAIN_ID,
         inCurrency: inCurrency,
         outChainId: OUT_CHAIN_ID,
@@ -803,16 +1248,35 @@ contract RelayExecutorTest is BaseTest {
         receiver: abi.encodePacked(receiver),
         data: "",
         fees: fees,
-        nonce: nonce
+        nonce: nonce,
+        deadline: block.timestamp + 1 hours
       });
   }
 
-  function _noFees() internal pure returns (RelayExecutor.Fee[] memory) {
-    return new RelayExecutor.Fee[](0);
+  function _noFees() internal pure returns (Fee[] memory) {
+    return new Fee[](0);
+  }
+
+  function _encode(
+    BasicCallResolver.Call[] memory calls
+  ) internal view returns (bytes memory) {
+    BasicCallResolver.Sweep[] memory sweeps = new BasicCallResolver.Sweep[](1);
+    sweeps[0] = BasicCallResolver.Sweep({
+      recipient: address(verifier),
+      tokenId: tokenOutId
+    });
+    return _encode(calls, sweeps);
+  }
+
+  function _encode(
+    BasicCallResolver.Call[] memory calls,
+    BasicCallResolver.Sweep[] memory sweeps
+  ) internal pure returns (bytes memory) {
+    return abi.encode(calls, sweeps);
   }
 
   function _allocatorWithdrawRequest(
-    RelayExecutor.ExecuteAndWithdrawRequest memory request,
+    ExecuteAndWithdrawRequest memory request,
     uint256 amount
   ) internal view returns (RelayAllocator.WithdrawRequest memory) {
     return
@@ -831,7 +1295,7 @@ contract RelayExecutorTest is BaseTest {
 
   function _signExecuteAndWithdrawRequest(
     uint256 pk,
-    RelayExecutor.ExecuteAndWithdrawRequest memory request
+    ExecuteAndWithdrawRequest memory request
   ) internal view returns (bytes memory) {
     bytes32 structHash = keccak256(
       abi.encode(
@@ -846,14 +1310,15 @@ contract RelayExecutorTest is BaseTest {
         keccak256(request.receiver),
         keccak256(request.data),
         _hashFees(request.fees),
-        request.nonce
+        request.nonce,
+        request.deadline
       )
     );
     return Eip712.sign(pk, verifierDomain, structHash);
   }
 
   function _executeAndWithdrawRequestDigest(
-    RelayExecutor.ExecuteAndWithdrawRequest memory request
+    ExecuteAndWithdrawRequest memory request
   ) internal view returns (bytes32) {
     bytes32 structHash = keccak256(
       abi.encode(
@@ -868,15 +1333,14 @@ contract RelayExecutorTest is BaseTest {
         keccak256(request.receiver),
         keccak256(request.data),
         _hashFees(request.fees),
-        request.nonce
+        request.nonce,
+        request.deadline
       )
     );
     return Eip712.digest(verifierDomain, structHash);
   }
 
-  function _hashFees(
-    RelayExecutor.Fee[] memory fees
-  ) internal pure returns (bytes32) {
+  function _hashFees(Fee[] memory fees) internal pure returns (bytes32) {
     bytes32[] memory feeHashes = new bytes32[](fees.length);
     for (uint256 i; i < fees.length; ++i) {
       feeHashes[i] = keccak256(

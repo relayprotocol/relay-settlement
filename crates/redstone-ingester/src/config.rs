@@ -11,9 +11,7 @@ const DEFAULT_GATEWAY_URL: &str = "https://oracle-gateway-1.a.redstone.finance";
 const DEFAULT_DATA_SERVICE_ID: &str = "redstone-primary-prod";
 const DEFAULT_MIN_SIGNERS: usize = 3;
 const DEFAULT_POLL_INTERVAL_MS: u64 = 1000;
-const DEFAULT_TRANSPORT: &str = "tcp";
-const DEFAULT_SOCKET_ADDRESS: &str = "127.0.0.1:9803";
-const DEFAULT_HEARTBEAT_SEC: u64 = 10;
+const DEFAULT_ADDRESS: &str = "127.0.0.1:9803";
 const DEFAULT_OTEL_SAMPLE_RATIO: f64 = 1.0;
 
 #[derive(Clone, Debug)]
@@ -31,8 +29,6 @@ pub struct Config {
     pub feed_ids: Vec<B256>,
     pub min_signers: usize,
     pub poll_interval: Duration,
-    pub heartbeat_interval: Duration,
-    pub write_timeout: Duration,
     pub telemetry: Option<TelemetryConfig>,
 }
 
@@ -47,9 +43,8 @@ pub struct TelemetryConfig {
 pub fn get() -> Result<Config> {
     let feeds = parse_feeds(&required_env("REDSTONE_FEED_IDS")?)?;
     let feed_ids = feeds.iter().map(|f| f.feed_id).collect();
-    let heartbeat_interval = parse_heartbeat_interval()?;
     Ok(Config {
-        listen_address: parse_listen_address()?,
+        listen_address: parse_listen_address(),
         gateway_url: optional_env("REDSTONE_GATEWAY_URL")
             .unwrap_or_else(|| DEFAULT_GATEWAY_URL.to_string()),
         data_service_id: optional_env("REDSTONE_DATA_SERVICE_ID")
@@ -58,8 +53,6 @@ pub fn get() -> Result<Config> {
         feed_ids,
         min_signers: parse_min_signers()?,
         poll_interval: parse_poll_interval()?,
-        write_timeout: parse_write_timeout(heartbeat_interval)?,
-        heartbeat_interval,
         telemetry: parse_telemetry()?,
     })
 }
@@ -111,16 +104,8 @@ fn parse_sample_ratio() -> Result<f64> {
     Ok(ratio)
 }
 
-fn parse_listen_address() -> Result<String> {
-    let transport =
-        optional_env("INGESTER_TRANSPORT").unwrap_or_else(|| DEFAULT_TRANSPORT.to_string());
-    match transport.as_str() {
-        "tcp" => Ok(optional_env("INGESTER_SOCKET_ADDRESS")
-            .unwrap_or_else(|| DEFAULT_SOCKET_ADDRESS.to_string())),
-        other => Err(anyhow!(
-            "INGESTER_TRANSPORT must be \"tcp\", got \"{other}\""
-        )),
-    }
+fn parse_listen_address() -> String {
+    optional_env("INGESTER_ADDRESS").unwrap_or_else(|| DEFAULT_ADDRESS.to_string())
 }
 
 fn parse_min_signers() -> Result<usize> {
@@ -149,34 +134,6 @@ fn parse_poll_interval() -> Result<Duration> {
         ));
     }
     Ok(Duration::from_millis(millis))
-}
-
-fn parse_write_timeout(heartbeat: Duration) -> Result<Duration> {
-    let Some(raw) = optional_env("INGESTER_WRITE_TIMEOUT_SEC") else {
-        return Ok(heartbeat * 3);
-    };
-    let secs = raw
-        .parse::<u64>()
-        .context("INGESTER_WRITE_TIMEOUT_SEC must be a positive integer")?;
-    if secs == 0 {
-        return Err(anyhow!(
-            "INGESTER_WRITE_TIMEOUT_SEC must be greater than zero"
-        ));
-    }
-    Ok(Duration::from_secs(secs))
-}
-
-fn parse_heartbeat_interval() -> Result<Duration> {
-    let Some(raw) = optional_env("INGESTER_HEARTBEAT_SEC") else {
-        return Ok(Duration::from_secs(DEFAULT_HEARTBEAT_SEC));
-    };
-    let secs = raw
-        .parse::<u64>()
-        .context("INGESTER_HEARTBEAT_SEC must be a positive integer")?;
-    if secs == 0 {
-        return Err(anyhow!("INGESTER_HEARTBEAT_SEC must be greater than zero"));
-    }
-    Ok(Duration::from_secs(secs))
 }
 
 fn required_env(name: &'static str) -> Result<String> {

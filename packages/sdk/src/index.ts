@@ -54,7 +54,6 @@ import {
   getExecutionMessageId,
   encodeAction,
   decodeAction,
-  encodeAmountLimiterData,
 } from "./messages/v2.2/execution"
 
 import {
@@ -192,7 +191,6 @@ export {
   getExecutionMessageId,
   encodeAction,
   decodeAction,
-  encodeAmountLimiterData,
 
   // Generic mapping
   GenericMappingMessage,

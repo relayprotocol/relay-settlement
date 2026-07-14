@@ -39,12 +39,35 @@ yarn multisig:check --network base \
 yarn multisig:execute --network base --transactions ./transactions/042-set-allocator.json
 ```
 
+### Local approval (Safe UI unavailable)
+
+When the Safe web UI or transaction service is down, `approve-local` executes the
+`approveSignature` bundle directly on-chain: it builds the same Safe transaction that
+`submit` would propose, collects owner signatures locally, and calls `executeTransaction`
+against the Safe contract. Provide enough owner keys to meet the Safe threshold via
+`SAFE_OWNER_KEYS` (comma-separated) or `DEPLOYER_PRIVATE_KEY`:
+
+```sh
+yarn workspace @relay-settlement/multisig-tools cli approve-local \
+  --network aurora \
+  --relay-multisig-signer <RelayMultisigSigner address> \
+  --transactions ./transactions/042-set-allocator.json
+
+# then sign via MPC + broadcast as usual (no Safe involvement from here on)
+yarn workspace @relay-settlement/multisig-tools cli execute-transactions \
+  --network aurora \
+  --relay-multisig-signer <RelayMultisigSigner address> \
+  --transactions ./transactions/042-set-allocator.json
+```
+
+No `SAFE_API_KEY` is needed for this flow. The executing key pays Aurora gas, and
+`execute-transactions` needs wNEAR on Aurora for the Chain Signatures fees.
+
 ## Manifest generators
 
 Standalone scripts under `scripts/` produce JSON manifests for common operations. Invoke with `tsx`:
 
 ```sh
-yarn workspace @relay-settlement/multisig-tools tsx scripts/grant-role.ts
 yarn workspace @relay-settlement/multisig-tools tsx scripts/set-allocator.ts
 ```
 

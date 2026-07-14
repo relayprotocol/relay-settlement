@@ -9,7 +9,9 @@ import {
   IPricingOracle,
   Price
 } from "./deposit-addresses/open/oracle/IPricingOracle.sol";
+import {ERC20View} from "./ERC20View.sol";
 import {PriceOraclePrecompile} from "./precompiles/PriceOraclePrecompile.sol";
+import {Utils} from "./Utils.sol";
 
 /// @title IPriceFeedAdapter
 /// @author Relay Protocol
@@ -65,14 +67,14 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
     bool exists;
   }
 
-  /// @notice Configured feed route per currency key.
-  mapping(bytes32 currencyKey => FeedRoute route) public feedRoutes;
+  /// @notice Configured feed route per Hub token id.
+  mapping(uint256 tokenId => FeedRoute route) public feedRoutes;
 
   /// @notice Price feed adapter per provider ID.
   mapping(bytes32 providerId => address adapter) public priceFeedAdapters;
 
   /// @notice Emitted when a currency route is set.
-  /// @param currencyKey Key derived from `(chainId, currency)`.
+  /// @param tokenId Hub token id derived from `(chainId, currency)`.
   /// @param chainId Identifier of the chain the currency lives on.
   /// @param currency Opaque, VM-specific encoding of the currency.
   /// @param providerId Oracle provider that owns the feed ID.
@@ -80,7 +82,7 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
   /// @param currencyDecimals Number of decimals the currency itself uses.
   /// @param maxAgeSeconds Validity window added to the provider publish time.
   event FeedRouteSet(
-    bytes32 indexed currencyKey,
+    uint256 indexed tokenId,
     string chainId,
     bytes currency,
     bytes32 indexed providerId,
@@ -90,11 +92,11 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
   );
 
   /// @notice Emitted when a currency route is deleted.
-  /// @param currencyKey Key derived from `(chainId, currency)`.
+  /// @param tokenId Hub token id derived from `(chainId, currency)`.
   /// @param chainId Identifier of the chain the currency lives on.
   /// @param currency Opaque, VM-specific encoding of the currency.
   event FeedRouteDeleted(
-    bytes32 indexed currencyKey,
+    uint256 indexed tokenId,
     string chainId,
     bytes currency
   );
@@ -126,7 +128,7 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
   );
 
   /// @notice Thrown when a currency has no configured route.
-  error FeedRouteNotFound(bytes32 currencyKey);
+  error FeedRouteNotFound(uint256 tokenId);
 
   /// @notice Thrown when no adapter is configured for a provider.
   error PriceFeedAdapterNotFound(bytes32 providerId);
@@ -211,13 +213,13 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
   /// @notice Deletes the configured provider feed route for a currency.
   /// @param currency Currency whose route should be deleted.
   function deleteFeedRoute(Currency calldata currency) external onlyOwner {
-    bytes32 key = currencyKey(currency);
-    if (!feedRoutes[key].exists) {
-      revert FeedRouteNotFound(key);
+    uint256 tokenId = currencyToTokenId(currency);
+    if (!feedRoutes[tokenId].exists) {
+      revert FeedRouteNotFound(tokenId);
     }
 
-    delete feedRoutes[key];
-    emit FeedRouteDeleted(key, currency.chainId, currency.currency);
+    delete feedRoutes[tokenId];
+    emit FeedRouteDeleted(tokenId, currency.chainId, currency.currency);
   }
 
   /// @notice Sets or replaces the adapter for a provider.
@@ -265,6 +267,42 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
     price = _resolveUsdPrice(currency);
   }
 
+  /// @notice Returns USD prices for a batch of Hub token ids via their configured provider feeds.
+  /// @param tokenIds Hub token ids whose USD prices should be returned.
+  /// @return prices USD price data for `tokenIds`, in the same order.
+  function resolveUsdPrices(
+    uint256[] calldata tokenIds
+  ) external returns (Price[] memory prices) {
+    prices = _resolveUsdPrices(tokenIds);
+  }
+
+  /// @notice Returns the USD price for a Hub token id via its configured provider feed.
+  /// @param tokenId Hub token id whose USD price should be returned.
+  /// @return price USD price data for `tokenId`.
+  function resolveUsdPrice(
+    uint256 tokenId
+  ) external returns (Price memory price) {
+    price = _resolveUsdPrice(tokenId);
+  }
+
+  /// @notice Returns USD prices for a batch of ERC20View contracts via their token ids.
+  /// @param erc20Views ERC20View contracts whose USD prices should be returned.
+  /// @return prices USD price data for `erc20Views`, in the same order.
+  function resolveUsdPrices(
+    address[] calldata erc20Views
+  ) external returns (Price[] memory prices) {
+    prices = _resolveUsdPrices(erc20Views);
+  }
+
+  /// @notice Returns the USD price for an ERC20View contract via its token id.
+  /// @param erc20View ERC20View contract whose USD price should be returned.
+  /// @return price USD price data for `erc20View`.
+  function resolveUsdPrice(
+    address erc20View
+  ) external returns (Price memory price) {
+    price = _resolveUsdPrice(ERC20View(erc20View).tokenId());
+  }
+
   /// @inheritdoc IBidAskOracle
   /// @dev `RelayPriceOracle` ignores `extraData`; direct callers can use the overload without it.
   function resolveBidAskPrices(
@@ -292,6 +330,42 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
     bidAsk = _resolveBidAskPrice(currency);
   }
 
+  /// @notice Returns the mid + bid/ask band for a batch of Hub token ids via their configured feeds.
+  /// @param tokenIds Hub token ids whose bid/ask bands should be returned.
+  /// @return bidAsks Mid + bid/ask data for `tokenIds`, in the same order.
+  function resolveBidAskPrices(
+    uint256[] calldata tokenIds
+  ) external returns (BidAsk[] memory bidAsks) {
+    bidAsks = _resolveBidAskPrices(tokenIds);
+  }
+
+  /// @notice Returns the mid + bid/ask band for a Hub token id via its configured feed.
+  /// @param tokenId Hub token id whose bid/ask band should be returned.
+  /// @return bidAsk Mid + bid/ask data for `tokenId`.
+  function resolveBidAskPrice(
+    uint256 tokenId
+  ) external returns (BidAsk memory bidAsk) {
+    bidAsk = _resolveBidAskPrice(tokenId);
+  }
+
+  /// @notice Returns the mid + bid/ask band for a batch of ERC20View contracts via their token ids.
+  /// @param erc20Views ERC20View contracts whose bid/ask bands should be returned.
+  /// @return bidAsks Mid + bid/ask data for `erc20Views`, in the same order.
+  function resolveBidAskPrices(
+    address[] calldata erc20Views
+  ) external returns (BidAsk[] memory bidAsks) {
+    bidAsks = _resolveBidAskPrices(erc20Views);
+  }
+
+  /// @notice Returns the mid + bid/ask band for an ERC20View contract via its token id.
+  /// @param erc20View ERC20View contract whose bid/ask band should be returned.
+  /// @return bidAsk Mid + bid/ask data for `erc20View`.
+  function resolveBidAskPrice(
+    address erc20View
+  ) external returns (BidAsk memory bidAsk) {
+    bidAsk = _resolveBidAskPrice(ERC20View(erc20View).tokenId());
+  }
+
   /// @notice Returns USD prices for a batch of currencies via their configured provider feeds.
   /// @param currencies Currencies whose USD prices should be returned.
   /// @return prices USD price data for `currencies`, in the same order.
@@ -306,7 +380,43 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
     prices = new Price[](length);
 
     for (uint256 i; i < length; ++i) {
-      prices[i] = _resolveUsdPrice(currencies[i]);
+      prices[i] = _resolveUsdPrice(currencyToTokenId(currencies[i]));
+    }
+  }
+
+  /// @notice Returns USD prices for a batch of Hub token ids via their configured provider feeds.
+  /// @param tokenIds Hub token ids whose USD prices should be returned.
+  /// @return prices USD price data for `tokenIds`, in the same order.
+  function _resolveUsdPrices(
+    uint256[] calldata tokenIds
+  ) internal returns (Price[] memory prices) {
+    uint256 length = tokenIds.length;
+    if (length > MAX_PRICE_BATCH_SIZE) {
+      revert PriceBatchTooLarge(length, MAX_PRICE_BATCH_SIZE);
+    }
+
+    prices = new Price[](length);
+
+    for (uint256 i; i < length; ++i) {
+      prices[i] = _resolveUsdPrice(tokenIds[i]);
+    }
+  }
+
+  /// @notice Returns USD prices for a batch of ERC20View contracts via their token ids.
+  /// @param erc20Views ERC20View contracts whose USD prices should be returned.
+  /// @return prices USD price data for `erc20Views`, in the same order.
+  function _resolveUsdPrices(
+    address[] calldata erc20Views
+  ) internal returns (Price[] memory prices) {
+    uint256 length = erc20Views.length;
+    if (length > MAX_PRICE_BATCH_SIZE) {
+      revert PriceBatchTooLarge(length, MAX_PRICE_BATCH_SIZE);
+    }
+
+    prices = new Price[](length);
+
+    for (uint256 i; i < length; ++i) {
+      prices[i] = _resolveUsdPrice(ERC20View(erc20Views[i]).tokenId());
     }
   }
 
@@ -324,7 +434,43 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
     bidAsks = new BidAsk[](length);
 
     for (uint256 i; i < length; ++i) {
-      bidAsks[i] = _resolveBidAskPrice(currencies[i]);
+      bidAsks[i] = _resolveBidAskPrice(currencyToTokenId(currencies[i]));
+    }
+  }
+
+  /// @notice Returns the mid + bid/ask band for a batch of Hub token ids via their configured feeds.
+  /// @param tokenIds Hub token ids whose bid/ask bands should be returned.
+  /// @return bidAsks Mid + bid/ask data for `tokenIds`, in the same order.
+  function _resolveBidAskPrices(
+    uint256[] calldata tokenIds
+  ) internal returns (BidAsk[] memory bidAsks) {
+    uint256 length = tokenIds.length;
+    if (length > MAX_PRICE_BATCH_SIZE) {
+      revert PriceBatchTooLarge(length, MAX_PRICE_BATCH_SIZE);
+    }
+
+    bidAsks = new BidAsk[](length);
+
+    for (uint256 i; i < length; ++i) {
+      bidAsks[i] = _resolveBidAskPrice(tokenIds[i]);
+    }
+  }
+
+  /// @notice Returns the mid + bid/ask band for a batch of ERC20View contracts via their token ids.
+  /// @param erc20Views ERC20View contracts whose bid/ask bands should be returned.
+  /// @return bidAsks Mid + bid/ask data for `erc20Views`, in the same order.
+  function _resolveBidAskPrices(
+    address[] calldata erc20Views
+  ) internal returns (BidAsk[] memory bidAsks) {
+    uint256 length = erc20Views.length;
+    if (length > MAX_PRICE_BATCH_SIZE) {
+      revert PriceBatchTooLarge(length, MAX_PRICE_BATCH_SIZE);
+    }
+
+    bidAsks = new BidAsk[](length);
+
+    for (uint256 i; i < length; ++i) {
+      bidAsks[i] = _resolveBidAskPrice(ERC20View(erc20Views[i]).tokenId());
     }
   }
 
@@ -348,8 +494,8 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
       revert InvalidFeedId();
     }
 
-    bytes32 key = currencyKey(currency);
-    feedRoutes[key] = FeedRoute({
+    uint256 tokenId = currencyToTokenId(currency);
+    feedRoutes[tokenId] = FeedRoute({
       providerId: providerId,
       feedId: feedId,
       currencyDecimals: currencyDecimals,
@@ -357,7 +503,7 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
       exists: true
     });
     emit FeedRouteSet(
-      key,
+      tokenId,
       currency.chainId,
       currency.currency,
       providerId,
@@ -367,9 +513,9 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
     );
   }
 
-  /// @notice Resolves a currency's feed: routes it, reads the precompile, and
+  /// @notice Resolves a token id's feed: routes it, reads the precompile, and
   ///         verifies/decodes the provider update into normalized fields.
-  /// @param currency Currency whose feed should be resolved.
+  /// @param tokenId Hub token id whose feed should be resolved.
   /// @return usdPrice Mid (benchmark) price scaled by `usdPriceDecimals`.
   /// @return bid Best bid scaled by `usdPriceDecimals`, or `0` if unavailable.
   /// @return ask Best ask scaled by `usdPriceDecimals`, or `0` if unavailable.
@@ -377,7 +523,7 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
   /// @return currencyDecimals Number of decimals the currency itself uses.
   /// @return expiration Unix timestamp after which the price must not be used.
   function _resolveFeed(
-    Currency calldata currency
+    uint256 tokenId
   )
     internal
     returns (
@@ -389,10 +535,9 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
       uint256 expiration
     )
   {
-    bytes32 key = currencyKey(currency);
-    FeedRoute memory route = feedRoutes[key];
+    FeedRoute memory route = feedRoutes[tokenId];
     if (!route.exists) {
-      revert FeedRouteNotFound(key);
+      revert FeedRouteNotFound(tokenId);
     }
 
     address adapter = priceFeedAdapters[route.providerId];
@@ -428,6 +573,15 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
   function _resolveUsdPrice(
     Currency calldata currency
   ) internal returns (Price memory price) {
+    price = _resolveUsdPrice(currencyToTokenId(currency));
+  }
+
+  /// @notice Returns the configured USD (mid) price for a Hub token id.
+  /// @param tokenId Hub token id whose USD price should be returned.
+  /// @return price USD price data for `tokenId`.
+  function _resolveUsdPrice(
+    uint256 tokenId
+  ) internal returns (Price memory price) {
     (
       uint256 usdPrice,
       ,
@@ -435,7 +589,7 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
       uint8 usdPriceDecimals,
       uint8 currencyDecimals,
       uint256 expiration
-    ) = _resolveFeed(currency);
+    ) = _resolveFeed(tokenId);
 
     price = Price({
       usdPrice: usdPrice,
@@ -451,6 +605,15 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
   function _resolveBidAskPrice(
     Currency calldata currency
   ) internal returns (BidAsk memory bidAsk) {
+    bidAsk = _resolveBidAskPrice(currencyToTokenId(currency));
+  }
+
+  /// @notice Returns the configured mid + bid/ask band for a Hub token id.
+  /// @param tokenId Hub token id whose bid/ask band should be returned.
+  /// @return bidAsk Mid + bid/ask data for `tokenId`.
+  function _resolveBidAskPrice(
+    uint256 tokenId
+  ) internal returns (BidAsk memory bidAsk) {
     (
       uint256 usdPrice,
       uint256 bid,
@@ -458,7 +621,7 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
       uint8 usdPriceDecimals,
       uint8 currencyDecimals,
       uint256 expiration
-    ) = _resolveFeed(currency);
+    ) = _resolveFeed(tokenId);
 
     bidAsk = BidAsk({
       midPrice: usdPrice,
@@ -470,12 +633,12 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
     });
   }
 
-  /// @notice Derives the route key for a currency.
+  /// @notice Derives the Hub token id used as the route key for a currency.
   /// @param currency Currency to key.
-  /// @return key Storage key used by `feedRoutes`.
-  function currencyKey(
+  /// @return tokenId Hub token id used by `feedRoutes`.
+  function currencyToTokenId(
     Currency calldata currency
-  ) public pure returns (bytes32 key) {
-    key = keccak256(abi.encode(currency.chainId, currency.currency));
+  ) public pure returns (uint256 tokenId) {
+    tokenId = Utils.generateTokenId(currency.chainId, currency.currency);
   }
 }

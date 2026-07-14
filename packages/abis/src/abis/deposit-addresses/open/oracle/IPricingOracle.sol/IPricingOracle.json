@@ -1,7 +1,7 @@
 [
   {
     "type": "function",
-    "name": "getUsdPrices",
+    "name": "resolveUsdPrices",
     "inputs": [
       {
         "name": "currencies",
@@ -55,6 +55,6 @@
         ]
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "nonpayable"
   }
 ]

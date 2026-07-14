@@ -1,5 +1,5 @@
 [workspace]
-members = ["pyth-ingester", "chainlink-ingester", "redstone-ingester"]
+members = ["pyth-ingester", "chainlink-ingester", "redstone-ingester", "stork-ingester"]
 resolver = "2"
 
 [workspace.package]
@@ -44,4 +44,4 @@ tracing = { version = "0.1.44", default-features = false, features = ["attribute
 tracing-opentelemetry = "0.33"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
-price-oracle-ipc = { git = "https://github.com/unevenlabs/relay-chain", rev = "f6261c913eb1b25111bbe340345111547ab866be" }
+price-oracle-ipc = { git = "https://github.com/unevenlabs/relay-chain", rev = "4f2013baf38c0feeb8abd7318994a013e5831b77" }

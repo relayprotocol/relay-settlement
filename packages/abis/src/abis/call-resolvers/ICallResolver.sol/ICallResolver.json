@@ -1,0 +1,99 @@
+[
+  {
+    "type": "function",
+    "name": "execute",
+    "inputs": [
+      {
+        "name": "request",
+        "type": "tuple",
+        "internalType": "struct ExecuteAndWithdrawRequest",
+        "components": [
+          {
+            "name": "inChainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "inCurrency",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "outChainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "outCurrency",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "outAmountMinimum",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "depository",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "orderAddress",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "receiver",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "data",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "fees",
+            "type": "tuple[]",
+            "internalType": "struct Fee[]",
+            "components": [
+              {
+                "name": "recipient",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "amount",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "nonce",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "deadline",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "feesCharged",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "data",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  }
+]

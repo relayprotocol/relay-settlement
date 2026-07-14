@@ -375,9 +375,13 @@ async function executeEvmTransaction(
       ? BigInt(transaction.gasPrice)
       : await networkClient.getGasPrice()
 
+  const isRelayChain = [537713, 537714].includes(
+    await networkClient.getChainId()
+  )
+
   const estimatedGasCost = gasLimit * gasPrice
   const txValue = transaction.value ? BigInt(transaction.value) : 0n
-  const requiredBalance = estimatedGasCost + txValue
+  const requiredBalance = isRelayChain ? 0n : estimatedGasCost + txValue
 
   if (currentBalance < requiredBalance) {
     console.log(

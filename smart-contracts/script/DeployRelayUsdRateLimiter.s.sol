@@ -8,14 +8,16 @@ import {ScriptBase} from "./utils/ScriptBase.sol";
 /// Env:
 ///   DEPLOYER_PRIVATE_KEY – deployer key (required)
 ///   ADMIN                – optional, defaults to the deployer
+///   PRICE_ORACLE         – RelayPriceOracle address (required)
 contract DeployRelayUsdRateLimiter is ScriptBase {
-    function run() external returns (RelayUsdRateLimiter rateLimiter) {
-        address admin = _envAddressOrDeployer("ADMIN");
+  function run() external returns (RelayUsdRateLimiter rateLimiter) {
+    address admin = _envAddressOrDeployer("ADMIN");
+    address priceOracle = _requireEnvAddress("PRICE_ORACLE");
 
-        vm.startBroadcast(_deployerKey());
-        rateLimiter = new RelayUsdRateLimiter(admin);
-        vm.stopBroadcast();
+    vm.startBroadcast(_deployerKey());
+    rateLimiter = new RelayUsdRateLimiter(admin, priceOracle);
+    vm.stopBroadcast();
 
-        _logDeployment("RelayUsdRateLimiter", address(rateLimiter));
-    }
+    _logDeployment("RelayUsdRateLimiter", address(rateLimiter));
+  }
 }

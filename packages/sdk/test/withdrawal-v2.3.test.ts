@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from "vitest"
 import * as bitcoin from "bitcoinjs-lib"
+import { classicAddressToXAddress } from "ripple-address-codec"
 import { decodeAbiParameters, parseAbiParameters } from "viem"
 
 import {
@@ -353,5 +354,105 @@ describe("normalizeWithdrawRequest", () => {
       "ton-vm",
       "ethereum-vm"
     )
+  })
+
+  const xrpRequestDataAbiParams = parseAbiParameters([
+    "(uint32 sequence, uint64 fee, uint32 lastLedgerSequence, uint32 flags, uint32 destinationTag, bool hasDestinationTag)",
+  ])
+
+  const xrpRequestBase = {
+    chainId: "xrp",
+    depository: "rEgPcf61jqzyxHMqStaX7GsC9Swb1srgur",
+    currency: getVmTypeNativeCurrency("xrp-vm"),
+    amount: "1000000",
+    spenderChainId: "8453",
+    spender: "0x000000000000000000000000000000000000dEaD",
+    receiver: "rDg96xs4mPNW7oz19igxbtgQ5ES5GiYdLM",
+    nonce: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    vmType: "xrp-vm" as const,
+    spenderVmType: "ethereum-vm" as const,
+  }
+
+  it("normalizes xrp-vm withdrawal requests, encoding additionalData as XrpRequestData", () => {
+    const normalized = normalizeWithdrawRequest({
+      ...xrpRequestBase,
+      additionalData: {
+        "xrp-vm": {
+          sequence: 42,
+          fee: "12",
+          lastLedgerSequence: 90000000,
+          destinationTag: 0,
+        },
+      },
+    })
+
+    expect(normalized.depository).toBe(
+      encodeAddressToHex(xrpRequestBase.depository, "xrp-vm")
+    )
+    expect(normalized.currency).toBe(
+      encodeAddressToHex(xrpRequestBase.currency, "xrp-vm")
+    )
+    expect(normalized.receiver).toBe(
+      encodeAddressToHex(xrpRequestBase.receiver, "xrp-vm")
+    )
+
+    const [decoded] = decodeAbiParameters(
+      xrpRequestDataAbiParams,
+      normalized.data as `0x${string}`
+    )
+    expect(decoded.sequence).toBe(42)
+    expect(decoded.fee).toBe(12n)
+    expect(decoded.lastLedgerSequence).toBe(90000000)
+    expect(decoded.flags).toBe(0)
+    // A tag of 0 is a real tag — presence is a separate flag
+    expect(decoded.destinationTag).toBe(0)
+    expect(decoded.hasDestinationTag).toBe(true)
+  })
+
+  it("encodes an absent xrp-vm destination tag as hasDestinationTag=false", () => {
+    const normalized = normalizeWithdrawRequest({
+      ...xrpRequestBase,
+      additionalData: {
+        "xrp-vm": {
+          sequence: 42,
+          fee: "12",
+          lastLedgerSequence: 90000000,
+        },
+      },
+    })
+
+    const [decoded] = decodeAbiParameters(
+      xrpRequestDataAbiParams,
+      normalized.data as `0x${string}`
+    )
+    expect(decoded.destinationTag).toBe(0)
+    expect(decoded.hasDestinationTag).toBe(false)
+  })
+
+  it("requires xrp-vm additionalData", () => {
+    expect(() => normalizeWithdrawRequest(xrpRequestBase)).toThrow(
+      "Additional data is required for xrp-vm"
+    )
+  })
+
+  it("rejects xrp-vm withdrawal requests with a tagged X-address receiver", () => {
+    const taggedReceiver = classicAddressToXAddress(
+      "rDg96xs4mPNW7oz19igxbtgQ5ES5GiYdLM",
+      12345,
+      false
+    )
+    expect(() =>
+      normalizeWithdrawRequest({
+        ...xrpRequestBase,
+        receiver: taggedReceiver,
+        additionalData: {
+          "xrp-vm": {
+            sequence: 42,
+            fee: "12",
+            lastLedgerSequence: 90000000,
+          },
+        },
+      })
+    ).toThrow("destination tag")
   })
 })

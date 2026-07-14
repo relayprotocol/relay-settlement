@@ -2,6 +2,7 @@
 import { Command } from "commander"
 import { registerSimulate } from "./commands/simulate"
 import { registerSubmit } from "./commands/submit"
+import { registerApproveLocal } from "./commands/approve-local"
 import { registerCheckHashes } from "./commands/check-hashes"
 import { registerExecuteTransactions } from "./commands/execute-transactions"
 import { registerDecodeMulticall } from "./commands/decode-multicall"
@@ -17,6 +18,7 @@ const program = new Command("multisig-tools")
 
 registerSimulate(program)
 registerSubmit(program)
+registerApproveLocal(program)
 registerCheckHashes(program)
 registerExecuteTransactions(program)
 registerDecodeMulticall(program)

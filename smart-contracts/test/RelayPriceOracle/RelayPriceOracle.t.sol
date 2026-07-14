@@ -2,13 +2,16 @@
 pragma solidity ^0.8.28;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ERC20View} from "../../contracts/ERC20View.sol";
 import {RelayPriceOracle} from "../../contracts/RelayPriceOracle.sol";
 import {MockPriceFeedAdapter} from "../../contracts/mocks/MockPriceFeedAdapter.sol";
 import {PriceOraclePrecompile} from "../../contracts/precompiles/PriceOraclePrecompile.sol";
 import {
+  BidAsk,
   Currency,
   Price
 } from "../../contracts/deposit-addresses/open/oracle/IPricingOracle.sol";
+import {Utils} from "../../contracts/Utils.sol";
 import {BaseTest} from "../utils/BaseTest.sol";
 
 /// @notice Tests the owner-managed currency to provider feed routing contract.
@@ -43,6 +46,7 @@ contract RelayPriceOracleTest is BaseTest {
 
   function test_allowsOwnerToSetFeedRoute() public {
     Currency memory eth = _eth();
+    uint256 tokenId = config.currencyToTokenId(eth);
 
     vm.prank(owner);
     config.setFeedRoute(
@@ -59,7 +63,7 @@ contract RelayPriceOracleTest is BaseTest {
       uint8 currencyDecimals,
       uint32 maxAgeSeconds,
       bool exists
-    ) = config.feedRoutes(config.currencyKey(eth));
+    ) = config.feedRoutes(tokenId);
     assertEq(providerId, PROVIDER_PYTH);
     assertEq(feedId, PYTH_ETH_FEED);
     assertEq(currencyDecimals, ETH_DECIMALS);
@@ -69,11 +73,11 @@ contract RelayPriceOracleTest is BaseTest {
 
   function test_emitsFeedRouteSetEvent() public {
     Currency memory eth = _eth();
-    bytes32 key = config.currencyKey(eth);
+    uint256 tokenId = config.currencyToTokenId(eth);
 
     vm.expectEmit(true, true, true, true, address(config));
     emit RelayPriceOracle.FeedRouteSet(
-      key,
+      tokenId,
       eth.chainId,
       eth.currency,
       PROVIDER_PYTH,
@@ -94,6 +98,7 @@ contract RelayPriceOracleTest is BaseTest {
 
   function test_allowsOwnerToReplaceFeedRoute() public {
     Currency memory eth = _eth();
+    uint256 tokenId = config.currencyToTokenId(eth);
 
     vm.startPrank(owner);
     config.setFeedRoute(
@@ -118,7 +123,7 @@ contract RelayPriceOracleTest is BaseTest {
       ,
       uint32 maxAgeSeconds,
       bool exists
-    ) = config.feedRoutes(config.currencyKey(eth));
+    ) = config.feedRoutes(tokenId);
     assertEq(providerId, PROVIDER_CHAINLINK);
     assertEq(feedId, CHAINLINK_ETH_FEED);
     assertEq(maxAgeSeconds, MAX_AGE_SECONDS + 1);
@@ -214,7 +219,7 @@ contract RelayPriceOracleTest is BaseTest {
 
   function test_allowsOwnerToDeleteFeedRoute() public {
     Currency memory eth = _eth();
-    bytes32 key = config.currencyKey(eth);
+    uint256 tokenId = config.currencyToTokenId(eth);
 
     vm.startPrank(owner);
     config.setFeedRoute(
@@ -226,12 +231,12 @@ contract RelayPriceOracleTest is BaseTest {
     );
 
     vm.expectEmit(true, false, false, true, address(config));
-    emit RelayPriceOracle.FeedRouteDeleted(key, eth.chainId, eth.currency);
+    emit RelayPriceOracle.FeedRouteDeleted(tokenId, eth.chainId, eth.currency);
     config.deleteFeedRoute(eth);
     vm.stopPrank();
 
     (bytes32 providerId, bytes32 feedId, , , bool exists) = config.feedRoutes(
-      key
+      tokenId
     );
     assertEq(providerId, bytes32(0));
     assertEq(feedId, bytes32(0));
@@ -240,11 +245,14 @@ contract RelayPriceOracleTest is BaseTest {
 
   function test_rejectsDeletingMissingFeedRoute() public {
     Currency memory eth = _eth();
-    bytes32 key = config.currencyKey(eth);
+    uint256 tokenId = config.currencyToTokenId(eth);
 
     vm.prank(owner);
     vm.expectRevert(
-      abi.encodeWithSelector(RelayPriceOracle.FeedRouteNotFound.selector, key)
+      abi.encodeWithSelector(
+        RelayPriceOracle.FeedRouteNotFound.selector,
+        tokenId
+      )
     );
     config.deleteFeedRoute(eth);
   }
@@ -396,6 +404,150 @@ contract RelayPriceOracleTest is BaseTest {
     assertEq(price.expiration, ETH_PUBLISH_TIME + MAX_AGE_SECONDS);
   }
 
+  function test_currencyKeyUsesUtilsGenerateTokenId() public view {
+    Currency memory eth = _eth();
+    assertEq(
+      config.currencyToTokenId(eth),
+      Utils.generateTokenId(eth.chainId, eth.currency)
+    );
+  }
+
+  function test_resolveUsdPriceByTokenId() public {
+    Currency memory eth = _eth();
+    uint256 tokenId = config.currencyToTokenId(eth);
+    uint256 pythPrice = 3500e8;
+
+    _mockFeed(
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      _encodeUpdate(
+        PYTH_ETH_FEED,
+        pythPrice,
+        USD_PRICE_DECIMALS,
+        ETH_PUBLISH_TIME
+      )
+    );
+
+    vm.startPrank(owner);
+    config.setPriceFeedAdapter(PROVIDER_PYTH, address(adapter));
+    config.setFeedRoute(
+      eth,
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      ETH_DECIMALS,
+      MAX_AGE_SECONDS
+    );
+    vm.stopPrank();
+
+    Price memory price = config.resolveUsdPrice(tokenId);
+
+    assertEq(price.usdPrice, pythPrice);
+    assertEq(price.usdPriceDecimals, USD_PRICE_DECIMALS);
+    assertEq(price.currencyDecimals, ETH_DECIMALS);
+    assertEq(price.expiration, ETH_PUBLISH_TIME + MAX_AGE_SECONDS);
+  }
+
+  function test_resolveUsdPricesByErc20Views() public {
+    Currency[] memory currencies = new Currency[](2);
+    currencies[0] = _eth();
+    currencies[1] = _btc();
+
+    address[] memory erc20Views = new address[](2);
+    erc20Views[0] = address(
+      new ERC20View(config.currencyToTokenId(currencies[0]))
+    );
+    erc20Views[1] = address(
+      new ERC20View(config.currencyToTokenId(currencies[1]))
+    );
+
+    uint256 pythPrice = 3500e8;
+    uint256 redstonePrice = 65000e8;
+
+    _mockFeed(
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      _encodeUpdate(
+        PYTH_ETH_FEED,
+        pythPrice,
+        USD_PRICE_DECIMALS,
+        ETH_PUBLISH_TIME
+      )
+    );
+    _mockFeed(
+      PROVIDER_REDSTONE,
+      REDSTONE_BTC_FEED,
+      _encodeUpdate(
+        REDSTONE_BTC_FEED,
+        redstonePrice,
+        USD_PRICE_DECIMALS,
+        BTC_PUBLISH_TIME
+      )
+    );
+
+    vm.startPrank(owner);
+    config.setPriceFeedAdapter(PROVIDER_PYTH, address(adapter));
+    config.setPriceFeedAdapter(PROVIDER_REDSTONE, address(adapter));
+    config.setFeedRoute(
+      currencies[0],
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      ETH_DECIMALS,
+      MAX_AGE_SECONDS
+    );
+    config.setFeedRoute(
+      currencies[1],
+      PROVIDER_REDSTONE,
+      REDSTONE_BTC_FEED,
+      BTC_DECIMALS,
+      MAX_AGE_SECONDS + 1
+    );
+    vm.stopPrank();
+
+    Price[] memory prices = config.resolveUsdPrices(erc20Views);
+
+    assertEq(prices[0].usdPrice, pythPrice);
+    assertEq(prices[0].currencyDecimals, ETH_DECIMALS);
+    assertEq(prices[1].usdPrice, redstonePrice);
+    assertEq(prices[1].currencyDecimals, BTC_DECIMALS);
+  }
+
+  function test_resolveBidAskPriceByTokenId() public {
+    Currency memory eth = _eth();
+    uint256 tokenId = config.currencyToTokenId(eth);
+    uint256 pythPrice = 3500e8;
+
+    _mockFeed(
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      _encodeUpdate(
+        PYTH_ETH_FEED,
+        pythPrice,
+        USD_PRICE_DECIMALS,
+        ETH_PUBLISH_TIME
+      )
+    );
+
+    vm.startPrank(owner);
+    config.setPriceFeedAdapter(PROVIDER_PYTH, address(adapter));
+    config.setFeedRoute(
+      eth,
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      ETH_DECIMALS,
+      MAX_AGE_SECONDS
+    );
+    vm.stopPrank();
+
+    BidAsk memory bidAsk = config.resolveBidAskPrice(tokenId);
+
+    assertEq(bidAsk.midPrice, pythPrice);
+    assertEq(bidAsk.bidPrice, 0);
+    assertEq(bidAsk.askPrice, 0);
+    assertEq(bidAsk.usdPriceDecimals, USD_PRICE_DECIMALS);
+    assertEq(bidAsk.currencyDecimals, ETH_DECIMALS);
+    assertEq(bidAsk.expiration, ETH_PUBLISH_TIME + MAX_AGE_SECONDS);
+  }
+
   function test_resolveUsdPriceRevertsForMissingPriceFeedAdapter() public {
     Currency memory eth = _eth();
 
@@ -484,10 +636,13 @@ contract RelayPriceOracleTest is BaseTest {
   function test_resolveUsdPricesRevertsForMissingRoute() public {
     Currency[] memory currencies = new Currency[](1);
     currencies[0] = _eth();
-    bytes32 key = config.currencyKey(currencies[0]);
+    uint256 tokenId = config.currencyToTokenId(currencies[0]);
 
     vm.expectRevert(
-      abi.encodeWithSelector(RelayPriceOracle.FeedRouteNotFound.selector, key)
+      abi.encodeWithSelector(
+        RelayPriceOracle.FeedRouteNotFound.selector,
+        tokenId
+      )
     );
     config.resolveUsdPrices(currencies);
   }
@@ -582,7 +737,7 @@ contract RelayPriceOracleTest is BaseTest {
       uint8 currencyDecimals,
       uint32 maxAgeSeconds,
       bool exists
-    ) = config.feedRoutes(config.currencyKey(currency));
+    ) = config.feedRoutes(config.currencyToTokenId(currency));
     assertEq(providerId, expectedProviderId);
     assertEq(feedId, expectedFeedId);
     assertEq(currencyDecimals, expectedCurrencyDecimals);

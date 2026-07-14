@@ -3,21 +3,94 @@ pragma solidity ^0.8.28;
 
 import {BaseTest} from "../utils/BaseTest.sol";
 import {Eip712} from "../utils/Eip712.sol";
+import {Vm} from "forge-std/Vm.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 
 import {RelayHub} from "../../contracts/RelayHub.sol";
+import {Price} from "../../contracts/deposit-addresses/open/oracle/IPricingOracle.sol";
+import {IFeeCalculator} from "../../contracts/fee-calculators/IFeeCalculator.sol";
+import {RelayBpsFeeCalculator} from "../../contracts/fee-calculators/RelayBpsFeeCalculator.sol";
 import {RelayOracle} from "../../contracts/RelayOracle.sol";
+import {RelayOracleIdempotencyStore} from "../../contracts/RelayOracleIdempotencyStore.sol";
 import {RelayOracleV2} from "../../contracts/RelayOracleV2.sol";
+import {IRateLimiter} from "../../contracts/rate-limiters/IRateLimiter.sol";
 import {RelayAmountRateLimiter} from "../../contracts/rate-limiters/RelayAmountRateLimiter.sol";
 
-/// @notice Scenario coverage for RelayOracleV2's FAST_MINT action: fee/input split (incl. dust),
+contract FlatFastMintFeeCalculator is IFeeCalculator {
+  function calculateFee(
+    uint256 tokenId,
+    uint256,
+    bytes calldata data
+  )
+    external
+    pure
+    returns (
+      uint256 feeCurrency,
+      uint256 feeAmount,
+      address feeRecipient,
+      address feePayer
+    )
+  {
+    (
+      uint256 expectedTokenId,
+      uint256 decodedFeeAmount,
+      uint256 decodedFeeCurrency,
+      address decodedFeeRecipient,
+      address decodedFeePayer
+    ) = abi.decode(data, (uint256, uint256, uint256, address, address));
+    require(tokenId == expectedTokenId, "wrong token id");
+    feeAmount = decodedFeeAmount;
+    feeCurrency = decodedFeeCurrency;
+    feeRecipient = decodedFeeRecipient;
+    feePayer = decodedFeePayer;
+    if (feeAmount != 0 && feeRecipient == address(0)) {
+      revert RelayBpsFeeCalculator.InvalidFeeRecipient();
+    }
+    if (feeAmount != 0 && feePayer == address(0)) {
+      revert RelayBpsFeeCalculator.InvalidFeePayer();
+    }
+  }
+}
+
+contract TokenAwareRateLimiter is IRateLimiter {
+  function consume(
+    uint256 tokenId,
+    uint256 amount,
+    bytes calldata data
+  ) external pure returns (bool) {
+    (uint256 expectedTokenId, uint256 expectedAmount) = abi.decode(
+      data,
+      (uint256, uint256)
+    );
+    return tokenId == expectedTokenId && amount == expectedAmount;
+  }
+}
+
+contract MockOracleV2PriceOracle {
+  mapping(uint256 => Price) internal prices;
+
+  function setPrice(uint256 tokenId, Price memory price) external {
+    prices[tokenId] = price;
+  }
+
+  function resolveUsdPrice(
+    uint256 tokenId
+  ) external view returns (Price memory price) {
+    return prices[tokenId];
+  }
+}
+
+/// @notice Scenario coverage for RelayOracleV2's FAST_MINT action: fee-on-top transfer (incl. dust),
 ///         rate-limit integration (consume the gross amount; revert leaves no key →
 ///         slow re-attest), fail-closed paths (limiter unset, fast disabled, zero amount, bad
-///         fee), dual-key dedup against the old oracle, MINT/BURN/TRANSFER parity, split-inv fuzz.
+///         fee), dual-key dedup against the old oracle, MINT/BURN/TRANSFER parity, fee-inv fuzz.
 contract RelayOracleV2Test is BaseTest {
   RelayHub internal hub;
   RelayOracle internal oldOracle;
+  RelayOracleIdempotencyStore internal idempotencyStore;
+  MockOracleV2PriceOracle internal priceOracle;
+  RelayBpsFeeCalculator internal feeCalculator;
   RelayOracleV2 internal v2;
   RelayAmountRateLimiter internal limiter;
 
@@ -26,6 +99,7 @@ contract RelayOracleV2Test is BaseTest {
   uint256 internal oracleSignerPk;
   address internal orderAddr;
   address internal feeRecipient;
+  address internal feePayer;
   address internal otherAddr;
 
   bytes32 internal v2Domain;
@@ -48,32 +122,42 @@ contract RelayOracleV2Test is BaseTest {
     (oracleSigner, oracleSignerPk) = makeAddrAndKey("oracleSigner");
     orderAddr = makeAddr("orderAddr");
     feeRecipient = makeAddr("feeRecipient");
+    feePayer = makeAddr("feePayer");
     otherAddr = makeAddr("otherAddr");
 
     hub = new RelayHub(admin);
     oldOracle = new RelayOracle(admin, address(hub));
-    v2 = new RelayOracleV2(admin, address(hub), address(oldOracle));
+    idempotencyStore = new RelayOracleIdempotencyStore(admin);
+    priceOracle = new MockOracleV2PriceOracle();
+    _setUsdPrice(_tokenId(CHAIN_ID, CURRENCY), 1e18, 18, 8);
+    feeCalculator = new RelayBpsFeeCalculator(address(priceOracle));
+    v2 = new RelayOracleV2(admin, address(hub), address(idempotencyStore));
 
     limiter = new RelayAmountRateLimiter(admin);
 
     bytes32 operatorRole = hub.OPERATOR_ROLE();
     vm.startPrank(admin);
+    idempotencyStore.addSource(address(oldOracle));
     hub.grantRole(operatorRole, address(v2));
     hub.grantRole(operatorRole, address(oldOracle));
+    idempotencyStore.grantRole(idempotencyStore.WRITE_ROLE(), address(v2));
     v2.grantRole(v2.ORACLE_ROLE(), oracleSigner);
     oldOracle.grantRole(oldOracle.ORACLE_ROLE(), oracleSigner);
     limiter.grantRole(limiter.CONSUMER_ROLE(), address(v2));
     limiter.setBucketConfig(
       RelayAmountRateLimiter.BucketConfig({
-        chainId: CHAIN_ID,
-        currency: CURRENCY,
+        tokenId: _tokenId(CHAIN_ID, CURRENCY),
         isEnabled: true,
         capacity: type(uint128).max,
         rate: 0
       })
     );
     v2.addRateLimiter(address(limiter));
+    v2.addFeeCalculator(address(feeCalculator));
     vm.stopPrank();
+
+    vm.prank(address(v2));
+    hub.mint(feePayer, _tokenId(CHAIN_ID, CURRENCY), type(uint128).max);
 
     v2Domain = Eip712.domainSeparator(
       "RelayOracle",
@@ -96,6 +180,23 @@ contract RelayOracleV2Test is BaseTest {
     bytes memory currency
   ) internal pure returns (uint256) {
     return uint256(keccak256(abi.encodePacked(chainId, currency)));
+  }
+
+  function _setUsdPrice(
+    uint256 tokenId,
+    uint256 usdPrice,
+    uint8 usdPriceDecimals,
+    uint8 currencyDecimals
+  ) internal {
+    priceOracle.setPrice(
+      tokenId,
+      Price({
+        usdPrice: usdPrice,
+        usdPriceDecimals: usdPriceDecimals,
+        currencyDecimals: currencyDecimals,
+        expiration: block.timestamp + 1 days
+      })
+    );
   }
 
   function _mintAction(
@@ -150,18 +251,59 @@ contract RelayOracleV2Test is BaseTest {
     uint256 feeBps,
     address recipient
   ) internal view returns (bytes memory) {
-    // Matches RelayOracleV2._executeFastMint's decode tuple: mint params (hubTokenId direct) + the
-    // limiter to call + its opaque data (the amount limiter's abi.encode(chainId, currency, amount)).
+    return
+      _fastMintActionWithFeeCalculator(
+        hubToAddress,
+        chainId,
+        currency,
+        amount,
+        address(feeCalculator),
+        abi.encode(_tokenId(chainId, currency), feeBps, recipient, feePayer)
+      );
+  }
+
+  function _fastMintActionWithFeeCalculator(
+    address hubToAddress,
+    string memory chainId,
+    bytes memory currency,
+    uint256 amount,
+    address actionFeeCalculator,
+    bytes memory feeCalculatorData
+  ) internal view returns (bytes memory) {
+    return
+      _fastMintActionWithModules(
+        hubToAddress,
+        _tokenId(chainId, currency),
+        amount,
+        actionFeeCalculator,
+        feeCalculatorData,
+        address(limiter),
+        bytes("")
+      );
+  }
+
+  function _fastMintActionWithModules(
+    address hubToAddress,
+    uint256 tokenId,
+    uint256 amount,
+    address actionFeeCalculator,
+    bytes memory feeCalculatorData,
+    address actionRateLimiter,
+    bytes memory rateLimiterData
+  ) internal pure returns (bytes memory) {
+    // Matches RelayOracleV2._executeFastMint's decode tuple: mint params (tokenId direct), the
+    // fee calculator to call + its opaque data, and the rateLimiter to call + its opaque
+    // rateLimiterData.
     return
       abi.encode(
         uint8(RelayOracleV2.ActionType.FAST_MINT),
         hubToAddress,
-        _tokenId(chainId, currency),
+        tokenId,
         amount,
-        feeBps,
-        recipient,
-        address(limiter),
-        abi.encode(chainId, currency, amount)
+        actionFeeCalculator,
+        feeCalculatorData,
+        actionRateLimiter,
+        rateLimiterData
       );
   }
 
@@ -201,11 +343,11 @@ contract RelayOracleV2Test is BaseTest {
     v2.execute(_v2Exec(idempotencyKey, actions), oracleSigner, sig);
   }
 
-  // FAST_MINT — split
+  // FAST_MINT — fee-on-top
 
-  function test_fastMint_splitsFeeAndInput() public {
-    bytes32 key = keccak256("fast-split");
-    uint256 amount = 100e8; // 1% fee → 1 fee, 99 order input
+  function test_fastMint_transfersFeeOnTop() public {
+    bytes32 key = keccak256("fast-fee-on-top");
+    uint256 amount = 100e8; // 1% fee → 100 order input, 1 fee
     uint256 feeBps = 1e16; // 1% (1e16 / 1e18)
     uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
 
@@ -222,16 +364,20 @@ contract RelayOracleV2Test is BaseTest {
     vm.expectEmit(true, false, false, true, address(v2));
     emit RelayOracleV2.Executed(key, actions);
 
+    uint256 feePayerBalanceBefore = hub.balanceOf(feePayer, tokenId);
+
     _runFast(key, actions);
 
     uint256 fee = 1e8; // 100e8 * 1e16 / 1e18
     assertEq(hub.balanceOf(feeRecipient, tokenId), fee);
-    assertEq(hub.balanceOf(orderAddr, tokenId), amount - fee);
+    assertEq(hub.balanceOf(feePayer, tokenId), feePayerBalanceBefore - fee);
+    assertEq(hub.balanceOf(orderAddr, tokenId), amount);
     assertEq(
       hub.balanceOf(feeRecipient, tokenId) + hub.balanceOf(orderAddr, tokenId),
-      amount
+      amount + fee
     );
     assertTrue(v2.isExecuted(key));
+    assertTrue(idempotencyStore.isExecuted(key));
   }
 
   function test_fastMint_emitsFastMintEvent() public {
@@ -256,8 +402,10 @@ contract RelayOracleV2Test is BaseTest {
       orderAddr,
       _tokenId(CHAIN_ID, CURRENCY),
       amount,
-      feeBps,
-      feeRecipient
+      _tokenId(CHAIN_ID, CURRENCY),
+      1e8,
+      feeRecipient,
+      feePayer
     );
 
     _runFast(key, actions);
@@ -310,9 +458,9 @@ contract RelayOracleV2Test is BaseTest {
     assertTrue(v2.isExecuted(key));
   }
 
-  function test_fastMint_maxFeeRate_allToFee() public {
+  function test_fastMint_maxFeeRate_transfersFeeOnTop() public {
     bytes32 key = keccak256("fast-max-fee-rate");
-    uint256 amount = 60e8; // 100% fee → all to fee, zero order input
+    uint256 amount = 60e8; // 100% fee → full amount to recipient plus matching fee
     uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
 
     bytes[] memory actions = new bytes[](1);
@@ -321,14 +469,14 @@ contract RelayOracleV2Test is BaseTest {
       CHAIN_ID,
       CURRENCY,
       amount,
-      1e18, // 100% (= BPS_DENOMINATOR, the max allowed)
+      1e18, // 100% fee, the max allowed by the default fee calculator
       feeRecipient
     );
 
     _runFast(key, actions);
 
     assertEq(hub.balanceOf(feeRecipient, tokenId), amount);
-    assertEq(hub.balanceOf(orderAddr, tokenId), 0);
+    assertEq(hub.balanceOf(orderAddr, tokenId), amount);
   }
 
   function test_fastMint_feeRoundsDown_noDust() public {
@@ -336,7 +484,6 @@ contract RelayOracleV2Test is BaseTest {
     uint256 amount = 1e18 + 7; // not divisible by the fee rate
     uint256 feeBps = 333e13; // 0.333% (333e13 / 1e18)
     uint256 fee = FixedPointMathLib.fullMulDiv(amount, feeBps, 1e18);
-    uint256 orderInput = amount - fee;
     uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
 
     bytes[] memory actions = new bytes[](1);
@@ -352,11 +499,11 @@ contract RelayOracleV2Test is BaseTest {
     _runFast(key, actions);
 
     assertEq(hub.balanceOf(feeRecipient, tokenId), fee);
-    assertEq(hub.balanceOf(orderAddr, tokenId), orderInput);
-    // no dust: the two mints reconstruct the full amount exactly
+    assertEq(hub.balanceOf(orderAddr, tokenId), amount);
+    // no dust: the fee is rounded down and transferred on top of the full amount.
     assertEq(
       hub.balanceOf(feeRecipient, tokenId) + hub.balanceOf(orderAddr, tokenId),
-      amount
+      amount + fee
     );
   }
 
@@ -364,12 +511,12 @@ contract RelayOracleV2Test is BaseTest {
 
   function test_fastMint_consumesGrossAmount() public {
     RelayAmountRateLimiter.TokenBucket memory before_ = limiter.getBucket(
-      CHAIN_ID,
-      CURRENCY
+      _tokenId(CHAIN_ID, CURRENCY)
     );
 
     bytes32 key = keccak256("fast-consume");
-    uint256 amount = 101e8; // 100 order input + 1 fee
+    uint256 amount = 101e8; // full order input plus a 1% fee on top
+    uint256 fee = FixedPointMathLib.fullMulDiv(amount, 1e16, 1e18);
     bytes[] memory actions = new bytes[](1);
     actions[0] = _fastMintAction(
       orderAddr,
@@ -383,16 +530,15 @@ contract RelayOracleV2Test is BaseTest {
     _runFast(key, actions);
 
     RelayAmountRateLimiter.TokenBucket memory after_ = limiter.getBucket(
-      CHAIN_ID,
-      CURRENCY
+      _tokenId(CHAIN_ID, CURRENCY)
     );
     // The limiter consumes the full gross amount (the at-risk value), independent of the fee.
     assertEq(before_.tokens - after_.tokens, amount);
-    // The mint still splits on the gross amount.
+    // The mint credits the full amount plus the fee on top.
     assertEq(
       hub.balanceOf(orderAddr, _tokenId(CHAIN_ID, CURRENCY)) +
         hub.balanceOf(feeRecipient, _tokenId(CHAIN_ID, CURRENCY)),
-      amount
+      amount + fee
     );
   }
 
@@ -403,8 +549,7 @@ contract RelayOracleV2Test is BaseTest {
     vm.prank(admin);
     limiter.setBucketConfig(
       RelayAmountRateLimiter.BucketConfig({
-        chainId: CHAIN_ID,
-        currency: CURRENCY,
+        tokenId: _tokenId(CHAIN_ID, CURRENCY),
         isEnabled: true,
         capacity: 1e8, // small cap (base units)
         rate: 0
@@ -452,8 +597,7 @@ contract RelayOracleV2Test is BaseTest {
     vm.prank(admin);
     limiter.setBucketConfig(
       RelayAmountRateLimiter.BucketConfig({
-        chainId: CHAIN_ID,
-        currency: CURRENCY,
+        tokenId: _tokenId(CHAIN_ID, CURRENCY),
         isEnabled: true,
         capacity: 1e8,
         rate: 0
@@ -506,12 +650,13 @@ contract RelayOracleV2Test is BaseTest {
     assertEq(hub.balanceOf(orderAddr, tokenId), 1000e8);
   }
 
-  // FAST_MINT — zero-address limiter opts out of rate limiting
+  // FAST_MINT — zero-address rateLimiter opts out of rate limiting
 
-  function test_fastMint_zeroLimiter_skipsRateLimiting() public {
-    // A zero-address limiter bypasses the allowlist check and the consume call entirely: the mint
-    // proceeds without touching any rate limiter. Only reachable when the oracle attests limiter == 0.
-    bytes32 key = keccak256("fast-zero-limiter");
+  function test_fastMint_zeroRateLimiter_skipsRateLimiting() public {
+    // A zero-address rateLimiter bypasses the allowlist check and the consume call entirely: the mint
+    // proceeds without touching any rate limiter. Only reachable when the oracle attests
+    // rateLimiter == 0.
+    bytes32 key = keccak256("fast-zero-rate-limiter");
     uint256 amount = 100e8;
     uint256 feeBps = 1e16; // 1%
     uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
@@ -522,28 +667,26 @@ contract RelayOracleV2Test is BaseTest {
       orderAddr,
       tokenId,
       amount,
-      feeBps,
-      feeRecipient,
-      address(0), // no limiter → rate limiting skipped
+      address(feeCalculator),
+      abi.encode(tokenId, feeBps, feeRecipient, feePayer),
+      address(0), // no rateLimiter → rate limiting skipped
       bytes("")
     );
 
-    // The limiter bucket must be untouched by a zero-limiter fast mint.
+    // The rate limiter bucket must be untouched by a zero-rateLimiter fast mint.
     RelayAmountRateLimiter.TokenBucket memory before_ = limiter.getBucket(
-      CHAIN_ID,
-      CURRENCY
+      _tokenId(CHAIN_ID, CURRENCY)
     );
 
     _runFast(key, actions);
 
     uint256 fee = 1e8; // 100e8 * 1e16 / 1e18
     assertEq(hub.balanceOf(feeRecipient, tokenId), fee);
-    assertEq(hub.balanceOf(orderAddr, tokenId), amount - fee);
+    assertEq(hub.balanceOf(orderAddr, tokenId), amount);
     assertTrue(v2.isExecuted(key));
 
     RelayAmountRateLimiter.TokenBucket memory after_ = limiter.getBucket(
-      CHAIN_ID,
-      CURRENCY
+      _tokenId(CHAIN_ID, CURRENCY)
     );
     assertEq(after_.tokens, before_.tokens);
   }
@@ -571,6 +714,33 @@ contract RelayOracleV2Test is BaseTest {
       abi.encodeWithSelector(
         RelayOracleV2.RateLimiterNotAllowed.selector,
         address(limiter)
+      )
+    );
+    v2.execute(_v2Exec(key, actions), oracleSigner, sig);
+    assertFalse(v2.isExecuted(key));
+  }
+
+  function test_fastMint_revertsWhenFeeCalculatorNotAllowed() public {
+    FlatFastMintFeeCalculator flatFeeCalculator = new FlatFastMintFeeCalculator();
+
+    bytes32 key = keccak256("fast-fee-calculator-not-allowed");
+    uint256 amount = 10e8;
+    uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
+    bytes[] memory actions = new bytes[](1);
+    actions[0] = _fastMintActionWithFeeCalculator(
+      orderAddr,
+      CHAIN_ID,
+      CURRENCY,
+      amount,
+      address(flatFeeCalculator),
+      abi.encode(tokenId, uint256(1e8), tokenId, feeRecipient, orderAddr)
+    );
+    bytes memory sig = _sign(oracleSignerPk, v2Domain, key, actions);
+
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        RelayOracleV2.FeeCalculatorNotAllowed.selector,
+        address(flatFeeCalculator)
       )
     );
     v2.execute(_v2Exec(key, actions), oracleSigner, sig);
@@ -618,7 +788,7 @@ contract RelayOracleV2Test is BaseTest {
 
   function test_fastMint_revertsInvalidFeeBps() public {
     bytes32 key = keccak256("fast-bad-bps");
-    uint256 feeBps = 1e18 + 1; // > BPS_DENOMINATOR (100%)
+    uint256 feeBps = 1e18 + 1; // > 100%
     bytes[] memory actions = new bytes[](1);
     actions[0] = _fastMintAction(
       orderAddr,
@@ -631,7 +801,10 @@ contract RelayOracleV2Test is BaseTest {
     bytes memory sig = _sign(oracleSignerPk, v2Domain, key, actions);
 
     vm.expectRevert(
-      abi.encodeWithSelector(RelayOracleV2.InvalidFeeBps.selector, feeBps)
+      abi.encodeWithSelector(
+        RelayBpsFeeCalculator.InvalidFeeBps.selector,
+        feeBps
+      )
     );
     v2.execute(_v2Exec(key, actions), oracleSigner, sig);
   }
@@ -649,7 +822,7 @@ contract RelayOracleV2Test is BaseTest {
     );
     bytes memory sig = _sign(oracleSignerPk, v2Domain, key, actions);
 
-    vm.expectRevert(RelayOracleV2.InvalidFeeRecipient.selector);
+    vm.expectRevert(RelayBpsFeeCalculator.InvalidFeeRecipient.selector);
     v2.execute(_v2Exec(key, actions), oracleSigner, sig);
   }
 
@@ -676,6 +849,8 @@ contract RelayOracleV2Test is BaseTest {
     assertTrue(oldOracle.isExecuted(key));
 
     // The same key must be rejected on v2 (migration safety).
+    assertTrue(idempotencyStore.isExecuted(key));
+    assertFalse(idempotencyStore.isStored(key));
     bytes[] memory v2Actions = new bytes[](1);
     v2Actions[0] = _mintAction(otherAddr, tokenId, 2e8);
     bytes memory v2Sig = _sign(oracleSignerPk, v2Domain, key, v2Actions);
@@ -722,7 +897,9 @@ contract RelayOracleV2Test is BaseTest {
 
     v2.executeMultiple(execs, oracleSigner, sigs);
 
-    assertFalse(v2.isExecuted(oldKey)); // skipped, not re-executed on v2
+    assertTrue(idempotencyStore.isExecuted(oldKey)); // source key is visible through the store
+    assertFalse(idempotencyStore.isStored(oldKey)); // skipped, not written to shared storage
+    assertTrue(v2.isExecuted(oldKey)); // compatibility getter still reports true
     assertTrue(v2.isExecuted(freshKey));
     assertEq(hub.balanceOf(otherAddr, tokenId), 9e8);
     // the skipped mint never happened on v2
@@ -749,10 +926,12 @@ contract RelayOracleV2Test is BaseTest {
     v2.execute(_v2Exec(key, actions), oracleSigner, sig);
   }
 
-  function test_execute_withZeroOldOracle_onlyChecksOwnKeys() public {
-    RelayOracleV2 v2b = new RelayOracleV2(admin, address(hub), address(0));
+  function test_execute_withoutStoreSources_onlyChecksOwnKeys() public {
+    RelayOracleIdempotencyStore storeB = new RelayOracleIdempotencyStore(admin);
+    RelayOracleV2 v2b = new RelayOracleV2(admin, address(hub), address(storeB));
     vm.startPrank(admin);
     hub.grantRole(hub.OPERATOR_ROLE(), address(v2b));
+    storeB.grantRole(storeB.WRITE_ROLE(), address(v2b));
     v2b.grantRole(v2b.ORACLE_ROLE(), oracleSigner);
     vm.stopPrank();
 
@@ -768,7 +947,7 @@ contract RelayOracleV2Test is BaseTest {
     actions[0] = _mintAction(orderAddr, tokenId, 5e8);
     bytes memory sig = _sign(oracleSignerPk, domainB, key, actions);
 
-    // Must not revert from calling isExecuted on a zero old-oracle address.
+    // Must not consult legacy keys unless they are configured as store sources.
     v2b.execute(
       RelayOracleV2.Execution({idempotencyKey: key, actions: actions}),
       oracleSigner,
@@ -786,63 +965,66 @@ contract RelayOracleV2Test is BaseTest {
     );
   }
 
+  function test_execute_checksStoreSources() public {
+    bytes32 key = keccak256("store-source-old-key");
+    uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
+
+    bytes[] memory oldActions = new bytes[](1);
+    oldActions[0] = abi.encode(
+      uint8(RelayOracle.ActionType.MINT),
+      orderAddr,
+      tokenId,
+      uint256(1e8)
+    );
+    bytes memory oldSig = _sign(oracleSignerPk, oldDomain, key, oldActions);
+    oldOracle.execute(
+      RelayOracle.Execution({idempotencyKey: key, actions: oldActions}),
+      oracleSigner,
+      oldSig
+    );
+
+    RelayOracleIdempotencyStore storeB = new RelayOracleIdempotencyStore(admin);
+    RelayOracleV2 v2b = new RelayOracleV2(admin, address(hub), address(storeB));
+    vm.startPrank(admin);
+    storeB.addSource(address(oldOracle));
+    hub.grantRole(hub.OPERATOR_ROLE(), address(v2b));
+    storeB.grantRole(storeB.WRITE_ROLE(), address(v2b));
+    v2b.grantRole(v2b.ORACLE_ROLE(), oracleSigner);
+    vm.stopPrank();
+
+    bytes32 domainB = Eip712.domainSeparator(
+      "RelayOracle",
+      "2",
+      block.chainid,
+      address(v2b)
+    );
+    bytes[] memory v2Actions = new bytes[](1);
+    v2Actions[0] = _mintAction(otherAddr, tokenId, 2e8);
+    bytes memory v2Sig = _sign(oracleSignerPk, domainB, key, v2Actions);
+
+    assertTrue(storeB.isExecuted(key));
+    assertTrue(v2b.isExecuted(key));
+    vm.expectRevert(
+      abi.encodeWithSelector(RelayOracleV2.AlreadyExecuted.selector, key)
+    );
+    v2b.execute(_v2Exec(key, v2Actions), oracleSigner, v2Sig);
+  }
+
   // Constructor validation
 
   function test_constructorRevertsZeroAdmin() public {
     vm.expectRevert(RelayOracleV2.ZeroAddress.selector);
-    new RelayOracleV2(address(0), address(hub), address(oldOracle));
+    new RelayOracleV2(address(0), address(hub), address(idempotencyStore));
   }
 
   function test_constructorRevertsZeroHub() public {
     vm.expectRevert(RelayOracleV2.ZeroAddress.selector);
-    new RelayOracleV2(admin, address(0), address(oldOracle));
+    new RelayOracleV2(admin, address(0), address(idempotencyStore));
   }
 
-  function test_constructorRevertsWrongTypeOldOracle() public {
-    // A non-zero oldOracle that is not a live RelayOracle (here a RelayHub, which has no
-    // isExecuted) is rejected at deploy, so a misconfigured immutable predecessor cannot brick
-    // every execution later.
-    vm.expectRevert(
-      abi.encodeWithSelector(
-        RelayOracleV2.InvalidOldOracle.selector,
-        address(hub)
-      )
-    );
-    new RelayOracleV2(admin, address(hub), address(hub));
-  }
-
-  function test_constructorRevertsCodelessOldOracle() public {
-    // A non-zero codeless address (EOA) is rejected at deploy with the documented error. The
-    // try/catch alone cannot do this — a high-level call to a codeless target fails the existence
-    // check in the constructor frame (outside the try), so without the explicit code.length guard
-    // the revert would carry no data instead of InvalidOldOracle.
-    address eoa = makeAddr("codelessOldOracle");
-    assertEq(eoa.code.length, 0, "precondition: codeless");
-    vm.expectRevert(
-      abi.encodeWithSelector(RelayOracleV2.InvalidOldOracle.selector, eoa)
-    );
-    new RelayOracleV2(admin, address(hub), eoa);
-  }
-
-  function test_constructorRevertsOldOracleHubMismatch() public {
-    // A live RelayOracle from a DIFFERENT environment (different hub) is rejected. Its
-    // environment-independent idempotency keys would otherwise make _isExecuted silently skip
-    // legitimate executions here.
-    RelayHub otherHub = new RelayHub(admin);
-    RelayOracle foreignOracle = new RelayOracle(admin, address(otherHub));
-    vm.expectRevert(
-      abi.encodeWithSelector(
-        RelayOracleV2.OldOracleHubMismatch.selector,
-        address(foreignOracle)
-      )
-    );
-    new RelayOracleV2(admin, address(hub), address(foreignOracle));
-  }
-
-  function test_constructorAcceptsZeroOldOracle() public {
-    // Zero predecessor is valid (only this contract's keys apply) and must not be probed.
-    RelayOracleV2 v2c = new RelayOracleV2(admin, address(hub), address(0));
-    assertEq(address(v2c.OLD_ORACLE()), address(0));
+  function test_constructorRevertsZeroIdempotencyStore() public {
+    vm.expectRevert(RelayOracleV2.ZeroAddress.selector);
+    new RelayOracleV2(admin, address(hub), address(0));
   }
 
   // MINT / BURN / TRANSFER parity + composition
@@ -870,6 +1052,28 @@ contract RelayOracleV2Test is BaseTest {
     assertEq(hub.balanceOf(orderAddr, tokenId), 0);
   }
 
+  function test_zeroAmountMintBurnTransferAreNoOps() public {
+    bytes32 key = keccak256("zero-slow-actions");
+    uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
+
+    bytes[] memory actions = new bytes[](3);
+    actions[0] = _mintAction(address(0), tokenId, 0);
+    actions[1] = _burnAction(address(0), tokenId, 0);
+    actions[2] = _transferAction(address(0), address(0), tokenId, 0);
+
+    vm.recordLogs();
+    _runFast(key, actions);
+    Vm.Log[] memory logs = vm.getRecordedLogs();
+
+    uint256 hubLogCount;
+    for (uint256 i; i < logs.length; i++) {
+      if (logs[i].emitter == address(hub)) hubLogCount++;
+    }
+
+    assertEq(hubLogCount, 0);
+    assertTrue(v2.isExecuted(key));
+  }
+
   function test_executesFastMintAndMintInOneExecution() public {
     bytes32 key = keccak256("compose");
     uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
@@ -887,7 +1091,7 @@ contract RelayOracleV2Test is BaseTest {
     _runFast(key, actions);
 
     assertEq(hub.balanceOf(feeRecipient, tokenId), 1e8);
-    assertEq(hub.balanceOf(orderAddr, tokenId), 99e8);
+    assertEq(hub.balanceOf(orderAddr, tokenId), 100e8);
     assertEq(hub.balanceOf(otherAddr, tokenId), 3e8);
   }
 
@@ -968,6 +1172,293 @@ contract RelayOracleV2Test is BaseTest {
     assertFalse(v2.isRateLimiter(newLimiter));
   }
 
+  function test_addFeeCalculator_revertsForNonAdmin() public {
+    address rando = makeAddr("feeRando");
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        IAccessControl.AccessControlUnauthorizedAccount.selector,
+        rando,
+        v2.ADMIN_ROLE()
+      )
+    );
+    vm.prank(rando);
+    v2.addFeeCalculator(makeAddr("someFeeCalculator"));
+  }
+
+  function test_addAndRemoveFeeCalculator_togglesAllowlistAndEmits() public {
+    address newFeeCalculator = makeAddr("newFeeCalculator");
+
+    vm.expectEmit(true, false, false, false, address(v2));
+    emit RelayOracleV2.FeeCalculatorAdded(newFeeCalculator);
+    vm.prank(admin);
+    v2.addFeeCalculator(newFeeCalculator);
+    assertTrue(v2.isFeeCalculator(newFeeCalculator));
+
+    vm.expectEmit(true, false, false, false, address(v2));
+    emit RelayOracleV2.FeeCalculatorRemoved(newFeeCalculator);
+    vm.prank(admin);
+    v2.removeFeeCalculator(newFeeCalculator);
+    assertFalse(v2.isFeeCalculator(newFeeCalculator));
+  }
+
+  function test_idempotencyStore_revertsForNonWriter() public {
+    bytes32 key = keccak256("direct-store-write");
+    address rando = makeAddr("rando");
+
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        IAccessControl.AccessControlUnauthorizedAccount.selector,
+        rando,
+        idempotencyStore.WRITE_ROLE()
+      )
+    );
+    vm.prank(rando);
+    idempotencyStore.markExecuted(key);
+  }
+
+  function test_idempotencyStore_allowsUpToFiveSources() public {
+    RelayOracleIdempotencyStore store = new RelayOracleIdempotencyStore(admin);
+    RelayOracle[6] memory sourceOracles;
+    bytes32 key = keccak256("source-five-key");
+
+    vm.startPrank(admin);
+    for (uint256 i; i < 6; i++) {
+      sourceOracles[i] = new RelayOracle(admin, address(hub));
+      sourceOracles[i].grantRole(sourceOracles[i].ORACLE_ROLE(), oracleSigner);
+      if (i < 5) {
+        store.addSource(address(sourceOracles[i]));
+        assertTrue(store.isSource(address(sourceOracles[i])));
+      }
+    }
+    vm.expectRevert(RelayOracleIdempotencyStore.TooManySources.selector);
+    store.addSource(address(sourceOracles[5]));
+    vm.stopPrank();
+
+    bytes[] memory sourceActions = new bytes[](0);
+    bytes32 sourceDomain = Eip712.domainSeparator(
+      "RelayOracle",
+      "1",
+      block.chainid,
+      address(sourceOracles[4])
+    );
+    bytes memory sourceSig = _sign(
+      oracleSignerPk,
+      sourceDomain,
+      key,
+      sourceActions
+    );
+    sourceOracles[4].execute(
+      RelayOracle.Execution({idempotencyKey: key, actions: sourceActions}),
+      oracleSigner,
+      sourceSig
+    );
+
+    assertEq(store.sourceCount(), 5);
+    assertFalse(store.isStored(key));
+    assertTrue(store.isExecuted(key));
+  }
+
+  function test_idempotencyStore_removeSourceStopsCheckingIt() public {
+    bytes32 key = keccak256("removed-source-key");
+    uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
+
+    bytes[] memory oldActions = new bytes[](1);
+    oldActions[0] = abi.encode(
+      uint8(RelayOracle.ActionType.MINT),
+      orderAddr,
+      tokenId,
+      uint256(1e8)
+    );
+    bytes memory oldSig = _sign(oracleSignerPk, oldDomain, key, oldActions);
+    oldOracle.execute(
+      RelayOracle.Execution({idempotencyKey: key, actions: oldActions}),
+      oracleSigner,
+      oldSig
+    );
+    assertTrue(idempotencyStore.isExecuted(key));
+
+    vm.prank(admin);
+    idempotencyStore.removeSource(address(oldOracle));
+
+    assertFalse(idempotencyStore.isSource(address(oldOracle)));
+    assertFalse(idempotencyStore.isExecuted(key));
+  }
+
+  function test_fastMint_usesActionFeeCalculatorModuleAndData() public {
+    FlatFastMintFeeCalculator flatFeeCalculator = new FlatFastMintFeeCalculator();
+    vm.prank(admin);
+    v2.addFeeCalculator(address(flatFeeCalculator));
+
+    bytes32 key = keccak256("flat-fee");
+    uint256 amount = 100e8;
+    uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
+    uint256 feeCurrency = tokenId + 1;
+    address customFeePayer = makeAddr("customFeePayer");
+
+    vm.prank(address(v2));
+    hub.mint(customFeePayer, feeCurrency, 2e8);
+
+    bytes[] memory actions = new bytes[](1);
+    actions[0] = _fastMintActionWithFeeCalculator(
+      orderAddr,
+      CHAIN_ID,
+      CURRENCY,
+      amount,
+      address(flatFeeCalculator),
+      abi.encode(
+        tokenId,
+        uint256(2e8),
+        feeCurrency,
+        feeRecipient,
+        customFeePayer
+      )
+    );
+
+    _runFast(key, actions);
+
+    assertEq(hub.balanceOf(feeRecipient, feeCurrency), 2e8);
+    assertEq(hub.balanceOf(customFeePayer, feeCurrency), 0);
+    assertEq(hub.balanceOf(feeRecipient, tokenId), 0);
+    assertEq(hub.balanceOf(orderAddr, tokenId), amount);
+  }
+
+  function test_fastMint_passesTokenIdToLimiter() public {
+    TokenAwareRateLimiter tokenAwareLimiter = new TokenAwareRateLimiter();
+    vm.prank(admin);
+    v2.addRateLimiter(address(tokenAwareLimiter));
+
+    bytes32 key = keccak256("token-aware-limiter");
+    uint256 amount = 100e8;
+    uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
+
+    bytes[] memory actions = new bytes[](1);
+    actions[0] = _fastMintActionWithModules(
+      orderAddr,
+      tokenId,
+      amount,
+      address(0),
+      bytes(""),
+      address(tokenAwareLimiter),
+      abi.encode(tokenId, amount)
+    );
+
+    _runFast(key, actions);
+
+    assertEq(hub.balanceOf(orderAddr, tokenId), amount);
+    assertTrue(v2.isExecuted(key));
+  }
+
+  function test_fastMint_zeroFeeCalculatorSkipsFee() public {
+    bytes32 key = keccak256("zero-fee-calculator");
+    uint256 amount = 100e8;
+    uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
+
+    bytes[] memory actions = new bytes[](1);
+    actions[0] = _fastMintActionWithFeeCalculator(
+      orderAddr,
+      CHAIN_ID,
+      CURRENCY,
+      amount,
+      address(0),
+      bytes("")
+    );
+
+    _runFast(key, actions);
+
+    assertTrue(v2.isExecuted(key));
+    assertEq(hub.balanceOf(orderAddr, tokenId), amount);
+    assertEq(hub.balanceOf(feeRecipient, tokenId), 0);
+  }
+
+  function test_fastMint_startsWithoutModules_thenAddsModules() public {
+    RelayOracleIdempotencyStore cleanStore = new RelayOracleIdempotencyStore(
+      admin
+    );
+    RelayOracleV2 cleanV2 = new RelayOracleV2(
+      admin,
+      address(hub),
+      address(cleanStore)
+    );
+    bytes32 cleanDomain = Eip712.domainSeparator(
+      "RelayOracle",
+      "2",
+      block.chainid,
+      address(cleanV2)
+    );
+
+    vm.startPrank(admin);
+    hub.grantRole(hub.OPERATOR_ROLE(), address(cleanV2));
+    cleanStore.grantRole(cleanStore.WRITE_ROLE(), address(cleanV2));
+    cleanV2.grantRole(cleanV2.ORACLE_ROLE(), oracleSigner);
+    vm.stopPrank();
+
+    assertFalse(cleanV2.isFeeCalculator(address(feeCalculator)));
+    assertFalse(cleanV2.isRateLimiter(address(limiter)));
+
+    uint256 amount = 100e8;
+    uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
+
+    bytes32 noModulesKey = keccak256("no-modules-fast-mint");
+    bytes[] memory noModulesActions = new bytes[](1);
+    noModulesActions[0] = _fastMintActionWithModules(
+      orderAddr,
+      tokenId,
+      amount,
+      address(0),
+      bytes(""),
+      address(0),
+      bytes("")
+    );
+    cleanV2.execute(
+      _v2Exec(noModulesKey, noModulesActions),
+      oracleSigner,
+      _sign(oracleSignerPk, cleanDomain, noModulesKey, noModulesActions)
+    );
+
+    assertTrue(cleanV2.isExecuted(noModulesKey));
+    assertEq(hub.balanceOf(orderAddr, tokenId), amount);
+    assertEq(hub.balanceOf(feeRecipient, tokenId), 0);
+
+    vm.startPrank(admin);
+    limiter.grantRole(limiter.CONSUMER_ROLE(), address(cleanV2));
+    cleanV2.addRateLimiter(address(limiter));
+    cleanV2.addFeeCalculator(address(feeCalculator));
+    vm.stopPrank();
+
+    assertTrue(cleanV2.isFeeCalculator(address(feeCalculator)));
+    assertTrue(cleanV2.isRateLimiter(address(limiter)));
+
+    bytes32 withModulesKey = keccak256("with-modules-fast-mint");
+    bytes[] memory withModulesActions = new bytes[](1);
+    withModulesActions[0] = _fastMintActionWithModules(
+      orderAddr,
+      tokenId,
+      amount,
+      address(feeCalculator),
+      abi.encode(tokenId, uint256(1e16), feeRecipient, feePayer),
+      address(limiter),
+      bytes("")
+    );
+
+    uint256 feePayerBalanceBefore = hub.balanceOf(feePayer, tokenId);
+    RelayAmountRateLimiter.TokenBucket memory bucketBefore = limiter.getBucket(
+      tokenId
+    );
+
+    cleanV2.execute(
+      _v2Exec(withModulesKey, withModulesActions),
+      oracleSigner,
+      _sign(oracleSignerPk, cleanDomain, withModulesKey, withModulesActions)
+    );
+
+    uint256 fee = 1e8;
+    assertTrue(cleanV2.isExecuted(withModulesKey));
+    assertEq(hub.balanceOf(orderAddr, tokenId), amount * 2);
+    assertEq(hub.balanceOf(feeRecipient, tokenId), fee);
+    assertEq(hub.balanceOf(feePayer, tokenId), feePayerBalanceBefore - fee);
+    assertEq(bucketBefore.tokens - limiter.getBucket(tokenId).tokens, amount);
+  }
+
   // Fuzz
 
   function testFuzz_fastMint_recoversInputAndFee(
@@ -981,7 +1472,6 @@ contract RelayOracleV2Test is BaseTest {
     uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
 
     uint256 expectedFee = FixedPointMathLib.fullMulDiv(amount, feeBps, 1e18);
-    uint256 expectedInput = amount - expectedFee;
 
     bytes32 key = keccak256(abi.encode("fuzz", amount, feeBps));
     bytes[] memory actions = new bytes[](1);
@@ -996,10 +1486,10 @@ contract RelayOracleV2Test is BaseTest {
     _runFast(key, actions);
 
     assertEq(hub.balanceOf(feeRecipient, tokenId), expectedFee);
-    assertEq(hub.balanceOf(orderAddr, tokenId), expectedInput);
+    assertEq(hub.balanceOf(orderAddr, tokenId), amount);
     assertEq(
       hub.balanceOf(feeRecipient, tokenId) + hub.balanceOf(orderAddr, tokenId),
-      amount
+      amount + expectedFee
     );
   }
 }

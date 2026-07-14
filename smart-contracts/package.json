@@ -15,6 +15,8 @@
     "deploy:allocator-config": "forge script script/DeployConfig.s.sol --broadcast",
     "deploy:bitcoin-vm-payload-builder": "forge script script/DeployBitcoinVmPayloadBuilder.s.sol --broadcast",
     "deploy:price-oracle": "forge script script/DeployPriceOracle.s.sol --broadcast",
+    "deploy:mock-verifier-proxy": "forge script script/DeployMockVerifierProxy.s.sol --broadcast",
+    "deploy:chainlink-data-streams-adapter": "forge script script/DeployChainlinkDataStreamsAdapter.s.sol --broadcast",
     "deploy:ethereum-vm-payload-builder": "forge script script/DeployEthereumVmPayloadBuilder.s.sol --broadcast",
     "deploy:hyperliquid-vm-payload-builder": "forge script script/DeployHyperliquidVmPayloadBuilder.s.sol --broadcast",
     "deploy:lighter-vm-payload-builder": "forge script script/DeployLighterVmPayloadBuilder.s.sol --broadcast",
@@ -29,6 +31,7 @@
     "deploy:bitcoin-deposit-address": "forge script script/DeployBitcoinDepositAddress.s.sol --broadcast",
     "deploy:relay-multisig-signer": "forge script script/DeployRelayMultisigSigner.s.sol --broadcast",
     "deploy:relay-executor": "forge script script/DeployRelayExecutor.s.sol --broadcast",
+    "deploy:relay-bps-fee-calculator": "forge script script/DeployRelayBpsFeeCalculator.s.sol --broadcast",
     "grant-role": "forge script script/GrantRole.s.sol --broadcast",
     "renounce-role": "forge script script/RenounceRole.s.sol --broadcast"
   },

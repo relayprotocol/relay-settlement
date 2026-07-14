@@ -8,18 +8,15 @@ import {IRateLimiter} from "./IRateLimiter.sol";
 
 /// @title RelayAmountRateLimiter
 /// @author Relay Protocol
-/// @notice Per-(chain, currency) token-bucket rate limiter. It caps the RATE at which a currency's
-///         amount can be consumed on a chain — it is NOT a flat ceiling: over a window T, peak
-///         in-flight consumption is ~ capacity + rate*T. Size `rate` accordingly (e.g. rate <=
-///         capacity / (k * T)). One bucket per (chain, currency); each currency on a chain has its
-///         own budget.
+/// @notice Per-token token-bucket rate limiter. It caps the RATE at which a token amount can be
+///         consumed — it is NOT a flat ceiling: over a window T, peak in-flight consumption is ~
+///         capacity + rate*T. Size `rate` accordingly (e.g. rate <= capacity / (k * T)). One bucket
+///         per token id.
 /// @dev    Budget is denominated in the currency's own base units — there is no USD pricing and no
-///         decimal normalization, since each bucket holds a single currency. `consume` decodes
-///         (chainId, currency, amount) from the opaque `data` the oracle passes; there is no on-chain
-///         price read. The bucket key is keccak256(chainId, currency) (= the hub token id); config and
-///         callers MUST use one canonical (chainId, currency) form, else a lookup miss returns false.
+///         decimal normalization, since each bucket holds a single token. `consume` receives the
+///         token id and gross deposit amount as direct arguments; there is no on-chain price read.
 ///         Fail-closed: consumption requires an enabled bucket AND a nonzero amount; an
-///         unconfigured/disabled (chain, currency) — or a zero amount — returns false. "Unlimited" =
+///         unconfigured/disabled token id — or a zero amount — returns false. "Unlimited" =
 ///         a deliberately high capacity. Implements the generic `IRateLimiter`, so a different limiter
 ///         is a drop-in behind RelayOracleV2's limiter allowlist with no oracle/SDK change.
 contract RelayAmountRateLimiter is AccessControl, IRateLimiter {
@@ -27,19 +24,18 @@ contract RelayAmountRateLimiter is AccessControl, IRateLimiter {
 
   // Structs
 
-  /// @notice Live token-bucket state for one (chain, currency), in the currency's base units
+  /// @notice Live token-bucket state for one token id, in the token's base units
   struct TokenBucket {
     uint128 tokens; // available budget (base units), as of `lastUpdated`
     uint32 lastUpdated; // unix seconds of the last refill checkpoint
-    bool isEnabled; // false => not enabled for this (chain, currency) (consume returns false)
+    bool isEnabled; // false => not enabled for this token id (consume returns false)
     uint128 capacity; // max budget / burst size (base units)
     uint128 rate; // base units refilled per second
   }
 
-  /// @notice Admin-supplied bucket configuration for one (chain, currency)
+  /// @notice Admin-supplied bucket configuration for one token id
   struct BucketConfig {
-    string chainId;
-    bytes currency;
+    uint256 tokenId;
     bool isEnabled;
     uint128 capacity;
     uint128 rate;
@@ -55,32 +51,28 @@ contract RelayAmountRateLimiter is AccessControl, IRateLimiter {
 
   // Fields
 
-  /// @notice Token-bucket state keyed by keccak256(abi.encodePacked(chainId, currency))
-  mapping(bytes32 => TokenBucket) private buckets;
+  /// @notice Token-bucket state keyed by token id
+  mapping(uint256 => TokenBucket) private buckets;
 
   // Events
 
   /// @notice Emitted when budget is consumed
-  /// @param chainId Origin chain id
-  /// @param currency Origin currency (raw, VM-specific bytes)
+  /// @param tokenId Token id
   /// @param amount Amount consumed (currency base units)
   /// @param remaining Budget left after consumption (base units)
   event TokensConsumed(
-    string indexed chainId,
-    bytes currency,
+    uint256 indexed tokenId,
     uint256 amount,
     uint256 remaining
   );
 
-  /// @notice Emitted when a (chain, currency) bucket is (re)configured
-  /// @param chainId Origin chain id
-  /// @param currency Origin currency (raw, VM-specific bytes)
+  /// @notice Emitted when a token bucket is (re)configured
+  /// @param tokenId Token id
   /// @param isEnabled Whether the bucket rate-limits
   /// @param capacity Max budget (base units)
   /// @param rate Base units refilled per second
   event BucketConfigSet(
-    string indexed chainId,
-    bytes currency,
+    uint256 indexed tokenId,
     bool isEnabled,
     uint128 capacity,
     uint128 rate
@@ -109,21 +101,22 @@ contract RelayAmountRateLimiter is AccessControl, IRateLimiter {
   /// @notice Try to consume budget for a fast deposit; returns whether it was consumed.
   /// @dev Authoritative, trustless enforcement. Does NOT revert on rejection: the caller owns the
   ///      revert decision so it can carry its own context. Returns false (no deduct) when the budget
-  ///      is unavailable — disabled (chain, currency), zero amount, or over budget (fail-closed). A
+  ///      is unavailable — disabled token id, zero amount, or over budget (fail-closed). A
   ///      zero amount is rejected (NOT a no-op): it would otherwise consume nothing and always pass
   ///      (= unlimited). A caller's accept/reject choice must NOT depend on live budget (see
   ///      canConsume).
-  /// @param data abi.encode(string chainId, bytes currency, uint256 amount) — the oracle constructs
-  ///        it; (chainId, currency) are trusted attested values, amount is the at-risk deposit amount.
+  /// @param tokenId The token id for the fast mint.
+  /// @param amount The at-risk deposit amount.
+  /// @param data Unused by this limiter.
   /// @return consumed True if the budget was consumed; false otherwise
   function consume(
+    uint256 tokenId,
+    uint256 amount,
     bytes calldata data
   ) external override onlyRole(CONSUMER_ROLE) returns (bool consumed) {
-    (string memory chainId, bytes memory currency, uint256 amount) = abi.decode(
-      data,
-      (string, bytes, uint256)
-    );
-    TokenBucket storage bucket = buckets[_bucketKey(chainId, currency)];
+    data;
+
+    TokenBucket storage bucket = buckets[tokenId];
     if (!bucket.isEnabled) {
       // Fail-closed: requires an explicitly enabled budget; otherwise return false.
       return false;
@@ -160,13 +153,13 @@ contract RelayAmountRateLimiter is AccessControl, IRateLimiter {
       tokens -= amount;
     }
     bucket.tokens = tokens.toUint128();
-    emit TokensConsumed(chainId, currency, amount, tokens);
+    emit TokensConsumed(tokenId, amount, tokens);
     return true;
   }
 
   // Admin methods
 
-  /// @notice Configures a single (chain, currency) bucket
+  /// @notice Configures a single token bucket
   /// @param config Bucket configuration
   function setBucketConfig(
     BucketConfig calldata config
@@ -174,7 +167,7 @@ contract RelayAmountRateLimiter is AccessControl, IRateLimiter {
     _setBucketConfig(config);
   }
 
-  /// @notice Configures many (chain, currency) buckets in one call (e.g. seeding the threshold table)
+  /// @notice Configures many token buckets in one call (e.g. seeding the threshold table)
   /// @param configs Bucket configurations
   function setBucketConfigs(
     BucketConfig[] calldata configs
@@ -191,17 +184,15 @@ contract RelayAmountRateLimiter is AccessControl, IRateLimiter {
   /// @dev ADVISORY ONLY. MUST NOT gate a decision that needs to be deterministic across independent
   ///      callers: it reads mutable shared state they would read inconsistently. On-chain consume()
   ///      is the authoritative enforcement.
-  /// @param chainId Chain id (raw)
-  /// @param currency Currency (raw, VM-specific bytes)
+  /// @param tokenId Token id
   /// @param amount Amount that would be consumed (currency base units)
-  /// @return ok True if it would currently succeed; false when the (chain, currency) is disabled, the
+  /// @return ok True if it would currently succeed; false when the token bucket is disabled, the
   ///         amount is zero, or it is over budget
   function canConsume(
-    string calldata chainId,
-    bytes calldata currency,
+    uint256 tokenId,
     uint256 amount
   ) external view returns (bool ok) {
-    TokenBucket storage bucket = buckets[_bucketKey(chainId, currency)];
+    TokenBucket storage bucket = buckets[tokenId];
     if (!bucket.isEnabled) {
       return false;
     }
@@ -214,17 +205,14 @@ contract RelayAmountRateLimiter is AccessControl, IRateLimiter {
     return _refilledTokens(bucket) >= amount;
   }
 
-  /// @notice Returns the live (refilled) bucket state for a (chain, currency) without mutating
-  ///         storage. The struct carries `isEnabled`: when false, the bucket is disabled (consume
-  ///         returns false).
-  /// @param chainId Origin chain id
-  /// @param currency Origin currency (raw, VM-specific bytes)
+  /// @notice Returns the live (refilled) bucket state for a token id without mutating storage. The
+  ///         struct carries `isEnabled`: when false, the bucket is disabled (consume returns false).
+  /// @param tokenId Token id
   /// @return bucket Refilled bucket as of `block.timestamp`
   function getBucket(
-    string calldata chainId,
-    bytes calldata currency
+    uint256 tokenId
   ) external view returns (TokenBucket memory bucket) {
-    bucket = buckets[_bucketKey(chainId, currency)];
+    bucket = buckets[tokenId];
     if (bucket.isEnabled) {
       bucket.tokens = _refilledTokens(bucket).toUint128();
       bucket.lastUpdated = block.timestamp.toUint32();
@@ -233,21 +221,10 @@ contract RelayAmountRateLimiter is AccessControl, IRateLimiter {
 
   // Internal methods
 
-  /// @notice Bucket key for a (chain, currency)
-  /// @return key Storage key for the bucket
-  function _bucketKey(
-    string memory chainId,
-    bytes memory currency
-  ) internal pure returns (bytes32 key) {
-    return keccak256(abi.encodePacked(chainId, currency));
-  }
-
   /// @notice (Re)configures a bucket; new buckets start full, existing ones refill then cap to new capacity
   /// @param config Bucket configuration
   function _setBucketConfig(BucketConfig calldata config) internal {
-    TokenBucket storage bucket = buckets[
-      _bucketKey(config.chainId, config.currency)
-    ];
+    TokenBucket storage bucket = buckets[config.tokenId];
 
     if (bucket.lastUpdated == 0) {
       // First configuration: start full so budget is immediately available up to capacity.
@@ -274,8 +251,7 @@ contract RelayAmountRateLimiter is AccessControl, IRateLimiter {
     bucket.rate = config.rate;
 
     emit BucketConfigSet(
-      config.chainId,
-      config.currency,
+      config.tokenId,
       config.isEnabled,
       config.capacity,
       config.rate

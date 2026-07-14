@@ -28,7 +28,7 @@ subscribers over a TCP connection.
   canonical RedStone payload (`signed data packages ‖ unsigned metadata ‖
   marker`) and stores it in an in-memory map keyed by feed, keeping only the
   latest payload per feed.
-- It listens on the configured TCP address (`INGESTER_SOCKET_ADDRESS`) for
+- It listens on the configured TCP address (`INGESTER_ADDRESS`) for
   sequencer connections and streams updates to them.
 - Gateway errors retry with jittered exponential backoff (1s up to 30s).
 - The ingester and the IPC listener run as independent tasks. If either stops
@@ -43,7 +43,7 @@ A connected subscriber receives, in order:
 - A `Hello` frame with the protocol version, provider id, and subscribed feeds.
 - A snapshot of the latest cached payload for every feed seen so far.
 - Live `PriceUpdate` frames as new payloads are assembled.
-- Periodic `Heartbeat` frames every `INGESTER_HEARTBEAT_SEC`.
+- Periodic `Heartbeat` frames every `HEARTBEAT_INTERVAL` (5s, fixed by the protocol).
 
 Multiple subscribers are served concurrently, up to a fixed connection limit;
 connections beyond the limit are rejected. Each subscriber has an independent
@@ -51,9 +51,9 @@ view, and if one lags behind the broadcast buffer the full snapshot is resent to
 it.
 
 The `PriceUpdate` payload is the canonical RedStone payload bytes, forwarded
-opaquely. The `ingested_at` timestamp is the time the ingester received the
-update, and `source_time` is the data package timestamp from the gateway (both
-seconds).
+opaquely. The `delivery_time_ms` timestamp is the time the ingester received
+the update, and `source_time_ms` is the data package timestamp from the gateway
+(both Unix milliseconds).
 
 The provider id is `keccak256("redstone")`.
 
@@ -97,10 +97,7 @@ The `.env.example` contains example values.
 - `REDSTONE_FEED_IDS` - required, comma-separated RedStone feed symbols (e.g. `ETH,BTC`).
 - `REDSTONE_MIN_SIGNERS` - optional, minimum unique self-verified signers required to cache a feed, defaults to 3.
 - `REDSTONE_POLL_INTERVAL_MS` - optional, gateway poll interval in milliseconds, defaults to 1000.
-- `INGESTER_TRANSPORT` - optional, `tcp` (default). Reserved for future transports.
-- `INGESTER_SOCKET_ADDRESS` - TCP listen address, defaults to `127.0.0.1:9803`.
-- `INGESTER_HEARTBEAT_SEC` - optional, heartbeat interval in seconds, defaults to 10.
-- `INGESTER_WRITE_TIMEOUT_SEC` - optional, per-write timeout in seconds, defaults to 3x the heartbeat interval. A subscriber that stops reading is dropped once a single write exceeds this.
+- `INGESTER_ADDRESS` - TCP listen address, defaults to `127.0.0.1:9803`.
 - `RUST_LOG` - optional, tracing filter, defaults to `info`.
 
 ## How to build

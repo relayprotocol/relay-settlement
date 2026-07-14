@@ -5,15 +5,18 @@ import {BaseTest} from "../utils/BaseTest.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {RelayAmountRateLimiter} from "../../contracts/rate-limiters/RelayAmountRateLimiter.sol";
 
-/// @notice Scenario coverage for the per-(chain, currency) amount token-bucket rate limiter: config
-///         lifecycle, consume accept/reject (incl. zero-amount fail-closed), per-(chain, currency)
-///         budget isolation, rolling refill, views, role gating, fuzz. The deposit amount is in the
-///         currency's base units and passed straight in (no on-chain pricing).
+/// @notice Scenario coverage for the per-token amount token-bucket rate limiter: config lifecycle,
+///         consume accept/reject (incl. zero-amount fail-closed), per-token budget isolation,
+///         rolling refill, views, role gating, fuzz. The deposit amount is in the token's base units
+///         and passed straight in (no on-chain pricing).
 contract RelayAmountRateLimiterTest is BaseTest {
   RelayAmountRateLimiter internal policy;
   address internal consumer;
   bytes32 internal adminRole;
   bytes32 internal consumerRole;
+  uint256 internal tokenId;
+  uint256 internal tokenId2;
+  uint256 internal tokenIdChain2;
 
   string internal constant CHAIN_ID = "8453"; // base
   string internal constant CHAIN_ID_2 = "42161"; // arbitrum
@@ -35,46 +38,44 @@ contract RelayAmountRateLimiterTest is BaseTest {
     adminRole = policy.ADMIN_ROLE();
     consumerRole = policy.CONSUMER_ROLE();
     consumer = makeAddr("consumer");
+    tokenId = _tokenId(CHAIN_ID, CURRENCY);
+    tokenId2 = _tokenId(CHAIN_ID, CURRENCY_2);
+    tokenIdChain2 = _tokenId(CHAIN_ID_2, CURRENCY);
     vm.prank(owner);
     policy.grantRole(consumerRole, consumer);
   }
 
   // Helpers
 
-  function _config(
+  function _tokenId(
     string memory chainId,
-    bytes memory currency,
+    bytes memory currency
+  ) internal pure returns (uint256) {
+    return uint256(keccak256(abi.encodePacked(chainId, currency)));
+  }
+
+  function _config(
+    uint256 tokenId_,
     bool isEnabled,
     uint128 capacity,
     uint128 rate
   ) internal pure returns (RelayAmountRateLimiter.BucketConfig memory) {
     return
       RelayAmountRateLimiter.BucketConfig({
-        chainId: chainId,
-        currency: currency,
+        tokenId: tokenId_,
         isEnabled: isEnabled,
         capacity: capacity,
         rate: rate
       });
   }
 
-  function _enable(
-    string memory chainId,
-    bytes memory currency,
-    uint128 capacity,
-    uint128 rate
-  ) internal {
+  function _enable(uint256 tokenId_, uint128 capacity, uint128 rate) internal {
     vm.prank(owner);
-    policy.setBucketConfig(_config(chainId, currency, true, capacity, rate));
+    policy.setBucketConfig(_config(tokenId_, true, capacity, rate));
   }
 
-  // consume takes opaque bytes; the amount limiter decodes abi.encode(chainId, currency, amount).
-  function _consume(
-    string memory chainId,
-    bytes memory currency,
-    uint256 amount
-  ) internal returns (bool) {
-    return policy.consume(abi.encode(chainId, currency, amount));
+  function _consume(uint256 tokenId_, uint256 amount) internal returns (bool) {
+    return policy.consume(tokenId_, amount, bytes(""));
   }
 
   // ----------------------------------------------------------------------
@@ -82,12 +83,9 @@ contract RelayAmountRateLimiterTest is BaseTest {
   // ----------------------------------------------------------------------
 
   function test_firstConfigStartsFull() public {
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
+    _enable(tokenId, CAPACITY, RATE);
 
-    RelayAmountRateLimiter.TokenBucket memory b = policy.getBucket(
-      CHAIN_ID,
-      CURRENCY
-    );
+    RelayAmountRateLimiter.TokenBucket memory b = policy.getBucket(tokenId);
     assertEq(b.tokens, CAPACITY, "starts full");
     assertEq(b.capacity, CAPACITY);
     assertEq(b.rate, RATE);
@@ -97,44 +95,42 @@ contract RelayAmountRateLimiterTest is BaseTest {
   function test_setBucketConfigsBatch() public {
     RelayAmountRateLimiter.BucketConfig[]
       memory configs = new RelayAmountRateLimiter.BucketConfig[](2);
-    configs[0] = _config(CHAIN_ID, CURRENCY, true, CAPACITY, RATE);
-    configs[1] = _config(CHAIN_ID_2, CURRENCY, true, 500_000e18, 5_000e18);
+    configs[0] = _config(tokenId, true, CAPACITY, RATE);
+    configs[1] = _config(tokenIdChain2, true, 500_000e18, 5_000e18);
 
     vm.prank(owner);
     policy.setBucketConfigs(configs);
 
-    assertEq(policy.getBucket(CHAIN_ID, CURRENCY).tokens, CAPACITY);
-    assertEq(policy.getBucket(CHAIN_ID_2, CURRENCY).tokens, 500_000e18);
+    assertEq(policy.getBucket(tokenId).tokens, CAPACITY);
+    assertEq(policy.getBucket(tokenIdChain2).tokens, 500_000e18);
   }
 
   function test_reconfigLowerCapacityCapsTokens() public {
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
+    _enable(tokenId, CAPACITY, RATE);
 
     uint128 lower = 100_000e18;
     vm.prank(owner);
-    policy.setBucketConfig(_config(CHAIN_ID, CURRENCY, true, lower, RATE));
+    policy.setBucketConfig(_config(tokenId, true, lower, RATE));
 
     assertEq(
-      policy.getBucket(CHAIN_ID, CURRENCY).tokens,
+      policy.getBucket(tokenId).tokens,
       lower,
       "tokens capped to new capacity"
     );
   }
 
   function test_reconfigRefillsAtOldRateFirst() public {
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
+    _enable(tokenId, CAPACITY, RATE);
 
     vm.prank(consumer);
-    _consume(CHAIN_ID, CURRENCY, CAPACITY);
+    _consume(tokenId, CAPACITY);
     vm.warp(block.timestamp + 10); // +10s * RATE accrued at old rate
 
     vm.prank(owner);
-    policy.setBucketConfig(
-      _config(CHAIN_ID, CURRENCY, true, CAPACITY, RATE * 2)
-    );
+    policy.setBucketConfig(_config(tokenId, true, CAPACITY, RATE * 2));
 
     assertEq(
-      policy.getBucket(CHAIN_ID, CURRENCY).tokens,
+      policy.getBucket(tokenId).tokens,
       uint256(RATE) * 10,
       "old-rate accrual preserved"
     );
@@ -149,20 +145,14 @@ contract RelayAmountRateLimiterTest is BaseTest {
         adminRole
       )
     );
-    policy.setBucketConfig(_config(CHAIN_ID, CURRENCY, true, CAPACITY, RATE));
+    policy.setBucketConfig(_config(tokenId, true, CAPACITY, RATE));
   }
 
   function test_configEmitsEvent() public {
     vm.expectEmit(true, false, false, true, address(policy));
-    emit RelayAmountRateLimiter.BucketConfigSet(
-      CHAIN_ID,
-      CURRENCY,
-      true,
-      CAPACITY,
-      RATE
-    );
+    emit RelayAmountRateLimiter.BucketConfigSet(tokenId, true, CAPACITY, RATE);
     vm.prank(owner);
-    policy.setBucketConfig(_config(CHAIN_ID, CURRENCY, true, CAPACITY, RATE));
+    policy.setBucketConfig(_config(tokenId, true, CAPACITY, RATE));
   }
 
   // ----------------------------------------------------------------------
@@ -170,112 +160,97 @@ contract RelayAmountRateLimiterTest is BaseTest {
   // ----------------------------------------------------------------------
 
   function test_consumeReducesTokens() public {
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
+    _enable(tokenId, CAPACITY, RATE);
 
     vm.prank(consumer);
-    _consume(CHAIN_ID, CURRENCY, 250_000e18);
+    _consume(tokenId, 250_000e18);
 
-    assertEq(
-      policy.getBucket(CHAIN_ID, CURRENCY).tokens,
-      CAPACITY - 250_000e18
-    );
+    assertEq(policy.getBucket(tokenId).tokens, CAPACITY - 250_000e18);
   }
 
-  function test_perCurrencyBudgetIsolated() public {
-    // Two currencies on the SAME chain have independent buckets.
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
-    _enable(CHAIN_ID, CURRENCY_2, CAPACITY, RATE);
+  function test_perTokenBudgetIsolated() public {
+    // Two tokens have independent buckets.
+    _enable(tokenId, CAPACITY, RATE);
+    _enable(tokenId2, CAPACITY, RATE);
 
-    // Drain currency A's bucket on the chain.
+    // Drain token A's bucket.
     vm.prank(consumer);
-    _consume(CHAIN_ID, CURRENCY, CAPACITY);
-    assertEq(policy.getBucket(CHAIN_ID, CURRENCY).tokens, 0, "A drained");
+    _consume(tokenId, CAPACITY);
+    assertEq(policy.getBucket(tokenId).tokens, 0, "A drained");
 
-    // Currency B on the same chain is untouched.
-    assertEq(
-      policy.getBucket(CHAIN_ID, CURRENCY_2).tokens,
-      CAPACITY,
-      "B unaffected"
-    );
-    assertTrue(
-      policy.canConsume(CHAIN_ID, CURRENCY_2, CAPACITY),
-      "B fully available"
-    );
+    // Token B is untouched.
+    assertEq(policy.getBucket(tokenId2).tokens, CAPACITY, "B unaffected");
+    assertTrue(policy.canConsume(tokenId2, CAPACITY), "B fully available");
   }
 
   function test_consumeEmitsEvent() public {
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
+    _enable(tokenId, CAPACITY, RATE);
 
     vm.expectEmit(true, false, false, true, address(policy));
     emit RelayAmountRateLimiter.TokensConsumed(
-      CHAIN_ID,
-      CURRENCY,
+      tokenId,
       250_000e18,
       CAPACITY - 250_000e18
     );
     vm.prank(consumer);
-    _consume(CHAIN_ID, CURRENCY, 250_000e18);
+    _consume(tokenId, 250_000e18);
   }
 
   function test_consumeToZeroThenRateLimited() public {
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
+    _enable(tokenId, CAPACITY, RATE);
 
     vm.prank(consumer);
-    _consume(CHAIN_ID, CURRENCY, CAPACITY); // drain exactly
-    assertEq(policy.getBucket(CHAIN_ID, CURRENCY).tokens, 0);
+    _consume(tokenId, CAPACITY); // drain exactly
+    assertEq(policy.getBucket(tokenId).tokens, 0);
 
     // Over budget now => not consumed.
     vm.prank(consumer);
-    assertFalse(_consume(CHAIN_ID, CURRENCY, 1), "drained => not consumed");
+    assertFalse(_consume(tokenId, 1), "drained => not consumed");
   }
 
   function test_consumeMoreThanCapacityReturnsFalse() public {
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
+    _enable(tokenId, CAPACITY, RATE);
 
     vm.prank(consumer);
     assertFalse(
-      _consume(CHAIN_ID, CURRENCY, uint256(CAPACITY) + 1),
+      _consume(tokenId, uint256(CAPACITY) + 1),
       "over capacity => not consumed"
     );
   }
 
   function test_consumeZeroAmountFailsClosed() public {
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
+    _enable(tokenId, CAPACITY, RATE);
 
     // Fail-closed: a 0 amount on an enabled bucket would otherwise consume nothing and always pass
     // (= unlimited fast). Reject it; nothing is consumed.
     vm.prank(consumer);
-    assertFalse(_consume(CHAIN_ID, CURRENCY, 0), "zero amount => not consumed");
-    assertEq(
-      policy.getBucket(CHAIN_ID, CURRENCY).tokens,
-      CAPACITY,
-      "unchanged"
-    );
+    assertFalse(_consume(tokenId, 0), "zero amount => not consumed");
+    assertEq(policy.getBucket(tokenId).tokens, CAPACITY, "unchanged");
   }
 
   function test_consumeOnUnconfiguredBucketReturnsFalse() public {
-    // Fail-closed: (CHAIN_ID, CURRENCY) never configured => fast not enabled => not consumed.
+    // Fail-closed: tokenId never configured => fast not enabled => not consumed.
     vm.prank(consumer);
     assertFalse(
-      _consume(CHAIN_ID, CURRENCY, type(uint128).max),
+      _consume(tokenId, type(uint128).max),
       "unconfigured => not consumed"
     );
   }
 
   function test_consumeOnDisabledReturnsFalse() public {
-    // Disabling a (chain, currency) force-degrades its fast to slow (the kill-switch direction).
+    // Disabling a token force-degrades its fast to slow (the kill-switch direction).
     vm.prank(owner);
-    policy.setBucketConfig(_config(CHAIN_ID, CURRENCY, false, CAPACITY, RATE));
+    policy.setBucketConfig(_config(tokenId, false, CAPACITY, RATE));
 
     vm.prank(consumer);
     assertFalse(
-      _consume(CHAIN_ID, CURRENCY, type(uint128).max),
+      _consume(tokenId, type(uint128).max),
       "disabled => not consumed"
     );
   }
 
   function test_onlyConsumerCanConsume() public {
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
+    _enable(tokenId, CAPACITY, RATE);
 
     vm.prank(otherAccounts[0]);
     vm.expectRevert(
@@ -285,7 +260,7 @@ contract RelayAmountRateLimiterTest is BaseTest {
         consumerRole
       )
     );
-    _consume(CHAIN_ID, CURRENCY, 1);
+    _consume(tokenId, 1);
   }
 
   // ----------------------------------------------------------------------
@@ -293,79 +268,70 @@ contract RelayAmountRateLimiterTest is BaseTest {
   // ----------------------------------------------------------------------
 
   function test_refillOverTime() public {
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
+    _enable(tokenId, CAPACITY, RATE);
     vm.prank(consumer);
-    _consume(CHAIN_ID, CURRENCY, CAPACITY); // empty
+    _consume(tokenId, CAPACITY); // empty
 
     vm.warp(block.timestamp + 30);
     assertEq(
-      policy.getBucket(CHAIN_ID, CURRENCY).tokens,
+      policy.getBucket(tokenId).tokens,
       uint256(RATE) * 30,
       "30s * rate accrued"
     );
   }
 
   function test_refillCapsAtCapacity() public {
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
+    _enable(tokenId, CAPACITY, RATE);
     vm.prank(consumer);
-    _consume(CHAIN_ID, CURRENCY, CAPACITY);
+    _consume(tokenId, CAPACITY);
 
     vm.warp(block.timestamp + 10_000_000); // way past full
     assertEq(
-      policy.getBucket(CHAIN_ID, CURRENCY).tokens,
+      policy.getBucket(tokenId).tokens,
       CAPACITY,
       "never exceeds capacity"
     );
   }
 
   function test_refillThenConsumeBoundary() public {
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
+    _enable(tokenId, CAPACITY, RATE);
     vm.prank(consumer);
-    _consume(CHAIN_ID, CURRENCY, CAPACITY);
+    _consume(tokenId, CAPACITY);
 
     vm.warp(block.timestamp + 5); // 5 * RATE available
     uint256 available = uint256(RATE) * 5;
 
     vm.prank(consumer);
-    _consume(CHAIN_ID, CURRENCY, available); // exactly drains the refill
+    _consume(tokenId, available); // exactly drains the refill
 
     vm.prank(consumer);
-    assertFalse(
-      _consume(CHAIN_ID, CURRENCY, 1),
-      "refill drained => not consumed"
-    );
+    assertFalse(_consume(tokenId, 1), "refill drained => not consumed");
   }
 
   /// @dev A rejected consume after elapsed time must still persist the refill: advancing
   ///      `lastUpdated` without banking the accrued tokens would discard the accrual and let
   ///      repeated over-budget requests defeat the configured rate (grief the budget to ~0).
   function test_rejectedConsumeBanksRefill() public {
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
+    _enable(tokenId, CAPACITY, RATE);
     vm.prank(consumer);
-    _consume(CHAIN_ID, CURRENCY, CAPACITY); // drain to 0
+    _consume(tokenId, CAPACITY); // drain to 0
 
     vm.warp(block.timestamp + 5); // 5 * RATE accrued
     uint256 accrued = uint256(RATE) * 5;
 
     // Over-budget request is rejected but must NOT burn the accrued refill.
     vm.prank(consumer);
-    assertFalse(
-      _consume(CHAIN_ID, CURRENCY, accrued + 1),
-      "over budget => rejected"
-    );
+    assertFalse(_consume(tokenId, accrued + 1), "over budget => rejected");
     assertEq(
-      policy.getBucket(CHAIN_ID, CURRENCY).tokens,
+      policy.getBucket(tokenId).tokens,
       accrued,
       "refill banked despite rejection"
     );
 
     // The banked refill is spendable in the same block (no new accrual to mask it).
     vm.prank(consumer);
-    assertTrue(
-      _consume(CHAIN_ID, CURRENCY, accrued),
-      "banked refill spendable"
-    );
-    assertEq(policy.getBucket(CHAIN_ID, CURRENCY).tokens, 0);
+    assertTrue(_consume(tokenId, accrued), "banked refill spendable");
+    assertEq(policy.getBucket(tokenId).tokens, 0);
   }
 
   // ----------------------------------------------------------------------
@@ -373,43 +339,40 @@ contract RelayAmountRateLimiterTest is BaseTest {
   // ----------------------------------------------------------------------
 
   function test_getBucketIsLiveRefill() public {
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
+    _enable(tokenId, CAPACITY, RATE);
     vm.prank(consumer);
-    _consume(CHAIN_ID, CURRENCY, CAPACITY);
+    _consume(tokenId, CAPACITY);
 
     vm.warp(block.timestamp + 7);
-    assertEq(policy.getBucket(CHAIN_ID, CURRENCY).tokens, uint256(RATE) * 7);
+    assertEq(policy.getBucket(tokenId).tokens, uint256(RATE) * 7);
   }
 
   function test_canConsumeWithinBudget() public {
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
-    assertTrue(policy.canConsume(CHAIN_ID, CURRENCY, CAPACITY));
+    _enable(tokenId, CAPACITY, RATE);
+    assertTrue(policy.canConsume(tokenId, CAPACITY));
   }
 
   function test_canConsumeOverBudget() public {
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
+    _enable(tokenId, CAPACITY, RATE);
     vm.prank(consumer);
-    _consume(CHAIN_ID, CURRENCY, CAPACITY);
-    assertFalse(policy.canConsume(CHAIN_ID, CURRENCY, 1), "drained => cannot");
+    _consume(tokenId, CAPACITY);
+    assertFalse(policy.canConsume(tokenId, 1), "drained => cannot");
   }
 
   function test_canConsumeAboveCapacity() public {
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
-    assertFalse(policy.canConsume(CHAIN_ID, CURRENCY, uint256(CAPACITY) + 1));
+    _enable(tokenId, CAPACITY, RATE);
+    assertFalse(policy.canConsume(tokenId, uint256(CAPACITY) + 1));
   }
 
   function test_canConsumeFalseWhenBucketNotEnabled() public view {
-    // Fail-closed: (CHAIN_ID, CURRENCY) never configured => fast not enabled => cannot
-    assertFalse(policy.canConsume(CHAIN_ID, CURRENCY, type(uint256).max));
+    // Fail-closed: tokenId never configured => fast not enabled => cannot.
+    assertFalse(policy.canConsume(tokenId, type(uint256).max));
   }
 
   function test_canConsumeZeroAmountIsFalse() public {
     // Mirrors consume's fail-closed: a zero amount can never be consumed.
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
-    assertFalse(
-      policy.canConsume(CHAIN_ID, CURRENCY, 0),
-      "zero amount => cannot"
-    );
+    _enable(tokenId, CAPACITY, RATE);
+    assertFalse(policy.canConsume(tokenId, 0), "zero amount => cannot");
   }
 
   // ----------------------------------------------------------------------
@@ -421,10 +384,10 @@ contract RelayAmountRateLimiterTest is BaseTest {
     vm.prank(owner);
     policy.grantRole(consumerRole, newConsumer);
 
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, RATE);
+    _enable(tokenId, CAPACITY, RATE);
     vm.prank(newConsumer);
-    _consume(CHAIN_ID, CURRENCY, 1); // no revert
-    assertEq(policy.getBucket(CHAIN_ID, CURRENCY).tokens, CAPACITY - 1);
+    _consume(tokenId, 1); // no revert
+    assertEq(policy.getBucket(tokenId).tokens, CAPACITY - 1);
   }
 
   // ----------------------------------------------------------------------
@@ -442,13 +405,13 @@ contract RelayAmountRateLimiterTest is BaseTest {
     rate = uint128(bound(rate, 0, 1e24));
     elapsed = uint32(bound(elapsed, 0, 1e7));
 
-    _enable(CHAIN_ID, CURRENCY, capacity, rate);
+    _enable(tokenId, capacity, rate);
     vm.warp(block.timestamp + elapsed);
 
-    bool predicted = policy.canConsume(CHAIN_ID, CURRENCY, amount);
+    bool predicted = policy.canConsume(tokenId, amount);
 
     vm.prank(consumer);
-    bool consumed = _consume(CHAIN_ID, CURRENCY, amount);
+    bool consumed = _consume(tokenId, amount);
     assertEq(consumed, predicted, "consume return must match canConsume");
   }
 
@@ -464,12 +427,12 @@ contract RelayAmountRateLimiterTest is BaseTest {
     spent = uint128(bound(spent, 0, capacity));
     elapsed = uint32(bound(elapsed, 0, 1e7));
 
-    _enable(CHAIN_ID, CURRENCY, capacity, rate);
+    _enable(tokenId, capacity, rate);
     vm.prank(consumer);
-    _consume(CHAIN_ID, CURRENCY, spent);
+    _consume(tokenId, spent);
     vm.warp(block.timestamp + elapsed);
 
-    assertLe(policy.getBucket(CHAIN_ID, CURRENCY).tokens, capacity);
+    assertLe(policy.getBucket(tokenId).tokens, capacity);
   }
 
   /// @dev Refill follows min(capacity, remaining + elapsed*rate) exactly.
@@ -484,16 +447,16 @@ contract RelayAmountRateLimiterTest is BaseTest {
     spent = uint128(bound(spent, 0, capacity));
     elapsed = uint32(bound(elapsed, 0, 1e7));
 
-    _enable(CHAIN_ID, CURRENCY, capacity, rate);
+    _enable(tokenId, capacity, rate);
     vm.prank(consumer);
-    _consume(CHAIN_ID, CURRENCY, spent);
+    _consume(tokenId, spent);
     vm.warp(block.timestamp + elapsed);
 
     uint256 expected = capacity - spent + uint256(rate) * elapsed;
     if (expected > capacity) {
       expected = capacity;
     }
-    assertEq(policy.getBucket(CHAIN_ID, CURRENCY).tokens, expected);
+    assertEq(policy.getBucket(tokenId).tokens, expected);
   }
 
   // ----------------------------------------------------------------------
@@ -502,15 +465,12 @@ contract RelayAmountRateLimiterTest is BaseTest {
 
   /// @dev A no-refill bucket (rate == 0) drained then over-requested returns false cleanly, no panic.
   function test_zeroRateOverBudgetReturnsFalseCleanly() public {
-    _enable(CHAIN_ID, CURRENCY, CAPACITY, 0);
+    _enable(tokenId, CAPACITY, 0);
     vm.prank(consumer);
-    _consume(CHAIN_ID, CURRENCY, CAPACITY); // drain
+    _consume(tokenId, CAPACITY); // drain
 
     vm.prank(consumer);
-    assertFalse(
-      _consume(CHAIN_ID, CURRENCY, 1),
-      "zero-rate drained => not consumed"
-    );
+    assertFalse(_consume(tokenId, 1), "zero-rate drained => not consumed");
   }
 
   function test_constructorRejectsZeroAdmin() public {
