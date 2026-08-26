@@ -1,0 +1,425 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "tokenNum",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "MAX_FEE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_VALID_DURATION_SECONDS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "TOKEN_NUM",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "buildPayload",
+    "inputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "depository",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "params",
+        "type": "tuple",
+        "internalType": "struct BuildPayloadParams",
+        "components": [
+          {
+            "name": "currency",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "receiver",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "nonce",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "data",
+            "type": "bytes",
+            "internalType": "bytes"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "payload",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "curve",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "name",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "family",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "name",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "hashesToSign",
+    "inputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "payload",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "hashes",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "transactionBody",
+    "inputs": [
+      {
+        "name": "request",
+        "type": "tuple",
+        "internalType": "struct HederaTransferRequest",
+        "components": [
+          {
+            "name": "payerNum",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "senderNum",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "receiverNum",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "amount",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "tokenNum",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "nodeAccountNum",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "validStartSeconds",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "validStartNanos",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "validDurationSeconds",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "maxTransactionFee",
+            "type": "uint64",
+            "internalType": "uint64"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "error",
+    "name": "AmountExceedsMax",
+    "inputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "EntityNumExceedsMax",
+    "inputs": [
+      {
+        "name": "num",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "FeeExceedsMaxFee",
+    "inputs": [
+      {
+        "name": "fee",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "maxFee",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "FieldNumberTooLarge",
+    "inputs": [
+      {
+        "name": "fieldNumber",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidAccount",
+    "inputs": [
+      {
+        "name": "accountNum",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidAmount",
+    "inputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidCurrencyLength",
+    "inputs": [
+      {
+        "name": "length",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidDepositoryLength",
+    "inputs": [
+      {
+        "name": "length",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidReceiverLength",
+    "inputs": [
+      {
+        "name": "length",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidTokenNum",
+    "inputs": [
+      {
+        "name": "tokenNum",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidValidDuration",
+    "inputs": [
+      {
+        "name": "validDurationSeconds",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidValidStartNanos",
+    "inputs": [
+      {
+        "name": "nanos",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NotAnAccountId",
+    "inputs": [
+      {
+        "name": "address_",
+        "type": "bytes20",
+        "internalType": "bytes20"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PayerIsSender",
+    "inputs": [
+      {
+        "name": "accountNum",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ReceiverIsSender",
+    "inputs": [
+      {
+        "name": "accountNum",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "TransfersDoNotNetToZero",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UnsupportedCurrency",
+    "inputs": [
+      {
+        "name": "tokenNum",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  }
+]

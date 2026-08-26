@@ -1,30 +1,16 @@
 import { RelayHub } from "@relay-protocol/settlement-abis"
-import {
-  Contract,
-  Interface,
-  JsonRpcProvider,
-  type Provider,
-  toBeHex,
-  zeroPadValue,
-} from "ethers"
+import { Contract, Interface, JsonRpcProvider, type Provider } from "ethers"
 import type { Database, Queryable } from "../db/connection.js"
 import { getMeta } from "../db/meta.js"
 import { HUB_TRANSFER_META_KEY } from "../indexerState.js"
-import { logger } from "../logger.js"
 import { shouldSkipTokenId, parseTransferLog } from "./transferProcessor.js"
 import { isGetLogsResponseTooLargeError } from "./transferReplay.js"
 
-export const INDEXER_AUDIT_KINDS = [
-  "balance-drift",
-  "transfer-coverage",
-] as const
+export const INDEXER_AUDIT_KINDS = ["transfer-coverage"] as const
 
 export type IndexerAuditKind = (typeof INDEXER_AUDIT_KINDS)[number]
 export type IndexerAuditStatus = "failed" | "running" | "succeeded"
-export type IndexerAuditClassification =
-  | "ahead_of_checkpoint"
-  | "confirmed"
-  | "pending_head"
+export type IndexerAuditClassification = "confirmed"
 
 export type SuggestedReplayRange = {
   findingCount: number
@@ -34,15 +20,11 @@ export type SuggestedReplayRange = {
 }
 
 export type IndexerAuditFinding = {
-  address: string | null
   blockNumber: number | null
-  chainBalance: string | null
   classification: IndexerAuditClassification
   details: Record<string, unknown>
   id?: number
-  indexedBalance: string | null
   kind: IndexerAuditKind
-  latestEventBlock: number | null
   logIndex: number | null
   tokenId: string | null
   tokenName: string | null
@@ -58,7 +40,6 @@ export type IndexerAuditRunSummary = {
   id: number
   kind: IndexerAuditKind
   latestChainBlock: number | null
-  pendingCount: number
   startedAt: string
   status: IndexerAuditStatus
 }
@@ -72,7 +53,6 @@ export type IndexerAuditKindHealth = {
   error: string | null
   kind: IndexerAuditKind
   ok: boolean
-  pendingCount: number
   reason: string | null
   startedAt: string | null
   status: IndexerAuditStatus | "missing" | "stale"
@@ -109,33 +89,20 @@ type AuditRunRow = {
   id: number | string
   kind: IndexerAuditKind
   latest_chain_block: number | string | null
-  pending_count: number | string
   started_at: Date | string
   status: IndexerAuditStatus
 }
 
 type AuditFindingRow = {
-  address: string | null
   block_number: number | string | null
-  chain_balance: string | null
   classification: IndexerAuditClassification
   details_json: string
   id: number | string
-  indexed_balance: string | null
   kind: IndexerAuditKind
-  latest_event_block: number | string | null
   log_index: number | string | null
   token_id: string | null
   token_name: string | null
   tx_hash: string | null
-}
-
-type BalanceAuditRow = {
-  address: string
-  balance: string
-  latest_event_block: number | string | null
-  token_id: string
-  token_name: string | null
 }
 
 type ChainLog = {
@@ -149,13 +116,6 @@ type ChainLog = {
 type RunAuditOptions = {
   auditBlock?: number
   latestChainBlock?: number
-}
-
-export type BalanceDriftAuditOptions = RunAuditOptions & {
-  batchSize: number
-  graceBlocks: number
-  maxReplayRange: number
-  replayPaddingBlocks: number
 }
 
 export type TransferCoverageAuditOptions = RunAuditOptions & {
@@ -195,7 +155,6 @@ const normalizeRun = (row: AuditRunRow): IndexerAuditRunSummary => ({
   id: Number(row.id),
   kind: row.kind,
   latestChainBlock: normalizeNumber(row.latest_chain_block),
-  pendingCount: Number(row.pending_count),
   startedAt: normalizeTimestamp(row.started_at) as string,
   status: row.status,
 })
@@ -209,15 +168,11 @@ const parseDetails = (value: string) => {
 }
 
 const normalizeFinding = (row: AuditFindingRow): IndexerAuditFinding => ({
-  address: row.address,
   blockNumber: normalizeNumber(row.block_number),
-  chainBalance: row.chain_balance,
   classification: row.classification,
   details: parseDetails(row.details_json),
   id: Number(row.id),
-  indexedBalance: row.indexed_balance,
   kind: row.kind,
-  latestEventBlock: normalizeNumber(row.latest_event_block),
   logIndex: normalizeNumber(row.log_index),
   tokenId: row.token_id,
   tokenName: row.token_name,
@@ -314,36 +269,6 @@ export const mergeSuggestedReplayRanges = (
   return capped
 }
 
-export const classifyBalanceDrift = (input: {
-  auditBlock: number
-  chainBalance: string
-  chainLatestBalance?: string
-  graceBlocks: number
-  indexedBalance: string
-  latestEventBlock: number
-}): IndexerAuditClassification | null => {
-  if (input.indexedBalance === input.chainBalance) {
-    return null
-  }
-
-  if (input.chainLatestBalance === input.indexedBalance) {
-    return "ahead_of_checkpoint"
-  }
-
-  if (
-    input.latestEventBlock >
-    input.auditBlock - Math.max(0, input.graceBlocks)
-  ) {
-    return "pending_head"
-  }
-
-  return "confirmed"
-}
-
-const topicAddress = (address: string) =>
-  zeroPadValue(address, 32).toLowerCase()
-const topicUint = (value: string) =>
-  zeroPadValue(toBeHex(BigInt(value)), 32).toLowerCase()
 const toHex = (block: number) => `0x${block.toString(16)}`
 
 const normalizeProviderLog = (log: {
@@ -485,7 +410,6 @@ const completeAuditRun = async (
     confirmedCount: number
     error?: string | null
     latestChainBlock: number | null
-    pendingCount: number
     status: IndexerAuditStatus
   }
 ) => {
@@ -498,10 +422,9 @@ const completeAuditRun = async (
          latest_chain_block = $4,
          checked_count = $5,
          confirmed_count = $6,
-         pending_count = $7,
-         error = $8,
+         error = $7,
          updated_at = $2
-     WHERE id = $9`,
+     WHERE id = $8`,
     [
       input.status,
       now,
@@ -509,7 +432,6 @@ const completeAuditRun = async (
       input.latestChainBlock,
       input.checkedCount,
       input.confirmedCount,
-      input.pendingCount,
       input.error ?? null,
       runId,
     ]
@@ -525,20 +447,15 @@ const insertAuditFindings = async (
   for (const finding of findings) {
     await db.none(
       `INSERT INTO indexer_audit_findings(
-        run_id, kind, classification, token_id, token_name, address,
-        indexed_balance, chain_balance, latest_event_block, block_number,
+        run_id, kind, classification, token_id, token_name, block_number,
         tx_hash, log_index, details_json, created_at, updated_at
-      ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $14)`,
+      ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)`,
       [
         runId,
         finding.kind,
         finding.classification,
         finding.tokenId,
         finding.tokenName,
-        finding.address,
-        finding.indexedBalance,
-        finding.chainBalance,
-        finding.latestEventBlock,
         finding.blockNumber,
         finding.txHash,
         finding.logIndex,
@@ -573,14 +490,12 @@ const withAuditRun = async (
       checkedCount: result.checkedCount,
       confirmedCount,
       latestChainBlock: result.latestChainBlock,
-      pendingCount: result.findings.length - confirmedCount,
       status: "succeeded",
     })
 
     return {
       ...result,
       confirmedCount,
-      pendingCount: result.findings.length - confirmedCount,
       runId,
     }
   } catch (error) {
@@ -590,205 +505,11 @@ const withAuditRun = async (
       confirmedCount: 0,
       error: error instanceof Error ? error.message : String(error),
       latestChainBlock: null,
-      pendingCount: 0,
       status: "failed",
     })
     throw error
   }
 }
-
-const getBalanceRows = (db: Queryable) =>
-  db.manyOrNone<BalanceAuditRow>(
-    `SELECT
-       b.address,
-       b.token_id,
-       b.balance::text AS balance,
-       t.name AS token_name,
-       latest_event.block_number AS latest_event_block
-     FROM balances b
-     LEFT JOIN tokens t ON t.token_id = b.token_id
-     LEFT JOIN LATERAL (
-       SELECT e.block_number
-       FROM events e
-       WHERE e.token_id = b.token_id
-         AND (e.from_addr = b.address OR e.to_addr = b.address)
-       ORDER BY e.block_number DESC, e.log_index DESC
-       LIMIT 1
-     ) latest_event ON true
-     WHERE b.balance > 0
-     ORDER BY b.token_id ASC, b.address ASC`
-  )
-
-const chunk = <T>(items: T[], size: number) => {
-  const chunks: T[][] = []
-  for (let i = 0; i < items.length; i += size) {
-    chunks.push(items.slice(i, i + size))
-  }
-  return chunks
-}
-
-const findTransferEvidenceBlocks = async (
-  provider: Provider,
-  hubContract: Contract,
-  input: {
-    address: string
-    auditBlock: number
-    latestEventBlock: number
-    tokenId: string
-  }
-) => {
-  if (
-    input.latestEventBlock <= 0 ||
-    input.latestEventBlock >= input.auditBlock
-  ) {
-    return []
-  }
-
-  const fromBlock = input.latestEventBlock + 1
-  const topicsForAddress = topicAddress(input.address)
-  const topicsForToken = topicUint(input.tokenId)
-  const base = {
-    address: hubContract.target as string,
-    fromBlock,
-    toBlock: input.auditBlock,
-  }
-
-  const [fromLogs, toLogs] = await Promise.all([
-    getLogsWithSplitForFilter(provider, {
-      ...base,
-      topics: [transferTopic, topicsForAddress, null, topicsForToken],
-    }),
-    getLogsWithSplitForFilter(provider, {
-      ...base,
-      topics: [transferTopic, null, topicsForAddress, topicsForToken],
-    }),
-  ])
-
-  const byLog = new Map<string, ChainLog>()
-  for (const log of [...fromLogs, ...toLogs]) {
-    byLog.set(`${log.transactionHash.toLowerCase()}:${log.index}`, log)
-  }
-
-  return [...byLog.values()]
-    .sort((a, b) => a.blockNumber - b.blockNumber || a.index - b.index)
-    .map((log) => ({
-      blockNumber: log.blockNumber,
-      logIndex: log.index,
-      txHash: log.transactionHash,
-    }))
-}
-
-export const runBalanceDriftAudit = async (
-  db: Database,
-  provider: Provider,
-  hubContract: Contract,
-  options: BalanceDriftAuditOptions
-) =>
-  withAuditRun(db, "balance-drift", async (tx) => {
-    const auditBlock = await getAuditBlock(tx, options.auditBlock)
-    const latestChainBlock =
-      options.latestChainBlock ?? (await provider.getBlockNumber())
-    const rows = await getBalanceRows(tx)
-    const findings: IndexerAuditFinding[] = []
-
-    for (const rowBatch of chunk(rows, Math.max(1, options.batchSize))) {
-      await Promise.all(
-        rowBatch.map(async (row) => {
-          const latestEventBlock = Number(row.latest_event_block ?? 0)
-          const chainBalance = BigInt(
-            (
-              await hubContract.balanceOf(row.address, row.token_id, {
-                blockTag: auditBlock,
-              })
-            ).toString()
-          ).toString()
-          if (chainBalance === row.balance) {
-            return
-          }
-
-          const chainLatestBalance = BigInt(
-            (await hubContract.balanceOf(row.address, row.token_id)).toString()
-          ).toString()
-          const classification = classifyBalanceDrift({
-            auditBlock,
-            chainBalance,
-            chainLatestBalance,
-            graceBlocks: options.graceBlocks,
-            indexedBalance: row.balance,
-            latestEventBlock,
-          })
-
-          if (!classification) {
-            return
-          }
-
-          let rawEvidence: Array<{
-            blockNumber: number
-            logIndex: number
-            txHash: string
-          }> = []
-          let evidenceError: string | null = null
-          if (classification === "confirmed") {
-            try {
-              rawEvidence = await findTransferEvidenceBlocks(
-                provider,
-                hubContract,
-                {
-                  address: row.address,
-                  auditBlock,
-                  latestEventBlock,
-                  tokenId: row.token_id,
-                }
-              )
-            } catch (error) {
-              evidenceError =
-                error instanceof Error ? error.message : String(error)
-              logger.warn("audit", "Failed to fetch transfer evidence", {
-                address: row.address,
-                error,
-                tokenId: row.token_id,
-              })
-            }
-          }
-
-          const evidenceBlocks = rawEvidence.map((item) => item.blockNumber)
-          const rangeBlocks = evidenceBlocks.length
-            ? evidenceBlocks
-            : [latestEventBlock || auditBlock]
-          findings.push({
-            address: row.address,
-            blockNumber: evidenceBlocks[0] ?? null,
-            chainBalance,
-            classification,
-            details: {
-              chainLatestBalance,
-              evidenceError,
-              rawEvidence,
-              suggestedReplayRanges: buildSuggestedReplayRanges(rangeBlocks, {
-                maxRange: options.maxReplayRange,
-                padding: options.replayPaddingBlocks,
-                reason: "balance-drift",
-              }),
-            },
-            indexedBalance: row.balance,
-            kind: "balance-drift",
-            latestEventBlock,
-            logIndex: rawEvidence[0]?.logIndex ?? null,
-            tokenId: row.token_id,
-            tokenName: row.token_name,
-            txHash: rawEvidence[0]?.txHash ?? null,
-          })
-        })
-      )
-    }
-
-    return {
-      auditBlock,
-      checkedCount: rows.length,
-      findings,
-      latestChainBlock,
-    }
-  })
 
 const getIndexedEventKeys = async (
   db: Queryable,
@@ -858,9 +579,7 @@ export const runTransferCoverageAudit = async (
       }
 
       findings.push({
-        address: null,
         blockNumber: log.blockNumber,
-        chainBalance: null,
         classification: "confirmed",
         details: {
           amount: transfer.amount.toString(),
@@ -873,9 +592,7 @@ export const runTransferCoverageAudit = async (
           }),
           to: transfer.to.toLowerCase(),
         },
-        indexedBalance: null,
         kind: "transfer-coverage",
-        latestEventBlock: null,
         logIndex: log.index,
         tokenId: transfer.tokenId,
         tokenName: tokenNames.get(transfer.tokenId) ?? null,
@@ -895,9 +612,11 @@ const getLatestAuditRuns = async (db: Queryable) => {
   const rows = await db.manyOrNone<AuditRunRow>(
     `SELECT DISTINCT ON (kind)
        id, kind, status, started_at, completed_at, audit_block, latest_chain_block,
-       checked_count, confirmed_count, pending_count, error
+       checked_count, confirmed_count, error
      FROM indexer_audit_runs
-     ORDER BY kind, started_at DESC, id DESC`
+     WHERE kind IN ($1:csv)
+     ORDER BY kind, started_at DESC, id DESC`,
+    [INDEXER_AUDIT_KINDS]
   )
   return rows.map(normalizeRun)
 }
@@ -909,7 +628,7 @@ const getRecentCompletedRuns = async (
 ) => {
   const rows = await db.manyOrNone<AuditRunRow>(
     `SELECT id, kind, status, started_at, completed_at, audit_block, latest_chain_block,
-            checked_count, confirmed_count, pending_count, error
+            checked_count, confirmed_count, error
      FROM indexer_audit_runs
      WHERE kind = $1 AND status = 'succeeded' AND completed_at IS NOT NULL
      ORDER BY completed_at DESC, id DESC
@@ -943,7 +662,6 @@ export const getIndexerAuditHealth = async (
         error: null,
         kind,
         ok: true,
-        pendingCount: 0,
         reason: null,
         startedAt: null,
         status: "missing",
@@ -997,7 +715,6 @@ export const getIndexerAuditHealth = async (
       error: latest.error,
       kind,
       ok,
-      pendingCount: latest.pendingCount,
       reason,
       startedAt: latest.startedAt,
       status,
@@ -1019,8 +736,7 @@ const getFindingsForRuns = async (db: Queryable, runIds: number[]) => {
   }
 
   const rows = await db.manyOrNone<AuditFindingRow>(
-    `SELECT id, kind, classification, token_id, token_name, address,
-            indexed_balance::text, chain_balance::text, latest_event_block,
+    `SELECT id, kind, classification, token_id, token_name,
             block_number, tx_hash, log_index, details_json
      FROM indexer_audit_findings
      WHERE run_id IN ($1:csv)
@@ -1083,11 +799,7 @@ export const getLatestIndexerAuditReport = async (
   return {
     findings,
     generatedAt: new Date().toISOString(),
-    groupedFindings: [...grouped.values()].sort((a, b) =>
-      a.kind === b.kind
-        ? a.classification.localeCompare(b.classification)
-        : a.kind.localeCompare(b.kind)
-    ),
+    groupedFindings: [...grouped.values()],
     health,
     ok: health.ok,
     runs,

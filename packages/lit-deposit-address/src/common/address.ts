@@ -5,6 +5,7 @@ import { decodeEthereumAddress, encodeEthereumAddress } from "./address/ethereum
 import { decodeHyperliquidAddress, encodeHyperliquidAddress } from "./address/hyperliquid.js";
 import { decodeSolanaAddress, encodeSolanaAddress } from "./address/solana.js";
 import { decodeTonAddress, encodeTonAddress } from "./address/ton.js";
+import { decodeTronAddress, encodeTronAddress } from "./address/tron.js";
 
 /** Encode a VM-native address with the same bytes representation as the settlement SDK. */
 export function encodeAddress(address: string, vmType: VmType): Uint8Array {
@@ -19,6 +20,8 @@ export function encodeAddress(address: string, vmType: VmType): Uint8Array {
       return encodeSolanaAddress(address);
     case "ton-vm":
       return encodeTonAddress(address);
+    case "tron-vm":
+      return encodeTronAddress(address);
   }
 }
 
@@ -40,6 +43,8 @@ export function decodeAddress(encoded: Uint8Array, vmType: VmType): string {
       return decodeSolanaAddress(encoded);
     case "ton-vm":
       return decodeTonAddress(encoded);
+    case "tron-vm":
+      return decodeTronAddress(encoded);
   }
 }
 
@@ -61,3 +66,4 @@ export { decodeEthereumAddress, encodeEthereumAddress } from "./address/ethereum
 export { decodeHyperliquidAddress, encodeHyperliquidAddress } from "./address/hyperliquid.js";
 export { decodeSolanaAddress, encodeSolanaAddress } from "./address/solana.js";
 export { decodeTonAddress, encodeTonAddress } from "./address/ton.js";
+export { decodeTronAddress, encodeTronAddress, tronAddressFromPublicKey } from "./address/tron.js";

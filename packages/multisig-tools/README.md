@@ -21,7 +21,11 @@ yarn workspace @relay-settlement/multisig-tools build
 
 ## Subcommands
 
-Run `yarn multisig-tools --help` for the full list. Common flows:
+Run `yarn workspace @relay-settlement/multisig-tools cli --help` for the full list. The Safe-flow subcommands
+(`submit`, `check-hashes`, `approve-local`, `execute-transactions`) resolve the
+`RelayMultisigSigner` contract from the `--network` config for the `prod` env by
+default — pass `--env dev` or `--env stag` to target those deployments instead
+(or override the address directly with `--relay-multisig-signer`). Common flows:
 
 ```sh
 # Simulate every transaction in a manifest (pure offline build + hash check)
@@ -38,6 +42,18 @@ yarn multisig:check --network base \
 # Execute (broadcast) the signed transactions on their destination chains
 yarn multisig:execute --network base --transactions ./transactions/042-set-allocator.json
 ```
+
+### Nonce conflicts between manifests
+
+`submit` refuses a manifest whose EVM nonce slots are also claimed by another
+manifest in the same `transactions/` directory, when those slots are still
+unspent on-chain. Two manifests written against the same starting nonce both
+pass the per-transaction nonce check while both are pending — whichever Safe
+transaction executes first burns the nonce and silently leaves the other
+unexecutable, wasting a signing round.
+
+Regenerate the manifest against the current nonce when this fires. Pass
+`--allow-nonce-conflict` only when the other manifest is being abandoned.
 
 ### Local approval (Safe UI unavailable)
 
@@ -71,4 +87,6 @@ Standalone scripts under `scripts/` produce JSON manifests for common operations
 yarn workspace @relay-settlement/multisig-tools tsx scripts/set-allocator.ts
 ```
 
-Generated manifests land under `transactions/` with a numeric prefix.
+Generated manifests land under `transactions/<env>/` (`dev`, `stag`, or `prod`)
+with a per-env numeric prefix. `getManifestPath` defaults to `prod`; env-specific
+generators pass their env explicitly.

@@ -36,6 +36,14 @@ interface LitActionApiResponse {
 /** Cached bundled action source so repeated calls don't re-read the file. */
 const actionCodeCache = new Map<string, string>();
 
+/** Add the client-owned PKP id exactly as it will be sent to the Lit Action. */
+export function buildLitActionJsParams(
+  client: DepositAddressesClient,
+  jsParams: Record<string, unknown>,
+): Record<string, unknown> {
+  return { ...jsParams, pkpId: client.pkpId };
+}
+
 /** Locate and read the bundled per-VM action file for an environment from disk. */
 function loadBundledActionFile(envName: DepositAddressEnvironmentName, vmType: VmType): string {
   const cacheKey = `${envName}:${vmType}`;
@@ -79,7 +87,7 @@ export async function executeLitAction(
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Api-Key": client.apiKey },
     body: JSON.stringify({
-      js_params: { pkpId: client.pkpId, ...jsParams },
+      js_params: buildLitActionJsParams(client, jsParams),
       code: loadBundledActionFile(client.envName, client.vmType),
     }),
   });

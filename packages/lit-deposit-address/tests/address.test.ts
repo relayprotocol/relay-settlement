@@ -49,6 +49,11 @@ const CASES: Array<{ vmType: VmType; address: string; encoded: string; decoded?:
     encoded: `0x${"aa".repeat(32)}`,
   },
   {
+    vmType: "tron-vm",
+    address: "TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC",
+    encoded: "0x417e5f4552091a69125d5dfcb7b8c2659029395bdf",
+  },
+  {
     // Friendly (url-safe, bounceable) form encodes to the same hash and
     // decodes back to the canonical raw form.
     vmType: "ton-vm",

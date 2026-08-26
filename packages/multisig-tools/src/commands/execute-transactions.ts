@@ -28,7 +28,11 @@ import {
   buildBitcoinTransactionFromPayload,
 } from "../crypto/bitcoin"
 import { derivePublicKey } from "../crypto/near"
-import { resolveNetwork, type ResolvedNetwork } from "../helpers/network"
+import {
+  assertEnvOrSigner,
+  resolveNetwork,
+  type ResolvedNetwork,
+} from "../helpers/network"
 import { checkAndApproveWNEAR } from "../helpers/wnear"
 import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes"
 import { PublicKey, Keypair, Connection } from "@solana/web3.js"
@@ -375,7 +379,13 @@ async function executeEvmTransaction(
       ? BigInt(transaction.gasPrice)
       : await networkClient.getGasPrice()
 
-  const isRelayChain = [537713, 537714].includes(
+  // Relay chains don't require the signer to hold a native balance, so skip
+  // the pre-broadcast funding check there.
+  const RELAY_CHAIN_IDS = [
+    537713, // relay mainnet
+    537724, // relay testnet
+  ]
+  const isRelayChain = RELAY_CHAIN_IDS.includes(
     await networkClient.getChainId()
   )
 
@@ -409,6 +419,11 @@ async function executeEvmTransaction(
     console.log(`🚀 Transaction sent via ${tx.rpc}: ${hash}`)
 
     const receipt = await networkClient.waitForTransactionReceipt({ hash })
+    if (receipt.status !== "success") {
+      // The nonce is consumed either way, so a re-run's nonce check would skip
+      // this transaction as executed -- surface the revert instead.
+      throw new Error(`Transaction reverted: ${receipt.transactionHash}`)
+    }
     console.log(`✅ Transaction confirmed: ${receipt.transactionHash}`)
   } catch (error: any) {
     const errorMessage = error.message?.toLowerCase() || ""
@@ -428,6 +443,9 @@ async function executeEvmTransaction(
       console.log(`🚀 Transaction sent via ${tx.rpc}: ${hash}`)
 
       const receipt = await networkClient.waitForTransactionReceipt({ hash })
+      if (receipt.status !== "success") {
+        throw new Error(`Transaction reverted: ${receipt.transactionHash}`)
+      }
       console.log(`✅ Transaction confirmed: ${receipt.transactionHash}`)
     } else {
       throw error
@@ -713,14 +731,21 @@ export function registerExecuteTransactions(program: Command) {
     )
     .option("-n, --network <slug>", "Network slug (from settlement-networks)")
     .option("--rpc-url <url>", "RPC URL override")
+    .option(
+      "-e, --env <env>",
+      "Deployment env for the --network contract lookup (prod | dev | stag); required unless --relay-multisig-signer is set"
+    )
     .action(
       async ({
         transactions: transactionsPath,
         relayMultisigSigner,
         network,
         rpcUrl,
+        env,
       }) => {
+        assertEnvOrSigner({ env, multisigSignerOverride: relayMultisigSigner })
         const resolved = resolveNetwork({
+          env,
           multisigSignerOverride: relayMultisigSigner as
             | `0x${string}`
             | undefined,

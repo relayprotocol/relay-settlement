@@ -11,8 +11,10 @@
  *   --mode chain-secured
  *     Wallet-owned accounts. Reads go through the AccountConfig contract on
  *     Base (keyed by `keccak256(toUtf8Bytes(accountApiKey))`) and writes are
- *     wallet-signed transactions from `--private-key`. PKP and usage-key
- *     minting use Chipotle's wallet-signature endpoints.
+ *     wallet-signed transactions from `--private-key`. Alternatively, pass
+ *     `--calldata` to collect contract writes for relay through an MPC/multisig
+ *     owner instead of broadcasting them. PKP and usage-key minting use
+ *     Chipotle's wallet-signature endpoints.
  *
  * Each step checks whether the underlying resource already exists and skips
  * creation when so. PKP selection is explicit: pass `--create-pkp` to mint a
@@ -22,6 +24,10 @@
  * Usage:
  *   tsx scripts/setup.ts --env <name> --mode api-key       --account-api-key <key> (--create-pkp | --pkp-id <address>) [--dry-run]
  *   tsx scripts/setup.ts --env <name> --mode chain-secured --account-api-key <key> --private-key 0x... (--create-pkp | --pkp-id <address>) [--dry-run]
+ *   tsx scripts/setup.ts --env <name> --mode chain-secured --account-api-key <key> --calldata --pkp-id <address>
+ *
+ * `--calldata` requires an existing PKP and usage key because minting requires
+ * a live admin signature.
  */
 
 import { readFileSync } from "node:fs";

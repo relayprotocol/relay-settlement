@@ -12,9 +12,17 @@ import {
   xAddressToClassicAddress,
 } from "ripple-address-codec"
 
+import {
+  decodeHederaAddress,
+  encodeHederaAddress,
+  HEDERA_HBAR_TOKEN_ID,
+} from "./hedera-vm"
+
 export type VmType =
   | "bitcoin-vm"
   | "ethereum-vm"
+  | "gateway-vm"
+  | "hedera-vm"
   | "hyperliquid-vm"
   | "solana-vm"
   | "ton-vm"
@@ -42,7 +50,13 @@ export const getVmTypeNativeCurrency = (vmType: VmType) => {
     case "bitcoin-vm":
       return "bc1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqmql8k8"
     case "ethereum-vm":
+    case "gateway-vm":
       return "0x0000000000000000000000000000000000000000"
+    case "hedera-vm":
+      // HBAR has no HTS token entity, so the zero entity id stands in for it
+      // (mirroring the zero-address sentinel used by the other VMs). Encodes to
+      // 20 zero bytes via `encodeAddress`.
+      return HEDERA_HBAR_TOKEN_ID
     case "hyperliquid-vm":
       return "0x00000000000000000000000000000000"
     case "solana-vm":
@@ -143,6 +157,19 @@ export const encodeAddress = (address: string, vmType: VmType): Uint8Array => {
       return hexToBytes(address as Hex)
     }
 
+    case "gateway-vm": {
+      throw new Error(
+        "Address encoding is intentionally unsupported for gateway-vm because this VM type will not be supported for order creation"
+      )
+    }
+
+    case "hedera-vm": {
+      // 20-byte encoding: entity ids (`0.0.456858`) as their long-zero address,
+      // account EVM aliases as themselves. See ./hedera-vm.ts for the accepted
+      // address forms and why checksummed input is rejected here.
+      return encodeHederaAddress(address)
+    }
+
     case "hyperliquid-vm": {
       return hexToBytes(address as Hex)
     }
@@ -236,6 +263,19 @@ export const decodeAddress = (address: Uint8Array, vmType: VmType): string => {
       return bytesToHex(address)
     }
 
+    case "gateway-vm": {
+      throw new Error(
+        "Address decoding is intentionally unsupported for gateway-vm because this VM type will not be supported for order creation"
+      )
+    }
+
+    case "hedera-vm": {
+      // Long-zero values decode back to their entity id; anything else is an
+      // account EVM alias. Twenty zero bytes decode to `0.0.0`, the HBAR
+      // sentinel.
+      return decodeHederaAddress(address)
+    }
+
     case "hyperliquid-vm": {
       return bytesToHex(address)
     }
@@ -271,6 +311,10 @@ export const decodeAddress = (address: Uint8Array, vmType: VmType): string => {
       }
       return encodeAccountID(Buffer.from(address))
     }
+
+    default: {
+      throw new Error(`Vm type not implemented (decodeAddress)`)
+    }
   }
 }
 
@@ -293,105 +337,4 @@ export const decodeXrpDestination = (
     throw new Error(`Invalid XRP address: ${address}`)
   }
   return { account: address }
-}
-
-// Transaction encoding
-
-export const encodeTransactionIdToHex = (
-  transactionId: string,
-  vmType: VmType
-): Hex => {
-  return _toHexString(encodeTransactionId(transactionId, vmType))
-}
-
-export const encodeTransactionId = (
-  transactionId: string,
-  vmType: VmType
-): Uint8Array => {
-  switch (vmType) {
-    case "bitcoin-vm": {
-      return Uint8Array.from(Buffer.from(transactionId, "hex"))
-    }
-
-    case "ethereum-vm": {
-      return hexToBytes(transactionId as Hex)
-    }
-
-    case "hyperliquid-vm": {
-      return hexToBytes(transactionId as Hex)
-    }
-
-    case "solana-vm": {
-      return bs58.decode(transactionId)
-    }
-
-    case "ton-vm": {
-      if (transactionId.length !== 64) {
-        throw new Error(
-          `Invalid TON transaction id length ${transactionId.length}; expected 64 hex chars`
-        )
-      }
-      return hexToBytes(`0x${transactionId}`)
-    }
-
-    case "tron-vm": {
-      return hexToBytes(`0x${transactionId}`)
-    }
-
-    case "lighter-vm": {
-      return hexToBytes(`0x${transactionId}`)
-    }
-
-    case "xrp-vm": {
-      // XRPL transaction ids are the 32-byte hash rendered as 64 hex chars
-      // (canonically uppercase). Accept either case but reject 0x-prefixed or
-      // wrong-length input so it can't silently zero-pad.
-      if (!/^[0-9a-fA-F]{64}$/.test(transactionId)) {
-        throw new Error(
-          `Invalid XRP transaction id ${transactionId}; expected 64 hex chars`
-        )
-      }
-      return hexToBytes(`0x${transactionId}`)
-    }
-  }
-}
-
-export const decodeTransactionId = (
-  transactionId: Uint8Array,
-  vmType: VmType
-): string => {
-  switch (vmType) {
-    case "bitcoin-vm": {
-      return Buffer.from(transactionId).toString("hex")
-    }
-
-    case "ethereum-vm": {
-      return bytesToHex(transactionId)
-    }
-
-    case "hyperliquid-vm": {
-      return bytesToHex(transactionId)
-    }
-
-    case "solana-vm": {
-      return bs58.encode(transactionId)
-    }
-
-    case "ton-vm": {
-      return bytesToHex(transactionId).slice(2)
-    }
-
-    case "tron-vm": {
-      return bytesToHex(transactionId).slice(2)
-    }
-
-    case "lighter-vm": {
-      return bytesToHex(transactionId).slice(2)
-    }
-
-    case "xrp-vm": {
-      // Canonical XRPL rendering is uppercase, no 0x prefix.
-      return bytesToHex(transactionId).slice(2).toUpperCase()
-    }
-  }
 }

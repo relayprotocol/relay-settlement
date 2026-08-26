@@ -51,8 +51,7 @@
  *   HYPERLIQUID_VM_CURRENCY_SYMBOL   token symbol (e.g. "USDC", "HYPE")
  *   HYPERLIQUID_VM_CURRENCY_DECIMALS decimals to parse the amount with
  *   HYPERLIQUID_VM_AMOUNT            decimal string in whole units
- *   SOLVER_PRIVATE_KEY               EVM solver key (pin to keep the
- *                                    deposit address stable)
+ *   SOLVER_PRIVATE_KEY               EVM solver key used to authorize the order
  *
  *   RELAY_ORACLE_URL                 oracle base URL.
  *   RELAY_SOLVER_URL                 solver base URL.
@@ -213,6 +212,7 @@ const derivationFields: DerivationFields = {
   depositor: funderHex,
   refundRecipient: funderHex,
   priceImpactBps: "200",
+  salt: bytesToBigInt(randomBytes(32)).toString(),
 };
 
 console.log(`==> funder / depositor / refund (hl evm):  ${funder.address}`);
@@ -517,6 +517,7 @@ await submitTrigger(hub, {
     depositor: derivationFields.depositor as Hex,
     refundRecipient: derivationFields.refundRecipient as Hex,
     priceImpactBps: BigInt(derivationFields.priceImpactBps),
+    salt: BigInt(derivationFields.salt),
   },
   orderId,
   nonce: nonceBig,
@@ -566,6 +567,7 @@ const signRequest = await addSolverRequestSignature(
         usdPrice: p.usdPrice.toString(),
         usdPriceDecimals: p.usdPriceDecimals,
         currencyDecimals: p.currencyDecimals,
+        publishTime: p.publishTime.toString(),
         expiration: p.expiration.toString(),
       })),
       extraData,

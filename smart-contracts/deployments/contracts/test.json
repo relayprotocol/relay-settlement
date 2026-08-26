@@ -1,0 +1,16 @@
+{
+  "chainId": 421614,
+  "core": {
+    "utils": "0xddd361727c22a01eb137880678a20b0beae69318",
+    "hub": "0xa884543c91156098b2e50ae17c3840770b7b55f5",
+    "oracle": "0x5c874be77a17a150f883a3b31224298dc0d02da5",
+    "oracleMultisig": "0xffb396f168d5116972a1e5cceea323b2622d288c",
+    "genericMapping": "0xfcac667eb2369ab9b4c0c602ace72181b3d11327",
+    "allocator": "0xf62db37a0d07f7226292ce360225a329510a7f3a",
+    "executor": "0x765bba44c75924483b803592fbf1d6738dc99107",
+    "config": "0xdc2a0dc71daacf9746a06555e27d945678eb961f"
+  },
+  "payloadBuilders": {
+    "ethereumVmPayloadBuilder": "0x7fbf04aaede32cb6bc776d96529e5085f4b32794"
+  }
+}

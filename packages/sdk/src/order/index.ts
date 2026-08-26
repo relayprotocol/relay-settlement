@@ -192,6 +192,180 @@ export const getOrderId = (order: Order, config: ChainIdToVmType) => {
   })
 }
 
+export type OrderV2 = {
+  // The version of the order (determines the expected format)
+  version: "v2"
+
+  // The chain id and address of the relayer given exclusive filling rights (must be an ethereum-vm eoa)
+  relayerChainId: string
+  relayer: string
+
+  // Random salt value to ensure order uniqueness
+  salt: string
+
+  // Shared deadline for filling or refunding
+  deadline: number
+
+  // An order has a single input payment
+  input: {
+    chainId: string
+    currency: string
+    amount: string
+  }
+
+  // A list of refund options when the solver is unable to fulfill the request
+  refunds: {
+    chainId: string
+    currency: string
+    minimumAmount: string
+    recipient: string
+  }[]
+
+  // An order can have a single output, specifying:
+  output: {
+    // - the chain id of the output fill
+    chainId: string
+    // - the currency and minimum amount withdrawn from the depository to the router
+    withdraw: {
+      currency: string
+      minimumAmount: string
+    }
+    // - the currency, minimum amount and recipient the router must ultimately fill, plus
+    //   the user-intent calls the execution must end with (encoded per the chain's vm type)
+    fill: {
+      currency: string
+      minimumAmount: string
+      recipient: string
+      calls: string[]
+    }
+  }
+
+  // An order can specify hub fees to be paid on successful fill
+  fees: {
+    recipientChainId: string
+    recipient: string
+    currencyChainId: string
+    currency: string
+    amount: string
+  }[]
+}
+
+export const ORDER_V2_EIP712_TYPES = {
+  Order: [
+    { name: "version", type: "string" },
+    { name: "relayerChainId", type: "string" },
+    { name: "relayer", type: "address" },
+    { name: "salt", type: "uint256" },
+    { name: "deadline", type: "uint32" },
+    { name: "input", type: "Input" },
+    { name: "refunds", type: "Refund[]" },
+    { name: "output", type: "Output" },
+    { name: "fees", type: "Fee[]" },
+  ],
+  Input: [
+    { name: "chainId", type: "string" },
+    { name: "currency", type: "bytes" },
+    { name: "amount", type: "uint256" },
+  ],
+  Refund: [
+    { name: "chainId", type: "string" },
+    { name: "currency", type: "bytes" },
+    { name: "minimumAmount", type: "uint256" },
+    { name: "recipient", type: "bytes" },
+  ],
+  Output: [
+    { name: "chainId", type: "string" },
+    { name: "withdraw", type: "Withdraw" },
+    { name: "fill", type: "Fill" },
+  ],
+  Withdraw: [
+    { name: "currency", type: "bytes" },
+    { name: "minimumAmount", type: "uint256" },
+  ],
+  Fill: [
+    { name: "currency", type: "bytes" },
+    { name: "minimumAmount", type: "uint256" },
+    { name: "recipient", type: "bytes" },
+    { name: "calls", type: "bytes[]" },
+  ],
+  Fee: [
+    { name: "recipientChainId", type: "string" },
+    { name: "recipient", type: "bytes" },
+    { name: "currencyChainId", type: "string" },
+    { name: "currency", type: "bytes" },
+    { name: "amount", type: "uint256" },
+  ],
+}
+
+export const normalizeOrderV2 = (
+  order: OrderV2,
+  chainsConfig: ChainIdToVmType
+) => {
+  const vmType = (chainId: string) => getChainVmType(chainId, chainsConfig)
+
+  return {
+    version: order.version,
+    relayerChainId: order.relayerChainId,
+    relayer: order.relayer,
+    salt: order.salt,
+    deadline: order.deadline,
+    input: {
+      chainId: order.input.chainId,
+      currency: encodeAddressToHex(
+        order.input.currency,
+        vmType(order.input.chainId)
+      ),
+      amount: order.input.amount,
+    },
+    refunds: order.refunds.map((refund) => ({
+      chainId: refund.chainId,
+      currency: encodeAddressToHex(refund.currency, vmType(refund.chainId)),
+      minimumAmount: refund.minimumAmount,
+      recipient: encodeAddressToHex(refund.recipient, vmType(refund.chainId)),
+    })),
+    output: {
+      chainId: order.output.chainId,
+      withdraw: {
+        currency: encodeAddressToHex(
+          order.output.withdraw.currency,
+          vmType(order.output.chainId)
+        ),
+        minimumAmount: order.output.withdraw.minimumAmount,
+      },
+      fill: {
+        currency: encodeAddressToHex(
+          order.output.fill.currency,
+          vmType(order.output.chainId)
+        ),
+        minimumAmount: order.output.fill.minimumAmount,
+        recipient: encodeAddressToHex(
+          order.output.fill.recipient,
+          vmType(order.output.chainId)
+        ),
+        calls: order.output.fill.calls.map(encodeBytesToHex),
+      },
+    },
+    fees: order.fees.map((fee) => ({
+      recipientChainId: fee.recipientChainId,
+      recipient: encodeAddressToHex(
+        fee.recipient,
+        vmType(fee.recipientChainId)
+      ),
+      currencyChainId: fee.currencyChainId,
+      currency: encodeAddressToHex(fee.currency, vmType(fee.currencyChainId)),
+      amount: fee.amount,
+    })),
+  }
+}
+
+export const getOrderV2Id = (order: OrderV2, config: ChainIdToVmType) => {
+  return hashStruct({
+    types: ORDER_V2_EIP712_TYPES,
+    primaryType: "Order",
+    data: normalizeOrderV2(order, config),
+  })
+}
+
 type DecodedCall = {
   vmType: "ethereum-vm"
   call: {

@@ -77,8 +77,8 @@ contract RelayAllocator is Ownable, EIP712 {
   /// @notice Address of the hub contract
   address public immutable HUB;
 
-  /// @notice Oracle used to verify spender signatures
-  address public immutable ORACLE;
+  /// @notice RelayOracleMultisig contract used to verify spender signatures
+  address public immutable ORACLE_MULTISIG;
 
   /// @notice Mapping of payload builders: chain id => depository => payload builder address
   mapping(string => mapping(bytes => address)) public payloadBuilders;
@@ -184,16 +184,16 @@ contract RelayAllocator is Ownable, EIP712 {
   /// @notice Creates a new RelayAllocator contract
   /// @param _owner Owner of the contract
   /// @param _hub Hub contract address
-  /// @param _oracle Oracle used to verify spender signatures
+  /// @param _oracleMultisig RelayOracleMultisig contract address used to verify spender signatures
   constructor(
     address _owner,
     address _hub,
-    address _oracle
+    address _oracleMultisig
   ) Ownable(_owner) EIP712(SIGNING_DOMAIN, SIGNATURE_VERSION) {
     HUB = _hub;
-    ORACLE = _oracle;
+    ORACLE_MULTISIG = _oracleMultisig;
     emit HubSet(_hub);
-    emit OracleSet(_oracle);
+    emit OracleSet(_oracleMultisig);
   }
 
   /// @notice Sets or updates the payload builder for a specific chain and depository
@@ -353,7 +353,7 @@ contract RelayAllocator is Ownable, EIP712 {
       }
     }
 
-    if (ORACLE.isValidSignatureNow(digest, signature)) {
+    if (ORACLE_MULTISIG.isValidSignatureNow(digest, signature)) {
       usedNonces[spenderKey][params.nonce] = true;
       return true;
     }

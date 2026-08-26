@@ -21,7 +21,13 @@ describe("hyperliquid-vm transaction policy", () => {
     trigger.derivationFields.depositor = HL_DEPOSITOR;
     trigger.currencies = [{ chainId: trigger.input.chainId, currency }];
     trigger.prices = [
-      { usdPrice: "100000000", usdPriceDecimals: 8, currencyDecimals: 8, expiration: "9999999999" },
+      {
+        usdPrice: "100000000",
+        usdPriceDecimals: 8,
+        currencyDecimals: 8,
+        publishTime: "1735689500",
+        expiration: "9999999999",
+      },
     ];
     return trigger;
   }
@@ -196,6 +202,7 @@ describe("hyperliquid-vm transaction policy", () => {
         usdPrice: "100000000",
         usdPriceDecimals: 8,
         currencyDecimals: 8,
+        publishTime: "1735689500",
         expiration: "9999999999",
       },
     ];

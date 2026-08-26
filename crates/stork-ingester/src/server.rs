@@ -193,7 +193,8 @@ mod tests {
             CachedPrice {
                 payload: vec![0xde, 0xad, 0xbe, 0xef],
                 delivery_time_ms: 1_700_000_000_000,
-                source_time_ms: 1_699_999_999_500,
+                source_time_ns: 1_699_999_999_500_000_000,
+                quantized_value: 1,
             },
         );
         let address = spawn_server(cache, shutdown).await;

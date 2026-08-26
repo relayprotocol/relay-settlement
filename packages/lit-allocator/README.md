@@ -33,18 +33,21 @@ environments/
   dev.json
   stag.json
   prod.json
+  test.json
 ```
 
-Each environment config contains non-secret build-time configuration:
+Each environment config contains non-secret build-time configuration. The
+Lighter fields are optional and only configured in environments that support
+Lighter API-key registration:
 
 ```json
 {
   "name": "dev",
   "allocatorAddress": "0x...",
-  "hubEvmChainId": 421614,
+  "hubEvmChainId": 0,
   "allowedOracles": ["0x...", "0x..."],
   "oracleSignatureThreshold": 2,
-  "lighterAllowedApiKeys": [{ "apiKeyIndex": 5, "publicKey": "0x..." }],
+  "lighterAllowedApiKeys": [{ "apiKeyIndex": 0, "publicKey": "0x..." }],
   "lighterGateway": "0x...",
   "lighterGatewayChainId": 1
 }
@@ -53,6 +56,7 @@ Each environment config contains non-secret build-time configuration:
 Bundling creates separate Lit Action code for each environment:
 
 ```txt
+dist/actions/<env>/gateway.js
 dist/actions/<env>/ethereum.js
 dist/actions/<env>/tron.js
 dist/actions/<env>/solana.js
@@ -61,23 +65,25 @@ dist/actions/<env>/bitcoin.js
 dist/actions/<env>/hyperliquid.js
 dist/actions/<env>/lighter.js
 dist/actions/<env>/xrp.js
+dist/actions/<env>/hedera.js
 ```
 
-…one such set per environment (`dev`, `stag`, `prod`).
+…one such set per environment (`dev`, `stag`, `prod`, `test`).
 
 Because each bundle hardcodes the allocator address, oracle allowlist, and signature threshold, each environment has distinct action code/CIDs and can be registered under different Lit accounts, wallets, and groups.
 
 ## Build
 
 ```sh
-npm install
-npm run build
+yarn install
+yarn workspace @relay-protocol/lit-allocator build
 ```
 
-`npm run build` runs TypeScript compilation and bundles all environment actions. To bundle a single environment:
+`build` compiles the TypeScript sources. Lit Action bundles are generated for
+one explicit environment at a time:
 
 ```sh
-npm run bundle:actions -- --env dev
+yarn workspace @relay-protocol/lit-allocator bundle:actions -- --env dev
 ```
 
 The Lit Actions use jsDelivr ESM imports in the generated bundles, matching Lit's documented import style.
@@ -88,20 +94,20 @@ Setup is environment-specific and requires an explicit `--env` plus a `--mode`. 
 
 ```sh
 # Managed (API-mode) account
-npm run setup -- --env dev --mode api-key \
+yarn setup -- --env dev --mode api-key \
   --account-api-key <account-api-key> \
   (--create-pkp | --pkp-id <address>) \
   [--dry-run]
 
 # Wallet-owned (ChainSecured) account
-npm run setup -- --env dev --mode chain-secured \
+yarn setup -- --env dev --mode chain-secured \
   --account-api-key <account-api-key> \
   --private-key 0x<admin-wallet-key> \
   (--create-pkp | --pkp-id <address>) \
   [--dry-run]
 
 # MPC/multisig-owned (ChainSecured) account — emit calldata to relay, don't broadcast
-npm run setup -- --env dev --mode chain-secured --calldata \
+yarn setup -- --env dev --mode chain-secured --calldata \
   --account-api-key <account-api-key> \
   --pkp-id 0x<existing-pkp>
 ```
@@ -124,12 +130,12 @@ Setup is idempotent and will:
 To mint an additional usage API key for the existing environment group:
 
 ```sh
-npm run create-usage-api-key -- --env dev --mode api-key \
+yarn create-usage-api-key -- --env dev --mode api-key \
   --account-api-key <account-api-key> \
   --name allocator-dev-usage-key-2 \
   --description "Usage key for Lit Allocator"
 
-npm run create-usage-api-key -- --env dev --mode chain-secured \
+yarn create-usage-api-key -- --env dev --mode chain-secured \
   --account-api-key <account-api-key> \
   --private-key 0x<admin-wallet-key> \
   --name allocator-dev-usage-key-2 \
@@ -239,9 +245,10 @@ Output fields:
 - `balance_cents` — negative means credits remaining, zero means exhausted,
   positive means amount owed
 
-Note: the on-chain `UsageApiKey.balance` field (returned by `list_api_keys`)
-is unrelated — it is always `0` in this deployment since usage keys are
-minted with `balance: 0`. The real billing balance lives at `/billing/balance`.
+The account credit balance is separate from a ChainSecured usage key's
+on-chain `balance` and `expiration`, which Chipotle also checks when executing
+an action. See the [lit-helpers README](../lit-helpers/README.md) for commands
+that inspect account resources or top up a usage key.
 
 ## Topping Up With Crypto
 
@@ -274,20 +281,21 @@ Client CLIs invoke the deployed actions via the Chipotle REST API:
 
 ```sh
 # Print the derived VM-specific wallet address for the PKP
-npm run wallet -- --env dev \
+yarn wallet -- --env dev \
   --usage-api-key <usage-api-key> \
   --pkp-id <pkp-address> \
-  --vm-type <ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm>
+  --vm-type <gateway-vm|ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm|hedera-vm> \
+  [--destination-vm-type <ethereum-vm|solana-vm>]
 
 # Verify an oracle attestation and sign every hash it attests
-npm run sign -- --env dev \
+yarn sign -- --env dev \
   --usage-api-key <usage-api-key> \
   --pkp-id <pkp-address> \
-  --vm-type <ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm> \
+  --vm-type <gateway-vm|ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm|hedera-vm> \
   --input request.json
 
 # Sign a Lighter gateway changePubKey transaction for API-key setup
-npm run changepubkey -- --env dev \
+yarn changepubkey -- --env dev \
   --usage-api-key <usage-api-key> \
   --pkp-id <pkp-address> \
   --account-index <uint48> \
@@ -298,10 +306,18 @@ npm run changepubkey -- --env dev \
   --gas-limit <gas>
 ```
 
+The `gateway-vm` action signs every oracle-attested hash in order using the
+standard `results` array. Gateway callers provide `destinationVmType` and the
+BurnIntent and CallRequest hashes in payload-builder order. The first hash is
+always signed with secp256k1. Remaining hashes use secp256k1 for `ethereum-vm`
+and Ed25519 for `solana-vm`. Both curves use key material derived with the
+`gateway-vm` HKDF label.
+
 `request.json` format:
 
 ```json
 {
+  "destinationVmType": "ethereum-vm",
   "withdrawRequest": {
     "chainId": "ethereum-mainnet",
     "depository": "0x...",
@@ -326,6 +342,30 @@ npm run changepubkey -- --env dev \
 The `attestation` object is the direct response from `POST /attestations/withdraw-requests/v1` on the Relay oracle. The caller does **not** pass an allocator address — the action verifies it against the value embedded in the bundle.
 
 The Lighter action also supports `action: "changePubKey"` for API-key setup. It signs a Lighter gateway `changePubKey(uint48,uint8,bytes)` legacy EIP-155 transaction only when the requested `(apiKeyIndex, publicKey)` pair is present in the environment's `lighterAllowedApiKeys` config. The gateway address and gateway chain id are also embedded from `lighterGateway` and `lighterGatewayChainId`. The caller-provided `changePubKey` params are: `accountIndex`, `apiKeyIndex`, `publicKey`, `txNonce`, `gasPrice`, and `gasLimit`.
+
+### Creating a Hedera depository account
+
+The `hedera-vm` wallet action returns a secp256k1 public key and its EVM alias,
+but the protocol needs the `0.0.x` entity ID assigned after a Hedera account is
+created. The helper below creates that account with a funded operator, verifies
+the resulting alias through the mirror node, and prints the entity ID to
+register as the depository. It is idempotent and reports an existing account
+without creating another one.
+
+```sh
+yarn create-hedera-depository -- --env dev \
+  --usage-api-key <usage-api-key> \
+  --pkp-id <pkp-address> \
+  --operator-id <0.0.x> \
+  --operator-key <hex-or-DER-private-key> \
+  --hedera-network <mainnet|testnet|previewnet> \
+  [--initial-hbar <n>] \
+  [--max-auto-assoc <n>] \
+  [--dry-run]
+```
+
+The operator pays the account-creation fee. The PKP-derived private key stays
+inside the TEE; only its public key is used to create the Hedera account.
 
 ## Oracle Attestation
 
@@ -396,13 +436,16 @@ src/                                 # Lit Action source (bundled into dist/)
     index.ts                         # Public re-exports for the common module
     types.ts                         # Shared types (WithdrawRequest, attestation)
   vm/
+    gateway-vm.ts                    # Circle Gateway action (secp256k1 / Ed25519 signing)
     ethereum-vm.ts                   # Ethereum Lit Action (secp256k1 signing)
     bitcoin-vm.ts                    # Bitcoin Lit Action (secp256k1 signing, bc1 address)
+    tron-vm.ts                       # Tron Lit Action (secp256k1 signing)
     solana-vm.ts                     # Solana Lit Action (Ed25519 signing)
     ton-vm.ts                        # TON Lit Action (Ed25519 signing, 0:<hex> address)
     hyperliquid-vm.ts                # Hyperliquid Lit Action (secp256k1 signing, EVM address)
     lighter-vm.ts                    # Lighter Lit Action (secp256k1 signing + ChangePubKey)
     xrp-vm.ts                        # XRP Ledger Lit Action (secp256k1 DER signing, r... address)
+    hedera-vm.ts                     # Hedera Lit Action (secp256k1 signing, EVM alias)
 
 scripts/
   bundle-actions.ts                  # Bundles src/vm/*.ts into dist/actions/<env>/*.js
@@ -413,11 +456,13 @@ scripts/
     wallet.ts                        # CLI: derive VM-specific wallet address
     sign.ts                          # CLI: verify attestation + sign hashes
     change-pub-key.ts                # CLI: sign Lighter ChangePubKey transactions
+    create-hedera-depository.ts      # CLI: create the PKP-controlled Hedera account
 
 environments/
   dev.json                           # Dev environment config
   stag.json                          # Staging environment config
   prod.json                          # Production environment config
+  test.json                          # Test environment config
 
 test/
   src/common/                        # Unit tests for src/common utilities
@@ -433,6 +478,7 @@ The `setup` script uses the shared `SetupBackend` interface and implementations 
 | Algorithm          | HKDF-SHA256 (RFC 5869) |
 | IKM                | PKP private key bytes  |
 | Salt               | `"relay-allocator"`    |
+| Info (Gateway)     | `"gateway-vm"`         |
 | Info (Ethereum)    | `"ethereum-vm"`        |
 | Info (Bitcoin)     | `"bitcoin-vm"`         |
 | Info (Tron)        | `"tron-vm"`            |
@@ -441,6 +487,7 @@ The `setup` script uses the shared `SetupBackend` interface and implementations 
 | Info (Hyperliquid) | `"hyperliquid-vm"`     |
 | Info (Lighter)     | `"lighter-vm"`         |
 | Info (XRP)         | `"xrp-vm"`             |
+| Info (Hedera)      | `"hedera-vm"`          |
 | Output             | 32 bytes               |
 
 All VM actions use the same HKDF implementation from `src/common/crypto.ts`.
@@ -472,7 +519,7 @@ The oracle's EIP-712 domain:
 ## Testing
 
 ```sh
-npm test
+yarn test
 ```
 
 Tests cover:
@@ -486,11 +533,12 @@ The tests run locally without a Lit network connection.
 ## Development
 
 ```sh
-npm run format        # prettier --write .
-npm run format:check  # prettier --check .
-npm run lint          # tsc --noEmit && eslint .
-npm run build         # tsc + bundle every environment's actions
-npm test              # vitest run test
+yarn format        # prettier --write .
+yarn format:check  # prettier --check .
+yarn lint          # tsc --noEmit && eslint .
+yarn build         # TypeScript compilation
+yarn test          # vitest run test
+yarn bundle:actions -- --env dev  # bundle one environment's actions
 ```
 
 ## Security Model

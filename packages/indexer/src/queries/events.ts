@@ -1,4 +1,7 @@
+import { createHash } from "node:crypto"
+import { MemoryCacheBackend, type CacheBackend } from "../cache.js"
 import type { Database } from "../db/connection.js"
+import { jsonLogger } from "../logger.js"
 import type { EventRow, TransferStatRow } from "../models/db.js"
 
 type EventsFilter = {
@@ -58,60 +61,187 @@ export const listEvents = async (db: Database, filter: EventsFilter) => {
   return { nextCursor, rows }
 }
 
-const buildBucketExpr = (granularity: string) => {
-  const shiftedTs =
-    "(to_timestamp(timestamp) AT TIME ZONE 'UTC' + make_interval(mins => $/tzOffsetMinutes/))"
-  switch (granularity) {
-    case "minute":
-      return `to_char(date_trunc('minute', ${shiftedTs}), 'YYYY-MM-DD HH24:MI')`
-    case "hour":
-      return `to_char(date_trunc('hour', ${shiftedTs}), 'YYYY-MM-DD HH24:00')`
-    case "week":
-      return `to_char(date_trunc('week', ${shiftedTs}), 'YYYY-MM-DD')`
-    case "month":
-      return `to_char(date_trunc('month', ${shiftedTs}), 'YYYY-MM')`
-    case "day":
-    default:
-      return `to_char(date_trunc('day', ${shiftedTs}), 'YYYY-MM-DD')`
-  }
+const TRANSFER_STATS_CACHE_TTL_MS = 10 * 60 * 1000
+const TRANSFER_STATS_TIMEZONE = "UTC"
+
+type TransferStatsGranularity = "day" | "hour" | "minute" | "month" | "week"
+
+type TransferStatsArgs = {
+  tokenId?: string
+  granularity: string
+  points: number
+  tzOffsetMinutes: number
 }
 
-const secondsForGranularity = (granularity: string) => {
-  switch (granularity) {
-    case "minute":
-      return 60
-    case "hour":
-      return 3600
-    case "week":
-      return 604800
-    case "month":
-      return 2592000
-    case "day":
-    default:
-      return 86400
-  }
+type TransferStatsCacheLogger = Pick<typeof jsonLogger, "debug" | "error">
+
+const granularityConfig: Record<
+  TransferStatsGranularity,
+  { format: string; seconds: number }
+> = {
+  day: { format: "YYYY-MM-DD", seconds: 86400 },
+  hour: { format: "YYYY-MM-DD HH24:00", seconds: 3600 },
+  minute: { format: "YYYY-MM-DD HH24:MI", seconds: 60 },
+  month: { format: "YYYY-MM", seconds: 2592000 },
+  week: { format: "YYYY-MM-DD", seconds: 604800 },
 }
 
-export const transferStats = async (
-  db: Database,
-  args: {
-    tokenId?: string
-    granularity: string
-    points: number
-    tzOffsetMinutes: number
-  }
+const normalizeGranularity = (granularity: string): TransferStatsGranularity =>
+  Object.prototype.hasOwnProperty.call(granularityConfig, granularity)
+    ? (granularity as TransferStatsGranularity)
+    : "day"
+
+const normalizePoints = (points: number) =>
+  Number.isFinite(points) && points > 0 ? Math.min(points, 365) : 30
+
+const normalizeTzOffsetMinutes = (tzOffsetMinutes: number) =>
+  Number.isFinite(tzOffsetMinutes) ? Math.trunc(tzOffsetMinutes) : 0
+
+const buildBucketExpr = (
+  granularity: TransferStatsGranularity,
+  format: string
 ) => {
-  const { tokenId, granularity, points, tzOffsetMinutes } = args
-  const since =
-    Math.floor(Date.now() / 1000) - points * secondsForGranularity(granularity)
-  const bucketExpr = buildBucketExpr(granularity)
+  const shiftedTs = `(to_timestamp(timestamp) AT TIME ZONE '${TRANSFER_STATS_TIMEZONE}' + make_interval(mins => $/tzOffsetMinutes/))`
+  return `to_char(date_trunc('${granularity}', ${shiftedTs}), '${format}')`
+}
 
-  return db.manyOrNone<TransferStatRow>(
-    `SELECT ${bucketExpr} AS bucket, COUNT(*)::int AS count
-     FROM events
-     WHERE ${tokenId ? "token_id = $/tokenId/ AND " : ""}timestamp >= $/since/
-     GROUP BY bucket
-     ORDER BY bucket ASC`,
-    { since, tokenId, tzOffsetMinutes }
-  )
+const buildTransferStatsCacheKey = (input: {
+  format: string
+  granularity: TransferStatsGranularity
+  points: number
+  since: number
+  tokenId: string | null
+  timezone: string
+  tzOffsetMinutes: number
+}) => {
+  const digest = createHash("sha256")
+    .update(JSON.stringify(input))
+    .digest("hex")
+  return `indexer:transfer-stats:v1:${digest}`
+}
+
+const parseCachedRows = (value: string): TransferStatRow[] => {
+  const rows: unknown = JSON.parse(value)
+  if (
+    !Array.isArray(rows) ||
+    !rows.every(
+      (row) =>
+        typeof row === "object" &&
+        row !== null &&
+        typeof (row as TransferStatRow).bucket === "string" &&
+        Number.isInteger((row as TransferStatRow).count)
+    )
+  ) {
+    throw new Error("Invalid transfer stats cache value")
+  }
+
+  return rows as TransferStatRow[]
+}
+
+export const createTransferStatsService = (
+  db: Database,
+  options: {
+    cache?: CacheBackend
+    logger?: TransferStatsCacheLogger
+    now?: () => number
+  } = {}
+) => {
+  const cache = options.cache ?? new MemoryCacheBackend()
+  const logger = options.logger ?? jsonLogger
+  const now = options.now ?? Date.now
+  const inFlight = new Map<string, Promise<TransferStatRow[]>>()
+
+  const load = async (
+    key: string,
+    query: {
+      bucketExpr: string
+      since: number
+      tokenId?: string
+      tzOffsetMinutes: number
+    }
+  ) => {
+    try {
+      const cached = await cache.get(key)
+      if (cached !== null) {
+        const rows = parseCachedRows(cached)
+        logger.debug("transfer-stats-cache", "Cache hit", { cacheKey: key })
+        return rows
+      }
+    } catch (error) {
+      logger.error("transfer-stats-cache", "Cache read failed", {
+        cacheKey: key,
+        error,
+      })
+    }
+
+    logger.debug("transfer-stats-cache", "Cache miss", { cacheKey: key })
+
+    const rows = await db.manyOrNone<TransferStatRow>(
+      `SELECT ${query.bucketExpr} AS bucket, COUNT(*)::int AS count
+       FROM events
+       WHERE ${query.tokenId ? "token_id = $/tokenId/ AND " : ""}timestamp >= $/since/
+       GROUP BY bucket
+       ORDER BY bucket ASC`,
+      {
+        since: query.since,
+        tokenId: query.tokenId,
+        tzOffsetMinutes: query.tzOffsetMinutes,
+      }
+    )
+
+    try {
+      await cache.set(key, JSON.stringify(rows), TRANSFER_STATS_CACHE_TTL_MS)
+    } catch (error) {
+      logger.error("transfer-stats-cache", "Cache write failed", {
+        cacheKey: key,
+        error,
+      })
+    }
+
+    return rows
+  }
+
+  return async (args: TransferStatsArgs) => {
+    const granularity = normalizeGranularity(args.granularity)
+    const points = normalizePoints(args.points)
+    const tzOffsetMinutes = normalizeTzOffsetMinutes(args.tzOffsetMinutes)
+    const { format, seconds } = granularityConfig[granularity]
+    const normalizedNow =
+      Math.floor(now() / TRANSFER_STATS_CACHE_TTL_MS) *
+      TRANSFER_STATS_CACHE_TTL_MS
+    const since = Math.floor(normalizedNow / 1000) - points * seconds
+    const key = buildTransferStatsCacheKey({
+      format,
+      granularity,
+      points,
+      since,
+      timezone: TRANSFER_STATS_TIMEZONE,
+      tokenId: args.tokenId ?? null,
+      tzOffsetMinutes,
+    })
+
+    const existing = inFlight.get(key)
+    if (existing) {
+      logger.debug("transfer-stats-cache", "Joined in-flight query", {
+        cacheKey: key,
+      })
+      return existing
+    }
+
+    const pending = load(key, {
+      bucketExpr: buildBucketExpr(granularity, format),
+      since,
+      tokenId: args.tokenId,
+      tzOffsetMinutes,
+    })
+    inFlight.set(key, pending)
+
+    try {
+      return await pending
+    } finally {
+      if (inFlight.get(key) === pending) {
+        inFlight.delete(key)
+      }
+    }
+  }
 }

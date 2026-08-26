@@ -7,7 +7,7 @@ import {ScriptBase} from "./utils/ScriptBase.sol";
 /// @notice Deploys MockVerifierProxy — a stand-in for Chainlink's `VerifierProxy`
 ///         that unwraps a `fullReport` envelope without checking DON signatures
 ///         or charging a fee. Only for environments without a real Chainlink
-///         Data Streams verifier deployment (see docs/data-streams-onchain-verifier.md).
+///         Data Streams verifier deployment.
 /// Env:
 ///   DEPLOYER_PRIVATE_KEY – deployer key (required)
 contract DeployMockVerifierProxy is ScriptBase {

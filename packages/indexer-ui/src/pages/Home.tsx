@@ -219,7 +219,6 @@ export default function Home() {
     return {
       checked: runs.reduce((sum, run) => sum + run.checkedCount, 0),
       confirmed: runs.reduce((sum, run) => sum + run.confirmedCount, 0),
-      pending: runs.reduce((sum, run) => sum + run.pendingCount, 0),
     }
   }, [auditReport])
 
@@ -522,12 +521,6 @@ export default function Home() {
                 </p>
               </div>
               <div>
-                <p className="label">Pending head</p>
-                <p className="value">
-                  {auditTotals.pending.toLocaleString("en-US")}
-                </p>
-              </div>
-              <div>
                 <p className="label">Replay ranges</p>
                 <p className="value">
                   {auditReport.suggestedReplayRanges.length.toLocaleString(
@@ -598,12 +591,11 @@ export default function Home() {
                 <div className="table-row header">
                   <span>Finding</span>
                   <span>Token</span>
-                  <span>Address / log</span>
-                  <span>Drift</span>
+                  <span>Transaction / log</span>
                 </div>
                 {auditFindingExamples.map((finding) => (
                   <div
-                    key={`${finding.kind}-${finding.tokenId}-${finding.address}-${finding.txHash}-${finding.logIndex}`}
+                    key={`${finding.kind}-${finding.tokenId}-${finding.txHash}-${finding.logIndex}`}
                     className="table-row"
                   >
                     <span>
@@ -626,14 +618,7 @@ export default function Home() {
                       )}
                     </span>
                     <span>
-                      {finding.address ? (
-                        <Link
-                          className="token-link"
-                          to={`/address/${finding.address}`}
-                        >
-                          {displayAddress(finding.address)}
-                        </Link>
-                      ) : finding.txHash ? (
+                      {finding.txHash ? (
                         <a
                           href={txUrl(finding.txHash)}
                           target="_blank"
@@ -650,12 +635,6 @@ export default function Home() {
                           #{finding.blockNumber.toLocaleString("en-US")}
                         </span>
                       ) : null}
-                    </span>
-                    <span>
-                      {finding.indexedBalance != null &&
-                      finding.chainBalance != null
-                        ? `${finding.indexedBalance} -> ${finding.chainBalance}`
-                        : "Missing indexed transfer"}
                     </span>
                   </div>
                 ))}

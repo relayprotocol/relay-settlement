@@ -54,10 +54,6 @@ export type HealthCheckpointState = {
   failedEvents?: FailedEventStatus
 }
 
-export type HealthStatusOptions = {
-  includeAudits?: boolean
-}
-
 const parseBlock = (value: string | null) => {
   if (value == null) return null
   const parsed = Number(value)
@@ -96,10 +92,8 @@ const getMetaWithFallback = async (
 
 export const getHealthStatus = async (
   db: Database,
-  provider: Provider,
-  options: HealthStatusOptions = {}
+  provider: Provider
 ): Promise<HealthResponse> => {
-  const includeAudits = options.includeAudits ?? true
   const latestChainBlock = await provider.getBlockNumber()
   const latestIndexedBlock = Math.max(
     0,
@@ -122,13 +116,11 @@ export const getHealthStatus = async (
     getMeta(db, ORACLE_ROLE_META_KEY),
     getMeta(db, ORACLE_EXECUTION_META_KEY),
     getFailedEventStatus(db),
-    includeAudits
-      ? getIndexerAuditHealth(db, {
-          consecutiveFailures: config.indexerAuditConsecutiveFailures,
-          failureThreshold: config.indexerAuditFailureThreshold,
-          maxAgeMs: config.indexerAuditMaxAgeMs,
-        })
-      : Promise.resolve(undefined),
+    getIndexerAuditHealth(db, {
+      consecutiveFailures: config.indexerAuditConsecutiveFailures,
+      failureThreshold: config.indexerAuditFailureThreshold,
+      maxAgeMs: config.indexerAuditMaxAgeMs,
+    }),
   ])
 
   return buildHealthResponse({

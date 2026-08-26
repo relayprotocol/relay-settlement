@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
@@ -13,7 +13,8 @@ use yawc::{HttpRequestBuilder, Options, TcpWebSocket, WebSocket};
 
 use crate::Context;
 use crate::cache::{
-    FeedKey, IpcServerSink, PriceUpdateSink, SignedPriceUpdate, now_unix_ms, provider_id,
+    FeedKey, IpcServerSink, NANOS_PER_MILLISECOND, PriceUpdateSink, SignedPriceUpdate, now_unix_ms,
+    now_unix_ns, provider_id,
 };
 use crate::payload::FastPayload;
 use crate::taxonomy::FastAsset;
@@ -23,7 +24,6 @@ const MESSAGE_TYPE: &str = "signed_ecdsa";
 const DEFAULT_RECONNECT_BACKOFF: Duration = Duration::from_secs(1);
 const DEFAULT_MAX_RECONNECT_BACKOFF: Duration = Duration::from_secs(15);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
-const NANOS_PER_MS: u64 = 1_000_000;
 
 #[instrument(skip_all)]
 pub async fn run(ctx: Context) -> Result<()> {
@@ -166,7 +166,8 @@ impl BatchWorker {
     }
 
     fn cache_payload(&self, hex_payload: &str, tracker: Option<&mut AbsenceTracker>) {
-        let delivery_time_ms = now_unix_ms();
+        let delivery_time_ns = now_unix_ns();
+        let delivery_time_ms = delivery_time_ns / NANOS_PER_MILLISECOND;
         let payload = match FastPayload::from_hex(hex_payload) {
             Ok(payload) => payload,
             Err(e) => {
@@ -179,7 +180,7 @@ impl BatchWorker {
         if let Err(e) = crate::verification::verify(
             &payload,
             self.taxonomy_id,
-            delivery_time_ms,
+            delivery_time_ns,
             self.max_age_sec,
         ) {
             warn!(error = %e, "dropping fast payload that failed verification");
@@ -187,7 +188,9 @@ impl BatchWorker {
                 .assets
                 .iter()
                 .filter(|value| self.assets.contains_key(&value.asset_id))
-                .count();
+                .map(|value| value.asset_id)
+                .collect::<HashSet<_>>()
+                .len();
             self.sink.record_dropped(subscribed as u64);
             return;
         }
@@ -248,7 +251,7 @@ fn publish_batch(
     payload: &FastPayload,
     delivery_time_ms: u64,
 ) -> usize {
-    let source_time_ms = payload.timestamp_ns / NANOS_PER_MS;
+    let source_time_ms = payload.timestamp_ns / NANOS_PER_MILLISECOND;
     let mut published = 0;
     for value in &payload.assets {
         let Some(asset) = assets.get(&value.asset_id) else {
@@ -266,13 +269,14 @@ fn publish_batch(
             payload_len = payload.raw.len(),
             "cached fast update, broadcasting to subscribers"
         );
-        sink.insert(SignedPriceUpdate {
+        let inserted = sink.insert(SignedPriceUpdate {
             key: FeedKey::new(provider_id(), asset.feed_id),
             payload: payload.raw.clone(),
             delivery_time_ms,
-            source_time_ms,
+            source_time_ns: payload.timestamp_ns,
+            quantized_value: value.quantized_value,
         });
-        published += 1;
+        published += usize::from(inserted);
     }
     published
 }
@@ -389,8 +393,9 @@ mod tests {
     }
 
     impl PriceUpdateSink for RecordingSink {
-        fn insert(&self, update: SignedPriceUpdate) {
+        fn insert(&self, update: SignedPriceUpdate) -> bool {
             self.updates.lock().unwrap().push(update);
+            true
         }
     }
 
@@ -450,7 +455,8 @@ mod tests {
             assert_eq!(update.key.provider_id, keccak256("stork"));
             assert_eq!(update.key.feed_id, fast_feed_id(1, asset_id));
             assert_eq!(update.payload, payload.raw);
-            assert_eq!(update.source_time_ms, 1_700_000_000_000);
+            assert_eq!(update.source_time_ns, 1_700_000_000_000_000_000);
+            assert_eq!(update.quantized_value, i128::from(asset_id - 6));
             assert_eq!(update.delivery_time_ms, 1_700_000_000_001);
         }
     }

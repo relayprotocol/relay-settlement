@@ -15,6 +15,7 @@ The intended reader is an integrator working in the solver stack. The solver is 
 | `solana-vm`      | [solana-vm.md](./solana-vm.md)           | Native SOL and SPL token deposits into the Relay Solana depository program. |
 | `hyperliquid-vm` | [hyperliquid-vm.md](./hyperliquid-vm.md) | Hyperliquid `sendAsset` sweeps plus Relay nonce-mapping authorization.      |
 | `ton-vm`         | [ton-vm.md](./ton-vm.md)                 | Native TON deposits swept to the depository with an order-id comment.       |
+| `tron-vm`        | [tron-vm.md](./tron-vm.md)               | Native TRX and TRC20 deposits using canonical Tron protobuf transactions.   |
 
 ## End-to-end design
 
@@ -33,7 +34,7 @@ After constructing the Relay order, the solver submits `trigger(...)` to the Hub
 The trigger binds:
 
 - `input`: source VM, source chain id, input currency, and input amount.
-- `derivationFields`: all fields that deterministically derive the deposit wallet path, including output details, solver, pricing oracle, depositor, refund recipient, and price impact.
+- `derivationFields`: all fields that deterministically derive the deposit wallet path, including output details, solver, pricing oracle, depositor, refund recipient, price impact, and a random salt.
 - `orderId`: the Relay order id being funded.
 - `nonce`: Hub trigger nonce.
 - `currencies`, `prices`, and `extraData`: pricing context used by the trigger hash.
@@ -58,6 +59,9 @@ The fields are encoded in this fixed order (the ABI tuple the hash is computed o
 | `depositor`       | `bytes`   | Depositor identity on the input VM, VM-address-encoded.                               |
 | `refundRecipient` | `bytes`   | Refund recipient on the input VM, VM-address-encoded.                                 |
 | `priceImpactBps`  | `uint256` | Price impact in basis points (decimal string in JSON, encoded as a `uint256`).        |
+| `salt`            | `uint256` | Random 256-bit value (decimal string in JSON) that makes the deposit address unique.  |
+
+Generate a fresh, cryptographically random `salt` for every new deposit address. Reusing all derivation fields, including the salt, intentionally resolves to the same address.
 
 Non-EVM addresses (`outputCurrency`, `outputRecipient`, `depositor`, `refundRecipient`) are `bytes` carrying the protocol VM address encoding; `solver` and `pricingOracle` are always raw 20-byte EVM addresses. Use the settlement SDK address codecs to encode these fields so they hash identically across the solver, Hub, oracle, and action.
 
@@ -228,6 +232,7 @@ The repository includes source-controlled end-to-end example scripts under [`../
 | `solana-vm`      | [`../scripts/examples/solana-vm.ts`](../scripts/examples/solana-vm.ts)           |
 | `hyperliquid-vm` | [`../scripts/examples/hyperliquid-vm.ts`](../scripts/examples/hyperliquid-vm.ts) |
 | `ton-vm`         | [`../scripts/examples/ton-vm.ts`](../scripts/examples/ton-vm.ts)                 |
+| `tron-vm`        | [`../scripts/examples/tron-vm.ts`](../scripts/examples/tron-vm.ts)               |
 
 Run them from `packages/lit-deposit-address` after exporting the required environment variables listed at the top of each file:
 
@@ -237,6 +242,7 @@ yarn tsx scripts/examples/bitcoin-vm.ts
 yarn tsx scripts/examples/solana-vm.ts
 yarn tsx scripts/examples/hyperliquid-vm.ts
 yarn tsx scripts/examples/ton-vm.ts
+yarn tsx scripts/examples/tron-vm.ts
 ```
 
 These scripts are intentionally verbose and model the full solver flow: derive the deposit wallet, fund it, submit the Hub trigger, request the oracle attestation, call the Lit Action, and submit the signed sweep. They are examples for integrators, not production solver code.
@@ -255,7 +261,7 @@ yarn client account -- --env <env> --usage-api-key <key> --pkp-id <pkp> --vm-typ
 
 From the quote, build two objects that must agree field-for-field:
 
-- `derivationFields` — the inputs that deterministically derive the deposit address: `inputVmType`, the output side (`outputVmType` / `outputChainId` / `outputCurrency` / `outputRecipient`), `solver`, `pricingOracle`, `depositor`, `refundRecipient`, `priceImpactBps`. See the [derivation-fields table](#derivation-fields) for exact types and encodings.
+- `derivationFields` — the inputs that deterministically derive the deposit address: `inputVmType`, the output side (`outputVmType` / `outputChainId` / `outputCurrency` / `outputRecipient`), `solver`, `pricingOracle`, `depositor`, `refundRecipient`, `priceImpactBps`, and `salt`. See the [derivation-fields table](#derivation-fields) for exact types and encodings.
 - the Relay `Order` — built and hashed with the settlement SDK (`getOrderId(order, chainsConfig)`), then signed by the solver EOA (`orderSignature = solver.signMessage({ raw: orderId })`).
 
 Construction rules that trip people up:
@@ -305,7 +311,7 @@ Reference: `requestAttestation` in [`../scripts/examples/lib/common.ts`](../scri
 
 ### Step 6 — Build the VM-native deposit transaction(s)
 
-Once the deposit has landed in the deposit address, build the unsigned VM-native transaction(s) that sweep it into `attestation.inputDepository`, following the exact shape and policy in the VM's document ([ethereum-vm](./ethereum-vm.md), [bitcoin-vm](./bitcoin-vm.md), [solana-vm](./solana-vm.md), [hyperliquid-vm](./hyperliquid-vm.md), [ton-vm](./ton-vm.md)). The action re-derives these constraints and rejects anything that doesn't match the attested trigger.
+Once the deposit has landed in the deposit address, build the unsigned VM-native transaction(s) that sweep it into `attestation.inputDepository`, following the exact shape and policy in the VM's document ([ethereum-vm](./ethereum-vm.md), [bitcoin-vm](./bitcoin-vm.md), [solana-vm](./solana-vm.md), [hyperliquid-vm](./hyperliquid-vm.md), [ton-vm](./ton-vm.md), [tron-vm](./tron-vm.md)). The action re-derives these constraints and rejects anything that doesn't match the attested trigger.
 
 ### Step 7 — Authorize and sign inside the TEE
 
@@ -336,6 +342,7 @@ Addresses in trigger fields, derivation fields, orders, and VM policies are enco
 - `solana-vm`: raw 32-byte public keys. In protocol fields these are hex-encoded; VM-native transaction messages still use normal Solana account keys.
 - `bitcoin-vm`: settlement SDK-compatible Bitcoin address encoding. Derivation-field addresses should be normalized through the VM address codec.
 - `ton-vm`: the 32-byte basechain (workchain 0) StateInit account hash. Protocol fields are hex-encoded; VM-native addresses accept the raw `0:<hex>` form and the user-facing friendly base64 forms.
+- `tron-vm`: the 21-byte mainnet payload (`0x41` plus the 20-byte account body). Protocol fields are hex-encoded; VM-native addresses remain case-sensitive Base58Check strings.
 - Amounts in triggers are integer base units as decimal strings.
 - `orderId` and trigger ids are `0x`-prefixed 32-byte hex strings.
 

@@ -7,12 +7,10 @@ export type RuntimeConfig = {
   apiRequested: boolean
   allowUnauthenticatedApi: boolean
   authApiKey: string | undefined
-  balanceDriftAuditBatchSize: number
-  balanceDriftAuditEnabled: boolean
-  balanceDriftAuditGraceBlocks: number
   batchSize: number
   confirmationBlocks: number
   databaseUrl: string | undefined
+  depositoryBalanceAuditIntervalMs: number
   doBackgroundWork: boolean
   enableApi: boolean
   healthMaxLagBlocks: number
@@ -22,10 +20,8 @@ export type RuntimeConfig = {
   indexerAuditFailureThreshold: number
   indexerAuditIntervalMs: number
   indexerAuditMaxAgeMs: number
-  indexerDriftAutoReconcileBatchSize: number
-  indexerDriftAutoReconcileEnabled: boolean
-  indexerDriftAutoReconcileStaleMs: number
   maxTransferReplayBlockRange: number
+  oracleApiUrl: string | undefined
   oracleContractAddress: string
   oracleStartBlock: number
   port: number
@@ -124,6 +120,10 @@ export const validateRuntimeConfig = (config: RuntimeConfig) => {
   if (config.doBackgroundWork && !config.rpcWsUrl) {
     throw new Error("RPC_WS_URL is required when DO_BACKGROUND_WORK=1")
   }
+
+  if (config.doBackgroundWork && !config.oracleApiUrl) {
+    throw new Error("ORACLE_API_URL is required when DO_BACKGROUND_WORK=1")
+  }
 }
 
 const allowUnauthenticatedApi = resolveBoolean(
@@ -137,24 +137,16 @@ export const config: RuntimeConfig = {
   allowUnauthenticatedApi,
   apiRequested,
   authApiKey,
-  balanceDriftAuditBatchSize: resolveNonNegativeInteger(
-    process.env.BALANCE_DRIFT_AUDIT_BATCH_SIZE,
-    25
-  ),
-  balanceDriftAuditEnabled: resolveBoolean(
-    process.env.BALANCE_DRIFT_AUDIT_ENABLED,
-    true
-  ),
-  balanceDriftAuditGraceBlocks: resolveNonNegativeInteger(
-    process.env.BALANCE_DRIFT_AUDIT_GRACE_BLOCKS,
-    250
-  ),
   batchSize: resolveNumber(process.env.BATCH_SIZE, 2000),
   confirmationBlocks: resolveNonNegativeInteger(
     process.env.CONFIRMATION_BLOCKS,
     12
   ),
   databaseUrl: process.env.DATABASE_URL,
+  depositoryBalanceAuditIntervalMs: resolveNonNegativeInteger(
+    process.env.DEPOSITORY_BALANCE_AUDIT_INTERVAL_MS,
+    10 * 60 * 1000
+  ),
   doBackgroundWork: resolveBoolean(process.env.DO_BACKGROUND_WORK, true),
   enableApi: resolveEnableApi(
     apiRequested,
@@ -186,22 +178,11 @@ export const config: RuntimeConfig = {
     process.env.INDEXER_AUDIT_MAX_AGE_MS,
     30 * 60 * 1000
   ),
-  indexerDriftAutoReconcileBatchSize: resolveNonNegativeInteger(
-    process.env.INDEXER_DRIFT_AUTO_RECONCILE_BATCH_SIZE,
-    25
-  ),
-  indexerDriftAutoReconcileEnabled: resolveBoolean(
-    process.env.INDEXER_DRIFT_AUTO_RECONCILE_ENABLED,
-    true
-  ),
-  indexerDriftAutoReconcileStaleMs: resolveNonNegativeInteger(
-    process.env.INDEXER_DRIFT_AUTO_RECONCILE_STALE_MS,
-    10 * 60 * 1000
-  ),
   maxTransferReplayBlockRange: resolveNumber(
     process.env.MAX_TRANSFER_REPLAY_BLOCK_RANGE,
     100_000
   ),
+  oracleApiUrl: process.env.ORACLE_API_URL,
   oracleContractAddress: resolveAddress(
     process.env.ORACLE_CONTRACT_ADDRESS,
     relayNetworkDefaults.oracleContractAddress

@@ -1,6 +1,19 @@
 [
   {
     "type": "function",
+    "name": "ORACLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "decodeAndVerify",
     "inputs": [
       {
@@ -42,5 +55,27 @@
       }
     ],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "error",
+    "name": "InvalidOracle",
+    "inputs": [
+      {
+        "name": "oracle",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnauthorizedCaller",
+    "inputs": [
+      {
+        "name": "caller",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
   }
 ]

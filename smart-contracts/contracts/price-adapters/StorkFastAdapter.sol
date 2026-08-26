@@ -51,20 +51,20 @@ interface IStorkFastVerifier {
 ///      recomputes that hash for every asset in the payload and requires the
 ///      requested feed id to be among them, making the binding
 ///      self-certifying with no per-feed configuration. A payload may batch
-///      any number of assets under its one signature, and if an asset id
-///      repeats, the last occurrence wins.
+///      any number of assets under its one signature. Duplicate asset IDs are
+///      rejected.
 ///
 ///      Fees: verification charges a native-wei fee. The adapter calls with
 ///      zero value and assumes a zero-fee config, so a non-zero fee makes
 ///      verification revert rather than silently degrade.
 ///
-///      Cache: the decoded fields of the last verified payload per feed are
-///      kept in `cachedReports`. Verifying a batch caches an entry for every
-///      feed it contains, all keyed to the hash of the same raw bytes, so
-///      sibling feeds verified against a byte-identical `updateData` skip the
-///      fee-paying verification call. The feed id is an immutable hash of the
-///      pair an entry was verified against, so a cache hit is as strict as a
-///      fresh verification.
+///      Cache: `cachedReportHash` identifies the latest payload verified by
+///      the adapter. A byte-identical payload skips the verifier even when a
+///      different feed is requested. Only feeds actually requested by the
+///      oracle keep packed `CachedReportValues`, avoiding writes for every
+///      unused sibling feed in the batch. On a cache hit, the requested value
+///      is decoded directly from the exact payload bytes whose hash was
+///      previously signature-verified and fully validated.
 ///
 ///      Staleness: Fast payloads carry no expiry timestamp. Validity is
 ///      enforced by `RelayPriceOracle` via each route's `maxAgeSeconds`
@@ -79,31 +79,44 @@ contract StorkFastAdapter is IPriceFeedAdapter {
   ///      the raw payload bytes.
   uint256 private constant TAXONOMY_ID_OFFSET = 65;
 
+  /// @dev Byte offset of the uint64 nanosecond timestamp in a signed payload.
+  uint256 private constant TIMESTAMP_NS_OFFSET = 67;
+
+  /// @dev Byte offset of the first asset in a signed payload.
+  uint256 private constant ASSETS_OFFSET = 75;
+
+  /// @dev Bytes per asset: 2-byte asset id and 16-byte quantized value.
+  uint256 private constant ASSET_BYTES = 18;
+
+  /// @dev Byte width of the asset id at the start of each asset entry.
+  uint256 private constant ASSET_ID_BYTES = 2;
+
   /// @dev Nanoseconds per second, for converting payload timestamps to the
   ///      Unix-seconds `publishTime` expected by `RelayPriceOracle`.
   uint64 private constant NS_PER_SECOND = 1e9;
 
-  /// @notice Cached pricing fields of the last verified payload for a feed.
-  /// @dev Packs into 2 storage slots: `reportHash` (32), then
-  ///      `quantizedValue`/`publishTime` (24+8).
-  /// @param reportHash keccak256 of the raw payload bytes the entry was
-  ///        decoded from. Matching it against the hash of the bytes currently
-  ///        served by the precompile detects a cache hit.
+  /// @notice Latest accepted pricing fields for a consumed feed.
+  /// @dev Packs into one storage slot: `quantizedValue` (24) and
+  ///      `timestampNs` (8).
   /// @param quantizedValue Price scaled by `USD_PRICE_DECIMALS`.
-  /// @param publishTime Payload timestamp truncated to Unix seconds.
-  struct CachedReport {
-    bytes32 reportHash;
+  /// @param timestampNs Provider-signed Unix timestamp in nanoseconds.
+  struct CachedReportValues {
     int192 quantizedValue;
-    uint64 publishTime;
+    uint64 timestampNs;
   }
 
-  /// @notice Last verified payload per feed, keyed by feed ID.
-  /// @dev One live entry per feed. A new payload overwrites the previous
-  ///      entry.
-  mapping(bytes32 feedId => CachedReport report) public cachedReports;
+  /// @notice Hash of the latest payload verified by this adapter.
+  bytes32 public cachedReportHash;
+
+  /// @notice Latest accepted report values for each consumed feed.
+  mapping(bytes32 feedId => CachedReportValues values)
+    public cachedReportValues;
 
   /// @notice Stork Fast verifier that checks payload signatures on-chain.
   IStorkFastVerifier public immutable STORK_FAST_VERIFIER;
+
+  /// @inheritdoc IPriceFeedAdapter
+  address public immutable ORACLE;
 
   /// @notice Thrown when the verifier address is zero.
   error InvalidStorkFastVerifier();
@@ -117,13 +130,52 @@ contract StorkFastAdapter is IPriceFeedAdapter {
   /// @param quantizedValue Non-positive value decoded from the payload.
   error NonPositivePrice(int192 quantizedValue);
 
-  /// @notice Deploys the adapter bound to a Stork Fast verifier.
+  /// @notice Thrown when an asset ID appears more than once in a payload.
+  /// @param assetId Duplicated Stork Fast asset ID.
+  error DuplicateAssetId(uint16 assetId);
+
+  /// @notice Thrown when a feed's nanosecond timestamp moves backwards.
+  /// @param feedId Feed whose timestamp moved backwards.
+  /// @param timestampNs Timestamp in the newly verified payload.
+  /// @param latestTimestampNs Latest timestamp previously accepted for the feed.
+  error TimestampRollback(
+    bytes32 feedId,
+    uint64 timestampNs,
+    uint64 latestTimestampNs
+  );
+
+  /// @notice Thrown when the same feed and timestamp carry different prices.
+  /// @param feedId Feed with contradictory observations.
+  /// @param timestampNs Shared nanosecond timestamp of the observations.
+  /// @param latestValue Price previously accepted at the timestamp.
+  /// @param newValue Newly verified contradictory price.
+  error ConflictingPriceAtTimestamp(
+    bytes32 feedId,
+    uint64 timestampNs,
+    int192 latestValue,
+    int192 newValue
+  );
+
+  /// @notice Deploys the adapter bound to an oracle and Stork Fast verifier.
+  /// @param _oracle RelayPriceOracle authorized to request verification.
   /// @param storkFastVerifier Stork Fast verifier to verify payloads against.
-  constructor(IStorkFastVerifier storkFastVerifier) {
+  constructor(address _oracle, IStorkFastVerifier storkFastVerifier) {
+    if (_oracle == address(0)) {
+      revert InvalidOracle(_oracle);
+    }
     if (address(storkFastVerifier) == address(0)) {
       revert InvalidStorkFastVerifier();
     }
+    ORACLE = _oracle;
     STORK_FAST_VERIFIER = storkFastVerifier;
+  }
+
+  /// @notice Restricts report verification and cache writes to the bound oracle.
+  modifier onlyOracle() {
+    if (msg.sender != ORACLE) {
+      revert UnauthorizedCaller(msg.sender);
+    }
+    _;
   }
 
   /// @notice Computes the feed id for a Stork Fast asset.
@@ -150,6 +202,7 @@ contract StorkFastAdapter is IPriceFeedAdapter {
     bytes calldata updateData
   )
     external
+    onlyOracle
     returns (
       uint256 usdPrice,
       uint256 bid,
@@ -159,36 +212,39 @@ contract StorkFastAdapter is IPriceFeedAdapter {
     )
   {
     bytes32 reportHash = keccak256(updateData);
-    CachedReport memory cached = cachedReports[feedId];
+    CachedReportValues memory values;
 
-    if (cached.reportHash != reportHash) {
-      cached = _verifyAndCache(feedId, updateData, reportHash);
+    if (cachedReportHash == reportHash) {
+      values = _decodeCachedReportValues(feedId, updateData);
+      _validateReportValues(feedId, values);
+    } else {
+      values = _verifyReport(feedId, updateData);
+      cachedReportHash = reportHash;
     }
 
-    if (cached.quantizedValue <= 0) {
-      revert NonPositivePrice(cached.quantizedValue);
+    if (values.quantizedValue <= 0) {
+      revert NonPositivePrice(values.quantizedValue);
     }
+
+    _storeReportValues(feedId, values);
 
     // Fast payloads carry no bid/ask band, so it is reported as unavailable
     // (`bid == ask == 0`).
-    usdPrice = uint256(uint192(cached.quantizedValue));
+    usdPrice = uint256(uint192(values.quantizedValue));
     bid = 0;
     ask = 0;
     usdPriceDecimals = USD_PRICE_DECIMALS;
-    publishTime = cached.publishTime;
+    publishTime = values.timestampNs / NS_PER_SECOND;
   }
 
-  /// @notice Verifies a payload on-chain and caches the decoded pricing
-  ///         fields of every asset it contains.
+  /// @notice Verifies a payload and validates every decoded asset.
   /// @param feedId Feed the payload must contain.
   /// @param updateData Raw `signed_ecdsa` payload to verify.
-  /// @param reportHash keccak256 of `updateData`, stored as the cache identity.
-  /// @return entry The cached entry written for `feedId`.
-  function _verifyAndCache(
+  /// @return requestedValues Report values for `feedId`.
+  function _verifyReport(
     bytes32 feedId,
-    bytes calldata updateData,
-    bytes32 reportHash
-  ) private returns (CachedReport memory entry) {
+    bytes calldata updateData
+  ) private returns (CachedReportValues memory requestedValues) {
     // Reverts unless the payload is signed by the verifier's configured Stork
     // Fast signer. Called with zero value under the zero-fee assumption.
     IStorkFastVerifier.Asset[] memory assets = STORK_FAST_VERIFIER
@@ -201,28 +257,114 @@ contract StorkFastAdapter is IPriceFeedAdapter {
       bytes2(updateData[TAXONOMY_ID_OFFSET:TAXONOMY_ID_OFFSET + 2])
     );
 
-    // Each feed id is the hash of the payload's own identifying pair, so the
-    // binding needs no per-feed configuration. One verification warms the
-    // cache for every feed in the batch, and a duplicated asset id resolves
-    // to its last occurrence.
-    bool found;
+    requestedValues = _validateBatch(taxonomyId, assets, feedId);
+  }
+
+  /// @notice Rejects duplicate assets and validates the complete batch.
+  /// @dev No state is written while iterating, so any invalid sibling rejects
+  ///      the report atomically without partially advancing feed state.
+  /// @return requestedValues Report values for `requestedFeedId`.
+  function _validateBatch(
+    uint16 taxonomyId,
+    IStorkFastVerifier.Asset[] memory assets,
+    bytes32 requestedFeedId
+  ) private view returns (CachedReportValues memory requestedValues) {
+    uint256[256] memory seenAssetIds;
+    bool foundRequestedFeed;
+
     for (uint256 i; i < assets.length; ++i) {
-      CachedReport memory decoded = CachedReport({
-        reportHash: reportHash,
+      uint16 assetId = assets[i].assetID;
+      uint256 wordIndex = uint256(assetId) >> 8;
+      uint256 assetBit = uint256(1) << uint8(assetId);
+      if ((seenAssetIds[wordIndex] & assetBit) != 0) {
+        revert DuplicateAssetId(assetId);
+      }
+      seenAssetIds[wordIndex] |= assetBit;
+
+      bytes32 assetFeedId = computeFeedId(taxonomyId, assetId);
+      CachedReportValues memory values = CachedReportValues({
         quantizedValue: assets[i].temporalNumericValue.quantizedValue,
-        publishTime: assets[i].temporalNumericValue.timestampNs / NS_PER_SECOND
+        timestampNs: assets[i].temporalNumericValue.timestampNs
       });
-      bytes32 assetFeedId = computeFeedId(taxonomyId, assets[i].assetID);
-      // A revert later in `decodeAndVerify` rolls these writes back, so
-      // nothing invalid is ever cached.
-      cachedReports[assetFeedId] = decoded;
-      if (assetFeedId == feedId) {
-        entry = decoded;
-        found = true;
+      _validateReportValues(assetFeedId, values);
+
+      if (assetFeedId == requestedFeedId) {
+        requestedValues = values;
+        foundRequestedFeed = true;
       }
     }
-    if (!found) {
-      revert FeedNotInPayload(feedId);
+
+    if (!foundRequestedFeed) {
+      revert FeedNotInPayload(requestedFeedId);
+    }
+  }
+
+  /// @notice Decodes requested values from a cached verified payload.
+  /// @return values Report values for `requestedFeedId`.
+  function _decodeCachedReportValues(
+    bytes32 requestedFeedId,
+    bytes calldata updateData
+  ) private pure returns (CachedReportValues memory values) {
+    uint16 taxonomyId = uint16(
+      bytes2(updateData[TAXONOMY_ID_OFFSET:TAXONOMY_ID_OFFSET + 2])
+    );
+    uint64 timestampNs = uint64(
+      bytes8(updateData[TIMESTAMP_NS_OFFSET:TIMESTAMP_NS_OFFSET + 8])
+    );
+
+    uint256 numAssets = (updateData.length - ASSETS_OFFSET) / ASSET_BYTES;
+    for (uint256 i; i < numAssets; ++i) {
+      uint256 offset = ASSETS_OFFSET + i * ASSET_BYTES;
+      uint16 assetId = uint16(bytes2(updateData[offset:offset + 2]));
+      if (computeFeedId(taxonomyId, assetId) == requestedFeedId) {
+        int128 quantizedValue = int128(
+          uint128(
+            bytes16(updateData[offset + ASSET_ID_BYTES:offset + ASSET_BYTES])
+          )
+        );
+        return
+          CachedReportValues({
+            quantizedValue: int192(quantizedValue),
+            timestampNs: timestampNs
+          });
+      }
+    }
+
+    revert FeedNotInPayload(requestedFeedId);
+  }
+
+  /// @notice Validates report values against the feed's accepted state.
+  function _validateReportValues(
+    bytes32 feedId,
+    CachedReportValues memory values
+  ) private view {
+    CachedReportValues memory cached = cachedReportValues[feedId];
+    if (cached.timestampNs == 0) {
+      return;
+    }
+    if (values.timestampNs < cached.timestampNs) {
+      revert TimestampRollback(feedId, values.timestampNs, cached.timestampNs);
+    }
+    if (
+      values.timestampNs == cached.timestampNs &&
+      values.quantizedValue != cached.quantizedValue
+    ) {
+      revert ConflictingPriceAtTimestamp(
+        feedId,
+        values.timestampNs,
+        cached.quantizedValue,
+        values.quantizedValue
+      );
+    }
+  }
+
+  /// @notice Advances a consumed feed without rewriting identical state.
+  function _storeReportValues(
+    bytes32 feedId,
+    CachedReportValues memory values
+  ) private {
+    if (values.timestampNs > cachedReportValues[feedId].timestampNs) {
+      cachedReportValues[feedId] = values;
     }
   }
 }

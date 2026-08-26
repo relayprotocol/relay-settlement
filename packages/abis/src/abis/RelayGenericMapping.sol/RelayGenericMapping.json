@@ -95,7 +95,7 @@
         "internalType": "bytes32"
       },
       {
-        "name": "oracle",
+        "name": "oracleMultisig",
         "type": "address",
         "internalType": "address"
       },
@@ -302,7 +302,7 @@
         "internalType": "bytes32"
       },
       {
-        "name": "oracle",
+        "name": "oracleMultisig",
         "type": "address",
         "internalType": "address"
       },

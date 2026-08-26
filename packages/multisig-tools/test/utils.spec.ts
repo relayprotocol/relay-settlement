@@ -10,13 +10,26 @@ const TRANSACTIONS_DIR = join(__dirname, "..", "transactions")
 // real-world manifests.
 const hasUnparseableRpcPlaceholder = (raw: string) => raw.includes("[REDACTED")
 
-const manifestFiles = readdirSync(TRANSACTIONS_DIR)
-  .filter((name) => name.endsWith(".json"))
-  .filter((name) => {
-    const raw = readFileSync(join(TRANSACTIONS_DIR, name), "utf8")
-    return !hasUnparseableRpcPlaceholder(raw)
-  })
-  .sort()
+// Manifests live under per-env subdirectories (transactions/<env>/); scan all.
+const MANIFEST_ENVS = ["dev", "stag", "prod"] as const
+
+const manifestFiles = MANIFEST_ENVS.flatMap((env) => {
+  let entries: string[]
+  try {
+    entries = readdirSync(join(TRANSACTIONS_DIR, env))
+  } catch {
+    return []
+  }
+  return entries
+    .filter((name) => name.endsWith(".json"))
+    .filter(
+      (name) =>
+        !hasUnparseableRpcPlaceholder(
+          readFileSync(join(TRANSACTIONS_DIR, env, name), "utf8")
+        )
+    )
+    .map((name) => join(env, name))
+}).sort()
 
 describe("TransactionsSchema parses every committed manifest", () => {
   it.each(manifestFiles)("parses %s", (name) => {

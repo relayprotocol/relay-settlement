@@ -14,16 +14,18 @@ import {
 const encodeTestFeeCalculatorData = (
   feeCurrency: string | bigint,
   feeBps: string | bigint,
+  maxFeeAmount: string | bigint,
   feeRecipient: string,
   feePayer: string
 ) =>
   encodeAbiParameters(
     parseAbiParameters(
-      "uint256 feeCurrency, uint256 feeBps, address feeRecipient, address feePayer"
+      "uint256 feeCurrency, uint256 feeBps, uint256 maxFeeAmount, address feeRecipient, address feePayer"
     ),
     [
       BigInt(feeCurrency),
       BigInt(feeBps),
+      BigInt(maxFeeAmount),
       feeRecipient as `0x${string}`,
       feePayer as `0x${string}`,
     ]
@@ -65,9 +67,10 @@ const actions = [
       feeCalculatorData: encodeTestFeeCalculatorData(
         123456789n,
         "10000000000000000",
+        "20000",
         "0x4444444444444444444444444444444444444444",
         "0x3333333333333333333333333333333333333333"
-      ), // 1% (1e16 / 1e18)
+      ), // 1% (1e16 / 1e18), capped at 20000
       rateLimiter: "0x5555555555555555555555555555555555555555",
       rateLimiterData: "0x",
     },
@@ -172,16 +175,23 @@ describe("execution", () => {
     const encoded = encodeTestFeeCalculatorData(
       feeCurrency,
       "10000000000000000",
+      "20000",
       feeRecipient,
       feePayer
     )
-    const [decodedCurrency, feeBps, decodedRecipient, decodedPayer] =
-      decodeAbiParameters(
-        parseAbiParameters("uint256, uint256, address, address"),
-        encoded as `0x${string}`
-      )
+    const [
+      decodedCurrency,
+      feeBps,
+      maxFeeAmount,
+      decodedRecipient,
+      decodedPayer,
+    ] = decodeAbiParameters(
+      parseAbiParameters("uint256, uint256, uint256, address, address"),
+      encoded as `0x${string}`
+    )
     expect(decodedCurrency).toBe(feeCurrency)
     expect(feeBps).toBe(10000000000000000n)
+    expect(maxFeeAmount).toBe(20000n)
     expect((decodedRecipient as string).toLowerCase()).toBe(feeRecipient)
     expect((decodedPayer as string).toLowerCase()).toBe(feePayer)
   })

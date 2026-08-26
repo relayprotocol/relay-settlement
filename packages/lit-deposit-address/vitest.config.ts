@@ -7,9 +7,11 @@ import { defineConfig } from "vitest/config";
  * can resolve them normally.
  */
 export default defineConfig({
+  define: {},
   resolve: {
     alias: {
       "https://cdn.jsdelivr.net/npm/viem@2.48.11/+esm": "viem",
+      "https://cdn.jsdelivr.net/npm/tronweb@6.1.0/+esm": "tronweb",
       "https://cdn.jsdelivr.net/npm/@metamask/key-tree@10.1.1/+esm": "@metamask/key-tree",
       "https://cdn.jsdelivr.net/npm/@noble/curves@2.0.1/secp256k1.js/+esm":
         "@noble/curves/secp256k1.js",

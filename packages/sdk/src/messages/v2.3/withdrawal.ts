@@ -1,7 +1,20 @@
-import { Hex, encodeAbiParameters, parseAbiParameters, keccak256 } from "viem"
+import {
+  Address,
+  Hex,
+  encodeAbiParameters,
+  parseAbiParameters,
+  hashTypedData,
+  keccak256,
+} from "viem"
 import * as bitcoin from "bitcoinjs-lib"
 
 import { encodeAddressToHex, VmType } from "../../utils"
+import {
+  encodeRoutedWithdrawalData,
+  hashRoutedCalls,
+  ROUTED_WITHDRAWAL_DATA_VERSION,
+  RoutedCall,
+} from "../common/ethereum-vm/routed"
 
 export interface WithdrawRequest {
   chainId: string // The chain id to withdraw on
@@ -31,6 +44,16 @@ export type BitcoinVmWithdrawRequestAdditionalData = {
   feeChangeAddress: string
 }
 
+// Mirrors HederaVmPayloadBuilder.sol `HederaRequestData`; `validStartNanos` is
+// derived on-chain and deliberately absent.
+export type HederaVmWithdrawRequestAdditionalData = {
+  payerNum: number | bigint | string
+  nodeAccountNum: number | bigint | string
+  validStartSeconds: number | bigint | string
+  validDurationSeconds: number
+  maxTransactionFee: number | bigint | string
+}
+
 export type HyperliquidVmWithdrawRequestAdditionalData = {
   nonce: number | bigint | string
 }
@@ -49,11 +72,33 @@ export type XrpVmWithdrawRequestAdditionalData = {
   destinationTag?: number
 }
 
+export type GatewayVmWithdrawRequestAdditionalData = {
+  allocator: string
+  destinationChainId: string
+  maxBlockHeight: number | bigint | string
+  destinationData?: GatewayVmDestinationAdditionalData
+}
+
+type GatewayVmDestinationAdditionalData = {
+  vmType: "ethereum-vm"
+  router: string
+  calls: RoutedCall[]
+}
+
+// Routed withdrawal to an allowlisted router (empty/absent = direct transfer)
+export type EthereumVmWithdrawRequestAdditionalData = {
+  router: string
+  calls: RoutedCall[]
+}
+
 export type WithdrawRequestAdditionalData = {
   "bitcoin-vm"?: BitcoinVmWithdrawRequestAdditionalData
+  "hedera-vm"?: HederaVmWithdrawRequestAdditionalData
   "hyperliquid-vm"?: HyperliquidVmWithdrawRequestAdditionalData
   "lighter-vm"?: LighterVmWithdrawRequestAdditionalData
   "xrp-vm"?: XrpVmWithdrawRequestAdditionalData
+  "gateway-vm"?: GatewayVmWithdrawRequestAdditionalData
+  "ethereum-vm"?: EthereumVmWithdrawRequestAdditionalData
 }
 
 export type DenormalizedWithdrawRequest = Omit<WithdrawRequest, "data"> & {
@@ -82,6 +127,62 @@ export type ExecuteAndWithdrawRequest = {
   deadline: string
 }
 
+export const executeAndWithdrawRequestTypes = {
+  ExecuteAndWithdrawRequest: [
+    { name: "inChainId", type: "string" },
+    { name: "inCurrency", type: "bytes" },
+    { name: "outChainId", type: "string" },
+    { name: "outCurrency", type: "bytes" },
+    { name: "outAmountMinimum", type: "uint256" },
+    { name: "depository", type: "bytes" },
+    { name: "orderAddress", type: "address" },
+    { name: "receiver", type: "bytes" },
+    { name: "data", type: "bytes" },
+    { name: "fees", type: "Fee[]" },
+    { name: "nonce", type: "bytes32" },
+    { name: "deadline", type: "uint256" },
+  ],
+  Fee: [
+    { name: "recipient", type: "address" },
+    { name: "amount", type: "uint256" },
+  ],
+} as const
+
+// Mirrors `RelayExecutor.hashExecuteAndWithdrawRequest` — the digest the
+// oracle signs and the key of the funding pool's per-order draw records
+export const getExecuteAndWithdrawRequestHash = (
+  chainId: number,
+  executor: Address,
+  request: ExecuteAndWithdrawRequest
+) =>
+  hashTypedData({
+    domain: {
+      name: "RelayExecutor",
+      version: "1",
+      chainId,
+      verifyingContract: executor,
+    },
+    types: executeAndWithdrawRequestTypes,
+    primaryType: "ExecuteAndWithdrawRequest",
+    message: {
+      inChainId: request.inChainId,
+      inCurrency: request.inCurrency as Hex,
+      outChainId: request.outChainId,
+      outCurrency: request.outCurrency as Hex,
+      outAmountMinimum: BigInt(request.outAmountMinimum),
+      depository: request.depository as Hex,
+      orderAddress: request.orderAddress as Address,
+      receiver: request.receiver as Hex,
+      data: request.data as Hex,
+      fees: request.fees.map((fee) => ({
+        recipient: fee.recipient as Address,
+        amount: BigInt(fee.amount),
+      })),
+      nonce: request.nonce as Hex,
+      deadline: BigInt(request.deadline),
+    },
+  })
+
 export const getWithdrawRequestHash = (request: WithdrawRequest) => {
   const encoded = encodeAbiParameters(
     parseAbiParameters([
@@ -105,17 +206,23 @@ export const getWithdrawRequestHash = (request: WithdrawRequest) => {
   return keccak256(encoded)
 }
 
-export function normalizeWithdrawRequest(
-  request: DenormalizedWithdrawRequest & {
-    vmType: VmType
-    spenderVmType: VmType
-  }
-): WithdrawRequest {
-  switch (request.vmType) {
+export function encodeWithdrawRequestAdditionalData({
+  vmType,
+  additionalData,
+  depository,
+}: {
+  vmType: VmType
+  additionalData?: WithdrawRequestAdditionalData
+  depository?: string
+}): Hex {
+  switch (vmType) {
     case "bitcoin-vm": {
-      const bitcoinAdditionalData = request.additionalData?.["bitcoin-vm"]
+      const bitcoinAdditionalData = additionalData?.["bitcoin-vm"]
       if (!bitcoinAdditionalData) {
         throw new Error("Additional data is required for bitcoin-vm")
+      }
+      if (!depository) {
+        throw new Error("depository is required for bitcoin-vm additionalData")
       }
 
       const toLittleEndianTxid = (txid: string): Hex => {
@@ -141,9 +248,9 @@ export function normalizeWithdrawRequest(
 
         return scriptPubKey
       }
-      const allocatorScriptPubKey = toAllocatorScriptPubKey(request.depository)
+      const allocatorScriptPubKey = toAllocatorScriptPubKey(depository)
 
-      const data = encodeAbiParameters(
+      return encodeAbiParameters(
         [
           {
             type: "tuple",
@@ -196,45 +303,22 @@ export function normalizeWithdrawRequest(
           },
         ]
       )
-
-      return {
-        chainId: request.chainId,
-        depository: encodeAddressToHex(request.depository, request.vmType),
-        currency: encodeAddressToHex(request.currency, request.vmType),
-        amount: request.amount,
-        spenderChainId: request.spenderChainId,
-        spender: encodeAddressToHex(request.spender, request.spenderVmType),
-        receiver: encodeAddressToHex(request.receiver, request.vmType),
-        data,
-        nonce: request.nonce,
-      }
     }
 
     case "hyperliquid-vm": {
-      const hyperliquidAdditionalData =
-        request.additionalData?.["hyperliquid-vm"]
+      const hyperliquidAdditionalData = additionalData?.["hyperliquid-vm"]
       if (!hyperliquidAdditionalData) {
         throw new Error("Additional data is required for hyperliquid-vm")
       }
 
-      return {
-        chainId: request.chainId,
-        depository: encodeAddressToHex(request.depository, request.vmType),
-        currency: encodeAddressToHex(request.currency, request.vmType),
-        amount: request.amount,
-        spenderChainId: request.spenderChainId,
-        spender: encodeAddressToHex(request.spender, request.spenderVmType),
-        receiver: encodeAddressToHex(request.receiver, request.vmType),
-        data: encodeAbiParameters(
-          [{ type: "uint64" }],
-          [BigInt(hyperliquidAdditionalData.nonce)]
-        ),
-        nonce: request.nonce,
-      }
+      return encodeAbiParameters(
+        [{ type: "uint64" }],
+        [BigInt(hyperliquidAdditionalData.nonce)]
+      )
     }
 
     case "lighter-vm": {
-      const lighterAdditionalData = request.additionalData?.["lighter-vm"]
+      const lighterAdditionalData = additionalData?.["lighter-vm"]
       if (!lighterAdditionalData) {
         throw new Error("Additional data is required for lighter-vm")
       }
@@ -247,28 +331,19 @@ export function normalizeWithdrawRequest(
       if (lighterAdditionalData.usdcFee === undefined) {
         throw new Error("usdcFee is required in lighter-vm additionalData")
       }
-      return {
-        chainId: request.chainId,
-        depository: encodeAddressToHex(request.depository, request.vmType),
-        currency: encodeAddressToHex(request.currency, request.vmType),
-        amount: request.amount,
-        spenderChainId: request.spenderChainId,
-        spender: encodeAddressToHex(request.spender, request.spenderVmType),
-        receiver: encodeAddressToHex(request.receiver, request.vmType),
-        data: encodeAbiParameters(
-          [{ type: "uint64" }, { type: "uint64" }, { type: "uint64" }],
-          [
-            BigInt(lighterAdditionalData.nonce),
-            BigInt(lighterAdditionalData.apiKeyIndex),
-            BigInt(lighterAdditionalData.usdcFee),
-          ]
-        ),
-        nonce: request.nonce,
-      }
+
+      return encodeAbiParameters(
+        [{ type: "uint64" }, { type: "uint64" }, { type: "uint64" }],
+        [
+          BigInt(lighterAdditionalData.nonce),
+          BigInt(lighterAdditionalData.apiKeyIndex),
+          BigInt(lighterAdditionalData.usdcFee),
+        ]
+      )
     }
 
     case "xrp-vm": {
-      const xrpAdditionalData = request.additionalData?.["xrp-vm"]
+      const xrpAdditionalData = additionalData?.["xrp-vm"]
       if (!xrpAdditionalData) {
         throw new Error("Additional data is required for xrp-vm")
       }
@@ -285,7 +360,7 @@ export function normalizeWithdrawRequest(
       }
 
       // XrpVmPayloadBuilder decodes `data` as `abi.decode(data, (XrpRequestData))`
-      const data = encodeAbiParameters(
+      return encodeAbiParameters(
         parseAbiParameters([
           "(uint32 sequence, uint64 fee, uint32 lastLedgerSequence, uint32 flags, uint32 destinationTag, bool hasDestinationTag)",
         ]),
@@ -300,7 +375,112 @@ export function normalizeWithdrawRequest(
           },
         ]
       )
+    }
 
+    case "gateway-vm": {
+      const gatewayAdditionalData = additionalData?.["gateway-vm"]
+      if (!gatewayAdditionalData) {
+        throw new Error("Additional data is required for gateway-vm")
+      }
+      if (
+        gatewayAdditionalData.destinationData &&
+        gatewayAdditionalData.destinationData.vmType !== "ethereum-vm"
+      ) {
+        throw new Error("Unsupported gateway-vm destination data")
+      }
+      const destinationData = gatewayAdditionalData.destinationData
+        ? encodeRoutedWithdrawalData({
+            version: ROUTED_WITHDRAWAL_DATA_VERSION,
+            router: gatewayAdditionalData.destinationData.router,
+            dataHash: hashRoutedCalls(
+              gatewayAdditionalData.destinationData.calls
+            ),
+          })
+        : "0x"
+
+      return encodeAbiParameters(
+        parseAbiParameters([
+          "(address allocator, string destinationChainId, uint256 maxBlockHeight, bytes destinationData)",
+        ]),
+        [
+          {
+            allocator: gatewayAdditionalData.allocator as Hex,
+            destinationChainId: gatewayAdditionalData.destinationChainId,
+            maxBlockHeight: BigInt(gatewayAdditionalData.maxBlockHeight),
+            destinationData,
+          },
+        ]
+      )
+    }
+
+    case "ethereum-vm": {
+      const ethereumVmAdditionalData = additionalData?.["ethereum-vm"]
+      if (!ethereumVmAdditionalData) {
+        return "0x"
+      }
+
+      // Only the commitment goes on-chain; the caller keeps the calls for execution
+      return encodeRoutedWithdrawalData({
+        version: ROUTED_WITHDRAWAL_DATA_VERSION,
+        router: ethereumVmAdditionalData.router,
+        dataHash: hashRoutedCalls(ethereumVmAdditionalData.calls),
+      })
+    }
+
+    case "hedera-vm": {
+      const hederaAdditionalData = additionalData?.["hedera-vm"]
+      if (!hederaAdditionalData) {
+        throw new Error("Additional data is required for hedera-vm")
+      }
+      for (const field of [
+        "payerNum",
+        "nodeAccountNum",
+        "validStartSeconds",
+        "validDurationSeconds",
+        "maxTransactionFee",
+      ] as const) {
+        if (hederaAdditionalData[field] === undefined) {
+          throw new Error(`${field} is required in hedera-vm additionalData`)
+        }
+      }
+
+      // HederaVmPayloadBuilder decodes `data` as `abi.decode(data, (HederaRequestData))`
+      return encodeAbiParameters(
+        parseAbiParameters([
+          "(uint64 payerNum, uint64 nodeAccountNum, uint64 validStartSeconds, uint32 validDurationSeconds, uint64 maxTransactionFee)",
+        ]),
+        [
+          {
+            payerNum: BigInt(hederaAdditionalData.payerNum),
+            nodeAccountNum: BigInt(hederaAdditionalData.nodeAccountNum),
+            validStartSeconds: BigInt(hederaAdditionalData.validStartSeconds),
+            validDurationSeconds: hederaAdditionalData.validDurationSeconds,
+            maxTransactionFee: BigInt(hederaAdditionalData.maxTransactionFee),
+          },
+        ]
+      )
+    }
+
+    case "solana-vm":
+    case "ton-vm":
+    case "tron-vm":
+      return "0x"
+
+    default:
+      throw new Error(
+        "Vm type not implemented encodeWithdrawRequestAdditionalData"
+      )
+  }
+}
+
+export function normalizeWithdrawRequest(
+  request: DenormalizedWithdrawRequest & {
+    vmType: VmType
+    spenderVmType: VmType
+  }
+): WithdrawRequest {
+  switch (request.vmType) {
+    case "bitcoin-vm": {
       return {
         chainId: request.chainId,
         depository: encodeAddressToHex(request.depository, request.vmType),
@@ -309,12 +489,101 @@ export function normalizeWithdrawRequest(
         spenderChainId: request.spenderChainId,
         spender: encodeAddressToHex(request.spender, request.spenderVmType),
         receiver: encodeAddressToHex(request.receiver, request.vmType),
-        data,
+        data: encodeWithdrawRequestAdditionalData({
+          vmType: request.vmType,
+          additionalData: request.additionalData,
+          depository: request.depository,
+        }),
         nonce: request.nonce,
       }
     }
 
-    case "ethereum-vm":
+    case "hyperliquid-vm": {
+      return {
+        chainId: request.chainId,
+        depository: encodeAddressToHex(request.depository, request.vmType),
+        currency: encodeAddressToHex(request.currency, request.vmType),
+        amount: request.amount,
+        spenderChainId: request.spenderChainId,
+        spender: encodeAddressToHex(request.spender, request.spenderVmType),
+        receiver: encodeAddressToHex(request.receiver, request.vmType),
+        data: encodeWithdrawRequestAdditionalData({
+          vmType: request.vmType,
+          additionalData: request.additionalData,
+        }),
+        nonce: request.nonce,
+      }
+    }
+
+    case "lighter-vm": {
+      return {
+        chainId: request.chainId,
+        depository: encodeAddressToHex(request.depository, request.vmType),
+        currency: encodeAddressToHex(request.currency, request.vmType),
+        amount: request.amount,
+        spenderChainId: request.spenderChainId,
+        spender: encodeAddressToHex(request.spender, request.spenderVmType),
+        receiver: encodeAddressToHex(request.receiver, request.vmType),
+        data: encodeWithdrawRequestAdditionalData({
+          vmType: request.vmType,
+          additionalData: request.additionalData,
+        }),
+        nonce: request.nonce,
+      }
+    }
+
+    case "xrp-vm": {
+      return {
+        chainId: request.chainId,
+        depository: encodeAddressToHex(request.depository, request.vmType),
+        currency: encodeAddressToHex(request.currency, request.vmType),
+        amount: request.amount,
+        spenderChainId: request.spenderChainId,
+        spender: encodeAddressToHex(request.spender, request.spenderVmType),
+        receiver: encodeAddressToHex(request.receiver, request.vmType),
+        data: encodeWithdrawRequestAdditionalData({
+          vmType: request.vmType,
+          additionalData: request.additionalData,
+        }),
+        nonce: request.nonce,
+      }
+    }
+
+    case "gateway-vm": {
+      return {
+        chainId: request.chainId,
+        depository: request.depository,
+        currency: request.currency,
+        amount: request.amount,
+        spenderChainId: request.spenderChainId,
+        spender: encodeAddressToHex(request.spender, request.spenderVmType),
+        receiver: request.receiver,
+        data: encodeWithdrawRequestAdditionalData({
+          vmType: request.vmType,
+          additionalData: request.additionalData,
+        }),
+        nonce: request.nonce,
+      }
+    }
+
+    case "ethereum-vm": {
+      return {
+        chainId: request.chainId,
+        depository: encodeAddressToHex(request.depository, request.vmType),
+        currency: encodeAddressToHex(request.currency, request.vmType),
+        amount: request.amount,
+        spenderChainId: request.spenderChainId,
+        spender: encodeAddressToHex(request.spender, request.spenderVmType),
+        receiver: encodeAddressToHex(request.receiver, request.vmType),
+        data: encodeWithdrawRequestAdditionalData({
+          vmType: request.vmType,
+          additionalData: request.additionalData,
+        }),
+        nonce: request.nonce,
+      }
+    }
+
+    case "hedera-vm":
     case "solana-vm":
     case "ton-vm":
     case "tron-vm": {
@@ -326,7 +595,10 @@ export function normalizeWithdrawRequest(
         spenderChainId: request.spenderChainId,
         spender: encodeAddressToHex(request.spender, request.spenderVmType),
         receiver: encodeAddressToHex(request.receiver, request.vmType),
-        data: "0x",
+        data: encodeWithdrawRequestAdditionalData({
+          vmType: request.vmType,
+          additionalData: request.additionalData,
+        }),
         nonce: request.nonce,
       }
     }

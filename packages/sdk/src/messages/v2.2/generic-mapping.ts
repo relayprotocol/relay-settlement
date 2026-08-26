@@ -58,6 +58,31 @@ export const getNoFillOrRefundMessage = (
   }
 }
 
+export const getWithdrawParamsMappingMessage = (
+  solver: string,
+  withdrawParamsHash: string,
+  orderId: string
+): GenericMappingMessage => {
+  return {
+    user: solver,
+    id:
+      "0x" +
+      crypto
+        .createHash("sha256")
+        .update(`WITHDRAW_PARAMS_MAPPING:${withdrawParamsHash}`)
+        .digest()
+        .toString("hex"),
+    data: orderId,
+    nonce:
+      "0x" +
+      crypto
+        .createHash("sha256")
+        .update(`${solver}:${withdrawParamsHash}`)
+        .digest()
+        .toString("hex"),
+  }
+}
+
 export const getGenericMappingMessageId = (message: GenericMappingMessage) => {
   return hashStruct({
     types: {

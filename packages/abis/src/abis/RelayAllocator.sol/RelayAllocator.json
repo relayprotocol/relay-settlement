@@ -13,7 +13,7 @@
         "internalType": "address"
       },
       {
-        "name": "_oracle",
+        "name": "_oracleMultisig",
         "type": "address",
         "internalType": "address"
       }
@@ -35,7 +35,7 @@
   },
   {
     "type": "function",
-    "name": "ORACLE",
+    "name": "ORACLE_MULTISIG",
     "inputs": [],
     "outputs": [
       {

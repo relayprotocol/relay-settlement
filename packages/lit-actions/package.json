@@ -1,6 +1,6 @@
 {
   "name": "@relay-protocol/lit-actions",
-  "version": "0.0.23",
+  "version": "0.0.30",
   "description": "Definitions and helpers for tracking Relay Lit Actions",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

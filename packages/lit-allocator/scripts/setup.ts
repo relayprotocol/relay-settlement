@@ -13,9 +13,11 @@
  *     Wallet-owned accounts. Reads go through the AccountConfig contract on
  *     Base (keyed by `keccak256(toUtf8Bytes(accountApiKey))`) and writes are
  *     wallet-signed transactions sent from the admin wallet. Layers
- *     `--private-key` on top of `--account-api-key`. The Base RPC URL and
- *     AccountConfig contract address are defined in the shared setup backend
- *     in `@relay-protocol/lit-helpers`.
+ *     `--private-key` on top of `--account-api-key`. Alternatively, pass
+ *     `--calldata` to collect contract writes for relay through an MPC/multisig
+ *     owner instead of broadcasting them. The Base RPC URL and AccountConfig
+ *     contract address are defined in the shared setup backend in
+ *     `@relay-protocol/lit-helpers`.
  *
  * Each step checks whether the underlying resource already exists and skips
  * creation when so. PKP selection is explicit: pass `--create-pkp` to mint a
@@ -24,6 +26,10 @@
  * Usage:
  *   tsx scripts/setup.ts --env <name> --mode api-key       --account-api-key <key> (--create-pkp | --pkp-id <address>) [--dry-run]
  *   tsx scripts/setup.ts --env <name> --mode chain-secured --account-api-key <key> --private-key 0x... (--create-pkp | --pkp-id <address>) [--dry-run]
+ *   tsx scripts/setup.ts --env <name> --mode chain-secured --account-api-key <key> --calldata --pkp-id <address>
+ *
+ * `--calldata` requires an existing PKP and usage key because minting requires
+ * a live admin signature.
  */
 
 import { readFileSync } from "node:fs";
@@ -51,6 +57,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /** Human-readable Chipotle action description per VM. */
 const ACTION_DESCRIPTIONS: Record<VmType, string> = {
+  "gateway-vm": "Lit Allocator Circle Gateway signing action",
   "ethereum-vm": "Lit Allocator Ethereum signing action",
   "bitcoin-vm": "Lit Allocator Bitcoin signing action",
   "tron-vm": "Lit Allocator Tron signing action",
@@ -59,10 +66,12 @@ const ACTION_DESCRIPTIONS: Record<VmType, string> = {
   "hyperliquid-vm": "Lit Allocator Hyperliquid signing action",
   "lighter-vm": "Lit Allocator Lighter signing action",
   "xrp-vm": "Lit Allocator XRP signing action",
+  "hedera-vm": "Lit Allocator Hedera signing action",
 };
 
 /** Environment variable name carrying each VM's deployed action CID. */
 const ACTION_CID_ENV_VARS: Record<VmType, string> = {
+  "gateway-vm": "LIT_GATEWAY_ACTION_CID",
   "ethereum-vm": "LIT_ETHEREUM_ACTION_CID",
   "bitcoin-vm": "LIT_BITCOIN_ACTION_CID",
   "tron-vm": "LIT_TRON_ACTION_CID",
@@ -71,6 +80,7 @@ const ACTION_CID_ENV_VARS: Record<VmType, string> = {
   "hyperliquid-vm": "LIT_HYPERLIQUID_ACTION_CID",
   "lighter-vm": "LIT_LIGHTER_ACTION_CID",
   "xrp-vm": "LIT_XRP_ACTION_CID",
+  "hedera-vm": "LIT_HEDERA_ACTION_CID",
 };
 
 // ─── Shared script utilities ─────────────────────────────────────────────────

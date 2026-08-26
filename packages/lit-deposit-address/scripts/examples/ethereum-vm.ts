@@ -36,8 +36,7 @@
  *                             (e.g. "18" for ETH, "6" for USDC).
  *   ETHEREUM_VM_AMOUNT        deposit amount as a decimal string in whole
  *                             units (e.g. "0.0001").
- *   SOLVER_PRIVATE_KEY        solver key; pin across runs to keep the
- *                             deposit address stable.
+ *   SOLVER_PRIVATE_KEY        solver key used to authorize the order.
  *
  *   RELAY_ORACLE_URL          oracle base URL.
  *
@@ -206,6 +205,7 @@ const derivationFields: DerivationFields = {
   depositor: funder.address.toLowerCase(),
   refundRecipient: funder.address.toLowerCase(),
   priceImpactBps: "200",
+  salt: bytesToBigInt(randomBytes(32)).toString(),
 };
 
 console.log(`==> funder / depositor / refund: ${funder.address}`);
@@ -420,6 +420,7 @@ await submitTrigger(hub, {
     depositor: derivationFields.depositor as Hex,
     refundRecipient: derivationFields.refundRecipient as Hex,
     priceImpactBps: BigInt(derivationFields.priceImpactBps),
+    salt: BigInt(derivationFields.salt),
   },
   orderId,
   nonce,
@@ -549,6 +550,7 @@ const signRequest = await addSolverRequestSignature(
         usdPrice: p.usdPrice.toString(),
         usdPriceDecimals: p.usdPriceDecimals,
         currencyDecimals: p.currencyDecimals,
+        publishTime: p.publishTime.toString(),
         expiration: p.expiration.toString(),
       })),
       extraData,

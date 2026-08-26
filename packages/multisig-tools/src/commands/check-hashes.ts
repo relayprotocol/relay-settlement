@@ -5,7 +5,7 @@ import {
   getPendingSafeTxActionsByNonce,
 } from "../helpers/safe"
 import { createTransactionBundle } from "../builders/utils"
-import { resolveNetwork } from "../helpers/network"
+import { assertEnvOrSigner, resolveNetwork } from "../helpers/network"
 
 export function registerCheckHashes(program: Command) {
   program
@@ -27,6 +27,10 @@ export function registerCheckHashes(program: Command) {
     )
     .option("-n, --network <slug>", "Network slug (from settlement-networks)")
     .option("--rpc-url <url>", "RPC URL override")
+    .option(
+      "-e, --env <env>",
+      "Deployment env for the --network contract lookup (prod | dev | stag); required unless --relay-multisig-signer is set"
+    )
     .action(
       async ({
         transactions: transactionsPath,
@@ -34,8 +38,11 @@ export function registerCheckHashes(program: Command) {
         safeTransactionNonce,
         network,
         rpcUrl,
+        env,
       }) => {
+        assertEnvOrSigner({ env, multisigSignerOverride: relayMultisigSigner })
         const resolved = resolveNetwork({
+          env,
           multisigSignerOverride: relayMultisigSigner as
             | `0x${string}`
             | undefined,

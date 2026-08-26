@@ -4,13 +4,15 @@ pragma solidity ^0.8.28;
 import {RelayOracleMultisigBase} from "./RelayOracleMultisigBase.sol";
 import {Eip712} from "../utils/Eip712.sol";
 import {RelayHub} from "../../contracts/RelayHub.sol";
-import {RelayOracle} from "../../contracts/RelayOracle.sol";
+import {RelayOracleIdempotencyStore} from "../../contracts/RelayOracleIdempotencyStore.sol";
+import {RelayOracleV2} from "../../contracts/RelayOracleV2.sol";
 import {RelayOracleMultisig} from "../../contracts/RelayOracleMultisig.sol";
 
 /// @notice Port of test/RelayOracleMultisig/integration.ts.
 contract RelayOracleMultisigIntegrationTest is RelayOracleMultisigBase {
     RelayHub internal hub;
-    RelayOracle internal oracle;
+    RelayOracleV2 internal oracle;
+    RelayOracleIdempotencyStore internal idempotencyStore;
     RelayOracleMultisig internal multisig;
 
     bytes32 internal oracleDomain;
@@ -20,20 +22,28 @@ contract RelayOracleMultisigIntegrationTest is RelayOracleMultisigBase {
     function setUp() public override {
         super.setUp();
         hub = new RelayHub(multisigOwner);
-        oracle = new RelayOracle(multisigOwner, address(hub));
+        idempotencyStore = new RelayOracleIdempotencyStore(multisigOwner);
+        oracle = new RelayOracleV2(
+            multisigOwner,
+            address(hub),
+            address(idempotencyStore)
+        );
         multisig = _defaultMultisig();
 
         bytes32 operatorRole = hub.OPERATOR_ROLE();
         bytes32 oracleRole = oracle.ORACLE_ROLE();
+        bytes32 writeRole = idempotencyStore.WRITE_ROLE();
 
         vm.prank(multisigOwner);
         oracle.grantRole(oracleRole, address(multisig));
         vm.prank(multisigOwner);
         hub.grantRole(operatorRole, address(oracle));
+        vm.prank(multisigOwner);
+        idempotencyStore.grantRole(writeRole, address(oracle));
 
         oracleDomain = Eip712.domainSeparator(
             "RelayOracle",
-            "1",
+            "2",
             block.chainid,
             address(oracle)
         );
@@ -46,7 +56,7 @@ contract RelayOracleMultisigIntegrationTest is RelayOracleMultisigBase {
     ) internal pure returns (bytes memory) {
         return
             abi.encode(
-                uint8(RelayOracle.ActionType.MINT),
+                uint8(RelayOracleV2.ActionType.MINT),
                 hubToAddress,
                 hubTokenId,
                 amount
@@ -117,10 +127,10 @@ contract RelayOracleMultisigIntegrationTest is RelayOracleMultisigBase {
         uint256 before_ = hub.balanceOf(hubTo, tokenId);
 
         vm.expectEmit(true, false, false, true, address(oracle));
-        emit RelayOracle.Executed(idempotencyKey, actions);
+        emit RelayOracleV2.Executed(idempotencyKey, actions);
 
         oracle.execute(
-            RelayOracle.Execution({
+            RelayOracleV2.Execution({
                 idempotencyKey: idempotencyKey,
                 actions: actions
             }),
@@ -147,12 +157,12 @@ contract RelayOracleMultisigIntegrationTest is RelayOracleMultisigBase {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                RelayOracle.InvalidSignature.selector,
+                RelayOracleV2.InvalidSignature.selector,
                 address(multisig)
             )
         );
         oracle.execute(
-            RelayOracle.Execution({
+            RelayOracleV2.Execution({
                 idempotencyKey: idempotencyKey,
                 actions: actions
             }),
@@ -188,12 +198,12 @@ contract RelayOracleMultisigIntegrationTest is RelayOracleMultisigBase {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                RelayOracle.InvalidSignature.selector,
+                RelayOracleV2.InvalidSignature.selector,
                 address(multisig)
             )
         );
         oracle.execute(
-            RelayOracle.Execution({
+            RelayOracleV2.Execution({
                 idempotencyKey: idempotencyKey,
                 actions: actions
             }),
@@ -213,12 +223,14 @@ contract RelayOracleMultisigIntegrationTest is RelayOracleMultisigBase {
         bytes[] memory a2 = new bytes[](1);
         a2[0] = _mintAction(hubTo, tokenId, amount * 2);
 
-        RelayOracle.Execution[] memory execs = new RelayOracle.Execution[](2);
-        execs[0] = RelayOracle.Execution({
+        RelayOracleV2.Execution[] memory execs = new RelayOracleV2.Execution[](
+            2
+        );
+        execs[0] = RelayOracleV2.Execution({
             idempotencyKey: keccak256("ek-1"),
             actions: a1
         });
-        execs[1] = RelayOracle.Execution({
+        execs[1] = RelayOracleV2.Execution({
             idempotencyKey: keccak256("ek-2"),
             actions: a2
         });

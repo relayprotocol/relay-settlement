@@ -1,6 +1,6 @@
 {
   "name": "dev",
-  "allocatorAddress": "0x765BbA44c75924483b803592fbF1d6738dC99107",
+  "allocatorAddress": "0x95bb2652BaA8a1177f750d92384527c5814f5254",
   "hubEvmChainId": 537724,
   "allowedOracles": [
     "0xcda3c24706c1a5eea958a988693e8a838d520af9",

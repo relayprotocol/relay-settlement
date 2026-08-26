@@ -76,7 +76,7 @@ export function loadCommonEnv(): CommonExampleEnv {
     ) as Hex,
     solverPrivateKey: requireEnv(
       "SOLVER_PRIVATE_KEY",
-      "EVM solver key — pin across runs to keep the deposit address stable",
+      "EVM solver key used to authorize the order",
     ) as Hex,
     oracleUrl: requireEnv("RELAY_ORACLE_URL", "oracle base URL").replace(/\/+$/, ""),
   };
@@ -138,14 +138,14 @@ export function createSolverContext(privateKey: Hex, solverChainId = "10"): Solv
 /** ABI for the hub `DepositAddressManager.trigger(...)` entrypoint. */
 export const TRIGGER_ABI = parseAbi([
   "struct Input { string vmType; string chainId; bytes currency; uint256 amount; }",
-  "struct DerivationFields { string inputVmType; string outputVmType; string outputChainId; bytes outputCurrency; bytes outputRecipient; address solver; address pricingOracle; bytes depositor; bytes refundRecipient; uint256 priceImpactBps; }",
+  "struct DerivationFields { string inputVmType; string outputVmType; string outputChainId; bytes outputCurrency; bytes outputRecipient; address solver; address pricingOracle; bytes depositor; bytes refundRecipient; uint256 priceImpactBps; uint256 salt; }",
   "struct Currency { string chainId; bytes currency; }",
   "function trigger(Input input, DerivationFields derivationFields, bytes32 orderId, uint256 nonce, Currency[] currencies, bytes extraData) external",
 ]);
 
 /** Encoded-prices schema embedded into the trigger's `extraData` payload. */
 export const PRICES_ABI = parseAbiParameters(
-  "(uint256 usdPrice, uint8 usdPriceDecimals, uint8 currencyDecimals, uint256 expiration)[] prices",
+  "(uint256 usdPrice, uint8 usdPriceDecimals, uint8 currencyDecimals, uint256 publishTime, uint256 expiration)[] prices",
 );
 
 /** A single placeholder price entry shaped for the prices ABI. */
@@ -153,6 +153,7 @@ export interface PlaceholderPrice {
   usdPrice: bigint;
   usdPriceDecimals: number;
   currencyDecimals: number;
+  publishTime: bigint;
   expiration: bigint;
 }
 
@@ -167,6 +168,7 @@ export function placeholderPrice(currencyDecimals: number): PlaceholderPrice {
     usdPrice: 100_000_000n,
     usdPriceDecimals: 8,
     currencyDecimals,
+    publishTime: BigInt(Math.floor(Date.now() / 1000)),
     expiration: 0xffff_ffff_ffffn,
   };
 }
@@ -192,6 +194,7 @@ export interface TriggerArgs {
     depositor: Hex;
     refundRecipient: Hex;
     priceImpactBps: bigint;
+    salt: bigint;
   };
   orderId: Hex;
   nonce: bigint;
@@ -274,6 +277,7 @@ export async function requestAttestation(
         usdPrice: p.usdPrice.toString(),
         usdPriceDecimals: p.usdPriceDecimals,
         currencyDecimals: p.currencyDecimals,
+        publishTime: p.publishTime.toString(),
         expiration: p.expiration.toString(),
       })),
       extraData: args.extraData,

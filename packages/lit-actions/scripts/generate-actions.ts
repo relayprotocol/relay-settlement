@@ -16,14 +16,22 @@
  */
 
 import { execFileSync } from "node:child_process"
-import { readFileSync, writeFileSync } from "node:fs"
-import { dirname, resolve } from "node:path"
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { createRequire } from "node:module"
+import { tmpdir } from "node:os"
+import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const packageDir = resolve(__dirname, "..") // packages/lit-actions
 const repoRoot = resolve(packageDir, "../..") // monorepo root
 const outFile = resolve(packageDir, "src/generated.ts")
+const packageName = (
+  JSON.parse(
+    readFileSync(resolve(packageDir, "package.json"), "utf-8")
+  ) as { name: string }
+).name
+const require = createRequire(import.meta.url)
 
 interface VmEntry {
   /** VM type key consumers pass to `getAllocatorAction` / `getDepositAddressAction`. */
@@ -107,6 +115,11 @@ const KINDS: KindSpec[] = [
           { vmType: "xrp-vm", distBasename: "xrp" },
         ],
       },
+      {
+        env: "test",
+        version: "v1",
+        vms: [{ vmType: "ethereum-vm", distBasename: "ethereum" }],
+      },
     ],
   },
   {
@@ -124,6 +137,31 @@ const KINDS: KindSpec[] = [
           { vmType: "bitcoin-vm", distBasename: "bitcoin-vm" },
           { vmType: "hyperliquid-vm", distBasename: "hyperliquid-vm" },
           { vmType: "ton-vm", distBasename: "ton-vm" },
+          { vmType: "tron-vm", distBasename: "tron-vm" },
+        ],
+      },
+      {
+        env: "stag",
+        version: "v1",
+        vms: [
+          { vmType: "ethereum-vm", distBasename: "ethereum-vm" },
+          { vmType: "solana-vm", distBasename: "solana-vm" },
+          { vmType: "bitcoin-vm", distBasename: "bitcoin-vm" },
+          { vmType: "hyperliquid-vm", distBasename: "hyperliquid-vm" },
+          { vmType: "ton-vm", distBasename: "ton-vm" },
+          { vmType: "tron-vm", distBasename: "tron-vm" },
+        ],
+      },
+      {
+        env: "prod",
+        version: "v1",
+        vms: [
+          { vmType: "ethereum-vm", distBasename: "ethereum-vm" },
+          { vmType: "solana-vm", distBasename: "solana-vm" },
+          { vmType: "bitcoin-vm", distBasename: "bitcoin-vm" },
+          { vmType: "hyperliquid-vm", distBasename: "hyperliquid-vm" },
+          { vmType: "ton-vm", distBasename: "ton-vm" },
+          { vmType: "tron-vm", distBasename: "tron-vm" },
         ],
       },
     ],
@@ -146,6 +184,109 @@ function runBundler(sourcePackage: string, env: string): void {
 interface VersionedActions {
   config: unknown
   code: Record<string, string>
+}
+
+type Registry = Record<string, { versions: Record<string, VersionedActions> }>
+
+/**
+ * Download the latest published tarball of `packageName` from npm, extract its
+ * compiled `dist/generated.js`, and return each registry keyed by export name
+ * so a fresh generation can be diffed against what is already published.
+ *
+ * Returns an empty map (and logs a note) when the package is unpublished or the
+ * registry is unreachable, so generation still succeeds offline.
+ */
+function fetchPublishedRegistries(
+  name: string,
+  registryNames: string[]
+): Record<string, Registry | undefined> {
+  const result: Record<string, Registry | undefined> = {}
+  let tmp: string
+  try {
+    tmp = mkdtempSync(join(tmpdir(), "lit-actions-published-"))
+  } catch {
+    return result
+  }
+  try {
+    const packOutput = execFileSync(
+      "npm",
+      ["pack", `${name}@latest`, "--json", "--pack-destination", tmp],
+      { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }
+    )
+    const [{ filename, version }] = JSON.parse(packOutput) as {
+      filename: string
+      version: string
+    }[]
+    execFileSync("tar", ["-xzf", join(tmp, filename), "-C", tmp], {
+      stdio: "ignore",
+    })
+    // `dist/generated.js` only has type-only imports (erased at build time), so
+    // it can be required standalone without pulling in runtime dependencies.
+    const published = require(
+      join(tmp, "package", "dist", "generated.js")
+    ) as Record<string, Registry>
+    for (const registryName of registryNames) {
+      if (published[registryName]) {
+        result[registryName] = published[registryName]
+      }
+    }
+    console.log(`Comparing against published ${name}@${version}`)
+  } catch (err) {
+    console.log(
+      `Skipping published-version diff (${name}@latest unavailable): ${
+        (err as Error).message
+      }`
+    )
+  }
+  return result
+}
+
+/**
+ * Warn when a freshly generated registry differs from the latest published
+ * version, per env / version / vm type. Helps catch unexpected changes to
+ * bundled action code (e.g. from a dependency bump) before they ship. No-op
+ * when there is no published version to compare against.
+ */
+function warnOnRegistryChanges(
+  registryName: string,
+  previous: Registry | undefined,
+  current: Registry
+): void {
+  if (!previous) return
+  for (const [env, { versions }] of Object.entries(current)) {
+    const previousEnv = previous[env]
+    if (!previousEnv) {
+      console.warn(`⚠️  ${registryName}: new environment "${env}"`)
+      continue
+    }
+    for (const [version, actions] of Object.entries(versions)) {
+      const previousActions = previousEnv.versions[version]
+      if (!previousActions) {
+        console.warn(
+          `⚠️  ${registryName}: new version "${version}" for env "${env}"`
+        )
+        continue
+      }
+      if (
+        JSON.stringify(actions.config) !==
+        JSON.stringify(previousActions.config)
+      ) {
+        console.warn(`⚠️  ${registryName}: config changed for ${env}/${version}`)
+      }
+      for (const [vmType, code] of Object.entries(actions.code)) {
+        const previousCode = previousActions.code[vmType]
+        if (previousCode === undefined) {
+          console.warn(
+            `⚠️  ${registryName}: new action ${env}/${version}/${vmType}`
+          )
+        } else if (previousCode !== code) {
+          console.warn(
+            `⚠️  ${registryName}: code changed for ${env}/${version}/${vmType}`
+          )
+        }
+      }
+    }
+  }
 }
 
 /** Build the `{ versions: { <version>: { config, code } } }` map for one kind. */
@@ -186,9 +327,19 @@ function buildRegistry(
   return registry
 }
 
+const publishedRegistries = fetchPublishedRegistries(
+  packageName,
+  KINDS.map((k) => k.registry)
+)
+
 const sections: string[] = []
 for (const kind of KINDS) {
   const registry = buildRegistry(kind)
+  warnOnRegistryChanges(
+    kind.registry,
+    publishedRegistries[kind.registry],
+    registry
+  )
   sections.push(
     `export const ${kind.registry}: ActionRegistry<${kind.configType}> = ${JSON.stringify(
       registry,

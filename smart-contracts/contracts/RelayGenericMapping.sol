@@ -81,14 +81,14 @@ contract RelayGenericMapping is AccessControl, EIP712 {
   /// @param id The entry identifier
   /// @param data The entry data (arbitrary bytes)
   /// @param nonce Unique nonce to prevent replay attacks
-  /// @param oracle The oracle address that signed the request
+  /// @param oracleMultisig The RelayOracleMultisig contract address that signed the request
   /// @param oracleSignature The oracle's EIP-712 signature
   function setEntry(
     address user,
     bytes32 id,
     bytes calldata data,
     bytes32 nonce,
-    address oracle,
+    address oracleMultisig,
     bytes calldata oracleSignature
   ) external {
     if (id == bytes32(0)) revert EmptyId();
@@ -96,8 +96,8 @@ contract RelayGenericMapping is AccessControl, EIP712 {
     if (_entries[user][id].createdAt > 0) revert EntryAlreadyExists(user, id);
     if (usedNonces[nonce]) revert NonceAlreadyUsed(nonce);
 
-    if (!hasRole(ORACLE_ROLE, oracle)) {
-      revert UnauthorizedOracle(oracle);
+    if (!hasRole(ORACLE_ROLE, oracleMultisig)) {
+      revert UnauthorizedOracle(oracleMultisig);
     }
 
     bytes32 digest = _hashTypedDataV4(
@@ -106,8 +106,8 @@ contract RelayGenericMapping is AccessControl, EIP712 {
       )
     );
 
-    if (!oracle.isValidSignatureNow(digest, oracleSignature)) {
-      revert InvalidOracleSignature(oracle);
+    if (!oracleMultisig.isValidSignatureNow(digest, oracleSignature)) {
+      revert InvalidOracleSignature(oracleMultisig);
     }
 
     usedNonces[nonce] = true;
@@ -119,29 +119,29 @@ contract RelayGenericMapping is AccessControl, EIP712 {
   /// @param user The user address
   /// @param id The entry identifier
   /// @param nonce Unique nonce to prevent replay attacks
-  /// @param oracle The oracle address that signed the request
+  /// @param oracleMultisig The RelayOracleMultisig contract address that signed the request
   /// @param oracleSignature The oracle's EIP-712 signature
   function deleteEntry(
     address user,
     bytes32 id,
     bytes32 nonce,
-    address oracle,
+    address oracleMultisig,
     bytes calldata oracleSignature
   ) external {
     if (id == bytes32(0)) revert EmptyId();
     if (_entries[user][id].createdAt == 0) revert EntryNotFound(user, id);
     if (usedNonces[nonce]) revert NonceAlreadyUsed(nonce);
 
-    if (!hasRole(ORACLE_ROLE, oracle)) {
-      revert UnauthorizedOracle(oracle);
+    if (!hasRole(ORACLE_ROLE, oracleMultisig)) {
+      revert UnauthorizedOracle(oracleMultisig);
     }
 
     bytes32 digest = _hashTypedDataV4(
       keccak256(abi.encode(DELETE_ENTRY_TYPEHASH, user, id, nonce))
     );
 
-    if (!oracle.isValidSignatureNow(digest, oracleSignature)) {
-      revert InvalidOracleSignature(oracle);
+    if (!oracleMultisig.isValidSignatureNow(digest, oracleSignature)) {
+      revert InvalidOracleSignature(oracleMultisig);
     }
 
     usedNonces[nonce] = true;

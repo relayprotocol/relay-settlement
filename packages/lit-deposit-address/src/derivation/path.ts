@@ -26,6 +26,7 @@ const DERIVATION_FIELDS_ABI = [
       { name: "depositor", type: "bytes" },
       { name: "refundRecipient", type: "bytes" },
       { name: "priceImpactBps", type: "uint256" },
+      { name: "salt", type: "uint256" },
     ],
   },
 ] as const;
@@ -71,6 +72,7 @@ export function derivationFieldsToIndexes(
       depositor: derivationFields.depositor as Hex,
       refundRecipient: derivationFields.refundRecipient as Hex,
       priceImpactBps: BigInt(derivationFields.priceImpactBps),
+      salt: BigInt(derivationFields.salt),
     },
   ]);
   return bytes32ToIndexes(keccak256(encoded));

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {BasicPricingOracle} from "../contracts/deposit-addresses/open/oracle/BasicPricingOracle.sol";
+import {BasicPricingOracle} from "../contracts/deposit-addresses/oracle/BasicPricingOracle.sol";
 import {ScriptBase} from "./utils/ScriptBase.sol";
 
 /// @notice Deploys the BasicPricingOracle contract.

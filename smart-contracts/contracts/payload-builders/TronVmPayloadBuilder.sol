@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {
-  MessageHashUtils
-} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 import {Config} from "../Config.sol";
 import {BuildPayloadParams, IPayloadBuilder} from "../RelayAllocator.sol";

@@ -6,13 +6,16 @@ import {
   StorkFastAdapter
 } from "../../contracts/price-adapters/StorkFastAdapter.sol";
 import {MockStorkFastVerifier} from "../../contracts/mocks/MockStorkFastVerifier.sol";
-import {RelayPriceOracle} from "../../contracts/RelayPriceOracle.sol";
+import {
+  IPriceFeedAdapter,
+  RelayPriceOracle
+} from "../../contracts/RelayPriceOracle.sol";
 import {PriceOraclePrecompile} from "../../contracts/precompiles/PriceOraclePrecompile.sol";
 import {
   BidAsk,
   Currency,
   Price
-} from "../../contracts/deposit-addresses/open/oracle/IPricingOracle.sol";
+} from "../../contracts/deposit-addresses/oracle/IPricingOracle.sol";
 import {BaseTest} from "../utils/BaseTest.sol";
 
 /// @notice Tests the Stork Fast price feed adapter, both in isolation and
@@ -20,8 +23,10 @@ import {BaseTest} from "../utils/BaseTest.sol";
 contract StorkFastAdapterTest is BaseTest {
   StorkFastAdapter internal adapter;
   MockStorkFastVerifier internal verifier;
+  RelayPriceOracle internal oracle;
 
   bytes32 internal constant PROVIDER_STORK = keccak256("stork");
+  uint32 internal constant MAX_FUTURE_SECONDS = 12;
   uint16 internal constant TAXONOMY_ID = 1;
   uint16 internal constant ETH_ASSET_ID = 42;
   uint16 internal constant BTC_ASSET_ID = 43;
@@ -37,7 +42,8 @@ contract StorkFastAdapterTest is BaseTest {
     super.setUp();
     vm.warp(NOW);
     verifier = new MockStorkFastVerifier();
-    adapter = new StorkFastAdapter(verifier);
+    oracle = new RelayPriceOracle(owner);
+    adapter = new StorkFastAdapter(address(oracle), verifier);
   }
 
   function test_computesFeedIdFromPair() public view {
@@ -54,6 +60,37 @@ contract StorkFastAdapterTest is BaseTest {
     assertNotEq(adapter.computeFeedId(14, 48), adapter.computeFeedId(1, 448));
   }
 
+  function test_bindsRelayPriceOracle() public view {
+    assertEq(adapter.ORACLE(), address(oracle));
+  }
+
+  function test_rejectsZeroOracle() public {
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        IPriceFeedAdapter.InvalidOracle.selector,
+        address(0)
+      )
+    );
+    new StorkFastAdapter(address(0), verifier);
+  }
+
+  function test_rejectsUnauthorizedCaller() public {
+    bytes memory payload = _signedPayload(
+      TAXONOMY_ID,
+      TIMESTAMP_NS,
+      ETH_ASSET_ID,
+      ETH_PRICE
+    );
+
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        IPriceFeedAdapter.UnauthorizedCaller.selector,
+        address(this)
+      )
+    );
+    adapter.decodeAndVerify(ethFeedId, payload);
+  }
+
   function test_decodesSignedPayload() public {
     bytes memory payload = _signedPayload(
       TAXONOMY_ID,
@@ -68,7 +105,7 @@ contract StorkFastAdapterTest is BaseTest {
       uint256 ask,
       uint8 usdPriceDecimals,
       uint256 publishTime
-    ) = adapter.decodeAndVerify(ethFeedId, payload);
+    ) = _decodeAndVerify(ethFeedId, payload);
 
     assertEq(usdPrice, uint256(uint128(ETH_PRICE)));
     // Fast payloads carry no bid/ask band, so it is reported as unavailable.
@@ -102,16 +139,16 @@ contract StorkFastAdapterTest is BaseTest {
     );
 
     vm.expectRevert(expectedError);
-    adapter.decodeAndVerify(ethFeedId, otherAssetPayload);
+    _decodeAndVerify(ethFeedId, otherAssetPayload);
 
     vm.expectRevert(expectedError);
-    adapter.decodeAndVerify(ethFeedId, otherTaxonomyPayload);
+    _decodeAndVerify(ethFeedId, otherTaxonomyPayload);
 
     vm.expectRevert(expectedError);
-    adapter.decodeAndVerify(ethFeedId, emptyPayload);
+    _decodeAndVerify(ethFeedId, emptyPayload);
   }
 
-  function test_batchCachesAllContainedFeeds() public {
+  function test_globalCacheServesSiblingFeed() public {
     int128 btcPrice = 65_000e18;
     bytes memory payload = _signedBatch(
       TAXONOMY_ID,
@@ -122,11 +159,25 @@ contract StorkFastAdapterTest is BaseTest {
       )
     );
 
-    (uint256 usdPrice, , , , ) = adapter.decodeAndVerify(ethFeedId, payload);
+    (uint256 usdPrice, , , , ) = _decodeAndVerify(ethFeedId, payload);
     assertEq(usdPrice, uint256(uint128(ETH_PRICE)));
+    assertEq(adapter.cachedReportHash(), keccak256(payload));
 
-    // The first verification cached every feed in the batch, so the sibling
-    // feed must be served without another verifier call.
+    (int192 ethValue, uint64 ethTimestampNs) = adapter.cachedReportValues(
+      ethFeedId
+    );
+    assertEq(ethValue, int192(ETH_PRICE));
+    assertEq(ethTimestampNs, TIMESTAMP_NS);
+
+    // Unused sibling report values are not written to storage.
+    (int192 btcValue, uint64 btcTimestampNs) = adapter.cachedReportValues(
+      btcFeedId
+    );
+    assertEq(btcValue, 0);
+    assertEq(btcTimestampNs, 0);
+
+    // The global hash lets a sibling feed use the same verified payload
+    // without another verifier call.
     vm.mockCallRevert(
       address(verifier),
       abi.encodeWithSelector(
@@ -136,24 +187,213 @@ contract StorkFastAdapterTest is BaseTest {
     );
 
     uint256 publishTime;
-    (usdPrice, , , , publishTime) = adapter.decodeAndVerify(btcFeedId, payload);
+    (usdPrice, , , , publishTime) = _decodeAndVerify(btcFeedId, payload);
     assertEq(usdPrice, uint256(uint128(btcPrice)));
     assertEq(publishTime, PUBLISH_TIME);
+
+    (btcValue, btcTimestampNs) = adapter.cachedReportValues(btcFeedId);
+    assertEq(btcValue, int192(btcPrice));
+    assertEq(btcTimestampNs, TIMESTAMP_NS);
   }
 
-  function test_duplicateAssetIdLastOccurrenceWins() public {
-    int128 newerPrice = ETH_PRICE + 1e18;
+  function test_globalCacheRejectsNegativeSiblingPrice() public {
     bytes memory payload = _signedBatch(
       TAXONOMY_ID,
       TIMESTAMP_NS,
       abi.encodePacked(
         _asset(ETH_ASSET_ID, ETH_PRICE),
-        _asset(ETH_ASSET_ID, newerPrice)
+        _asset(BTC_ASSET_ID, -1)
       )
     );
 
-    (uint256 usdPrice, , , , ) = adapter.decodeAndVerify(ethFeedId, payload);
+    _decodeAndVerify(ethFeedId, payload);
+
+    vm.mockCallRevert(
+      address(verifier),
+      abi.encodeWithSelector(
+        IStorkFastVerifier.verifyAndDeserializeSignedECDSAPayload.selector
+      ),
+      "verify must not be called"
+    );
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        StorkFastAdapter.NonPositivePrice.selector,
+        int192(-1)
+      )
+    );
+    _decodeAndVerify(btcFeedId, payload);
+
+    (, uint64 btcTimestampNs) = adapter.cachedReportValues(btcFeedId);
+    assertEq(btcTimestampNs, 0);
+  }
+
+  function test_rejectsDuplicateAssetIds() public {
+    bytes memory identicalValues = _signedBatch(
+      TAXONOMY_ID,
+      TIMESTAMP_NS,
+      abi.encodePacked(
+        _asset(ETH_ASSET_ID, ETH_PRICE),
+        _asset(ETH_ASSET_ID, ETH_PRICE)
+      )
+    );
+    bytes memory differentValues = _signedBatch(
+      TAXONOMY_ID,
+      TIMESTAMP_NS,
+      abi.encodePacked(
+        _asset(ETH_ASSET_ID, ETH_PRICE),
+        _asset(ETH_ASSET_ID, ETH_PRICE + 1e18)
+      )
+    );
+
+    bytes memory expectedError = abi.encodeWithSelector(
+      StorkFastAdapter.DuplicateAssetId.selector,
+      ETH_ASSET_ID
+    );
+
+    vm.expectRevert(expectedError);
+    _decodeAndVerify(ethFeedId, identicalValues);
+
+    vm.expectRevert(expectedError);
+    _decodeAndVerify(ethFeedId, differentValues);
+
+    assertEq(adapter.cachedReportHash(), bytes32(0));
+    (, uint64 timestampNs) = adapter.cachedReportValues(ethFeedId);
+    assertEq(timestampNs, 0);
+  }
+
+  function test_acceptsNewerNanosecondsWithinSameSecond() public {
+    uint64 firstTimestampNs = TIMESTAMP_NS + 100_000_000;
+    uint64 secondTimestampNs = TIMESTAMP_NS + 900_000_000;
+    int128 newerPrice = ETH_PRICE + 1e18;
+
+    _decodeAndVerify(
+      ethFeedId,
+      _signedPayload(TAXONOMY_ID, firstTimestampNs, ETH_ASSET_ID, ETH_PRICE)
+    );
+    (uint256 usdPrice, , , , uint256 publishTime) = _decodeAndVerify(
+      ethFeedId,
+      _signedPayload(TAXONOMY_ID, secondTimestampNs, ETH_ASSET_ID, newerPrice)
+    );
+
     assertEq(usdPrice, uint256(uint128(newerPrice)));
+    assertEq(publishTime, PUBLISH_TIME);
+    (, uint64 cachedTimestampNs) = adapter.cachedReportValues(ethFeedId);
+    assertEq(cachedTimestampNs, secondTimestampNs);
+  }
+
+  function test_rejectsOlderNanosecondsWithinSameSecond() public {
+    uint64 latestTimestampNs = TIMESTAMP_NS + 900_000_000;
+    uint64 olderTimestampNs = TIMESTAMP_NS + 100_000_000;
+
+    _decodeAndVerify(
+      ethFeedId,
+      _signedPayload(TAXONOMY_ID, latestTimestampNs, ETH_ASSET_ID, ETH_PRICE)
+    );
+
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        StorkFastAdapter.TimestampRollback.selector,
+        ethFeedId,
+        olderTimestampNs,
+        latestTimestampNs
+      )
+    );
+    _decodeAndVerify(
+      ethFeedId,
+      _signedPayload(
+        TAXONOMY_ID,
+        olderTimestampNs,
+        ETH_ASSET_ID,
+        ETH_PRICE + 1e18
+      )
+    );
+  }
+
+  function test_allowsSamePriceAtSameTimestamp() public {
+    int128 btcPrice = 65_000e18;
+    bytes memory ethOnly = _signedPayload(
+      TAXONOMY_ID,
+      TIMESTAMP_NS,
+      ETH_ASSET_ID,
+      ETH_PRICE
+    );
+    bytes memory ethAndBtc = _signedBatch(
+      TAXONOMY_ID,
+      TIMESTAMP_NS,
+      abi.encodePacked(
+        _asset(ETH_ASSET_ID, ETH_PRICE),
+        _asset(BTC_ASSET_ID, btcPrice)
+      )
+    );
+
+    _decodeAndVerify(ethFeedId, ethOnly);
+    (uint256 usdPrice, , , , uint256 publishTime) = _decodeAndVerify(
+      btcFeedId,
+      ethAndBtc
+    );
+
+    assertEq(usdPrice, uint256(uint128(btcPrice)));
+    assertEq(publishTime, PUBLISH_TIME);
+    assertEq(adapter.cachedReportHash(), keccak256(ethAndBtc));
+    (, uint64 ethTimestampNs) = adapter.cachedReportValues(ethFeedId);
+    assertEq(ethTimestampNs, TIMESTAMP_NS);
+  }
+
+  function test_rejectsConflictingPriceAtSameTimestamp() public {
+    int128 conflictingPrice = ETH_PRICE + 1e18;
+    _decodeAndVerify(
+      ethFeedId,
+      _signedPayload(TAXONOMY_ID, TIMESTAMP_NS, ETH_ASSET_ID, ETH_PRICE)
+    );
+
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        StorkFastAdapter.ConflictingPriceAtTimestamp.selector,
+        ethFeedId,
+        TIMESTAMP_NS,
+        int192(ETH_PRICE),
+        int192(conflictingPrice)
+      )
+    );
+    _decodeAndVerify(
+      ethFeedId,
+      _signedPayload(TAXONOMY_ID, TIMESTAMP_NS, ETH_ASSET_ID, conflictingPrice)
+    );
+  }
+
+  function test_conflictingBatchDoesNotAdvanceCache() public {
+    int128 btcPrice = 65_000e18;
+    bytes memory acceptedPayload = _signedPayload(
+      TAXONOMY_ID,
+      TIMESTAMP_NS,
+      ETH_ASSET_ID,
+      ETH_PRICE
+    );
+    _decodeAndVerify(ethFeedId, acceptedPayload);
+
+    bytes memory conflictingBatch = _signedBatch(
+      TAXONOMY_ID,
+      TIMESTAMP_NS,
+      abi.encodePacked(
+        _asset(BTC_ASSET_ID, btcPrice),
+        _asset(ETH_ASSET_ID, ETH_PRICE + 1e18)
+      )
+    );
+
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        StorkFastAdapter.ConflictingPriceAtTimestamp.selector,
+        ethFeedId,
+        TIMESTAMP_NS,
+        int192(ETH_PRICE),
+        int192(ETH_PRICE + 1e18)
+      )
+    );
+    _decodeAndVerify(btcFeedId, conflictingBatch);
+
+    assertEq(adapter.cachedReportHash(), keccak256(acceptedPayload));
+    (, uint64 btcTimestampNs) = adapter.cachedReportValues(btcFeedId);
+    assertEq(btcTimestampNs, 0);
   }
 
   function test_revertsOnNonPositivePrice() public {
@@ -176,7 +416,7 @@ contract StorkFastAdapterTest is BaseTest {
         int192(0)
       )
     );
-    adapter.decodeAndVerify(ethFeedId, zeroPayload);
+    _decodeAndVerify(ethFeedId, zeroPayload);
 
     vm.expectRevert(
       abi.encodeWithSelector(
@@ -184,7 +424,7 @@ contract StorkFastAdapterTest is BaseTest {
         int192(-1)
       )
     );
-    adapter.decodeAndVerify(ethFeedId, negativePayload);
+    _decodeAndVerify(ethFeedId, negativePayload);
   }
 
   function test_cacheHitSkipsVerifier() public {
@@ -201,7 +441,7 @@ contract StorkFastAdapterTest is BaseTest {
       ETH_PRICE + 1e18
     );
 
-    adapter.decodeAndVerify(ethFeedId, payload);
+    _decodeAndVerify(ethFeedId, payload);
 
     // Any further verification attempt reverts, so success below proves the
     // adapter served the decoded values from its cache.
@@ -213,16 +453,16 @@ contract StorkFastAdapterTest is BaseTest {
       "verify must not be called"
     );
 
-    (uint256 usdPrice, , , , uint256 publishTime) = adapter.decodeAndVerify(
+    (uint256 usdPrice, , , , uint256 publishTime) = _decodeAndVerify(
       ethFeedId,
       payload
     );
     assertEq(usdPrice, uint256(uint128(ETH_PRICE)));
     assertEq(publishTime, PUBLISH_TIME);
 
-    // The cache is keyed per feed, so another feed's first use must verify.
+    // A different payload still requires verification even for another feed.
     vm.expectRevert(bytes("verify must not be called"));
-    adapter.decodeAndVerify(btcFeedId, btcPayload);
+    _decodeAndVerify(btcFeedId, btcPayload);
   }
 
   function test_reverifiesWhenReportChanges() public {
@@ -241,7 +481,7 @@ contract StorkFastAdapterTest is BaseTest {
       newPrice
     );
 
-    adapter.decodeAndVerify(ethFeedId, oldPayload);
+    _decodeAndVerify(ethFeedId, oldPayload);
 
     vm.expectCall(
       address(verifier),
@@ -251,7 +491,7 @@ contract StorkFastAdapterTest is BaseTest {
       ),
       1
     );
-    (uint256 usdPrice, , , , uint256 publishTime) = adapter.decodeAndVerify(
+    (uint256 usdPrice, , , , uint256 publishTime) = _decodeAndVerify(
       ethFeedId,
       newPayload
     );
@@ -267,14 +507,14 @@ contract StorkFastAdapterTest is BaseTest {
       ),
       "verify must not be called"
     );
-    (usdPrice, , , , ) = adapter.decodeAndVerify(ethFeedId, newPayload);
+    (usdPrice, , , , ) = _decodeAndVerify(ethFeedId, newPayload);
     assertEq(usdPrice, uint256(uint128(newPrice)));
 
     vm.expectRevert(bytes("verify must not be called"));
-    adapter.decodeAndVerify(ethFeedId, oldPayload);
+    _decodeAndVerify(ethFeedId, oldPayload);
   }
 
-  function test_exposesCachedReport() public {
+  function test_exposesCachedReportHashAndValues() public {
     bytes memory payload = _signedPayload(
       TAXONOMY_ID,
       TIMESTAMP_NS,
@@ -282,21 +522,20 @@ contract StorkFastAdapterTest is BaseTest {
       ETH_PRICE
     );
 
-    adapter.decodeAndVerify(ethFeedId, payload);
+    _decodeAndVerify(ethFeedId, payload);
 
-    (bytes32 reportHash, int192 quantizedValue, uint64 publishTime) = adapter
-      .cachedReports(ethFeedId);
+    (int192 quantizedValue, uint64 timestampNs) = adapter.cachedReportValues(
+      ethFeedId
+    );
 
-    assertEq(reportHash, keccak256(payload));
+    assertEq(adapter.cachedReportHash(), keccak256(payload));
     assertEq(quantizedValue, int192(ETH_PRICE));
-    assertEq(publishTime, uint64(PUBLISH_TIME));
+    assertEq(timestampNs, TIMESTAMP_NS);
   }
 
   function test_integratesWithRelayPriceOracle() public {
     uint32 maxAgeSeconds = 60;
     uint8 ethDecimals = 18;
-
-    RelayPriceOracle oracle = new RelayPriceOracle(owner);
 
     Currency memory eth = Currency({
       chainId: "ethereum",
@@ -310,7 +549,11 @@ contract StorkFastAdapterTest is BaseTest {
     );
 
     vm.startPrank(owner);
-    oracle.setPriceFeedAdapter(PROVIDER_STORK, address(adapter));
+    oracle.setPriceFeedAdapter(
+      PROVIDER_STORK,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
     oracle.setFeedRoute(
       eth,
       PROVIDER_STORK,
@@ -325,6 +568,7 @@ contract StorkFastAdapterTest is BaseTest {
     assertEq(price.usdPrice, uint256(uint128(ETH_PRICE)));
     assertEq(price.usdPriceDecimals, 18);
     assertEq(price.currencyDecimals, ethDecimals);
+    assertEq(price.publishTime, PUBLISH_TIME);
     assertEq(price.expiration, PUBLISH_TIME + maxAgeSeconds);
 
     // The bid/ask path reports the band as unavailable.
@@ -334,6 +578,7 @@ contract StorkFastAdapterTest is BaseTest {
     assertEq(bidAsk.askPrice, 0);
     assertEq(bidAsk.usdPriceDecimals, 18);
     assertEq(bidAsk.currencyDecimals, ethDecimals);
+    assertEq(bidAsk.publishTime, PUBLISH_TIME);
     assertEq(bidAsk.expiration, PUBLISH_TIME + maxAgeSeconds);
   }
 
@@ -345,8 +590,6 @@ contract StorkFastAdapterTest is BaseTest {
       ETH_ASSET_ID,
       ETH_PRICE
     );
-
-    RelayPriceOracle oracle = new RelayPriceOracle(owner);
 
     // The same asset on two chains routes to the same provider feed.
     Currency memory ethMainnet = Currency({
@@ -365,7 +608,11 @@ contract StorkFastAdapterTest is BaseTest {
     );
 
     vm.startPrank(owner);
-    oracle.setPriceFeedAdapter(PROVIDER_STORK, address(adapter));
+    oracle.setPriceFeedAdapter(
+      PROVIDER_STORK,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
     oracle.setFeedRoute(
       ethMainnet,
       PROVIDER_STORK,
@@ -400,11 +647,13 @@ contract StorkFastAdapterTest is BaseTest {
 
     assertEq(prices[0].usdPrice, uint256(uint128(ETH_PRICE)));
     assertEq(prices[1].usdPrice, uint256(uint128(ETH_PRICE)));
+    assertEq(prices[0].publishTime, PUBLISH_TIME);
+    assertEq(prices[1].publishTime, PUBLISH_TIME);
     assertEq(prices[0].expiration, PUBLISH_TIME + maxAgeSeconds);
     assertEq(prices[1].expiration, PUBLISH_TIME + maxAgeSeconds);
   }
 
-  function test_omittedAssetKeepsServingOlderPayload() public {
+  function test_batchRollbackDoesNotAdvanceState() public {
     int128 btcPrice = 65_000e18;
     bytes memory oldBoth = _signedBatch(
       TAXONOMY_ID,
@@ -428,40 +677,35 @@ contract StorkFastAdapterTest is BaseTest {
       abi.encodePacked(_asset(BTC_ASSET_ID, btcPrice + 2e18))
     );
 
-    adapter.decodeAndVerify(ethFeedId, oldBoth);
-    adapter.decodeAndVerify(btcFeedId, newBtcOnly);
+    _decodeAndVerify(ethFeedId, oldBoth);
+    _decodeAndVerify(btcFeedId, newBtcOnly);
 
-    (bytes32 ethHash, , ) = adapter.cachedReports(ethFeedId);
-    assertEq(ethHash, keccak256(oldBoth));
-
-    vm.mockCallRevert(
-      address(verifier),
+    vm.expectRevert(
       abi.encodeWithSelector(
-        IStorkFastVerifier.verifyAndDeserializeSignedECDSAPayload.selector
-      ),
-      "verify must not be called"
+        StorkFastAdapter.TimestampRollback.selector,
+        btcFeedId,
+        TIMESTAMP_NS + 1e9,
+        TIMESTAMP_NS + 2e9
+      )
     );
-    (uint256 usdPrice, , , , uint256 publishTime) = adapter.decodeAndVerify(
-      ethFeedId,
-      oldBoth
-    );
-    assertEq(usdPrice, uint256(uint128(ETH_PRICE)));
-    assertEq(publishTime, PUBLISH_TIME);
-    vm.clearMockedCalls();
+    _decodeAndVerify(ethFeedId, midBoth);
 
-    adapter.decodeAndVerify(ethFeedId, midBoth);
-    (bytes32 btcHash, , ) = adapter.cachedReports(btcFeedId);
-    assertEq(btcHash, keccak256(midBoth));
+    assertEq(adapter.cachedReportHash(), keccak256(newBtcOnly));
 
-    (usdPrice, , , , publishTime) = adapter.decodeAndVerify(
-      btcFeedId,
-      newBtcOnly
+    (int192 ethValue, uint64 ethTimestampNs) = adapter.cachedReportValues(
+      ethFeedId
     );
-    assertEq(usdPrice, uint256(uint128(btcPrice + 2e18)));
-    assertEq(publishTime, PUBLISH_TIME + 2);
+    assertEq(ethValue, int192(ETH_PRICE));
+    assertEq(ethTimestampNs, TIMESTAMP_NS);
+
+    (int192 btcValue, uint64 btcTimestampNs) = adapter.cachedReportValues(
+      btcFeedId
+    );
+    assertEq(btcValue, int192(btcPrice + 2e18));
+    assertEq(btcTimestampNs, TIMESTAMP_NS + 2e9);
   }
 
-  function test_largeBatchCachesAllAssetsLinearGas() public {
+  function test_largeBatchCachesOnlyRequestedFeed() public {
     uint16 assetCount = 200;
     bytes memory assetsBlob;
     for (uint16 id = 1; id <= assetCount; ++id) {
@@ -474,19 +718,46 @@ contract StorkFastAdapterTest is BaseTest {
     bytes32 midFeedId = _feedId(TAXONOMY_ID, assetCount / 2);
 
     uint256 gasBefore = gasleft();
-    (uint256 usdPrice, , , , ) = adapter.decodeAndVerify(midFeedId, payload);
+    (uint256 usdPrice, , , , ) = _decodeAndVerify(midFeedId, payload);
     uint256 gasUsed = gasBefore - gasleft();
 
     assertEq(usdPrice, uint256(assetCount / 2) * 1e18);
 
-    (bytes32 firstHash, , ) = adapter.cachedReports(_feedId(TAXONOMY_ID, 1));
-    (bytes32 lastHash, , ) = adapter.cachedReports(
+    assertEq(adapter.cachedReportHash(), keccak256(payload));
+
+    (, uint64 firstTimestampNs) = adapter.cachedReportValues(
+      _feedId(TAXONOMY_ID, 1)
+    );
+    (int192 midValue, uint64 midTimestampNs) = adapter.cachedReportValues(
+      midFeedId
+    );
+    (, uint64 lastTimestampNs) = adapter.cachedReportValues(
       _feedId(TAXONOMY_ID, assetCount)
     );
-    assertEq(firstHash, keccak256(payload));
-    assertEq(lastHash, keccak256(payload));
+    assertEq(firstTimestampNs, 0);
+    assertEq(midValue, int192(uint192(assetCount / 2) * 1e18));
+    assertEq(midTimestampNs, TIMESTAMP_NS);
+    assertEq(lastTimestampNs, 0);
 
-    assertLt(gasUsed, uint256(assetCount) * 60_000);
+    assertLt(gasUsed, uint256(assetCount) * 20_000);
+  }
+
+  /// @notice Calls the adapter as its bound RelayPriceOracle.
+  function _decodeAndVerify(
+    bytes32 feedId,
+    bytes memory updateData
+  )
+    internal
+    returns (
+      uint256 usdPrice,
+      uint256 bid,
+      uint256 ask,
+      uint8 usdPriceDecimals,
+      uint256 publishTime
+    )
+  {
+    vm.prank(address(oracle));
+    return adapter.decodeAndVerify(feedId, updateData);
   }
 
   /// @notice Computes a Stork Fast feed id from its identifying pair.

@@ -13,6 +13,10 @@ declare module "https://cdn.jsdelivr.net/npm/viem@2.48.11/+esm" {
   export * from "viem";
 }
 
+declare module "https://cdn.jsdelivr.net/npm/tronweb@6.1.0/+esm" {
+  export * from "tronweb";
+}
+
 declare module "https://cdn.jsdelivr.net/npm/@metamask/key-tree@10.1.1/+esm" {
   export * from "@metamask/key-tree";
 }

@@ -61,6 +61,7 @@ function mockConfig(): void {
 async function loadActions() {
   mockConfig();
   const [
+    { main: gatewayMain },
     { main: ethereumMain },
     { main: tronMain },
     { main: solanaMain },
@@ -69,7 +70,9 @@ async function loadActions() {
     { main: hyperliquidMain },
     { main: lighterMain },
     { main: xrpMain },
+    { main: hederaMain },
   ] = await Promise.all([
+    import("../../../src/vm/gateway-vm.js"),
     import("../../../src/vm/ethereum-vm.js"),
     import("../../../src/vm/tron-vm.js"),
     import("../../../src/vm/solana-vm.js"),
@@ -78,8 +81,10 @@ async function loadActions() {
     import("../../../src/vm/hyperliquid-vm.js"),
     import("../../../src/vm/lighter-vm.js"),
     import("../../../src/vm/xrp-vm.js"),
+    import("../../../src/vm/hedera-vm.js"),
   ]);
   return {
+    gatewayMain,
     ethereumMain,
     tronMain,
     solanaMain,
@@ -88,6 +93,7 @@ async function loadActions() {
     hyperliquidMain,
     lighterMain,
     xrpMain,
+    hederaMain,
   };
 }
 
@@ -101,6 +107,155 @@ function mockLit(privateKeyHex = TEST_PKP_KEY_HEX): LitMock {
   (globalThis as GlobalWithLit).Lit = lit;
   return lit;
 }
+
+describe("gateway-vm action", () => {
+  it("returns a dedicated HKDF-derived Gateway address", async () => {
+    const lit = mockLit();
+    const { gatewayMain, ethereumMain } = await loadActions();
+
+    const gateway = await gatewayMain({
+      pkpId: PKP_ID,
+      action: "wallet",
+      destinationVmType: "ethereum-vm",
+    });
+    const ethereum = await ethereumMain({ pkpId: PKP_ID, action: "wallet" });
+
+    expect(lit.Actions.getPrivateKey).toHaveBeenCalledWith({ pkpId: PKP_ID });
+    expect(gateway).toEqual({
+      vmType: "gateway-vm",
+      destinationVmType: "ethereum-vm",
+      gatewaySigner: "0x98073A349deF281dF771Ae2De7e6f47525e2D28B",
+      address: "0x98073A349deF281dF771Ae2De7e6f47525e2D28B",
+    });
+    expect(gateway.address).not.toBe(ethereum.address);
+  });
+
+  it("signs the attested BurnIntent and CallRequest in order", async () => {
+    mockLit();
+    const { gatewayMain } = await loadActions();
+    const withdrawRequest = {
+      chainId: "gateway",
+      depository: "0x1111111111111111111111111111111111111111",
+      currency: "0x0000000000000000000000000000000000000000",
+      amount: "1000000",
+      spenderChainId: "gateway",
+      spender: "0x2222222222222222222222222222222222222222",
+      receiver: "0x3333333333333333333333333333333333333333",
+      data: "0x",
+      nonce: `0x${"01".repeat(32)}`,
+    };
+    const { computeWithdrawRequestHash } = await import("../../../src/common/abi.js");
+    const { deriveKey } = await import("../../../src/common/crypto.js");
+    const withdrawRequestHash = `0x${bytesToHex(computeWithdrawRequestHash(withdrawRequest))}`;
+    const burnIntentHash = `0x${"11".repeat(32)}`;
+    const callRequestHash = `0x${"22".repeat(32)}`;
+
+    const result = await gatewayMain({
+      pkpId: PKP_ID,
+      action: "sign",
+      destinationVmType: "ethereum-vm",
+      withdrawRequest,
+      attestation: {
+        chainId: 421614,
+        allocator: "0x0000000000000000000000000000000000000000",
+        withdrawRequestHash,
+        hashesToSign: [burnIntentHash, callRequestHash],
+        signatures: [],
+      },
+    });
+
+    if (!("results" in result)) {
+      throw new Error("expected Gateway signing result");
+    }
+    expect(result.results.map(({ hash }) => hash)).toEqual([burnIntentHash, callRequestHash]);
+
+    const privateKey = await deriveKey(TEST_PKP_KEY_HEX, "gateway-vm");
+    const publicKey = secp256k1.getPublicKey(privateKey);
+    for (const signed of result.results) {
+      const signature = hexToBytes(signed.signature);
+      expect(signature).toHaveLength(65);
+      expect([27, 28]).toContain(signature[64]);
+      expect(
+        secp256k1.verify(signature.slice(0, 64), hexToBytes(signed.hash), publicKey, {
+          prehash: false,
+          format: "compact",
+        }),
+      ).toBe(true);
+    }
+  });
+
+  it("uses the same Gateway key material for a Solana destination allocator", async () => {
+    mockLit();
+    const { gatewayMain } = await loadActions();
+    const withdrawRequest = {
+      chainId: "gateway",
+      depository: `0x${"11".repeat(32)}`,
+      currency: "0x0000000000000000000000000000000000000000",
+      amount: "1000000",
+      spenderChainId: "gateway",
+      spender: "0x2222222222222222222222222222222222222222",
+      receiver: `0x${"33".repeat(32)}`,
+      data: "0x",
+      nonce: `0x${"01".repeat(32)}`,
+    };
+    const { computeWithdrawRequestHash } = await import("../../../src/common/abi.js");
+    const { deriveKey } = await import("../../../src/common/crypto.js");
+    const withdrawRequestHash = `0x${bytesToHex(computeWithdrawRequestHash(withdrawRequest))}`;
+    const burnIntentHash = `0x${"44".repeat(32)}`;
+    const callRequestHash = `0x${"55".repeat(32)}`;
+
+    const result = await gatewayMain({
+      pkpId: PKP_ID,
+      action: "sign",
+      destinationVmType: "solana-vm",
+      withdrawRequest,
+      attestation: {
+        chainId: 421614,
+        allocator: "0x0000000000000000000000000000000000000000",
+        withdrawRequestHash,
+        hashesToSign: [burnIntentHash, callRequestHash],
+        signatures: [],
+      },
+    });
+
+    if (!("results" in result)) {
+      throw new Error("expected Gateway signing result");
+    }
+    const gatewayKey = await deriveKey(TEST_PKP_KEY_HEX, "gateway-vm");
+    const secpPublicKey = secp256k1.getPublicKey(gatewayKey);
+    const solanaKeyPair = nacl.sign.keyPair.fromSeed(gatewayKey);
+
+    expect(result.gatewaySigner).toBe("0x98073A349deF281dF771Ae2De7e6f47525e2D28B");
+    expect(result.address).toBe(bs58.encode(solanaKeyPair.publicKey));
+
+    const burnSignature = hexToBytes(result.results[0].signature);
+    expect(
+      secp256k1.verify(burnSignature.slice(0, 64), hexToBytes(burnIntentHash), secpPublicKey, {
+        prehash: false,
+        format: "compact",
+      }),
+    ).toBe(true);
+
+    const callSignature = hexToBytes(result.results[1].signature);
+    expect(callSignature).toHaveLength(64);
+    expect(
+      nacl.sign.detached.verify(
+        hexToBytes(callRequestHash),
+        callSignature,
+        solanaKeyPair.publicKey,
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects unsupported destination VM types", async () => {
+    mockLit();
+    const { gatewayMain } = await loadActions();
+
+    await expect(
+      gatewayMain({ pkpId: PKP_ID, action: "wallet", destinationVmType: "bitcoin-vm" }),
+    ).rejects.toThrow("unsupported destinationVmType");
+  });
+});
 
 describe("ethereum-vm action", () => {
   it("returns the HKDF-derived Ethereum wallet address", async () => {
@@ -649,5 +804,102 @@ describe("xrp-vm action", () => {
     // Low-S canonical form: s must be in the lower half of the curve order.
     const parsed = secp256k1.Signature.fromBytes(der, "der");
     expect(parsed.hasHighS()).toBe(false);
+  });
+});
+
+describe("hedera-vm action", () => {
+  it("returns the HKDF-derived EVM alias and compressed public key", async () => {
+    const lit = mockLit();
+    const { hederaMain } = await loadActions();
+
+    const result = await hederaMain({ pkpId: PKP_ID, action: "wallet" });
+
+    expect(lit.Actions.getPrivateKey).toHaveBeenCalledWith({ pkpId: PKP_ID });
+    expect(result).toEqual({
+      vmType: "hedera-vm",
+      address: "0xa42D9C8832131a551b7D8836E1fFa759933a5326",
+      publicKey: "0x03ae2b785d3eaff9164b032acfd694fda4dd13aaf594abb8e826a1ff13ec8e72bb",
+    });
+  });
+
+  it("derives a distinct keypair from ethereum-vm", async () => {
+    mockLit();
+    const { ethereumMain, hederaMain } = await loadActions();
+
+    const ethereum = (await ethereumMain({ pkpId: PKP_ID, action: "wallet" })) as {
+      address: string;
+    };
+    const hedera = (await hederaMain({ pkpId: PKP_ID, action: "wallet" })) as { address: string };
+    expect(hedera.address).not.toBe(ethereum.address);
+  });
+
+  it("rejects unknown actions", async () => {
+    mockLit();
+    const { hederaMain } = await loadActions();
+    await expect(hederaMain({ pkpId: PKP_ID, action: "unknown" })).rejects.toThrow(
+      "unknown action",
+    );
+  });
+
+  it("requires withdrawRequest and attestation for sign", async () => {
+    mockLit();
+    const { hederaMain } = await loadActions();
+    await expect(hederaMain({ pkpId: PKP_ID, action: "sign" })).rejects.toThrow(
+      "withdrawRequest is required",
+    );
+    await expect(
+      hederaMain({ pkpId: PKP_ID, action: "sign", withdrawRequest: {} as never }),
+    ).rejects.toThrow("attestation is required");
+  });
+
+  it("emits canonical low-S 64-byte r‖s signatures over the given digest", async () => {
+    mockLit();
+    const { hederaMain } = await loadActions();
+
+    const withdrawRequest = {
+      chainId: "hedera",
+      depository: "0x0000000000000000000000000000000000000000",
+      currency: "0x0000000000000000000000000000000000000000",
+      amount: "0",
+      spenderChainId: "hedera",
+      spender: "0x0000000000000000000000000000000000000000",
+      receiver: "0x0000000000000000000000000000000000000000",
+      data: "0x",
+      nonce: `0x${"00".repeat(32)}`,
+    };
+    const { computeWithdrawRequestHash } = await import("../../../src/common/abi.js");
+    const withdrawRequestHash = `0x${bytesToHex(computeWithdrawRequestHash(withdrawRequest))}`;
+    const hashToSign = `0x${"11".repeat(32)}`;
+
+    const result = (await hederaMain({
+      pkpId: PKP_ID,
+      action: "sign",
+      withdrawRequest,
+      attestation: {
+        chainId: 421614,
+        allocator: "0x0000000000000000000000000000000000000000",
+        withdrawRequestHash,
+        hashesToSign: [hashToSign],
+        signatures: [],
+      },
+    })) as {
+      results: Array<{ hash: string; signature: string }>;
+    };
+
+    expect(result.results).toHaveLength(1);
+    const signature = hexToBytes(result.results[0].signature);
+    // Hedera's SignaturePair.ECDSA_secp256k1 carries raw r‖s with no recovery
+    // byte — 64 bytes, not the 65 the Ethereum action emits.
+    expect(signature).toHaveLength(64);
+
+    const wallet = (await hederaMain({ pkpId: PKP_ID, action: "wallet" })) as {
+      publicKey: string;
+    };
+    const pubKey = hexToBytes(wallet.publicKey);
+    const digest = hexToBytes(hashToSign);
+    // The digest is already keccak256 of the transaction body, so it is
+    // verified as-is rather than re-hashed.
+    expect(secp256k1.verify(signature, digest, pubKey, { prehash: false })).toBe(true);
+    expect(secp256k1.Signature.fromBytes(signature).hasHighS()).toBe(false);
   });
 });

@@ -13,6 +13,7 @@ import {ScriptBase} from "./utils/ScriptBase.sol";
 ///         is a separate post-deploy step.
 /// Env:
 ///   DEPLOYER_PRIVATE_KEY – deployer key (required)
+///   RELAY_PRICE_ORACLE    – required, authorized RelayPriceOracle
 ///   VERIFIER_PROXY       – required, Chainlink `VerifierProxy` (or a stand-in,
 ///                          e.g. MockVerifierProxy) to verify reports against
 ///   FEE_TOKEN             – optional, fee token forwarded to `verify`
@@ -20,11 +21,13 @@ import {ScriptBase} from "./utils/ScriptBase.sol";
 ///                          address for a zero-fee verifier config
 contract DeployChainlinkDataStreamsAdapter is ScriptBase {
     function run() external returns (ChainlinkDataStreamsAdapter adapter) {
+        address relayPriceOracle = _requireEnvAddress("RELAY_PRICE_ORACLE");
         address verifierProxy = _requireEnvAddress("VERIFIER_PROXY");
         address feeToken = vm.envOr("FEE_TOKEN", address(0));
 
         vm.startBroadcast(_deployerKey());
         adapter = new ChainlinkDataStreamsAdapter(
+            relayPriceOracle,
             IVerifierProxy(verifierProxy),
             feeToken
         );

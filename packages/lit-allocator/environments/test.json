@@ -1,0 +1,9 @@
+{
+  "name": "test",
+  "allocatorAddress": "0xf62Db37A0d07f7226292CE360225A329510A7F3a",
+  "hubEvmChainId": 421614,
+  "allowedOracles": [
+    "0x20a281822adfbc2be1fd5c77566702e0a8007084"
+  ],
+  "oracleSignatureThreshold": 1
+}

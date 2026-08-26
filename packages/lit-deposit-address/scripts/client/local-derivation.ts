@@ -17,7 +17,13 @@ import { WalletContractV5R1 } from "@ton/ton";
 import bs58 from "bs58";
 import { encodeAbiParameters, keccak256, type Address, type Hex } from "viem";
 
-export type VmType = "ethereum-vm" | "bitcoin-vm" | "solana-vm" | "hyperliquid-vm" | "ton-vm";
+export type VmType =
+  | "ethereum-vm"
+  | "bitcoin-vm"
+  | "solana-vm"
+  | "hyperliquid-vm"
+  | "ton-vm"
+  | "tron-vm";
 
 export interface AccountResponse {
   vmType: VmType;
@@ -37,6 +43,7 @@ export interface DerivationFields {
   depositor: string;
   refundRecipient: string;
   priceImpactBps: string;
+  salt: string;
 }
 
 export interface LocalWalletInfo {
@@ -61,6 +68,7 @@ const DERIVATION_FIELDS_ABI = [
       { name: "depositor", type: "bytes" },
       { name: "refundRecipient", type: "bytes" },
       { name: "priceImpactBps", type: "uint256" },
+      { name: "salt", type: "uint256" },
     ],
   },
 ] as const;
@@ -82,6 +90,7 @@ export function derivationFieldsToIndexes(fields: DerivationFields): number[] {
       depositor: fields.depositor as Hex,
       refundRecipient: fields.refundRecipient as Hex,
       priceImpactBps: BigInt(fields.priceImpactBps),
+      salt: BigInt(fields.salt),
     },
   ]);
   const hex = keccak256(encoded).slice(2);
@@ -117,6 +126,14 @@ const evmAddress = (node: SLIP10Node): string => {
 };
 const compressedPublicKey = (node: SLIP10Node): string => node.compressedPublicKey;
 const base58PublicKey = (node: SLIP10Node): string => bs58.encode(node.publicKeyBytes);
+const tronAddress = (node: SLIP10Node): string => {
+  const uncompressed = secp256k1.Point.fromHex(bytesToHex(node.compressedPublicKeyBytes)).toBytes(
+    false,
+  );
+  const payload = Uint8Array.of(0x41, ...keccak_256(uncompressed.slice(1)).slice(12));
+  const checksum = sha256(sha256(payload)).slice(0, 4);
+  return bs58.encode(Uint8Array.of(...payload, ...checksum));
+};
 
 const VM_DERIVATION: Record<VmType, VmDerivation> = {
   "ethereum-vm": {
@@ -150,6 +167,11 @@ const VM_DERIVATION: Record<VmType, VmDerivation> = {
         publicKey: Buffer.from(node.publicKeyBytes),
       }).address.toRawString(),
     formatPublicKey: (node) => `0x${Buffer.from(node.publicKeyBytes).toString("hex")}`,
+  },
+  "tron-vm": {
+    ed25519Bip32: false,
+    formatAddress: tronAddress,
+    formatPublicKey: compressedPublicKey,
   },
 };
 

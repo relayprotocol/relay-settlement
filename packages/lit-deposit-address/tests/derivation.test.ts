@@ -98,6 +98,14 @@ describe("derivation", () => {
     expect(wallet.path).toBe("m/44'/501'/0'/0/0");
   });
 
+  it("formats tron wallets", async () => {
+    const wallet = await deriveWallet(ROOT_KEY, "tron-vm", [0]);
+
+    expect(wallet.address).toMatch(/^T[1-9A-HJ-NP-Za-km-z]{33}$/u);
+    expect(wallet.publicKey).toMatch(/^0x0[23][0-9a-f]{64}$/u);
+    expect(wallet.path).toBe("m/44'/195'/0'/0/0");
+  });
+
   it("rejects invalid indexes", async () => {
     await expect(deriveWallet(ROOT_KEY, "ethereum-vm", [-1])).rejects.toThrow(
       "index must be an unhardened uint31",

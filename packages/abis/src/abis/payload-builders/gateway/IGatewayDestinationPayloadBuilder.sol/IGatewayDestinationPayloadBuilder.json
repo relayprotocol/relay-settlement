@@ -1,0 +1,136 @@
+[
+  {
+    "type": "function",
+    "name": "buildExecutionPayload",
+    "inputs": [
+      {
+        "name": "params",
+        "type": "tuple",
+        "internalType": "struct GatewayExecutionParams",
+        "components": [
+          {
+            "name": "destinationChainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "transferSpecHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "destinationToken",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "depository",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "receiver",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "nonce",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "expiration",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "data",
+            "type": "bytes",
+            "internalType": "bytes"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "payload",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "destinationContract",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "contractAddress",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getExpirationDelay",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "delay",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "hashExecutionPayload",
+    "inputs": [
+      {
+        "name": "destinationChainId",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "depository",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "payload",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "digest",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "sourceContract",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "contractAddress",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  }
+]

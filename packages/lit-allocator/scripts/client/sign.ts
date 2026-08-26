@@ -9,11 +9,12 @@
  *     --env <name> \
  *     --usage-api-key <key> \
  *     --pkp-id <pkp-address> \
- *     --vm-type <ethereum-vm | tron-vm | solana-vm | ton-vm | bitcoin-vm | hyperliquid-vm | lighter-vm | xrp-vm> \
+ *     --vm-type <gateway-vm | ethereum-vm | tron-vm | solana-vm | ton-vm | bitcoin-vm | hyperliquid-vm | lighter-vm | xrp-vm | hedera-vm> \
  *     --input <path-to-request.json>
  *
  * Example request.json:
  *   {
+ *     "destinationVmType": "ethereum-vm",
  *     "withdrawRequest": {
  *       "chainId": "...",
  *       "depository": "0x...",
@@ -44,7 +45,7 @@ import { CHIPOTLE_API_BASE_URL, executeLitAction } from "./index.js";
 
 const usage =
   "Usage:\n" +
-  "  tsx scripts/client/sign.ts --env <name> --usage-api-key <key> --pkp-id <address> --vm-type <ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm> --input <path>";
+  "  tsx scripts/client/sign.ts --env <name> --usage-api-key <key> --pkp-id <address> --vm-type <gateway-vm|ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm|hedera-vm> --input <path>";
 
 function getOption(args: string[], name: string): string | undefined {
   const idx = args.indexOf(name);
@@ -70,7 +71,7 @@ if (!pkpId) {
 }
 if (!vmTypeArg) {
   missing.push(
-    "--vm-type <ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm>",
+    "--vm-type <gateway-vm|ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm|hedera-vm>",
   );
 }
 if (!inputPath) {
@@ -88,11 +89,20 @@ if (!(VM_TYPES as readonly string[]).includes(vmTypeArg)) {
 const vmType = vmTypeArg as VmType;
 
 const request = JSON.parse(readFileSync(resolve(inputPath), "utf-8")) as {
+  destinationVmType?: string;
   withdrawRequest: Record<string, unknown>;
   attestation: Record<string, unknown>;
 };
 if (!request.withdrawRequest || !request.attestation) {
   console.error(`${inputPath} must contain both "withdrawRequest" and "attestation" objects`);
+  process.exit(1);
+}
+if (
+  vmType === "gateway-vm" &&
+  request.destinationVmType !== "ethereum-vm" &&
+  request.destinationVmType !== "solana-vm"
+) {
+  console.error(`${inputPath} must contain destinationVmType "ethereum-vm" or "solana-vm"`);
   process.exit(1);
 }
 
@@ -102,6 +112,7 @@ const result = await executeLitAction(
   vmType,
   {
     action: "sign",
+    ...(vmType === "gateway-vm" ? { destinationVmType: request.destinationVmType } : {}),
     withdrawRequest: request.withdrawRequest,
     attestation: request.attestation,
   },

@@ -1,53 +1,92 @@
-## Ethereum VM
+# EVM Relay Depository
 
-### Build
+Solidity implementations of the standard Relay depository and the Circle
+Gateway-backed depository.
 
-```shell
-$ forge build
+## Build and test
+
+From this directory:
+
+```sh
+forge build
+forge test
 ```
 
-### Test
+The Foundry configuration pins Solidity 0.8.28 and disables bytecode metadata.
+Dependency revisions are committed as Git submodules and in `foundry.lock`.
 
-```shell
-$ forge test
+## Standard depository deployment
+
+Use the multi-chain deployment wrapper for routine deployments. It performs a
+dry run unless `--execute` is supplied:
+
+```sh
+./deployments/scripts/deploy-depositories.sh --chains arbitrum,base
+./deployments/scripts/deploy-depositories.sh --execute --chains arbitrum,base
 ```
 
-### Deployment
+The script documents its required environment variables and derives the
+CREATE2 address before broadcasting. At minimum, deployments require the
+allocator, depository owner, per-chain RPC URLs, and—with `--execute`—the
+deployer private key. Keep secrets in an ignored `.env` file.
 
-Warning! For deterministic deployment make sure you're on commit `490858d742d1083bc4e3c2884798f6491dc72abb`.
+The underlying Foundry script is
+`script/RelayDepositoryDeployer.s.sol`. Its configuration is:
 
-The contracts deployment script is available in `./script/RelayDepositoryDeployer.s.sol`. It requires the following environment variables:
+- `ALLOCATOR`
+- `DEPOSITORY_OWNER`
+- `CREATE2_FACTORY`
+- `DEPOSITORY_SALT` (optional, defaults to `1`)
+- `CHAIN` (optional when `--rpc-url` selects the target)
 
-- `DEPLOYER_PK`: the private key of the deployer wallet
-- `CHAIN`: the chain to deploy on (the available options can be found in `./foundry.toml`)
-- `ALLOCATOR`: the address of the allocator
-- `CREATE2_FACTORY`: the addres of the `CREATE2` factory to be used for deterministic deployments - the default factory should be deployed at `0x4e59b44847b379578588920ca78fbf26c0b4956c`, in case it's not available on a given chain we should deploy it there or otherwise use a different factory
-- `ETHERSCAN_API_KEY`: the API key needed to verify the contracts on Etherscan-powered explorers
+Deploy only from a reviewed, tagged commit. Record the source commit, compiler
+profile, constructor arguments, salt, factory, transaction hash, runtime
+bytecode hash, and resulting address for each production deployment.
 
-The deployment can be triggered via the following command:
+## Gateway depository deployment
 
-```shell
-forge script ./script/RelayDepositoryDeployer.s.sol:RelayDepositoryDeployer \
-    --slow \
-    --multi \
-    --broadcast \
-    --verify \
-    --private-key $DEPLOYER_PK \
-    --create2-deployer $CREATE2_FACTORY
+`RelayGatewayDepository` uses chain-independent constructor arguments so the
+same CREATE2 factory, salt, owner, and allocator produce the same address on
+every EVM chain. Circle Gateway contract addresses are compiled constants
+because Circle uses the same addresses across its supported EVM chains.
+
+Compile Gateway deployments with the `london` profile so initialization
+bytecode is identical on chains with different EVM support. Both Foundry
+profiles disable the Solidity metadata hash and CBOR trailer.
+
+Required configuration:
+
+- `GATEWAY_DEPOSITORY_OWNER`
+- `GATEWAY_ALLOCATOR`
+- `CREATE2_FACTORY`
+- `GATEWAY_DEPOSITORY_SALT` (optional, defaults to `1`)
+
+```sh
+FOUNDRY_PROFILE=london forge script \
+  ./script/RelayGatewayDepositoryDeployer.s.sol:RelayGatewayDepositoryDeployer \
+  --rpc-url "$RPC_URL" \
+  --broadcast \
+  --private-key "$DEPLOYER_PRIVATE_KEY" \
+  --create2-deployer "$CREATE2_FACTORY" \
+  --no-metadata
 ```
 
-Do not forget to add the corresponding deployment information to the `./deployments/addresses.json` file! Also, please ensure all deployed contracts are verified!
+After deployment, the owner must call `initializeUsdc(address)` once with the
+chain's native USDC address. Deposits remain disabled until initialization is
+complete.
 
-### Contract source code verification
+## Verification and smoke tests
 
-The above script should do the deployment and verification altogether. However, in cases when the verification failed for some reason, it can be triggered individually via the following commands:
+Verify standard depositories recorded in Foundry broadcast output with:
 
-```shell
-forge verify-contract --chain $CHAIN $RELAY_DEPOSITORY ./src/RelayDepository.sol:RelayDepository --constructor-args $(cast abi-encode "constructor(address)" $ALLOCATOR)
+```sh
+./deployments/scripts/verify-depositories.sh --chains arbitrum,base
 ```
 
-In case `forge` doesn't have any default explorer for a given chain, make sure to pass the following extra arguments to the `forge verify-contract` commands: `--verifier-url $VERIFIER_URL --etherscan-api-key $VERIFIER_API_KEY`.
+For explorers not supported directly by Foundry, pass the appropriate verifier
+URL and API key to `forge verify-contract`.
 
-### Contract logic verification
-
-Since we need to deploy on a lot of chains which have different behaviour (eg. different supported evm version, with some opcodes not being available on some chains), it is important to ensure the logic of the contract works before going live with it on production. To help with that you can use the [`test-deposit-and-withdrawal`](./deployments/scripts/test-deposit-and-withdrawal.js) script which is going to execute a deposit to the depository and then request a withdrawal, ensuring both steps of the process work.
+After source verification, run
+`deployments/scripts/test-deposit-and-withdrawal.js` against each target chain
+to exercise a deposit and allocator-authorized withdrawal. This smoke test is
+in addition to the local Foundry suite.

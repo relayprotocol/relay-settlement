@@ -8,7 +8,8 @@
  *     --env <name> \
  *     --usage-api-key <key> \
  *     --pkp-id <pkp-address> \
- *     --vm-type <ethereum-vm | tron-vm | solana-vm | ton-vm | bitcoin-vm | hyperliquid-vm | lighter-vm | xrp-vm>
+ *     --vm-type <gateway-vm | ethereum-vm | tron-vm | solana-vm | ton-vm | bitcoin-vm | hyperliquid-vm | lighter-vm | xrp-vm | hedera-vm> \
+ *     [--destination-vm-type <ethereum-vm | solana-vm>]
  */
 
 import { VM_TYPES, loadEnvironment, parseEnvArg, type VmType } from "../env.js";
@@ -16,7 +17,7 @@ import { CHIPOTLE_API_BASE_URL, executeLitAction } from "./index.js";
 
 const usage =
   "Usage:\n" +
-  "  tsx scripts/client/wallet.ts --env <name> --usage-api-key <key> --pkp-id <address> --vm-type <ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm>";
+  "  tsx scripts/client/wallet.ts --env <name> --usage-api-key <key> --pkp-id <address> --vm-type <gateway-vm|ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm|hedera-vm> [--destination-vm-type <ethereum-vm|solana-vm>]";
 
 function getOption(args: string[], name: string): string | undefined {
   const idx = args.indexOf(name);
@@ -32,6 +33,7 @@ if (!envName) {
 const apiKey = getOption(args, "--usage-api-key");
 const pkpId = getOption(args, "--pkp-id");
 const vmTypeArg = getOption(args, "--vm-type");
+const destinationVmType = getOption(args, "--destination-vm-type");
 const missing: string[] = [];
 if (!apiKey) {
   missing.push("--usage-api-key <key>");
@@ -41,7 +43,7 @@ if (!pkpId) {
 }
 if (!vmTypeArg) {
   missing.push(
-    "--vm-type <ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm>",
+    "--vm-type <gateway-vm|ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm|hedera-vm>",
   );
 }
 if (missing.length > 0 || !apiKey || !pkpId || !vmTypeArg) {
@@ -54,12 +56,23 @@ if (!(VM_TYPES as readonly string[]).includes(vmTypeArg)) {
   process.exit(1);
 }
 const vmType = vmTypeArg as VmType;
+if (
+  vmType === "gateway-vm" &&
+  destinationVmType !== "ethereum-vm" &&
+  destinationVmType !== "solana-vm"
+) {
+  console.error("gateway-vm requires --destination-vm-type <ethereum-vm|solana-vm>");
+  process.exit(1);
+}
 
 const env = loadEnvironment(envName);
 const result = await executeLitAction(
   { apiBaseUrl: CHIPOTLE_API_BASE_URL, apiKey, pkpId, envName: env.name },
   vmType,
-  { action: "wallet" },
+  {
+    action: "wallet",
+    ...(vmType === "gateway-vm" ? { destinationVmType } : {}),
+  },
 );
 
 console.log(JSON.stringify(result, null, 2));

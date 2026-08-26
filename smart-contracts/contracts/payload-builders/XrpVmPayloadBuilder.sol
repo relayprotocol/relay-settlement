@@ -2,7 +2,8 @@
 pragma solidity ^0.8.28;
 
 import {BuildPayloadParams, IPayloadBuilder} from "../RelayAllocator.sol";
-import {Sha512} from "./Sha512.sol";
+import {GasPaidPayloadBuilder} from "./GasPaidPayloadBuilder.sol";
+import {Sha512} from "./utils/Sha512.sol";
 
 /// @notice Decoded fields for a native-XRP `Payment`, mirroring the settlement
 ///         SDK `xrp-vm` withdrawal codec. `signingPubKey` is copied from the
@@ -42,18 +43,36 @@ struct XrpRequestData {
 ///      and `SigningPubKey` into a submittable transaction. The depository
 ///      authorizes this builder's signing key (master key or RegularKey); key
 ///      custody is handled by the threshold signer, as with the other VMs.
-contract XrpVmPayloadBuilder is IPayloadBuilder {
+///      XRPL withdrawals spend depository funds on the transaction `Fee`, so
+///      building a payload requires a matching gas payment recorded via the
+///      `WithdrawGasPayer` contract (see `GasPaidPayloadBuilder`).
+contract XrpVmPayloadBuilder is IPayloadBuilder, GasPaidPayloadBuilder {
   error InvalidReceiverLength(uint256 length);
   error InvalidDepositoryLength(uint256 length);
   error InvalidCurrencyLength(uint256 length);
   error UnsupportedCurrency();
   error AmountExceedsMaxDrops(uint256 amount);
-  error FeeExceedsMaxDrops(uint256 fee);
+  error FeeExceedsMaxFee(uint64 fee, uint64 maxFee);
+  error FeeExceedsPaidGas(uint64 fee, uint256 paidAmount);
   error InvalidSigningPubKeyLength(uint256 length);
   error InvalidSigningPubKeyPrefix(bytes1 prefix);
 
   /// @notice Maximum total XRP supply in drops (10^17), the largest valid amount.
   uint64 internal constant MAX_DROPS = 100000000000000000;
+
+  /// @notice Upper bound (in drops) on the caller-supplied XRPL transaction fee,
+  ///         set to 1 XRP (1_000_000 drops).
+  /// @dev The `Fee` field is burned from the sending depository account; the
+  ///      spender compensates the depository out-of-band via `WithdrawGasPayer`,
+  ///      but the payment amount is fixed per chain rather than per request, so
+  ///      an unbounded fee would still let a self-service spender drain the
+  ///      shared depository reserve. XRPL fees are a
+  ///      network-wide property (reference fee ~10 drops), so this is a fixed
+  ///      constant rather than a per-deployment parameter: 1 XRP is ~100,000x
+  ///      the reference fee — far above any realistic load-based escalation and
+  ///      below the 2 XRP ceiling standard clients enforce — while keeping
+  ///      reserve drain infeasible.
+  uint64 public constant MAX_FEE = 1000000;
 
   /// @notice Serialized native-XRP amount flag: not-issued (bit 63 clear) and
   ///         positive (bit 62 set).
@@ -70,7 +89,11 @@ contract XrpVmPayloadBuilder is IPayloadBuilder {
   /// @notice Binds the builder to the allocator's XRP signing key.
   /// @param signingPubKey 33-byte compressed secp256k1 public key of the
   ///        allocator's XRP signer (master key or RegularKey of the depository).
-  constructor(bytes memory signingPubKey) {
+  /// @param gasPayer WithdrawGasPayer contract whose payments authorize builds
+  constructor(
+    bytes memory signingPubKey,
+    address gasPayer
+  ) GasPaidPayloadBuilder(gasPayer) {
     if (signingPubKey.length != 33) {
       revert InvalidSigningPubKeyLength(signingPubKey.length);
     }
@@ -87,15 +110,21 @@ contract XrpVmPayloadBuilder is IPayloadBuilder {
   }
 
   /// @inheritdoc IPayloadBuilder
-  /// @dev Receiver and depository must be 20-byte AccountIDs; currency must be
-  ///      the all-zero native sentinel (issued assets are rejected). Sequence,
-  ///      fee, lastLedgerSequence, flags and destinationTag come from
-  ///      `params.data`.
+  /// @dev Reverts with `GasNotPaid` unless a gas payment is recorded for the
+  ///      exact withdraw parameters, and with `FeeExceedsPaidGas` when the
+  ///      transaction `Fee` (spent by the depository) exceeds the amount that
+  ///      was pre-paid — both are in drops, since native-XRP hub balances are
+  ///      denominated in drops. Receiver and depository must be 20-byte
+  ///      AccountIDs; currency must be the all-zero native sentinel (issued
+  ///      assets are rejected). Sequence, fee, lastLedgerSequence, flags and
+  ///      destinationTag come from `params.data`.
   function buildPayload(
-    string calldata /* chainId */,
+    string calldata chainId,
     bytes calldata depository,
     BuildPayloadParams calldata params
   ) external view override returns (bytes memory payload) {
+    uint256 paidAmount = _requireGasPaid(chainId, depository, params);
+
     if (depository.length != ACCOUNT_ID_LENGTH) {
       revert InvalidDepositoryLength(depository.length);
     }
@@ -113,8 +142,13 @@ contract XrpVmPayloadBuilder is IPayloadBuilder {
     }
 
     XrpRequestData memory data = abi.decode(params.data, (XrpRequestData));
-    if (data.fee > MAX_DROPS) {
-      revert FeeExceedsMaxDrops(data.fee);
+    if (data.fee > MAX_FEE) {
+      revert FeeExceedsMaxFee(data.fee, MAX_FEE);
+    }
+    // The Fee field is spent by the depository; the pre-paid gas burn must
+    // cover it so the depository is never out of pocket.
+    if (data.fee > paidAmount) {
+      revert FeeExceedsPaidGas(data.fee, paidAmount);
     }
 
     XrpPaymentRequest memory request = XrpPaymentRequest({

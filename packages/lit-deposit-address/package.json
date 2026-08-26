@@ -25,12 +25,13 @@
     "@noble/hashes": "2.0.1",
     "@scure/base": "2.0.0",
     "bs58": "6.0.0",
+    "tronweb": "6.1.0",
     "viem": "2.48.11"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@relay-protocol/lit-helpers": "workspace:*",
-    "@relay-protocol/settlement-sdk": "0.0.110",
+    "@relay-protocol/settlement-sdk": "workspace:*",
     "@solana/web3.js": "1.98.4",
     "@ton/core": "0.61.0",
     "@ton/crypto": "3.3.0",

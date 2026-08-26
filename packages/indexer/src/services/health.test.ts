@@ -9,7 +9,7 @@ process.env.HUB_CONTRACT_ADDRESS ??=
 process.env.ORACLE_CONTRACT_ADDRESS ??=
   "0xd4b9fdB83C723c096d7fBE72da252aa23f1387aa"
 
-const { buildHealthResponse, getHealthStatus } = await import("./health.js")
+const { buildHealthResponse } = await import("./health.js")
 
 test("buildHealthResponse uses the slowest hub and oracle checkpoints", () => {
   const health = buildHealthResponse({
@@ -101,9 +101,8 @@ test("buildHealthResponse reports unhealthy when indexer audits fail", () => {
           confirmedCount: 1,
           consecutiveConfirmedRuns: 2,
           error: null,
-          kind: "balance-drift",
+          kind: "transfer-coverage",
           ok: false,
-          pendingCount: 0,
           reason: "confirmed audit findings exceeded threshold",
           startedAt: "2026-06-06T11:59:00.000Z",
           status: "succeeded",
@@ -126,27 +125,4 @@ test("buildHealthResponse reports unhealthy when indexer audits fail", () => {
 
   assert.equal(health.ok, false)
   assert.equal(health.audits?.ok, false)
-})
-
-test("getHealthStatus can omit audit health for readiness", async () => {
-  const db = {
-    manyOrNone: async () => {
-      throw new Error("audit health should not be queried")
-    },
-    one: async () => ({
-      count: 0,
-      oldest_block_number: null,
-    }),
-    oneOrNone: async () => ({
-      value: "990",
-    }),
-  } as unknown as Parameters<typeof getHealthStatus>[0]
-  const provider = {
-    getBlockNumber: async () => 1_000,
-  } as Parameters<typeof getHealthStatus>[1]
-
-  const health = await getHealthStatus(db, provider, { includeAudits: false })
-
-  assert.equal(health.ok, true)
-  assert.equal(health.audits, undefined)
 })

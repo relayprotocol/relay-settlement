@@ -6,7 +6,7 @@ import {console} from "forge-std/console.sol";
 
 /// @notice Shared helpers for deployment scripts.
 /// Centralises deployer-key resolution and consistent logging across the
-/// script suite that replaces the Hardhat/Ignition deployment tasks.
+/// Foundry script suite.
 abstract contract ScriptBase is Script {
     /// @notice Reads the deployer private key from `DEPLOYER_PRIVATE_KEY`, then
     /// falls back to forge's standard `PRIVATE_KEY`. Reverts when neither is set.
@@ -24,8 +24,8 @@ abstract contract ScriptBase is Script {
     }
 
     /// @notice Returns the address stored in `name`, defaulting to the deployer
-    /// when the variable is unset or zero. Useful for `--owner` / `--admin`
-    /// flags that Hardhat tasks treated as optional.
+    /// when the variable is unset or zero. Useful for optional owner/admin
+    /// environment variables.
     function _envAddressOrDeployer(string memory name) internal view returns (address account) {
         account = vm.envOr(name, address(0));
         if (account == address(0)) {

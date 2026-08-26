@@ -3,6 +3,11 @@
     "type": "constructor",
     "inputs": [
       {
+        "name": "config",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
         "name": "subwalletId",
         "type": "uint32",
         "internalType": "uint32"
@@ -11,9 +16,40 @@
         "name": "timeout",
         "type": "uint32",
         "internalType": "uint32"
+      },
+      {
+        "name": "gasPayer",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "CONFIG",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract Config"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "GAS_PAYER",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -46,12 +82,12 @@
     "name": "buildPayload",
     "inputs": [
       {
-        "name": "",
+        "name": "chainId",
         "type": "string",
         "internalType": "string"
       },
       {
-        "name": "",
+        "name": "depository",
         "type": "bytes",
         "internalType": "bytes"
       },
@@ -125,6 +161,25 @@
   },
   {
     "type": "function",
+    "name": "getGasFeeKey",
+    "inputs": [
+      {
+        "name": "chainId",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "key",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "hashesToSign",
     "inputs": [
       {
@@ -165,6 +220,17 @@
   },
   {
     "type": "error",
+    "name": "GasNotPaid",
+    "inputs": [
+      {
+        "name": "withdrawParamsHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InvalidCurrencyLength",
     "inputs": [
       {
@@ -180,6 +246,22 @@
     "inputs": [
       {
         "name": "length",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PaidGasBelowGasFee",
+    "inputs": [
+      {
+        "name": "paidAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "gasFee",
         "type": "uint256",
         "internalType": "uint256"
       }

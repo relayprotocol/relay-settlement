@@ -3,9 +3,9 @@ pragma solidity ^0.8.28;
 
 import {Vm} from "forge-std/Vm.sol";
 import {BaseTest} from "../utils/BaseTest.sol";
-import {RelayDepositAddressManager} from "../../contracts/deposit-addresses/open/RelayDepositAddressManager.sol";
-import {BasicPricingOracle} from "../../contracts/deposit-addresses/open/oracle/BasicPricingOracle.sol";
-import {Currency, Price} from "../../contracts/deposit-addresses/open/oracle/IPricingOracle.sol";
+import {RelayDepositAddressManager} from "../../contracts/deposit-addresses/RelayDepositAddressManager.sol";
+import {BasicPricingOracle} from "../../contracts/deposit-addresses/oracle/BasicPricingOracle.sol";
+import {Currency, Price} from "../../contracts/deposit-addresses/oracle/IPricingOracle.sol";
 import {MockPricingOracle} from "../../contracts/mocks/MockPricingOracle.sol";
 
 /// @notice Port of test/RelayDepositAddressManager/RelayDepositAddressManager.ts.
@@ -14,6 +14,7 @@ contract RelayDepositAddressManagerBase is BaseTest {
     bytes32 internal constant OTHER_ORDER_ID = keccak256(bytes("order-2"));
     bytes internal constant EMPTY_EXTRA_DATA = "";
     uint256 internal constant NONCE = 0;
+    uint256 internal constant PRICE_PUBLISH_TIME = 1_800_000_000;
     uint256 internal constant PRICE_EXPIRATION = 1_900_000_000;
     uint8 internal constant USD_PRICE_DECIMALS = 8;
 
@@ -22,6 +23,7 @@ contract RelayDepositAddressManagerBase is BaseTest {
     string internal constant OUTPUT_CHAIN_ID = "10";
     uint256 internal constant INPUT_AMOUNT = 1_000_000;
     uint256 internal constant PRICE_IMPACT_BPS = 50;
+    uint256 internal constant SALT = 123;
     address internal constant SOLVER = address(0xbEEF);
 
     bytes internal inputCurrency;
@@ -51,12 +53,14 @@ contract RelayDepositAddressManagerBase is BaseTest {
             usdPrice: 123_456,
             usdPriceDecimals: USD_PRICE_DECIMALS,
             currencyDecimals: 18,
+            publishTime: PRICE_PUBLISH_TIME,
             expiration: PRICE_EXPIRATION
         });
         outputPrice = Price({
             usdPrice: 789_012,
             usdPriceDecimals: USD_PRICE_DECIMALS,
             currencyDecimals: 6,
+            publishTime: PRICE_PUBLISH_TIME,
             expiration: PRICE_EXPIRATION
         });
     }
@@ -85,7 +89,8 @@ contract RelayDepositAddressManagerBase is BaseTest {
                 pricingOracle: pricingOracle,
                 depositor: depositorBytes,
                 refundRecipient: refundRecipient,
-                priceImpactBps: PRICE_IMPACT_BPS
+                priceImpactBps: PRICE_IMPACT_BPS,
+                salt: SALT
             });
     }
 
@@ -122,6 +127,7 @@ contract RelayDepositAddressManagerBase is BaseTest {
             inputPrice.usdPrice,
             inputPrice.usdPriceDecimals,
             inputPrice.currencyDecimals,
+            inputPrice.publishTime,
             inputPrice.expiration
         );
         oracle.setPrice(
@@ -130,6 +136,7 @@ contract RelayDepositAddressManagerBase is BaseTest {
             outputPrice.usdPrice,
             outputPrice.usdPriceDecimals,
             outputPrice.currencyDecimals,
+            outputPrice.publishTime,
             outputPrice.expiration
         );
     }
@@ -142,7 +149,14 @@ contract RelayDepositAddressManagerBase is BaseTest {
     }
 
     function _zeroPrice() internal pure returns (Price memory) {
-        return Price({usdPrice: 0, usdPriceDecimals: 0, currencyDecimals: 0, expiration: 0});
+        return
+            Price({
+                usdPrice: 0,
+                usdPriceDecimals: 0,
+                currencyDecimals: 0,
+                publishTime: 0,
+                expiration: 0
+            });
     }
 }
 
@@ -198,6 +212,7 @@ contract RelayDepositAddressManagerTriggerTest is RelayDepositAddressManagerBase
             usdPrice: inputPrice.usdPrice + 1,
             usdPriceDecimals: inputPrice.usdPriceDecimals,
             currencyDecimals: inputPrice.currencyDecimals,
+            publishTime: inputPrice.publishTime,
             expiration: inputPrice.expiration
         });
         oracle.setPrice(
@@ -206,6 +221,7 @@ contract RelayDepositAddressManagerTriggerTest is RelayDepositAddressManagerBase
             updatedInputPrice.usdPrice,
             updatedInputPrice.usdPriceDecimals,
             updatedInputPrice.currencyDecimals,
+            updatedInputPrice.publishTime,
             updatedInputPrice.expiration
         );
 
@@ -234,6 +250,7 @@ contract RelayDepositAddressManagerTriggerTest is RelayDepositAddressManagerBase
             usdPrice: 999_999,
             usdPriceDecimals: 6,
             currencyDecimals: 18,
+            publishTime: PRICE_PUBLISH_TIME + 1,
             expiration: PRICE_EXPIRATION + 1
         });
         altOracle.setPrice(
@@ -242,6 +259,7 @@ contract RelayDepositAddressManagerTriggerTest is RelayDepositAddressManagerBase
             altInputPrice.usdPrice,
             altInputPrice.usdPriceDecimals,
             altInputPrice.currencyDecimals,
+            altInputPrice.publishTime,
             altInputPrice.expiration
         );
 
@@ -312,6 +330,7 @@ contract RelayDepositAddressManagerTriggerTest is RelayDepositAddressManagerBase
             inputPrice.usdPrice,
             inputPrice.usdPriceDecimals,
             inputPrice.currencyDecimals,
+            inputPrice.publishTime,
             inputPrice.expiration
         );
 
@@ -326,7 +345,57 @@ contract RelayDepositAddressManagerTriggerTest is RelayDepositAddressManagerBase
             usdPrice: inputPrice.usdPrice,
             usdPriceDecimals: inputPrice.usdPriceDecimals,
             currencyDecimals: inputPrice.currencyDecimals,
+            publishTime: inputPrice.publishTime,
             expiration: inputPrice.expiration + 1
+        });
+
+        bytes32 matchingHash = _hashTrigger(
+            _input(),
+            d,
+            ORDER_ID,
+            NONCE,
+            currencies,
+            matchingPrices,
+            EMPTY_EXTRA_DATA
+        );
+        bytes32 mismatchedHash = _hashTrigger(
+            _input(),
+            d,
+            ORDER_ID,
+            NONCE,
+            currencies,
+            mismatchedPrices,
+            EMPTY_EXTRA_DATA
+        );
+        assertTrue(matchingHash != mismatchedHash);
+        assertEq(manager.triggers(matchingHash), ORDER_ID);
+        assertEq(manager.triggers(mismatchedHash), bytes32(0));
+    }
+
+    function test_bindsPricePublishTimeIntoTheTriggerHash() public {
+        oracle.setPrice(
+            INPUT_CHAIN_ID,
+            inputCurrency,
+            inputPrice.usdPrice,
+            inputPrice.usdPriceDecimals,
+            inputPrice.currencyDecimals,
+            inputPrice.publishTime,
+            inputPrice.expiration
+        );
+
+        RelayDepositAddressManager.DerivationFields memory d = _derivation(address(oracle));
+        Currency[] memory currencies = _inputCurrencyArr();
+        manager.trigger(_input(), d, ORDER_ID, NONCE, currencies, EMPTY_EXTRA_DATA);
+
+        Price[] memory matchingPrices = new Price[](1);
+        matchingPrices[0] = inputPrice;
+        Price[] memory mismatchedPrices = new Price[](1);
+        mismatchedPrices[0] = Price({
+            usdPrice: inputPrice.usdPrice,
+            usdPriceDecimals: inputPrice.usdPriceDecimals,
+            currencyDecimals: inputPrice.currencyDecimals,
+            publishTime: inputPrice.publishTime + 1,
+            expiration: inputPrice.expiration
         });
 
         bytes32 matchingHash = _hashTrigger(
@@ -359,6 +428,7 @@ contract RelayDepositAddressManagerTriggerTest is RelayDepositAddressManagerBase
             inputPrice.usdPrice,
             inputPrice.usdPriceDecimals,
             inputPrice.currencyDecimals,
+            inputPrice.publishTime,
             inputPrice.expiration
         );
 
@@ -373,6 +443,7 @@ contract RelayDepositAddressManagerTriggerTest is RelayDepositAddressManagerBase
             usdPrice: inputPrice.usdPrice,
             usdPriceDecimals: 6,
             currencyDecimals: inputPrice.currencyDecimals,
+            publishTime: inputPrice.publishTime,
             expiration: inputPrice.expiration
         });
 
@@ -397,6 +468,42 @@ contract RelayDepositAddressManagerTriggerTest is RelayDepositAddressManagerBase
         assertTrue(matchingHash != mismatchedHash);
         assertEq(manager.triggers(matchingHash), ORDER_ID);
         assertEq(manager.triggers(mismatchedHash), bytes32(0));
+    }
+
+    function test_bindsSaltIntoTheTriggerHash() public {
+        _seedPrices();
+
+        RelayDepositAddressManager.DerivationFields memory first = _derivation(address(oracle));
+        RelayDepositAddressManager.DerivationFields memory second = _derivation(address(oracle));
+        second.salt = first.salt + 1;
+        Currency[] memory currencies = _inputCurrencyArr();
+
+        manager.trigger(_input(), first, ORDER_ID, NONCE, currencies, EMPTY_EXTRA_DATA);
+        manager.trigger(_input(), second, ORDER_ID, NONCE, currencies, EMPTY_EXTRA_DATA);
+
+        Price[] memory prices = new Price[](1);
+        prices[0] = inputPrice;
+        bytes32 firstHash = _hashTrigger(
+            _input(),
+            first,
+            ORDER_ID,
+            NONCE,
+            currencies,
+            prices,
+            EMPTY_EXTRA_DATA
+        );
+        bytes32 secondHash = _hashTrigger(
+            _input(),
+            second,
+            ORDER_ID,
+            NONCE,
+            currencies,
+            prices,
+            EMPTY_EXTRA_DATA
+        );
+        assertTrue(firstHash != secondHash);
+        assertEq(manager.triggers(firstHash), ORDER_ID);
+        assertEq(manager.triggers(secondHash), ORDER_ID);
     }
 
     function test_bindsTheNonceIntoTheTriggerHash() public {

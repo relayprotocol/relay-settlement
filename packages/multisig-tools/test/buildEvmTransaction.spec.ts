@@ -27,6 +27,7 @@ const loadMetisTx = () => {
       __dirname,
       "..",
       "transactions",
+      "prod",
       "047-rt-migration-set-allocator.json"
     ),
     "utf8"

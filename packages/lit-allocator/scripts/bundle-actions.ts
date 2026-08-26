@@ -12,6 +12,7 @@
  *   tsx scripts/bundle-actions.ts --env <name>
  *
  * Outputs:
+ *   dist/actions/<env>/gateway.js   (from src/vm/gateway-vm.ts)
  *   dist/actions/<env>/ethereum.js  (from src/vm/ethereum-vm.ts)
  *   dist/actions/<env>/bitcoin.js   (from src/vm/bitcoin-vm.ts)
  *   dist/actions/<env>/tron.js      (from src/vm/tron-vm.ts)
@@ -20,6 +21,7 @@
  *   dist/actions/<env>/hyperliquid.js (from src/vm/hyperliquid-vm.ts)
  *   dist/actions/<env>/lighter.js (from src/vm/lighter-vm.ts)
  *   dist/actions/<env>/xrp.js       (from src/vm/xrp-vm.ts)
+ *   dist/actions/<env>/hedera.js    (from src/vm/hedera-vm.ts)
  */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -98,8 +100,11 @@ const define: Record<string, string> = {
   __ALLOWED_ORACLES__: JSON.stringify(JSON.stringify(env.allowedOracles)),
   __ORACLE_SIGNATURE_THRESHOLD__: JSON.stringify(String(env.oracleSignatureThreshold)),
   __LIGHTER_ALLOWED_API_KEYS__: JSON.stringify(JSON.stringify(env.lighterAllowedApiKeys ?? [])),
-  __LIGHTER_GATEWAY__: JSON.stringify(env.lighterGateway),
-  __LIGHTER_GATEWAY_CHAIN_ID__: JSON.stringify(String(env.lighterGatewayChainId)),
+  // Lighter isn't supported in every environment (e.g. testnet)
+  __LIGHTER_GATEWAY__: JSON.stringify(
+    env.lighterGateway ?? "0x0000000000000000000000000000000000000000",
+  ),
+  __LIGHTER_GATEWAY_CHAIN_ID__: JSON.stringify(String(env.lighterGatewayChainId ?? 0)),
 };
 
 for (const vmType of VM_TYPES) {

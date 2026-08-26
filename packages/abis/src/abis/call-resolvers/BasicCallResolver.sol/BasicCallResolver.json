@@ -28,7 +28,7 @@
     "name": "execute",
     "inputs": [
       {
-        "name": "request",
+        "name": "",
         "type": "tuple",
         "internalType": "struct ExecuteAndWithdrawRequest",
         "components": [

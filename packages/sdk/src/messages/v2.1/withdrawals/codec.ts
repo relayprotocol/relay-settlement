@@ -4,7 +4,6 @@ import {
   decodeAbiParameters,
   encodeAbiParameters,
   Hex,
-  parseAbiParameters,
 } from "viem"
 
 // Per-VM withdrawal codec. `W` is the decoded "withdrawal" payload type,
@@ -52,18 +51,3 @@ export const defineAbiWithdrawalCodec = <
       ) as AbiValues<TParams>
     ),
 })
-
-export const decodeERC20TransferParams = (data: string) => {
-  // ERC20 / TRC20 `transfer(address,uint256)` selector is 0xa9059cbb
-  const TRANSFER_SELECTOR = "0xa9059cbb"
-  if (data.toLowerCase().startsWith(TRANSFER_SELECTOR.toLowerCase())) {
-    const paramsData = ("0x" + data.slice(TRANSFER_SELECTOR.length)) as Hex
-    const params = decodeAbiParameters(
-      parseAbiParameters(["address", "uint256"]),
-      paramsData
-    )
-    return params
-  } else {
-    throw new Error(`Unsupported function call data: ${data}`)
-  }
-}

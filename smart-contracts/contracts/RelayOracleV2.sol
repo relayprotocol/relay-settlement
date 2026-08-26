@@ -388,24 +388,24 @@ contract RelayOracleV2 is AccessControl, EIP712 {
 
   /// @notice Execute actions
   /// @param execution The actions to execute
-  /// @param oracle The oracle address that signed the execution
+  /// @param oracleMultisig The RelayOracleMultisig contract address that signed the execution
   /// @param signature The oracle signature (ECDSA or EIP-1271)
   function _execute(
     Execution calldata execution,
-    address oracle,
+    address oracleMultisig,
     bytes calldata signature
-  ) internal {
+  ) internal {  
     bytes32 idempotencyKey = execution.idempotencyKey;
 
     // Error if the oracle is not an authorized address
-    if (!hasRole(ORACLE_ROLE, oracle)) {
-      revert UnauthorizedOracle(oracle);
+    if (!hasRole(ORACLE_ROLE, oracleMultisig  )) {
+      revert UnauthorizedOracle(oracleMultisig);
     }
 
     // Verify the signature (supports both EOA and EIP-1271 contract signatures)
     bytes32 digest = _hashExecution(execution);
-    if (!oracle.isValidSignatureNow(digest, signature)) {
-      revert InvalidSignature(oracle);
+    if (!oracleMultisig.isValidSignatureNow(digest, signature)) {
+      revert InvalidSignature(oracleMultisig);
     }
 
     // Mark the idempotency key as executed. If a later action reverts, this external write rolls

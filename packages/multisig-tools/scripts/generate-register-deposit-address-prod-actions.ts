@@ -1,0 +1,135 @@
+/**
+ * Generates a multisig manifest that registers the prod Lit Deposit Address
+ * actions on the Lit account (PKP) contract on Base.
+ *
+ * The calldata below is produced verbatim by the lit-deposit-address setup in
+ * chain-secured calldata mode:
+ *
+ *   yarn workspace @relay-protocol/lit-deposit-address setup \
+ *     --env prod --account-api-key <key> --mode chain-secured \
+ *     --pkp-id 0x317121e0546e3de7145238ecb0e2e8e83583e6a4 \
+ *     --private-key <owner> --calldata
+ *
+ * It performs six calls against the Lit account contract:
+ *   1-5. addAction(...) — register the per-VM signing actions
+ *        (ethereum / bitcoin / solana / hyperliquid / ton).
+ *   6.   addGroup("deposit-address-prod") — create the group bundling those
+ *        actions plus the PKP permission.
+ *
+ * All six are relayed by the prod multisig signer's Base MPC wallet (`FROM`),
+ * which owns the Lit account in chain-secured mode. Nonces start at that
+ * sender's on-chain transaction count plus RELAY_NONCE_OFFSET, which accounts
+ * for transactions from the same signer queued in earlier manifests but not yet
+ * mined.
+ *
+ * Usage:
+ *   yarn workspace @relay-settlement/multisig-tools \
+ *     tsx scripts/generate-register-deposit-address-prod-actions.ts \
+ *     > transactions/068-register-deposit-address-prod-lit-actions.json
+ */
+import { createPublicClient, getAddress, http, type Hex } from "viem"
+
+// Base mainnet (chain id 8453) — where the Lit account (PKP) contract lives.
+const BASE_RPC = "https://mainnet.base.org"
+// Lit account (PKP permissions) contract the setup targets.
+const LIT_ACCOUNT = getAddress("0xaAaAA9120fE271F653cfDb6bf400dB93D2DEa7Aa")
+// prod multisig signer's Base MPC wallet; owns the Lit account and relays these
+// calls. Derive with:
+//   tsx scripts/derive-signer-address.ts --family ethereum-vm --env prod
+const FROM =
+  process.env.FROM !== undefined
+    ? getAddress(process.env.FROM)
+    : getAddress("0xF61A305199fa1135d76FFaB3752D42F55cBd775A")
+
+// Conservative gas fallbacks used when estimateGas reverts (e.g. because an
+// earlier queued manifest has not been mined yet).
+const ADD_ACTION_GAS_FALLBACK = 300_000n
+const ADD_GROUP_GAS_FALLBACK = 800_000n
+
+type Call = { calldata: Hex; description: string; gasFallback: bigint }
+
+const calls: Call[] = [
+  {
+    calldata:
+      "0xb49b8b89d044d801565b110874c397c34b93eab4b3e15c5b8d4d334d3ff4cf6a07a2a78d000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000e0ae1cbc3695d973fa2c33fad0269de78afb098a09333e5b8d66f3843cd31f248900000000000000000000000000000000000000000000000000000000000000276465706f7369742d616464726573732d70726f642d616374696f6e2d657468657265756d2d766d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000304c6974204465706f7369742041646472657373207369676e696e6720616374696f6e2028657468657265756d2d766d2900000000000000000000000000000000",
+    description: 'addAction "deposit-address-prod-action-ethereum-vm"',
+    gasFallback: ADD_ACTION_GAS_FALLBACK,
+  },
+  {
+    calldata:
+      "0xb49b8b89d044d801565b110874c397c34b93eab4b3e15c5b8d4d334d3ff4cf6a07a2a78d000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000e00ddd4fe654f1a5476d94e406fd94414c18b15ce938621ca3b8e552ac131290db00000000000000000000000000000000000000000000000000000000000000266465706f7369742d616464726573732d70726f642d616374696f6e2d626974636f696e2d766d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002f4c6974204465706f7369742041646472657373207369676e696e6720616374696f6e2028626974636f696e2d766d290000000000000000000000000000000000",
+    description: 'addAction "deposit-address-prod-action-bitcoin-vm"',
+    gasFallback: ADD_ACTION_GAS_FALLBACK,
+  },
+  {
+    calldata:
+      "0xb49b8b89d044d801565b110874c397c34b93eab4b3e15c5b8d4d334d3ff4cf6a07a2a78d000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000e080c50e30d2437bb1005a5089598a221a8a5921882a9bb5ea9751ed6d7eb0288500000000000000000000000000000000000000000000000000000000000000256465706f7369742d616464726573732d70726f642d616374696f6e2d736f6c616e612d766d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002e4c6974204465706f7369742041646472657373207369676e696e6720616374696f6e2028736f6c616e612d766d29000000000000000000000000000000000000",
+    description: 'addAction "deposit-address-prod-action-solana-vm"',
+    gasFallback: ADD_ACTION_GAS_FALLBACK,
+  },
+  {
+    calldata:
+      "0xb49b8b89d044d801565b110874c397c34b93eab4b3e15c5b8d4d334d3ff4cf6a07a2a78d000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000e0893329d15c1ec4768a873efcd7746214814724b394c99f8f290ea82dfc19e190000000000000000000000000000000000000000000000000000000000000002a6465706f7369742d616464726573732d70726f642d616374696f6e2d68797065726c69717569642d766d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000334c6974204465706f7369742041646472657373207369676e696e6720616374696f6e202868797065726c69717569642d766d2900000000000000000000000000",
+    description: 'addAction "deposit-address-prod-action-hyperliquid-vm"',
+    gasFallback: ADD_ACTION_GAS_FALLBACK,
+  },
+  {
+    calldata:
+      "0xb49b8b89d044d801565b110874c397c34b93eab4b3e15c5b8d4d334d3ff4cf6a07a2a78d000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000e01255b76429b043addf3c8b1a3a47d94e3b9eb2cadbba218b5038520cd85c52f800000000000000000000000000000000000000000000000000000000000000226465706f7369742d616464726573732d70726f642d616374696f6e2d746f6e2d766d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002b4c6974204465706f7369742041646472657373207369676e696e6720616374696f6e2028746f6e2d766d29000000000000000000000000000000000000000000",
+    description: 'addAction "deposit-address-prod-action-ton-vm"',
+    gasFallback: ADD_ACTION_GAS_FALLBACK,
+  },
+  {
+    calldata:
+      "0x2b12dee6d044d801565b110874c397c34b93eab4b3e15c5b8d4d334d3ff4cf6a07a2a78d00000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000e00000000000000000000000000000000000000000000000000000000000000140000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000146465706f7369742d616464726573732d70726f6400000000000000000000000000000000000000000000000000000000000000000000000000000000000000214c6974204465706f7369742041646472657373207369676e696e672067726f7570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005ae1cbc3695d973fa2c33fad0269de78afb098a09333e5b8d66f3843cd31f24890ddd4fe654f1a5476d94e406fd94414c18b15ce938621ca3b8e552ac131290db80c50e30d2437bb1005a5089598a221a8a5921882a9bb5ea9751ed6d7eb02885893329d15c1ec4768a873efcd7746214814724b394c99f8f290ea82dfc19e1901255b76429b043addf3c8b1a3a47d94e3b9eb2cadbba218b5038520cd85c52f80000000000000000000000000000000000000000000000000000000000000001000000000000000000000000317121e0546e3de7145238ecb0e2e8e83583e6a4",
+    description: 'addGroup "deposit-address-prod"',
+    gasFallback: ADD_GROUP_GAS_FALLBACK,
+  },
+]
+
+const main = async () => {
+  const client = createPublicClient({ transport: http(BASE_RPC) })
+
+  const fees = await client.estimateFeesPerGas()
+  const nonceOffset = Number(process.env.RELAY_NONCE_OFFSET ?? "0")
+  let nonce =
+    (await client.getTransactionCount({ address: FROM })) + nonceOffset
+
+  const txs = []
+  for (const call of calls) {
+    let gas: bigint
+    try {
+      gas = await client.estimateGas({
+        account: FROM,
+        data: call.calldata,
+        to: LIT_ACCOUNT,
+        value: 0n,
+      })
+    } catch {
+      gas = call.gasFallback
+      console.error(
+        `⚠️  estimateGas failed for ${call.description}; using fallback ${gas}`
+      )
+    }
+    txs.push({
+      amount: "0",
+      calldata: call.calldata,
+      family: "ethereum-vm",
+      from: FROM,
+      gas: gas.toString(),
+      maxFeePerGas: fees.maxFeePerGas!.toString(),
+      maxPriorityFeePerGas: fees.maxPriorityFeePerGas!.toString(),
+      nonce: nonce++,
+      rpc: BASE_RPC,
+      to: LIT_ACCOUNT,
+    })
+    console.error(`✓ ${call.description}`)
+  }
+
+  console.log(JSON.stringify(txs, null, 2))
+}
+
+main().catch((err) => {
+  console.error(err)
+  process.exit(1)
+})

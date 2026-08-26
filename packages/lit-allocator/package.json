@@ -16,7 +16,8 @@
     "wallet": "tsx scripts/client/wallet.ts",
     "sign": "tsx scripts/client/sign.ts",
     "changepubkey": "tsx scripts/client/change-pub-key.ts",
-    "change-pub-key": "tsx scripts/client/change-pub-key.ts"
+    "change-pub-key": "tsx scripts/client/change-pub-key.ts",
+    "create-hedera-depository": "tsx scripts/client/create-hedera-depository.ts"
   },
   "engines": {
     "node": ">=20"
@@ -25,6 +26,7 @@
   "private": true,
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@hashgraph/sdk": "2.81.0",
     "@noble/curves": "2.0.1",
     "@noble/hashes": "2.0.1",
     "@relay-protocol/lit-helpers": "workspace:*",

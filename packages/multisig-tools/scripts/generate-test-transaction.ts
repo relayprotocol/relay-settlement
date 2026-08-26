@@ -111,7 +111,7 @@ async function generateTestTransaction() {
   }
 
   // Write to file
-  const outputDir = join(__dirname, "../transactions")
+  const outputDir = join(__dirname, "../transactions/prod")
   const fileName = "020-test-multisig-signer.json"
   const outputPath = join(outputDir, fileName)
 
@@ -125,7 +125,7 @@ async function generateTestTransaction() {
   console.log(`  Nonce: ${nonce}`)
   console.log(`\n📝 Manifest saved to: ${outputPath}`)
   console.log(
-    `\n💡 Run simulation: yarn run hardhat relay-multisig-signer:simulate --transactions ${outputPath}`
+    `\n💡 Run simulation: yarn multisig:simulate --transactions ${outputPath}`
   )
   console.log(
     "   This will verify the RelayMultisigSigner can sign for this address.\n"

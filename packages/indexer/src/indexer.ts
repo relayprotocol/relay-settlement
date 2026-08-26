@@ -36,6 +36,12 @@ import { logger } from "./logger.js"
 
 const relayHubInterface = new Interface(RelayHub)
 const relayOracleInterface = new Interface(RelayOracle)
+const PROCESSING_YIELD_INTERVAL = 100
+
+const yieldToEventLoop = () =>
+  new Promise<void>((resolve) => {
+    setImmediate(resolve)
+  })
 
 type IndexedLog = {
   blockNumber: number
@@ -201,7 +207,7 @@ export const backfillAndWatch = async (db: Database) => {
       throw new Error(`Lane ${lane.name} is missing a log processor`)
     }
 
-    for (const log of logs) {
+    for (const [batchIndex, log] of logs.entries()) {
       try {
         const timestamp = await getBlockTimestamp(
           pollingProvider,
@@ -223,6 +229,10 @@ export const backfillAndWatch = async (db: Database) => {
           }
         )
         await recordFailedEvent(db, lane.contractAddress, log, error)
+      } finally {
+        if ((batchIndex + 1) % PROCESSING_YIELD_INTERVAL === 0) {
+          await yieldToEventLoop()
+        }
       }
     }
 
@@ -258,7 +268,7 @@ export const backfillAndWatch = async (db: Database) => {
     const touched = new Map<string, Map<string, number>>()
     const touchedLogsByToken = new Map<string, IndexedLog[]>()
 
-    for (const log of logs) {
+    for (const [batchIndex, log] of logs.entries()) {
       try {
         const transfer = parseTransferLog(log)
         if (!transfer) {
@@ -298,7 +308,7 @@ export const backfillAndWatch = async (db: Database) => {
         }
 
         if (inserted) {
-          logger.info("processor", "Transfer processed", {
+          logger.debug("processor", "Transfer processed", {
             amount: transfer.amount.toString(),
             blockNumber: log.blockNumber,
             from: transfer.from,
@@ -324,6 +334,10 @@ export const backfillAndWatch = async (db: Database) => {
           }
         )
         await recordFailedEvent(db, lane.contractAddress, log, error)
+      } finally {
+        if ((batchIndex + 1) % PROCESSING_YIELD_INTERVAL === 0) {
+          await yieldToEventLoop()
+        }
       }
     }
 
@@ -384,6 +398,8 @@ export const backfillAndWatch = async (db: Database) => {
           }
         )
       }
+
+      await yieldToEventLoop()
     }
   }
 

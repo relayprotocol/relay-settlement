@@ -3,8 +3,8 @@ pragma solidity ^0.8.28;
 
 import {BaseTest} from "../utils/BaseTest.sol";
 import {Eip712} from "../utils/Eip712.sol";
-import {SignedPricingOracle} from "../../contracts/deposit-addresses/open/oracle/SignedPricingOracle.sol";
-import {Currency} from "../../contracts/deposit-addresses/open/oracle/IPricingOracle.sol";
+import {SignedPricingOracle} from "../../contracts/deposit-addresses/oracle/SignedPricingOracle.sol";
+import {Currency} from "../../contracts/deposit-addresses/oracle/IPricingOracle.sol";
 
 /// @notice Shared fixture for SignedPricingOracle tests.
 abstract contract SignedPricingOracleBase is BaseTest {
@@ -17,7 +17,7 @@ abstract contract SignedPricingOracleBase is BaseTest {
 
     bytes32 internal constant SIGNED_PRICE_TYPEHASH =
         keccak256(
-            "SignedPrice(string chainId,bytes currency,uint256 usdPrice,uint8 usdPriceDecimals,uint8 currencyDecimals,uint256 expiration)"
+            "SignedPrice(string chainId,bytes currency,uint256 usdPrice,uint8 usdPriceDecimals,uint8 currencyDecimals,uint256 publishTime,uint256 expiration)"
         );
 
     function setUp() public virtual override {
@@ -41,6 +41,7 @@ abstract contract SignedPricingOracleBase is BaseTest {
         uint256 usdPrice,
         uint8 usdPriceDecimals,
         uint8 currencyDecimals,
+        uint256 publishTime,
         uint256 expiration
     ) internal view returns (SignedPricingOracle.SignedPrice memory) {
         bytes32 structHash = keccak256(
@@ -51,6 +52,7 @@ abstract contract SignedPricingOracleBase is BaseTest {
                 usdPrice,
                 usdPriceDecimals,
                 currencyDecimals,
+                publishTime,
                 expiration
             )
         );
@@ -62,6 +64,7 @@ abstract contract SignedPricingOracleBase is BaseTest {
                 usdPrice: usdPrice,
                 usdPriceDecimals: usdPriceDecimals,
                 currencyDecimals: currencyDecimals,
+                publishTime: publishTime,
                 expiration: expiration,
                 signature: sig
             });

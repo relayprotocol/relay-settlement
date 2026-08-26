@@ -8,7 +8,7 @@ import {
   IBidAskOracle,
   IPricingOracle,
   Price
-} from "./deposit-addresses/open/oracle/IPricingOracle.sol";
+} from "./deposit-addresses/oracle/IPricingOracle.sol";
 import {ERC20View} from "./ERC20View.sol";
 import {PriceOraclePrecompile} from "./precompiles/PriceOraclePrecompile.sol";
 import {Utils} from "./Utils.sol";
@@ -17,6 +17,16 @@ import {Utils} from "./Utils.sol";
 /// @author Relay Protocol
 /// @notice Provider-specific adapter that verifies and decodes raw feed updates.
 interface IPriceFeedAdapter {
+  /// @notice Thrown when the configured oracle address is invalid.
+  error InvalidOracle(address oracle);
+
+  /// @notice Thrown when a caller other than the bound oracle requests verification.
+  error UnauthorizedCaller(address caller);
+
+  /// @notice RelayPriceOracle authorized to call `decodeAndVerify`.
+  /// @return oracleAddress Authorized RelayPriceOracle address.
+  function ORACLE() external view returns (address);
+
   /// @notice Verifies a raw provider update and returns normalized price data.
   /// @dev Intentionally not `view`: an adapter may verify the update on-chain
   ///      via a state-changing, fee-paying call (eg. Chainlink Data Streams
@@ -53,6 +63,12 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
   /// @notice Maximum number of currencies accepted in one price query.
   uint256 public constant MAX_PRICE_BATCH_SIZE = 32;
 
+  /// @notice Hard upper bound for a provider's future publish-time allowance.
+  uint32 public constant MAX_FUTURE_SECONDS_UPPER_BOUND = 60;
+
+  /// @notice Hard upper bound for a route's price freshness window.
+  uint32 public constant MAX_AGE_SECONDS_UPPER_BOUND = 300;
+
   /// @notice Configured route from a currency to a provider feed.
   /// @param providerId Oracle provider that owns the feed ID.
   /// @param feedId Provider-specific feed identifier.
@@ -72,6 +88,14 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
 
   /// @notice Price feed adapter per provider ID.
   mapping(bytes32 providerId => address adapter) public priceFeedAdapters;
+
+  /// @notice Maximum future publish-time allowance per provider ID.
+  mapping(bytes32 providerId => uint32 maxFutureSeconds)
+    public providerMaxFutureSeconds;
+
+  /// @notice Monotonic publish time cached per provider feed, in Unix seconds.
+  mapping(bytes32 providerId => mapping(bytes32 feedId => uint256 publishTime))
+    public cachedPublishTimes;
 
   /// @notice Emitted when a currency route is set.
   /// @param tokenId Hub token id derived from `(chainId, currency)`.
@@ -104,9 +128,11 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
   /// @notice Emitted when a provider adapter is set.
   /// @param providerId Oracle provider identifier.
   /// @param adapter Adapter that verifies and decodes provider updates.
+  /// @param maxFutureSeconds Maximum seconds a publish time may be ahead of the block timestamp.
   event PriceFeedAdapterSet(
     bytes32 indexed providerId,
-    address indexed adapter
+    address indexed adapter,
+    uint32 maxFutureSeconds
   );
 
   /// @notice Thrown when a route uses the zero provider ID.
@@ -117,6 +143,25 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
 
   /// @notice Thrown when a provider adapter address is zero.
   error InvalidPriceFeedAdapter(address adapter);
+
+  /// @notice Thrown when an adapter is not bound to this oracle.
+  error InvalidPriceFeedAdapterOracle(
+    address adapter,
+    address expectedOracle,
+    address actualOracle
+  );
+
+  /// @notice Thrown when a provider future-time allowance exceeds the hard cap.
+  error InvalidMaxFutureSeconds(
+    uint32 maxFutureSeconds,
+    uint32 maxFutureSecondsUpperBound
+  );
+
+  /// @notice Thrown when a route freshness window exceeds the hard cap.
+  error InvalidMaxAgeSeconds(
+    uint32 maxAgeSeconds,
+    uint32 maxAgeSecondsUpperBound
+  );
 
   /// @notice Thrown when batch input arrays do not have the same length.
   error ArrayLengthMismatch(
@@ -143,6 +188,29 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
   /// @param expiration Timestamp after which the price must not be used.
   /// @param blockTimestamp Current block timestamp.
   error PriceExpired(uint256 expiration, uint256 blockTimestamp);
+
+  /// @notice Thrown when a provider publish time is too far ahead of the block timestamp.
+  /// @param publishTime Provider-signed Unix timestamp for the price.
+  /// @param maxPublishTime Latest publish time allowed by the provider configuration.
+  error PriceTimestampTooFarInFuture(
+    uint256 publishTime,
+    uint256 maxPublishTime
+  );
+
+  /// @notice Thrown when an adapter returns the zero publish time.
+  error InvalidPublishTime();
+
+  /// @notice Thrown when a feed's publish time moves below its latest accepted value.
+  /// @param providerId Oracle provider that owns the feed ID.
+  /// @param feedId Provider-specific feed identifier.
+  /// @param publishTime Publish time returned by the adapter.
+  /// @param cachedPublishTime Monotonic publish time cached for the feed.
+  error PriceTimestampRollback(
+    bytes32 providerId,
+    bytes32 feedId,
+    uint256 publishTime,
+    uint256 cachedPublishTime
+  );
 
   /// @notice Creates a new price oracle contract.
   /// @param _owner Owner that can update feed routes.
@@ -222,12 +290,14 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
     emit FeedRouteDeleted(tokenId, currency.chainId, currency.currency);
   }
 
-  /// @notice Sets or replaces the adapter for a provider.
+  /// @notice Sets or replaces a provider adapter and its future-time allowance.
   /// @param providerId Oracle provider identifier.
   /// @param adapter Adapter that verifies and decodes provider updates.
+  /// @param maxFutureSeconds Maximum seconds a publish time may be ahead of the block timestamp.
   function setPriceFeedAdapter(
     bytes32 providerId,
-    address adapter
+    address adapter,
+    uint32 maxFutureSeconds
   ) external onlyOwner {
     if (providerId == bytes32(0)) {
       revert InvalidProviderId();
@@ -235,9 +305,34 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
     if (adapter == address(0)) {
       revert InvalidPriceFeedAdapter(adapter);
     }
+    (bool success, bytes memory result) = adapter.staticcall(
+      abi.encodeWithSelector(IPriceFeedAdapter.ORACLE.selector)
+    );
+    if (!success || result.length != 32) {
+      revert InvalidPriceFeedAdapter(adapter);
+    }
+    uint256 encodedOracle = abi.decode(result, (uint256));
+    if (encodedOracle > type(uint160).max) {
+      revert InvalidPriceFeedAdapter(adapter);
+    }
+    address adapterOracle = address(uint160(encodedOracle));
+    if (adapterOracle != address(this)) {
+      revert InvalidPriceFeedAdapterOracle(
+        adapter,
+        address(this),
+        adapterOracle
+      );
+    }
+    if (maxFutureSeconds > MAX_FUTURE_SECONDS_UPPER_BOUND) {
+      revert InvalidMaxFutureSeconds(
+        maxFutureSeconds,
+        MAX_FUTURE_SECONDS_UPPER_BOUND
+      );
+    }
 
     priceFeedAdapters[providerId] = adapter;
-    emit PriceFeedAdapterSet(providerId, adapter);
+    providerMaxFutureSeconds[providerId] = maxFutureSeconds;
+    emit PriceFeedAdapterSet(providerId, adapter, maxFutureSeconds);
   }
 
   /// @inheritdoc IPricingOracle
@@ -493,6 +588,9 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
     if (feedId == bytes32(0)) {
       revert InvalidFeedId();
     }
+    if (maxAgeSeconds > MAX_AGE_SECONDS_UPPER_BOUND) {
+      revert InvalidMaxAgeSeconds(maxAgeSeconds, MAX_AGE_SECONDS_UPPER_BOUND);
+    }
 
     uint256 tokenId = currencyToTokenId(currency);
     feedRoutes[tokenId] = FeedRoute({
@@ -521,6 +619,7 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
   /// @return ask Best ask scaled by `usdPriceDecimals`, or `0` if unavailable.
   /// @return usdPriceDecimals Fixed-point precision of `usdPrice`, `bid` and `ask`.
   /// @return currencyDecimals Number of decimals the currency itself uses.
+  /// @return publishTime Unix timestamp when the price was published.
   /// @return expiration Unix timestamp after which the price must not be used.
   function _resolveFeed(
     uint256 tokenId
@@ -532,6 +631,7 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
       uint256 ask,
       uint8 usdPriceDecimals,
       uint8 currencyDecimals,
+      uint256 publishTime,
       uint256 expiration
     )
   {
@@ -550,10 +650,19 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
       route.feedId
     );
 
-    uint256 publishTime;
     (usdPrice, bid, ask, usdPriceDecimals, publishTime) = IPriceFeedAdapter(
       adapter
     ).decodeAndVerify(route.feedId, updateData);
+
+    if (publishTime == 0) {
+      revert InvalidPublishTime();
+    }
+
+    uint256 maxPublishTime = block.timestamp +
+      providerMaxFutureSeconds[route.providerId];
+    if (publishTime > maxPublishTime) {
+      revert PriceTimestampTooFarInFuture(publishTime, maxPublishTime);
+    }
 
     currencyDecimals = route.currencyDecimals;
     expiration = publishTime + route.maxAgeSeconds;
@@ -564,6 +673,21 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
     // `maxAgeSeconds` window.
     if (block.timestamp > expiration) {
       revert PriceExpired(expiration, block.timestamp);
+    }
+
+    uint256 cachedPublishTime = cachedPublishTimes[
+      route.providerId
+    ][route.feedId];
+    if (publishTime < cachedPublishTime) {
+      revert PriceTimestampRollback(
+        route.providerId,
+        route.feedId,
+        publishTime,
+        cachedPublishTime
+      );
+    }
+    if (publishTime > cachedPublishTime) {
+      cachedPublishTimes[route.providerId][route.feedId] = publishTime;
     }
   }
 
@@ -588,6 +712,7 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
       ,
       uint8 usdPriceDecimals,
       uint8 currencyDecimals,
+      uint256 publishTime,
       uint256 expiration
     ) = _resolveFeed(tokenId);
 
@@ -595,6 +720,7 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
       usdPrice: usdPrice,
       usdPriceDecimals: usdPriceDecimals,
       currencyDecimals: currencyDecimals,
+      publishTime: publishTime,
       expiration: expiration
     });
   }
@@ -620,6 +746,7 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
       uint256 ask,
       uint8 usdPriceDecimals,
       uint8 currencyDecimals,
+      uint256 publishTime,
       uint256 expiration
     ) = _resolveFeed(tokenId);
 
@@ -629,6 +756,7 @@ contract RelayPriceOracle is Ownable, IPricingOracle, IBidAskOracle {
       askPrice: ask,
       usdPriceDecimals: usdPriceDecimals,
       currencyDecimals: currencyDecimals,
+      publishTime: publishTime,
       expiration: expiration
     });
   }

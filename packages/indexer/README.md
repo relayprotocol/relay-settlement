@@ -1,21 +1,38 @@
 # Settlement Indexer
 
-## Operational Checks
+## Transfer Statistics Cache
 
-Run a sampled balance audit against the Relay chain:
+`/api/transfers/stats` and `/api/tokens/:id/transfer-stats` cache their final
+bucketed query results in each API process for 10 minutes. Equivalent query
+parameters are normalized, and the rolling lower timestamp bound advances on
+10-minute boundaries. Concurrent requests for the same result share one
+database query. Cache read or write failures are logged as structured events
+and fall back to PostgreSQL.
 
-```sh
-DATABASE_URL=... RPC_HTTP_URL=... yarn workspace @relay-settlement/indexer audit:balances
-```
+## Depository Balance Audit
 
-Useful environment variables:
+Worker pods compare supported indexed currencies' Hub total supply with their
+underlying depository balance every 10 minutes. Chain and production
+depository metadata comes from `$ORACLE_API_URL/chains/v1`; currency metadata
+comes from `RelayHub.tokenMetadata` and is cached on the `tokens` row.
 
-- `BALANCE_AUDIT_TOKEN_LIMIT`: number of tokens to sample, ordered by indexed transfer count. Defaults to `20`.
-- `BALANCE_AUDIT_HOLDER_LIMIT`: number of top holders to sample per token. Defaults to `20`.
-- `BALANCE_AUDIT_TOKEN_ID`: restricts the audit to one token.
-- `BALANCE_AUDIT_ADDRESS`: restricts the audit to one address. Requires `BALANCE_AUDIT_TOKEN_ID`.
+Set `ORACLE_API_URL` to the Oracle service base URL. Configure an RPC for each
+chain containing an indexed currency. Environment variable names use the
+uppercased Oracle chain id followed by `_RPC_URL`, for example `BASE_RPC_URL`
+and `ARBITRUM_NOVA_RPC_URL`.
 
-The command exits non-zero when any indexed balance differs from the chain's `balanceOf`.
+`DEPOSITORY_BALANCE_AUDIT_INTERVAL_MS` overrides the default `600000` ms
+interval. All audit lifecycle and currency-check logs are emitted as JSON. A
+currency-check entry includes its `auditStatus`, Oracle `chainId`, token
+metadata, and amounts as decimal strings formatted using the token's
+`decimals`. The
+corresponding integer values are retained in `deltaBaseUnits`,
+`depositoryBalanceBaseUnits`, and `totalSupplyBaseUnits`. Deficits and
+configuration or RPC errors use the error log level. The audit currently
+supports Ethereum VM native and ERC-20 currencies, Solana VM native and SPL
+currencies, Bitcoin, native TON, Tron native and TRC-20 currencies, native XRP,
+Hyperliquid perps and spot assets, and Lighter assets. The JSON logger reserves
+`status` for the log severity recognized by Datadog.
 
 ## Transfer Replay
 
@@ -40,34 +57,23 @@ Useful environment variables:
 - `CONFIRMATION_BLOCKS`: number of latest chain blocks to leave unindexed until they are less likely to be reorganized. Defaults to `12`.
 - `TRANSFER_OVERLAP_BLOCKS`: number of Hub transfer blocks to re-scan from the checkpoint on each poll. Defaults to `250`.
 
-## Indexer Drift Audits
+## Transfer Coverage Audit
 
-When `DO_BACKGROUND_WORK=1`, the indexer runs persisted drift audits in the background:
-
-- Balance drift audit: compares positive indexed `balances` rows with `RelayHub.balanceOf(address, tokenId)` at the Hub transfer checkpoint.
-- Transfer coverage audit: compares recent confirmed `RelayHub.Transfer` logs with indexed `events`.
+When `DO_BACKGROUND_WORK=1`, the indexer compares recent confirmed `RelayHub.Transfer` logs with indexed `events`.
 
 Audit findings are written to `indexer_audit_findings` and exposed through `/api/health` and `/api/audits/indexer/latest`. Confirmed findings include suggested replay ranges, but replay stays manual through the admin replay API/UI.
 
-Confirmed balance drift findings are also queued in `indexer_reconciliation_jobs` for a bounded state-based repair. This only calls `RelayHub.balanceOf`/`totalSupply` for already-indexed token/address rows and updates current balance state. It does not insert missing historical events or automatically replay block ranges.
+Sync health only becomes unhealthy after the configured number of consecutive completed audit runs have confirmed findings, or when the latest audit is stale or failed.
 
-Sync health only becomes unhealthy after the configured number of consecutive completed audit runs have confirmed findings, or when the latest audit is stale or failed. Pending near-head findings are tracked for debugging without failing health.
-
-Worker readiness does not depend on audit health. The readiness probe still checks runtime state, checkpoint lag, and pending `failed_events`, but skips audit health so an expensive or stale audit cannot remove otherwise running workers from service. Audit failures remain visible through `/sync-health`, `/api/health`, and `/api/audits/indexer/latest`.
+Worker readiness reports whether the configured API and background worker roles are running. Historical backfill, checkpoint lag, pending `failed_events`, and audit health do not remove an otherwise running worker from service. These strict operational signals remain visible through `/sync-health`, `/api/health`, and `/api/audits/indexer/latest`.
 
 Useful environment variables:
 
-- `BALANCE_DRIFT_AUDIT_ENABLED`: enables the balance drift audit. Defaults to `true`.
-- `BALANCE_DRIFT_AUDIT_BATCH_SIZE`: number of balance rows checked concurrently. Defaults to `25`.
-- `BALANCE_DRIFT_AUDIT_GRACE_BLOCKS`: blocks near the audit checkpoint classified as pending instead of confirmed. Defaults to `250`.
 - `TRANSFER_COVERAGE_AUDIT_LOOKBACK_BLOCKS`: confirmed Hub transfer window checked for missing indexed logs. Defaults to `5000`.
 - `INDEXER_AUDIT_INTERVAL_MS`: background audit interval. Defaults to `900000`.
 - `INDEXER_AUDIT_MAX_AGE_MS`: max age before audit health is stale. Defaults to `1800000`.
 - `INDEXER_AUDIT_CONSECUTIVE_FAILURES`: consecutive completed audit runs required before confirmed findings fail health. Defaults to `2`.
 - `INDEXER_AUDIT_FAILURE_THRESHOLD`: confirmed finding count per run that counts toward audit health failure. Defaults to `1`.
-- `INDEXER_DRIFT_AUTO_RECONCILE_ENABLED`: enables bounded auto-reconciliation for confirmed balance drift. Defaults to `true`.
-- `INDEXER_DRIFT_AUTO_RECONCILE_BATCH_SIZE`: max reconciliation jobs claimed after an audit run. Defaults to `25`.
-- `INDEXER_DRIFT_AUTO_RECONCILE_STALE_MS`: age after which a running reconciliation job can be retried. Defaults to `600000`.
 
 ## Admin Transfer Replay API
 

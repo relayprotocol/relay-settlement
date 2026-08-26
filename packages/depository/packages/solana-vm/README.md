@@ -1,179 +1,96 @@
 # Solana VM Relay Depository
 
-A Solana relay depository smart contract built with the Anchor framework. This contract allows users to deposit SOL or SPL tokens and execute transfers with verified signatures.
+Anchor programs for custody, forwarding, and deterministic deposit addresses
+on Solana.
 
-## Project Overview
+## Programs
 
-This contract provides the following key functionalities:
+- `relay-depository` receives SOL and SPL-token deposits and executes
+  allocator-authorized transfers.
+- `relay-forwarder` forwards deposits into the depository flow.
+- `deposit-address` manages deterministic deposit addresses used by the
+  deposit-address signing flow.
 
-- Initialize the depository contract and set owner and allocator
-- Deposit SOL to the depository account
-- Deposit SPL tokens to the depository account
-- Execute transfers with allocator signature verification
+Program IDs for localnet, devnet, and mainnet are committed in `Anchor.toml` and
+in each program's `declare_id!` declaration. Changing one is a deployment
+change, not a normal local setup step.
 
-## Installing Anchor
+## Toolchain
 
-### Prerequisites
+The committed Rust crates and JavaScript client use Anchor 0.30.1. The known
+working development toolchain is:
 
-- [Rust](https://www.rust-lang.org/tools/install) (latest stable version)
-- [Solana CLI](https://docs.solana.com/cli/install-solana-cli-tools) (latest stable version)
-- [Node.js](https://nodejs.org/en/download/) (v14 or higher)
-- [Yarn](https://yarnpkg.com/getting-started/install)
+- Anchor CLI 0.30.1
+- Solana CLI 1.18.18
+- Node.js 22
+- Yarn 4.9.1 through Corepack
 
-### Installing the Anchor CLI
+Install the matching Anchor CLI with Cargo if it is not already available:
 
-```bash
-# Install Anchor CLI via npm
-npm install -g @project-serum/anchor-cli
+```sh
+cargo install \
+  --git https://github.com/coral-xyz/anchor \
+  --tag v0.30.1 \
+  anchor-cli \
+  --locked
+```
 
-# Or install via cargo
-cargo install --git https://github.com/project-serum/anchor anchor-cli --locked
+Verify the active tools before building:
 
-# Verify the installation
+```sh
 anchor --version
+solana --version
+node --version
+yarn --version
 ```
 
-## Project Setup
+## Build and test
 
-1. Clone the project repository
+From the repository root:
 
-```bash
-git clone <repository-url>
-cd depository-contracts/packages/solana-vm
-```
-
-2. Install dependencies
-
-```bash
+```sh
+corepack enable
+cd packages/depository/packages/solana-vm
 yarn install
-```
-
-3. Build the project
-
-```bash
 anchor build
-```
-
-4. Update the program ID
-
-After building, get the program ID and update it in the `Anchor.toml` and `lib.rs` files:
-
-```bash
-anchor keys list
-# Example output:
-# relay_depository: 2eAeUDN5EpxUB8ebCPu2HNnC9r1eJ3m2JSXGUWdxCMJg
-```
-
-Make sure to update the program ID in:
-
-- `Anchor.toml` under `[programs.localnet]`
-- `programs/relay-depository/src/lib.rs` in the `declare_id!()` function call
-
-## Testing the Contract
-
-### Local Testing
-
-1. Start a local validator node (optional, if you don't want to use the `--skip-local-validator` flag during testing)
-
-```bash
-solana-test-validator
-```
-
-2. Run the tests
-
-```bash
-# If you've manually started the validator
-anchor test --skip-local-validator
-
-# Or let Anchor start the validator automatically
 anchor test
 ```
 
-# Common Testing Issues and Solutions
+`anchor test` starts a local validator, deploys the three programs, and runs
+the TypeScript integration tests under `tests/`. If a validator is already
+running, reuse it with:
 
-## Case 1: Test Validator Not Started
-
-## Generate Doc
-
-```
-cd packages/solana-vm
-
-# Generate json docs
-RUSTDOCFLAGS="-Z unstable-options --output-format json" \
-cargo doc --no-deps \
-
-# Convert json doc to single markdown file
-rustdoc-md --path target/doc/relay_depository.json \
---output relay_depository.md \
-```
-
-### Error Message
-
-```
-Unable to get latest blockhash. Test validator does not look started.
-Check .anchor/test-ledger/test-ledger-log.txt for errors.
-Consider increasing [test.startup_wait] in Anchor.toml.
-```
-
-### Solution
-
-1. Start Solana local network manually:
-
-```bash
-solana-test-validator
-```
-
-2. Run anchor test with the skip validator flag:
-
-```bash
+```sh
 anchor test --skip-local-validator
 ```
 
-## Case 2: Program ID Mismatch
+The test scripts declared in `Anchor.toml` can also target the depository,
+forwarder, or deposit-address suite individually after the programs have been
+built and deployed.
 
-### Error Message
+## Troubleshooting
 
-```
-Error: AnchorError occurred. Error Code: DeclaredProgramIdMismatch.
-Error Number: 4100. Error Message: The declared program id does not match the actual program id.
-```
+If the test runner cannot obtain a recent blockhash, inspect
+`.anchor/test-ledger/test-ledger-log.txt`. Stop a stale local validator or start
+one explicitly with `solana-test-validator`, then rerun with
+`--skip-local-validator`.
 
-### Solution
+For `DeclaredProgramIdMismatch`, compare `anchor keys list`, the selected
+cluster in `Anchor.toml`, and the relevant program's `declare_id!`. Do not edit
+committed program IDs unless the change is part of an intentional deployment.
 
-1. Get the correct program ID:
+## Layout
 
-```bash
-anchor keys list
-# Output example:
-# relay_depository: 2eAeUDN5EpxUB8ebCPu2HNnC9r1eJ3m2JSXGUWdxCMJg
-```
-
-2. Update the program ID in your source code (`src/lib.rs`):
-
-```rust
-declare_id!("2eAeUDN5EpxUB8ebCPu2HNnC9r1eJ3m2JSXGUWdxCMJg");
-```
-
-## Project Structure
-
-```
+```text
 solana-vm/
-├── Anchor.toml          # Anchor configuration file
-├── Cargo.toml           # Rust dependencies configuration
-├── programs/            # Contract code directory
-│   └── relay-depository/    # Relay depository contract
-│       ├── Cargo.toml
-│       └── src/
-│           └── lib.rs   # Main contract code
-├── tests/               # Test code directory
-├── app/                 # Frontend application (if applicable)
-└── migrations/          # Deployment scripts (if applicable)
+├── Anchor.toml
+├── Cargo.toml
+├── programs/
+│   ├── deposit-address/
+│   ├── relay-depository/
+│   └── relay-forwarder/
+└── tests/
+    ├── deposit-address.ts
+    ├── relay-depository.ts
+    └── relay-forwarder.ts
 ```
-
-## Contribution Guidelines
-
-1. Fork the project
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request

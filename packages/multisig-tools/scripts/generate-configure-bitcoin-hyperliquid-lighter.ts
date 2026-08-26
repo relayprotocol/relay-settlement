@@ -45,7 +45,7 @@ import {
 } from "viem"
 
 // --- Prod Relay Chain (537713) deployment -----------------------------------
-// Sourced from smart-contracts/deployments/hub-contracts/prod.json
+// Sourced from smart-contracts/deployments/contracts/prod.json
 
 const RELAY_RPC = "https://rpc.chain.relay.link"
 const CONFIG = getAddress("0x8162BeeC776442afd262B672730Bb5d0d8af16A1")

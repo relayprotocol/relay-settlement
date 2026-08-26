@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {RelayDepositAddressManager} from "../contracts/deposit-addresses/open/RelayDepositAddressManager.sol";
+import {RelayDepositAddressManager} from "../contracts/deposit-addresses/RelayDepositAddressManager.sol";
 import {ScriptBase} from "./utils/ScriptBase.sol";
 
 /// @notice Deploys the RelayDepositAddressManager contract.

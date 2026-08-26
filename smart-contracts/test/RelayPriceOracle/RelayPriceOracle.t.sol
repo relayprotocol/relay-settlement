@@ -10,7 +10,7 @@ import {
   BidAsk,
   Currency,
   Price
-} from "../../contracts/deposit-addresses/open/oracle/IPricingOracle.sol";
+} from "../../contracts/deposit-addresses/oracle/IPricingOracle.sol";
 import {Utils} from "../../contracts/Utils.sol";
 import {BaseTest} from "../utils/BaseTest.sol";
 
@@ -29,6 +29,9 @@ contract RelayPriceOracleTest is BaseTest {
   uint8 internal constant ETH_DECIMALS = 18;
   uint8 internal constant BTC_DECIMALS = 8;
   uint32 internal constant MAX_AGE_SECONDS = 60;
+  uint32 internal constant MAX_AGE_SECONDS_UPPER_BOUND = 300;
+  uint32 internal constant MAX_FUTURE_SECONDS = 12;
+  uint32 internal constant MAX_FUTURE_SECONDS_UPPER_BOUND = 60;
   uint256 internal constant NOW = 1_700_000_000;
   uint256 internal constant ETH_PUBLISH_TIME = NOW - 10;
   uint256 internal constant BTC_PUBLISH_TIME = NOW - 20;
@@ -36,12 +39,17 @@ contract RelayPriceOracleTest is BaseTest {
   function setUp() public override {
     super.setUp();
     vm.warp(NOW);
-    adapter = new MockPriceFeedAdapter();
     config = new RelayPriceOracle(owner);
+    adapter = new MockPriceFeedAdapter(address(config));
   }
 
   function test_deploysWithOwner() public view {
     assertEq(config.owner(), owner);
+    assertEq(
+      config.MAX_FUTURE_SECONDS_UPPER_BOUND(),
+      MAX_FUTURE_SECONDS_UPPER_BOUND
+    );
+    assertEq(config.MAX_AGE_SECONDS_UPPER_BOUND(), MAX_AGE_SECONDS_UPPER_BOUND);
   }
 
   function test_allowsOwnerToSetFeedRoute() public {
@@ -171,6 +179,52 @@ contract RelayPriceOracleTest is BaseTest {
     );
   }
 
+  function test_allowsMaxAgeSecondsAtUpperBound() public {
+    vm.prank(owner);
+    config.setFeedRoute(
+      _eth(),
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      ETH_DECIMALS,
+      MAX_AGE_SECONDS_UPPER_BOUND
+    );
+
+    (, , , uint32 maxAgeSeconds, ) = config.feedRoutes(
+      config.currencyToTokenId(_eth())
+    );
+    assertEq(maxAgeSeconds, MAX_AGE_SECONDS_UPPER_BOUND);
+  }
+
+  function test_allowsZeroMaxAgeSeconds() public {
+    vm.prank(owner);
+    config.setFeedRoute(_eth(), PROVIDER_PYTH, PYTH_ETH_FEED, ETH_DECIMALS, 0);
+
+    (, , , uint32 maxAgeSeconds, ) = config.feedRoutes(
+      config.currencyToTokenId(_eth())
+    );
+    assertEq(maxAgeSeconds, 0);
+  }
+
+  function test_rejectsMaxAgeSecondsAboveUpperBound() public {
+    uint32 invalidMaxAgeSeconds = MAX_AGE_SECONDS_UPPER_BOUND + 1;
+
+    vm.prank(owner);
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        RelayPriceOracle.InvalidMaxAgeSeconds.selector,
+        invalidMaxAgeSeconds,
+        MAX_AGE_SECONDS_UPPER_BOUND
+      )
+    );
+    config.setFeedRoute(
+      _eth(),
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      ETH_DECIMALS,
+      invalidMaxAgeSeconds
+    );
+  }
+
   function test_allowsOwnerToSetFeedRoutesInBatch() public {
     _setBatchRoutes();
 
@@ -259,17 +313,94 @@ contract RelayPriceOracleTest is BaseTest {
 
   function test_allowsOwnerToSetPriceFeedAdapter() public {
     vm.prank(owner);
-    config.setPriceFeedAdapter(PROVIDER_PYTH, address(adapter));
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
 
     assertEq(config.priceFeedAdapters(PROVIDER_PYTH), address(adapter));
+    assertEq(
+      config.providerMaxFutureSeconds(PROVIDER_PYTH),
+      MAX_FUTURE_SECONDS
+    );
   }
 
   function test_emitsPriceFeedAdapterSetEvent() public {
     vm.expectEmit(true, true, false, true, address(config));
-    emit RelayPriceOracle.PriceFeedAdapterSet(PROVIDER_PYTH, address(adapter));
+    emit RelayPriceOracle.PriceFeedAdapterSet(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
 
     vm.prank(owner);
-    config.setPriceFeedAdapter(PROVIDER_PYTH, address(adapter));
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
+  }
+
+  function test_allowsOwnerToSetExplicitMaxFutureSeconds() public {
+    vm.prank(owner);
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS_UPPER_BOUND
+    );
+
+    assertEq(config.priceFeedAdapters(PROVIDER_PYTH), address(adapter));
+    assertEq(
+      config.providerMaxFutureSeconds(PROVIDER_PYTH),
+      MAX_FUTURE_SECONDS_UPPER_BOUND
+    );
+  }
+
+  function test_allowsZeroMaxFutureSeconds() public {
+    vm.prank(owner);
+    config.setPriceFeedAdapter(PROVIDER_PYTH, address(adapter), 0);
+
+    assertEq(config.providerMaxFutureSeconds(PROVIDER_PYTH), 0);
+  }
+
+  function test_adapterReplacementUpdatesMaxFutureSeconds() public {
+    MockPriceFeedAdapter replacement = new MockPriceFeedAdapter(
+      address(config)
+    );
+
+    vm.startPrank(owner);
+    config.setPriceFeedAdapter(PROVIDER_PYTH, address(adapter), 0);
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(replacement),
+      MAX_FUTURE_SECONDS
+    );
+    vm.stopPrank();
+
+    assertEq(config.priceFeedAdapters(PROVIDER_PYTH), address(replacement));
+    assertEq(
+      config.providerMaxFutureSeconds(PROVIDER_PYTH),
+      MAX_FUTURE_SECONDS
+    );
+  }
+
+  function test_rejectsMaxFutureSecondsAboveHardCap() public {
+    uint32 invalidMaxFutureSeconds = MAX_FUTURE_SECONDS_UPPER_BOUND + 1;
+
+    vm.prank(owner);
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        RelayPriceOracle.InvalidMaxFutureSeconds.selector,
+        invalidMaxFutureSeconds,
+        MAX_FUTURE_SECONDS_UPPER_BOUND
+      )
+    );
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      invalidMaxFutureSeconds
+    );
   }
 
   function test_rejectsNonOwnerSetPriceFeedAdapter() public {
@@ -280,13 +411,21 @@ contract RelayPriceOracleTest is BaseTest {
         otherAccounts[0]
       )
     );
-    config.setPriceFeedAdapter(PROVIDER_PYTH, address(adapter));
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
   }
 
   function test_rejectsZeroProviderIdForPriceFeedAdapter() public {
     vm.prank(owner);
     vm.expectRevert(RelayPriceOracle.InvalidProviderId.selector);
-    config.setPriceFeedAdapter(bytes32(0), address(adapter));
+    config.setPriceFeedAdapter(
+      bytes32(0),
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
   }
 
   function test_rejectsZeroPriceFeedAdapter() public {
@@ -297,7 +436,45 @@ contract RelayPriceOracleTest is BaseTest {
         address(0)
       )
     );
-    config.setPriceFeedAdapter(PROVIDER_PYTH, address(0));
+    config.setPriceFeedAdapter(PROVIDER_PYTH, address(0), MAX_FUTURE_SECONDS);
+  }
+
+  function test_rejectsAdapterBoundToAnotherOracle() public {
+    MockPriceFeedAdapter wrongAdapter = new MockPriceFeedAdapter(
+      otherAccounts[0]
+    );
+
+    vm.prank(owner);
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        RelayPriceOracle.InvalidPriceFeedAdapterOracle.selector,
+        address(wrongAdapter),
+        address(config),
+        otherAccounts[0]
+      )
+    );
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(wrongAdapter),
+      MAX_FUTURE_SECONDS
+    );
+  }
+
+  function test_rejectsAddressWithoutAdapterInterface() public {
+    address invalidAdapter = otherAccounts[0];
+
+    vm.prank(owner);
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        RelayPriceOracle.InvalidPriceFeedAdapter.selector,
+        invalidAdapter
+      )
+    );
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      invalidAdapter,
+      MAX_FUTURE_SECONDS
+    );
   }
 
   function test_resolveUsdPricesDelegatesToConfiguredProviderFeeds() public {
@@ -330,8 +507,16 @@ contract RelayPriceOracleTest is BaseTest {
     );
 
     vm.startPrank(owner);
-    config.setPriceFeedAdapter(PROVIDER_PYTH, address(adapter));
-    config.setPriceFeedAdapter(PROVIDER_REDSTONE, address(adapter));
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
+    config.setPriceFeedAdapter(
+      PROVIDER_REDSTONE,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
     config.setFeedRoute(
       currencies[0],
       PROVIDER_PYTH,
@@ -353,10 +538,12 @@ contract RelayPriceOracleTest is BaseTest {
     assertEq(prices[0].usdPrice, pythPrice);
     assertEq(prices[0].usdPriceDecimals, USD_PRICE_DECIMALS);
     assertEq(prices[0].currencyDecimals, ETH_DECIMALS);
+    assertEq(prices[0].publishTime, ETH_PUBLISH_TIME);
     assertEq(prices[0].expiration, ETH_PUBLISH_TIME + MAX_AGE_SECONDS);
     assertEq(prices[1].usdPrice, redstonePrice);
     assertEq(prices[1].usdPriceDecimals, USD_PRICE_DECIMALS);
     assertEq(prices[1].currencyDecimals, BTC_DECIMALS);
+    assertEq(prices[1].publishTime, BTC_PUBLISH_TIME);
     assertEq(prices[1].expiration, BTC_PUBLISH_TIME + MAX_AGE_SECONDS + 1);
   }
 
@@ -387,7 +574,11 @@ contract RelayPriceOracleTest is BaseTest {
     );
 
     vm.startPrank(owner);
-    config.setPriceFeedAdapter(PROVIDER_PYTH, address(adapter));
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
     config.setFeedRoute(
       eth,
       PROVIDER_PYTH,
@@ -401,6 +592,7 @@ contract RelayPriceOracleTest is BaseTest {
     assertEq(price.usdPrice, pythPrice);
     assertEq(price.usdPriceDecimals, USD_PRICE_DECIMALS);
     assertEq(price.currencyDecimals, ETH_DECIMALS);
+    assertEq(price.publishTime, ETH_PUBLISH_TIME);
     assertEq(price.expiration, ETH_PUBLISH_TIME + MAX_AGE_SECONDS);
   }
 
@@ -429,7 +621,11 @@ contract RelayPriceOracleTest is BaseTest {
     );
 
     vm.startPrank(owner);
-    config.setPriceFeedAdapter(PROVIDER_PYTH, address(adapter));
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
     config.setFeedRoute(
       eth,
       PROVIDER_PYTH,
@@ -444,6 +640,7 @@ contract RelayPriceOracleTest is BaseTest {
     assertEq(price.usdPrice, pythPrice);
     assertEq(price.usdPriceDecimals, USD_PRICE_DECIMALS);
     assertEq(price.currencyDecimals, ETH_DECIMALS);
+    assertEq(price.publishTime, ETH_PUBLISH_TIME);
     assertEq(price.expiration, ETH_PUBLISH_TIME + MAX_AGE_SECONDS);
   }
 
@@ -485,8 +682,16 @@ contract RelayPriceOracleTest is BaseTest {
     );
 
     vm.startPrank(owner);
-    config.setPriceFeedAdapter(PROVIDER_PYTH, address(adapter));
-    config.setPriceFeedAdapter(PROVIDER_REDSTONE, address(adapter));
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
+    config.setPriceFeedAdapter(
+      PROVIDER_REDSTONE,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
     config.setFeedRoute(
       currencies[0],
       PROVIDER_PYTH,
@@ -528,7 +733,11 @@ contract RelayPriceOracleTest is BaseTest {
     );
 
     vm.startPrank(owner);
-    config.setPriceFeedAdapter(PROVIDER_PYTH, address(adapter));
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
     config.setFeedRoute(
       eth,
       PROVIDER_PYTH,
@@ -545,6 +754,7 @@ contract RelayPriceOracleTest is BaseTest {
     assertEq(bidAsk.askPrice, 0);
     assertEq(bidAsk.usdPriceDecimals, USD_PRICE_DECIMALS);
     assertEq(bidAsk.currencyDecimals, ETH_DECIMALS);
+    assertEq(bidAsk.publishTime, ETH_PUBLISH_TIME);
     assertEq(bidAsk.expiration, ETH_PUBLISH_TIME + MAX_AGE_SECONDS);
   }
 
@@ -580,7 +790,11 @@ contract RelayPriceOracleTest is BaseTest {
     );
 
     vm.startPrank(owner);
-    config.setPriceFeedAdapter(PROVIDER_PYTH, address(adapter));
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
     config.setFeedRoute(
       eth,
       PROVIDER_PYTH,
@@ -610,7 +824,11 @@ contract RelayPriceOracleTest is BaseTest {
     );
 
     vm.startPrank(owner);
-    config.setPriceFeedAdapter(PROVIDER_PYTH, address(adapter));
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
     config.setFeedRoute(
       eth,
       PROVIDER_PYTH,
@@ -628,6 +846,396 @@ contract RelayPriceOracleTest is BaseTest {
         RelayPriceOracle.PriceExpired.selector,
         expiration,
         expiration + 1
+      )
+    );
+    config.resolveUsdPrice(eth);
+  }
+
+  function test_rejectsZeroPublishTime() public {
+    Currency memory eth = _eth();
+
+    _mockFeed(
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      _encodeUpdate(PYTH_ETH_FEED, 3500e8, USD_PRICE_DECIMALS, 0)
+    );
+
+    vm.startPrank(owner);
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
+    config.setFeedRoute(
+      eth,
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      ETH_DECIMALS,
+      MAX_AGE_SECONDS
+    );
+    vm.stopPrank();
+
+    vm.expectRevert(RelayPriceOracle.InvalidPublishTime.selector);
+    config.resolveUsdPrice(eth);
+  }
+
+  function test_recordsCachedPublishTime() public {
+    Currency memory eth = _eth();
+
+    _mockFeed(
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      _encodeUpdate(PYTH_ETH_FEED, 3500e8, USD_PRICE_DECIMALS, ETH_PUBLISH_TIME)
+    );
+
+    vm.startPrank(owner);
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
+    config.setFeedRoute(
+      eth,
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      ETH_DECIMALS,
+      MAX_AGE_SECONDS
+    );
+    vm.stopPrank();
+
+    config.resolveUsdPrice(eth);
+
+    assertEq(
+      config.cachedPublishTimes(PROVIDER_PYTH, PYTH_ETH_FEED),
+      ETH_PUBLISH_TIME
+    );
+  }
+
+  function test_tracksPublishTimesPerProviderAndFeed() public {
+    Currency memory eth = _eth();
+    uint256 firstPublishTime = NOW - 1;
+    uint256 secondPublishTime = NOW - 2;
+    uint256 thirdPublishTime = NOW - 3;
+
+    _mockFeed(
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      _encodeUpdate(PYTH_ETH_FEED, 3500e8, USD_PRICE_DECIMALS, firstPublishTime)
+    );
+    _mockFeed(
+      PROVIDER_PYTH,
+      REDSTONE_BTC_FEED,
+      _encodeUpdate(
+        REDSTONE_BTC_FEED,
+        3500e8,
+        USD_PRICE_DECIMALS,
+        secondPublishTime
+      )
+    );
+    _mockFeed(
+      PROVIDER_REDSTONE,
+      REDSTONE_BTC_FEED,
+      _encodeUpdate(
+        REDSTONE_BTC_FEED,
+        3500e8,
+        USD_PRICE_DECIMALS,
+        thirdPublishTime
+      )
+    );
+
+    vm.startPrank(owner);
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
+    config.setPriceFeedAdapter(
+      PROVIDER_REDSTONE,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
+    config.setFeedRoute(
+      eth,
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      ETH_DECIMALS,
+      MAX_AGE_SECONDS
+    );
+    vm.stopPrank();
+
+    config.resolveUsdPrice(eth);
+
+    vm.prank(owner);
+    config.setFeedRoute(
+      eth,
+      PROVIDER_PYTH,
+      REDSTONE_BTC_FEED,
+      ETH_DECIMALS,
+      MAX_AGE_SECONDS
+    );
+    config.resolveUsdPrice(eth);
+
+    vm.prank(owner);
+    config.setFeedRoute(
+      eth,
+      PROVIDER_REDSTONE,
+      REDSTONE_BTC_FEED,
+      ETH_DECIMALS,
+      MAX_AGE_SECONDS
+    );
+    config.resolveUsdPrice(eth);
+
+    assertEq(
+      config.cachedPublishTimes(PROVIDER_PYTH, PYTH_ETH_FEED),
+      firstPublishTime
+    );
+    assertEq(
+      config.cachedPublishTimes(PROVIDER_PYTH, REDSTONE_BTC_FEED),
+      secondPublishTime
+    );
+    assertEq(
+      config.cachedPublishTimes(PROVIDER_REDSTONE, REDSTONE_BTC_FEED),
+      thirdPublishTime
+    );
+  }
+
+  function test_allowsEqualPublishTime() public {
+    Currency memory eth = _eth();
+
+    _mockFeed(
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      _encodeUpdate(PYTH_ETH_FEED, 3500e8, USD_PRICE_DECIMALS, ETH_PUBLISH_TIME)
+    );
+
+    vm.startPrank(owner);
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
+    config.setFeedRoute(
+      eth,
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      ETH_DECIMALS,
+      MAX_AGE_SECONDS
+    );
+    vm.stopPrank();
+
+    config.resolveUsdPrice(eth);
+
+    uint256 replacementPrice = 3501e8;
+    _mockFeed(
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      _encodeUpdate(
+        PYTH_ETH_FEED,
+        replacementPrice,
+        USD_PRICE_DECIMALS,
+        ETH_PUBLISH_TIME
+      )
+    );
+
+    Price memory price = config.resolveUsdPrice(eth);
+    assertEq(price.usdPrice, replacementPrice);
+    assertEq(
+      config.cachedPublishTimes(PROVIDER_PYTH, PYTH_ETH_FEED),
+      ETH_PUBLISH_TIME
+    );
+  }
+
+  function test_rejectsPublishTimeRollback() public {
+    Currency memory eth = _eth();
+
+    _mockFeed(
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      _encodeUpdate(PYTH_ETH_FEED, 3500e8, USD_PRICE_DECIMALS, ETH_PUBLISH_TIME)
+    );
+
+    vm.startPrank(owner);
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
+    config.setFeedRoute(
+      eth,
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      ETH_DECIMALS,
+      MAX_AGE_SECONDS
+    );
+    vm.stopPrank();
+
+    config.resolveUsdPrice(eth);
+
+    uint256 olderPublishTime = ETH_PUBLISH_TIME - 1;
+    _mockFeed(
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      _encodeUpdate(PYTH_ETH_FEED, 3499e8, USD_PRICE_DECIMALS, olderPublishTime)
+    );
+
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        RelayPriceOracle.PriceTimestampRollback.selector,
+        PROVIDER_PYTH,
+        PYTH_ETH_FEED,
+        olderPublishTime,
+        ETH_PUBLISH_TIME
+      )
+    );
+    config.resolveUsdPrice(eth);
+  }
+
+  function test_preservesPublishTimeAcrossAdapterReplacement() public {
+    Currency memory eth = _eth();
+
+    _mockFeed(
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      _encodeUpdate(PYTH_ETH_FEED, 3500e8, USD_PRICE_DECIMALS, ETH_PUBLISH_TIME)
+    );
+
+    vm.startPrank(owner);
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
+    config.setFeedRoute(
+      eth,
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      ETH_DECIMALS,
+      MAX_AGE_SECONDS
+    );
+    vm.stopPrank();
+
+    config.resolveUsdPrice(eth);
+
+    MockPriceFeedAdapter replacement = new MockPriceFeedAdapter(
+      address(config)
+    );
+    vm.prank(owner);
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(replacement),
+      MAX_FUTURE_SECONDS
+    );
+
+    uint256 olderPublishTime = ETH_PUBLISH_TIME - 1;
+    _mockFeed(
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      _encodeUpdate(PYTH_ETH_FEED, 3499e8, USD_PRICE_DECIMALS, olderPublishTime)
+    );
+
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        RelayPriceOracle.PriceTimestampRollback.selector,
+        PROVIDER_PYTH,
+        PYTH_ETH_FEED,
+        olderPublishTime,
+        ETH_PUBLISH_TIME
+      )
+    );
+    config.resolveUsdPrice(eth);
+  }
+
+  function test_resolveUsdPriceAllowsPublishTimeAtFutureLimit() public {
+    Currency memory eth = _eth();
+    uint256 publishTime = NOW + MAX_FUTURE_SECONDS;
+
+    _mockFeed(
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      _encodeUpdate(PYTH_ETH_FEED, 3500e8, USD_PRICE_DECIMALS, publishTime)
+    );
+
+    vm.startPrank(owner);
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
+    config.setFeedRoute(
+      eth,
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      ETH_DECIMALS,
+      MAX_AGE_SECONDS
+    );
+    vm.stopPrank();
+
+    Price memory price = config.resolveUsdPrice(eth);
+    assertEq(price.expiration, publishTime + MAX_AGE_SECONDS);
+  }
+
+  function test_resolveUsdPriceRejectsPublishTimeAboveFutureLimit() public {
+    Currency memory eth = _eth();
+    uint256 maxPublishTime = NOW + MAX_FUTURE_SECONDS;
+    uint256 publishTime = maxPublishTime + 1;
+
+    _mockFeed(
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      _encodeUpdate(PYTH_ETH_FEED, 3500e8, USD_PRICE_DECIMALS, publishTime)
+    );
+
+    vm.startPrank(owner);
+    config.setPriceFeedAdapter(
+      PROVIDER_PYTH,
+      address(adapter),
+      MAX_FUTURE_SECONDS
+    );
+    config.setFeedRoute(
+      eth,
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      ETH_DECIMALS,
+      MAX_AGE_SECONDS
+    );
+    vm.stopPrank();
+
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        RelayPriceOracle.PriceTimestampTooFarInFuture.selector,
+        publishTime,
+        maxPublishTime
+      )
+    );
+    config.resolveUsdPrice(eth);
+  }
+
+  function test_resolveUsdPriceRejectsAnyFutureTimeInStrictMode() public {
+    Currency memory eth = _eth();
+    uint256 publishTime = NOW + 1;
+
+    _mockFeed(
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      _encodeUpdate(PYTH_ETH_FEED, 3500e8, USD_PRICE_DECIMALS, publishTime)
+    );
+
+    vm.startPrank(owner);
+    config.setPriceFeedAdapter(PROVIDER_PYTH, address(adapter), 0);
+    config.setFeedRoute(
+      eth,
+      PROVIDER_PYTH,
+      PYTH_ETH_FEED,
+      ETH_DECIMALS,
+      MAX_AGE_SECONDS
+    );
+    vm.stopPrank();
+
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        RelayPriceOracle.PriceTimestampTooFarInFuture.selector,
+        publishTime,
+        NOW
       )
     );
     config.resolveUsdPrice(eth);

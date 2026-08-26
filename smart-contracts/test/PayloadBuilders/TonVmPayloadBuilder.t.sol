@@ -2,11 +2,16 @@
 pragma solidity ^0.8.28;
 
 import {BaseTest} from "../utils/BaseTest.sol";
+import {PayGasSig} from "../utils/PayGasSig.sol";
 import {
   RelayAllocator,
   BuildPayloadParams
 } from "../../contracts/RelayAllocator.sol";
+import {Config} from "../../contracts/Config.sol";
 import {RelayHub} from "../../contracts/RelayHub.sol";
+import {Utils} from "../../contracts/Utils.sol";
+import {WithdrawGasPayer} from "../../contracts/WithdrawGasPayer.sol";
+import {GasPaidPayloadBuilder} from "../../contracts/payload-builders/GasPaidPayloadBuilder.sol";
 import {
   TonVmPayloadBuilder,
   TonTransferRequest
@@ -14,7 +19,7 @@ import {
 
 // Reference msg_inner cell hashes were computed using the @ton/core cell
 // builder against the canonical Highload V3 layout — see
-// tools/tonReferenceHashes.ts for the generation procedure.
+// tools/ton-reference-hashes.ts for the generation procedure.
 abstract contract TonVmPayloadBuilderBase is BaseTest {
   string internal constant CHAIN_ID = "ton-testnet";
   uint32 internal constant SUBWALLET_ID = 0x10AD0001;
@@ -32,22 +37,96 @@ abstract contract TonVmPayloadBuilderBase is BaseTest {
   bytes32 internal constant DEPOSITORY_HASH =
     0xaabbccddeeff00112233445566778899aabbccddeeff00112233445566778899;
 
+  uint256 internal constant GAS_FEE_AMOUNT = 1000000000; // 1 TON in nanotons
+
   RelayHub internal hub;
   RelayAllocator internal allocator;
+  Config internal config;
+  WithdrawGasPayer internal gasPayer;
   TonVmPayloadBuilder internal payloadBuilder;
+
+  address internal spender;
+  address internal spenderAlias;
+  uint256 internal gasTokenId;
+
+  address internal oracle;
+  uint256 internal oraclePk;
 
   function setUp() public virtual override {
     super.setUp();
 
+    (oracle, oraclePk) = makeAddrAndKey("oracle");
+
     hub = new RelayHub(owner);
     allocator = new RelayAllocator(owner, address(hub), address(0));
-    payloadBuilder = new TonVmPayloadBuilder(SUBWALLET_ID, TIMEOUT);
+    config = new Config(address(allocator));
+    gasPayer = new WithdrawGasPayer(address(hub), oracle);
+    payloadBuilder = new TonVmPayloadBuilder(
+      address(config),
+      SUBWALLET_ID,
+      TIMEOUT,
+      address(gasPayer)
+    );
+
+    spender = makeAddr("spender");
+    spenderAlias = Utils.generateAddress(CHAIN_ID, abi.encodePacked(spender));
+    gasTokenId = Utils.generateTokenId(CHAIN_ID, NATIVE_CURRENCY);
+
+    bytes32 operatorRole = hub.OPERATOR_ROLE();
+    vm.startPrank(owner);
+    hub.grantRole(operatorRole, owner);
+    hub.grantRole(operatorRole, address(gasPayer));
+    vm.stopPrank();
+
+    _setPayloadBuilderGasFee(GAS_FEE_AMOUNT);
+  }
+
+  /// @notice Pays the gas fee for the exact parameters that will be passed to
+  /// `buildPayload`, unlocking the gas payment gate. Mirrors the off-chain
+  /// flow: the oracle signs the request and anyone submits the payment.
+  function _payGas(
+    bytes memory depository,
+    BuildPayloadParams memory params
+  ) internal {
+    vm.prank(owner);
+    hub.mint(spenderAlias, gasTokenId, GAS_FEE_AMOUNT);
+
+    RelayAllocator.WithdrawRequest memory request = RelayAllocator
+      .WithdrawRequest({
+        chainId: CHAIN_ID,
+        depository: depository,
+        currency: params.currency,
+        amount: params.amount,
+        spenderChainId: CHAIN_ID,
+        spender: abi.encodePacked(spender),
+        receiver: params.receiver,
+        data: params.data,
+        nonce: bytes32(params.nonce)
+      });
+    gasPayer.payGas(
+      request,
+      NATIVE_CURRENCY,
+      GAS_FEE_AMOUNT,
+      PayGasSig.sign(
+        oraclePk,
+        gasPayer,
+        request,
+        NATIVE_CURRENCY,
+        GAS_FEE_AMOUNT
+      )
+    );
   }
 
   function _depositoryBytes(
     bytes32 depository
   ) internal pure returns (bytes memory) {
     return abi.encodePacked(depository);
+  }
+
+  function _setPayloadBuilderGasFee(uint256 amount) internal {
+    bytes32 key = payloadBuilder.getGasFeeKey(CHAIN_ID);
+    vm.prank(owner);
+    config.setConfigValue(key, bytes32(amount));
   }
 
   function _expectedQueryId(
@@ -81,9 +160,34 @@ contract TonVmPayloadBuilderImmutablesTest is TonVmPayloadBuilderBase {
     assertEq(uint256(payloadBuilder.TIMEOUT()), uint256(TIMEOUT));
   }
 
+  function test_storesGasPayer() public view {
+    assertEq(payloadBuilder.GAS_PAYER(), address(gasPayer));
+  }
+
+  function test_storesConfig() public view {
+    assertEq(address(payloadBuilder.CONFIG()), address(config));
+  }
+
+  function test_gasFeeKeyMatchesDerivation() public view {
+    assertEq(
+      payloadBuilder.getGasFeeKey(CHAIN_ID),
+      keccak256(
+        abi.encodePacked(
+          keccak256("TON_VM_GAS_FEE"),
+          keccak256(bytes(CHAIN_ID))
+        )
+      )
+    );
+  }
+
   function test_acceptsMaxValid22BitTimeout() public {
     uint32 maxTimeout = uint32((uint32(1) << 22) - 1);
-    TonVmPayloadBuilder b = new TonVmPayloadBuilder(SUBWALLET_ID, maxTimeout);
+    TonVmPayloadBuilder b = new TonVmPayloadBuilder(
+      address(config),
+      SUBWALLET_ID,
+      maxTimeout,
+      address(gasPayer)
+    );
     assertEq(uint256(b.TIMEOUT()), uint256(maxTimeout));
   }
 
@@ -95,7 +199,12 @@ contract TonVmPayloadBuilderImmutablesTest is TonVmPayloadBuilderBase {
         tooLarge
       )
     );
-    new TonVmPayloadBuilder(SUBWALLET_ID, tooLarge);
+    new TonVmPayloadBuilder(
+      address(config),
+      SUBWALLET_ID,
+      tooLarge,
+      address(gasPayer)
+    );
   }
 }
 
@@ -108,6 +217,7 @@ contract TonVmPayloadBuilderBuildPayloadTest is TonVmPayloadBuilderBase {
       nonce: 0,
       data: ""
     });
+    _payGas(_depositoryBytes(DEPOSITORY_HASH), params);
     vm.expectRevert(
       abi.encodeWithSelector(
         TonVmPayloadBuilder.InvalidReceiverLength.selector,
@@ -129,6 +239,7 @@ contract TonVmPayloadBuilderBuildPayloadTest is TonVmPayloadBuilderBase {
       nonce: 0,
       data: ""
     });
+    _payGas(_depositoryBytes(DEPOSITORY_HASH), params);
     vm.expectRevert(
       abi.encodeWithSelector(
         TonVmPayloadBuilder.InvalidCurrencyLength.selector,
@@ -150,6 +261,7 @@ contract TonVmPayloadBuilderBuildPayloadTest is TonVmPayloadBuilderBase {
       nonce: 0,
       data: ""
     });
+    _payGas(_depositoryBytes(DEPOSITORY_HASH), params);
     vm.expectRevert(
       abi.encodeWithSelector(
         TonVmPayloadBuilder.InvalidCurrencyLength.selector,
@@ -172,6 +284,7 @@ contract TonVmPayloadBuilderBuildPayloadTest is TonVmPayloadBuilderBase {
       nonce: 0,
       data: ""
     });
+    _payGas(_depositoryBytes(DEPOSITORY_HASH), params);
     vm.expectRevert(
       abi.encodeWithSelector(
         TonVmPayloadBuilder.UnsupportedCurrency.selector,
@@ -194,6 +307,7 @@ contract TonVmPayloadBuilderBuildPayloadTest is TonVmPayloadBuilderBase {
       nonce: 0,
       data: ""
     });
+    _payGas(_depositoryBytes(DEPOSITORY_HASH), params);
     vm.expectRevert(
       abi.encodeWithSelector(
         TonVmPayloadBuilder.AmountExceedsMaxCoins.selector,
@@ -207,7 +321,7 @@ contract TonVmPayloadBuilderBuildPayloadTest is TonVmPayloadBuilderBase {
     );
   }
 
-  function test_buildsPayloadForNativeTon() public view {
+  function test_buildsPayloadForNativeTon() public {
     uint256 blockNumber = block.number;
     uint256 nowTs = block.timestamp;
     uint256 nonceInput = 42;
@@ -220,6 +334,7 @@ contract TonVmPayloadBuilderBuildPayloadTest is TonVmPayloadBuilderBase {
       nonce: nonceInput,
       data: ""
     });
+    _payGas(_depositoryBytes(DEPOSITORY_HASH), params);
     bytes memory payload = payloadBuilder.buildPayload(
       CHAIN_ID,
       _depositoryBytes(DEPOSITORY_HASH),
@@ -252,7 +367,7 @@ contract TonVmPayloadBuilderBuildPayloadTest is TonVmPayloadBuilderBase {
   /// @notice Regression: brute-force a nonce whose pre-remap keccak yields
   /// `bit_number == 1023` and confirm the builder remaps to a value the
   /// Highload V3 wallet will accept.
-  function test_remapsForbiddenBitNumber() public view {
+  function test_remapsForbiddenBitNumber() public {
     bytes memory receiver = abi.encodePacked(RECIPIENT_HASH);
     uint256 amount = 100;
 
@@ -284,6 +399,7 @@ contract TonVmPayloadBuilderBuildPayloadTest is TonVmPayloadBuilderBase {
       nonce: badNonce,
       data: ""
     });
+    _payGas(_depositoryBytes(DEPOSITORY_HASH), params);
     bytes memory payload = payloadBuilder.buildPayload(
       CHAIN_ID,
       _depositoryBytes(DEPOSITORY_HASH),
@@ -317,7 +433,7 @@ contract TonVmPayloadBuilderBuildPayloadTest is TonVmPayloadBuilderBase {
     uint256 nonce,
     bytes32 receiver,
     uint120 amount
-  ) public view {
+  ) public {
     BuildPayloadParams memory params = BuildPayloadParams({
       currency: NATIVE_CURRENCY,
       amount: uint256(amount),
@@ -325,6 +441,7 @@ contract TonVmPayloadBuilderBuildPayloadTest is TonVmPayloadBuilderBase {
       nonce: nonce,
       data: ""
     });
+    _payGas(_depositoryBytes(DEPOSITORY_HASH), params);
     bytes memory payload = payloadBuilder.buildPayload(
       CHAIN_ID,
       _depositoryBytes(DEPOSITORY_HASH),
@@ -465,6 +582,114 @@ contract TonVmPayloadBuilderHashesToSignTest is TonVmPayloadBuilderBase {
         _depositoryBytes(DEPOSITORY_HASH),
         abi.encode(r)
       )[0];
+  }
+}
+
+contract TonVmPayloadBuilderGasPaymentTest is TonVmPayloadBuilderBase {
+  function _updatePayloadBuilderGasFee(uint256 newAmount) internal {
+    _setPayloadBuilderGasFee(newAmount);
+  }
+
+  function test_rejectsBuildWhenFeeRaisedAfterPayment() public {
+    BuildPayloadParams memory params = _params();
+    _payGas(_depositoryBytes(DEPOSITORY_HASH), params);
+
+    _updatePayloadBuilderGasFee(GAS_FEE_AMOUNT * 2);
+
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        TonVmPayloadBuilder.PaidGasBelowGasFee.selector,
+        GAS_FEE_AMOUNT,
+        GAS_FEE_AMOUNT * 2
+      )
+    );
+    payloadBuilder.buildPayload(
+      CHAIN_ID,
+      _depositoryBytes(DEPOSITORY_HASH),
+      params
+    );
+  }
+
+  function test_allowsBuildWhenFeeLoweredAfterPayment() public {
+    BuildPayloadParams memory params = _params();
+    _payGas(_depositoryBytes(DEPOSITORY_HASH), params);
+
+    _updatePayloadBuilderGasFee(GAS_FEE_AMOUNT / 2);
+
+    bytes memory payload = payloadBuilder.buildPayload(
+      CHAIN_ID,
+      _depositoryBytes(DEPOSITORY_HASH),
+      params
+    );
+    assertGt(payload.length, 0);
+  }
+
+  function _params() internal pure returns (BuildPayloadParams memory) {
+    return
+      BuildPayloadParams({
+        currency: NATIVE_CURRENCY,
+        amount: 100000000,
+        receiver: abi.encodePacked(RECIPIENT_HASH),
+        nonce: 42,
+        data: ""
+      });
+  }
+
+  function test_rejectsBuildWithoutGasPayment() public {
+    BuildPayloadParams memory params = _params();
+    bytes32 expectedHash = keccak256(
+      abi.encode(CHAIN_ID, _depositoryBytes(DEPOSITORY_HASH), params)
+    );
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        GasPaidPayloadBuilder.GasNotPaid.selector,
+        expectedHash
+      )
+    );
+    payloadBuilder.buildPayload(
+      CHAIN_ID,
+      _depositoryBytes(DEPOSITORY_HASH),
+      params
+    );
+  }
+
+  function test_rejectsBuildWhenGasPaidForDifferentParams() public {
+    BuildPayloadParams memory paid = _params();
+    _payGas(_depositoryBytes(DEPOSITORY_HASH), paid);
+
+    BuildPayloadParams memory unpaid = _params();
+    unpaid.nonce = paid.nonce + 1;
+    bytes32 expectedHash = keccak256(
+      abi.encode(CHAIN_ID, _depositoryBytes(DEPOSITORY_HASH), unpaid)
+    );
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        GasPaidPayloadBuilder.GasNotPaid.selector,
+        expectedHash
+      )
+    );
+    payloadBuilder.buildPayload(
+      CHAIN_ID,
+      _depositoryBytes(DEPOSITORY_HASH),
+      unpaid
+    );
+  }
+
+  function test_rejectsBuildWhenGasPaidForDifferentDepository() public {
+    BuildPayloadParams memory params = _params();
+    _payGas(_depositoryBytes(DEPOSITORY_HASH), params);
+
+    bytes memory otherDepository = _depositoryBytes(RECIPIENT_HASH);
+    bytes32 expectedHash = keccak256(
+      abi.encode(CHAIN_ID, otherDepository, params)
+    );
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        GasPaidPayloadBuilder.GasNotPaid.selector,
+        expectedHash
+      )
+    );
+    payloadBuilder.buildPayload(CHAIN_ID, otherDepository, params);
   }
 }
 

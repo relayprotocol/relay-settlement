@@ -41,6 +41,7 @@ const baseParams: ActionParams<"ethereum-vm"> = {
       depositor: "0x",
       refundRecipient: "0x",
       priceImpactBps: "0",
+      salt: "123",
     },
     orderId: `0x${"00".repeat(32)}`,
     nonce: "0",

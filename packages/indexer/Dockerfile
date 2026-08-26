@@ -33,10 +33,12 @@ COPY .yarn ./.yarn
 COPY packages/indexer/package.json ./packages/indexer/package.json
 COPY packages/abis/package.json ./packages/abis/package.json
 COPY packages/networks/package.json ./packages/networks/package.json
+COPY packages/sdk/package.json ./packages/sdk/package.json
 COPY --from=builder /app/packages/abis/dist ./packages/abis/dist
 COPY --from=builder /app/packages/indexer/dist ./packages/indexer/dist
 COPY packages/indexer/src/migrations ./packages/indexer/src/migrations
 COPY --from=builder /app/packages/networks/dist ./packages/networks/dist
+COPY --from=builder /app/packages/sdk/dist ./packages/sdk/dist
 COPY --from=prod-deps /app/node_modules ./node_modules
 
 ENV NODE_ENV=production

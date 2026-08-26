@@ -7,10 +7,29 @@ import {IPriceFeedAdapter} from "../RelayPriceOracle.sol";
 /// @author Relay Protocol
 /// @notice Test helper that decodes ABI-encoded feed updates into price data.
 contract MockPriceFeedAdapter is IPriceFeedAdapter {
+  /// @inheritdoc IPriceFeedAdapter
+  address public immutable ORACLE;
+
   /// @notice Thrown when the decoded feed ID does not match the requested feed.
   /// @param expected Feed ID requested by the caller.
   /// @param actual Feed ID decoded from the update data.
   error FeedIdMismatch(bytes32 expected, bytes32 actual);
+
+  /// @notice Deploys the mock bound to an oracle.
+  constructor(address _oracle) {
+    if (_oracle == address(0)) {
+      revert InvalidOracle(_oracle);
+    }
+    ORACLE = _oracle;
+  }
+
+  /// @notice Restricts mock decoding to the bound oracle.
+  modifier onlyOracle() {
+    if (msg.sender != ORACLE) {
+      revert UnauthorizedCaller(msg.sender);
+    }
+    _;
+  }
 
   /// @inheritdoc IPriceFeedAdapter
   /// @dev This mock has no bid/ask spread, so it returns `bid = ask = 0`.
@@ -19,7 +38,8 @@ contract MockPriceFeedAdapter is IPriceFeedAdapter {
     bytes calldata updateData
   )
     external
-    pure
+    view
+    onlyOracle
     returns (
       uint256 usdPrice,
       uint256 bid,

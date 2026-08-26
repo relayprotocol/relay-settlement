@@ -5,9 +5,9 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /** Supported allocator environment names. */
-export type AllocatorEnvironmentName = "dev" | "stag" | "prod";
+export type AllocatorEnvironmentName = "dev" | "stag" | "prod" | "test";
 
-const ENVIRONMENT_NAMES = new Set<AllocatorEnvironmentName>(["dev", "stag", "prod"]);
+const ENVIRONMENT_NAMES = new Set<AllocatorEnvironmentName>(["dev", "stag", "prod", "test"]);
 
 /** Parsed contents of an `environments/<env>.json` config file. */
 export interface AllocatorEnvironment {
@@ -21,10 +21,10 @@ export interface AllocatorEnvironment {
   allowedOracles: string[];
   /** Minimum distinct oracle signatures required for a valid attestation. */
   oracleSignatureThreshold: number;
-  /** Lighter gateway contract address on the gateway chain. */
-  lighterGateway: string;
+  /** Lighter gateway contract address on the gateway chain (omit when Lighter isn't supported in this environment). */
+  lighterGateway?: string;
   /** EIP-155 gateway chain id used for Lighter ChangePubKey transactions. */
-  lighterGatewayChainId: number;
+  lighterGatewayChainId?: number;
   /** Lighter API keys the Lighter action may register via ChangePubKey. */
   lighterAllowedApiKeys?: Array<{
     apiKeyIndex: number;
@@ -112,10 +112,13 @@ function validateEnvironment(env: AllocatorEnvironment, path: string): void {
   if (env.oracleSignatureThreshold > env.allowedOracles.length) {
     throw new Error(`${path}: oracleSignatureThreshold cannot exceed allowedOracles.length`);
   }
-  if (!/^0x[0-9a-fA-F]{40}$/.test(env.lighterGateway)) {
+  if (env.lighterGateway !== undefined && !/^0x[0-9a-fA-F]{40}$/.test(env.lighterGateway)) {
     throw new Error(`${path}: lighterGateway must be a 20-byte hex address`);
   }
-  if (!Number.isInteger(env.lighterGatewayChainId) || env.lighterGatewayChainId < 1) {
+  if (
+    env.lighterGatewayChainId !== undefined &&
+    (!Number.isInteger(env.lighterGatewayChainId) || env.lighterGatewayChainId < 1)
+  ) {
     throw new Error(`${path}: lighterGatewayChainId must be a positive integer`);
   }
   if (env.lighterAllowedApiKeys !== undefined) {
@@ -140,6 +143,7 @@ function validateEnvironment(env: AllocatorEnvironment, path: string): void {
 
 /** Supported VM-specific Lit Action sources. */
 export const VM_TYPES = [
+  "gateway-vm",
   "ethereum-vm",
   "tron-vm",
   "solana-vm",
@@ -148,10 +152,12 @@ export const VM_TYPES = [
   "hyperliquid-vm",
   "lighter-vm",
   "xrp-vm",
+  "hedera-vm",
 ] as const;
 export type VmType = (typeof VM_TYPES)[number];
 
 const ACTION_BASENAMES: Record<VmType, string> = {
+  "gateway-vm": "gateway",
   "ethereum-vm": "ethereum",
   "bitcoin-vm": "bitcoin",
   "tron-vm": "tron",
@@ -160,6 +166,7 @@ const ACTION_BASENAMES: Record<VmType, string> = {
   "hyperliquid-vm": "hyperliquid",
   "lighter-vm": "lighter",
   "xrp-vm": "xrp",
+  "hedera-vm": "hedera",
 };
 
 /** Map a VmType to the `src/vm/*.ts` entry / bundle output basename. */

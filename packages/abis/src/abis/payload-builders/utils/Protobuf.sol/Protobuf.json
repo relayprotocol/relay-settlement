@@ -1,0 +1,13 @@
+[
+  {
+    "type": "error",
+    "name": "FieldNumberTooLarge",
+    "inputs": [
+      {
+        "name": "fieldNumber",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  }
+]

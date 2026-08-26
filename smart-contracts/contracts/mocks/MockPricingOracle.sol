@@ -5,7 +5,7 @@ import {
   Currency,
   IPricingOracle,
   Price
-} from "../deposit-addresses/open/oracle/IPricingOracle.sol";
+} from "../deposit-addresses/oracle/IPricingOracle.sol";
 
 /// @title MockPricingOracle
 /// @author Relay Protocol
@@ -22,6 +22,7 @@ contract MockPricingOracle is IPricingOracle {
   /// @param usdPrice USD price of one whole unit of the currency, scaled by `10 ** usdPriceDecimals`
   /// @param usdPriceDecimals Fixed-point precision of `usdPrice`
   /// @param currencyDecimals Number of decimals the currency itself uses
+  /// @param publishTime Unix timestamp when the price was published
   /// @param expiration Unix timestamp after which this price should no longer be used
   function setPrice(
     string calldata chainId,
@@ -29,12 +30,14 @@ contract MockPricingOracle is IPricingOracle {
     uint256 usdPrice,
     uint8 usdPriceDecimals,
     uint8 currencyDecimals,
+    uint256 publishTime,
     uint256 expiration
   ) external {
     prices[_key(chainId, currency)] = Price({
       usdPrice: usdPrice,
       usdPriceDecimals: usdPriceDecimals,
       currencyDecimals: currencyDecimals,
+      publishTime: publishTime,
       expiration: expiration
     });
   }

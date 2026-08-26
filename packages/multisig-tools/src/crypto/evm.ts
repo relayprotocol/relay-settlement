@@ -1,13 +1,19 @@
-import { decodeAbiParameters } from "viem"
+import { decodeAbiParameters, encodeAbiParameters } from "viem"
 
-export function decodeCallRequest(encoded: `0x${string}`) {
-  const callAbi = [
+const ZERO_DATA_HASH =
+  "0x0000000000000000000000000000000000000000000000000000000000000000"
+
+const callRequestAbi = (committed: boolean) =>
+  [
     {
       components: [
         {
           components: [
             { name: "to", type: "address" },
             { name: "data", type: "bytes" },
+            ...(committed
+              ? [{ name: "dataHash", type: "bytes32" } as const]
+              : []),
             { name: "value", type: "uint256" },
             { name: "allowFailure", type: "bool" },
           ],
@@ -22,17 +28,53 @@ export function decodeCallRequest(encoded: `0x${string}`) {
     },
   ] as const
 
-  const [request] = decodeAbiParameters(callAbi, encoded)
-  return request as {
-    calls: {
+// Decodes a payload into the EIP-712 message shape, whose `Call` has no `dataHash`.
+// Either payload shape is accepted; only one re-encodes to its own input.
+export function decodeCallRequest(encoded: `0x${string}`) {
+  for (const committed of [true, false]) {
+    const abi = callRequestAbi(committed)
+    let request
+    try {
+      ;[request] = decodeAbiParameters(abi, encoded)
+      if (
+        encodeAbiParameters(abi, [request]).toLowerCase() !==
+        encoded.toLowerCase()
+      ) {
+        continue
+      }
+    } catch {
+      continue
+    }
+
+    const calls = request.calls as {
       to: `0x${string}`
       data: `0x${string}`
+      dataHash?: `0x${string}`
       value: bigint
       allowFailure: boolean
     }[]
-    nonce: bigint
-    expiration: bigint
+    // A committed call keeps its calldata off-chain, so its message cannot be rebuilt
+    if (
+      calls.some((call) => call.dataHash && call.dataHash !== ZERO_DATA_HASH)
+    ) {
+      throw new Error(
+        "Call request commits to calldata that is not in the payload"
+      )
+    }
+
+    return {
+      calls: calls.map((call) => ({
+        allowFailure: call.allowFailure,
+        data: call.data,
+        to: call.to,
+        value: call.value,
+      })),
+      expiration: request.expiration,
+      nonce: request.nonce,
+    }
   }
+
+  throw new Error("Failed to decode call request")
 }
 
 export const IRelayDespository = [

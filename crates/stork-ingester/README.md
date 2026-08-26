@@ -12,7 +12,7 @@ Each payload is validated and forwarded verbatim, since the bytes are already th
   The taxonomy id must match, every configured symbol must exist, and each symbol's asset id must agree with the taxonomy.
 - The fetch is retried a few times for transient failures; a validation mismatch exits immediately.
 - It opens one authenticated WebSocket at `/ws?channel=<channel>&message_type=signed_ecdsa` and subscribes to all configured asset ids.
-- Each frame carries one signed batch. Valid batches are cached under each configured feed present in them, keeping only the latest per feed. Failures are dropped and logged.
+- Each frame carries one signed batch. Valid batches are cached under each configured feed present in them, keeping only the latest nanosecond timestamp per feed. Older updates and conflicting values at the same timestamp are dropped and logged.
 - It listens on `INGESTER_ADDRESS` for sequencer connections and streams updates to them.
 - The connection reconnects with exponential backoff (1s to 15s). The backoff resets once a connection delivers a valid payload, so only connections that never produce data keep escalating.
 - On a fixed channel, a watchdog reconnects the socket if it is silent for 5 seconds, catching dead connections.
@@ -56,7 +56,8 @@ The signer address is set by on-chain registration and can rotate, so the ingest
 Before caching, each payload is checked:
 
 - Its `taxonomyID` matches the taxonomy resolved at startup.
-- It is fresh, not older than `STORK_MAX_AGE_SEC` and not far future-dated.
+- Each asset id appears only once in the batch.
+- It is fresh, not older than `STORK_MAX_AGE_SEC` and no more than 6 seconds ahead of the ingester host's Unix clock.
 
 Failing payloads are dropped and logged.
 Assets in the batch that are not configured feeds are ignored.

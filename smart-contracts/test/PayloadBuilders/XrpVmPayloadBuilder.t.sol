@@ -1,15 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {Test} from "forge-std/Test.sol";
-import {BuildPayloadParams} from "../../contracts/RelayAllocator.sol";
+import {BaseTest} from "../utils/BaseTest.sol";
+import {PayGasSig} from "../utils/PayGasSig.sol";
+import {
+  BuildPayloadParams,
+  RelayAllocator
+} from "../../contracts/RelayAllocator.sol";
+import {RelayHub} from "../../contracts/RelayHub.sol";
+import {Utils} from "../../contracts/Utils.sol";
+import {WithdrawGasPayer} from "../../contracts/WithdrawGasPayer.sol";
+import {GasPaidPayloadBuilder} from "../../contracts/payload-builders/GasPaidPayloadBuilder.sol";
 import {
   XrpVmPayloadBuilder,
   XrpPaymentRequest,
   XrpRequestData
 } from "../../contracts/payload-builders/XrpVmPayloadBuilder.sol";
 
-abstract contract XrpVmPayloadBuilderBase is Test {
+abstract contract XrpVmPayloadBuilderBase is BaseTest {
   string internal constant CHAIN_ID = "xrp";
 
   // 33-byte compressed secp256k1 signing key (matches the settlement SDK
@@ -28,10 +36,82 @@ abstract contract XrpVmPayloadBuilderBase is Test {
   bytes internal constant NATIVE_CURRENCY =
     hex"0000000000000000000000000000000000000000";
 
+  // Mirrors the contract's hardcoded MAX_FEE constant (~1 XRP in drops).
+  uint64 internal constant MAX_FEE = 1000000;
+
+  uint256 internal constant GAS_FEE_AMOUNT = 100000; // 0.1 XRP in drops
+
+  RelayHub internal hub;
+  WithdrawGasPayer internal gasPayer;
   XrpVmPayloadBuilder internal builder;
 
-  function setUp() public virtual {
-    builder = new XrpVmPayloadBuilder(SIGNING_PUBKEY);
+  address internal spender;
+  address internal spenderAlias;
+  uint256 internal gasTokenId;
+
+  address internal oracle;
+  uint256 internal oraclePk;
+
+  function setUp() public virtual override {
+    super.setUp();
+
+    (oracle, oraclePk) = makeAddrAndKey("oracle");
+
+    hub = new RelayHub(owner);
+    gasPayer = new WithdrawGasPayer(address(hub), oracle);
+    builder = new XrpVmPayloadBuilder(SIGNING_PUBKEY, address(gasPayer));
+
+    spender = makeAddr("spender");
+    spenderAlias = Utils.generateAddress(CHAIN_ID, abi.encodePacked(spender));
+    gasTokenId = Utils.generateTokenId(CHAIN_ID, NATIVE_CURRENCY);
+
+    bytes32 operatorRole = hub.OPERATOR_ROLE();
+    vm.startPrank(owner);
+    hub.grantRole(operatorRole, owner);
+    hub.grantRole(operatorRole, address(gasPayer));
+    vm.stopPrank();
+  }
+
+  /// @notice Pays the gas fee for the exact parameters that will be passed to
+  /// `buildPayload`, unlocking the gas payment gate. Mirrors the off-chain
+  /// flow: the oracle signs the request and anyone submits the payment.
+  function _payGas(
+    bytes memory depository,
+    BuildPayloadParams memory params
+  ) internal {
+    _payGasOnChain(CHAIN_ID, depository, params, GAS_FEE_AMOUNT);
+  }
+
+  /// @notice Same as `_payGas` but for an arbitrary chain id, so tests can
+  /// exercise oracle-authorized fees other than the fixture's default.
+  function _payGasOnChain(
+    string memory chainId,
+    bytes memory depository,
+    BuildPayloadParams memory params,
+    uint256 feeAmount
+  ) internal {
+    uint256 tokenId = Utils.generateTokenId(chainId, NATIVE_CURRENCY);
+    vm.prank(owner);
+    hub.mint(spenderAlias, tokenId, feeAmount);
+
+    RelayAllocator.WithdrawRequest memory request = RelayAllocator
+      .WithdrawRequest({
+        chainId: chainId,
+        depository: depository,
+        currency: params.currency,
+        amount: params.amount,
+        spenderChainId: CHAIN_ID,
+        spender: abi.encodePacked(spender),
+        receiver: params.receiver,
+        data: params.data,
+        nonce: bytes32(params.nonce)
+      });
+    gasPayer.payGas(
+      request,
+      NATIVE_CURRENCY,
+      feeAmount,
+      PayGasSig.sign(oraclePk, gasPayer, request, NATIVE_CURRENCY, feeAmount)
+    );
   }
 
   function _request(
@@ -70,6 +150,10 @@ contract XrpVmPayloadBuilderConstructorTest is XrpVmPayloadBuilderBase {
     );
   }
 
+  function test_exposesMaxFee() public view {
+    assertEq(uint256(builder.MAX_FEE()), uint256(MAX_FEE));
+  }
+
   function test_rejectsWrongLengthKey() public {
     vm.expectRevert(
       abi.encodeWithSelector(
@@ -77,7 +161,11 @@ contract XrpVmPayloadBuilderConstructorTest is XrpVmPayloadBuilderBase {
         uint256(32)
       )
     );
-    new XrpVmPayloadBuilder(new bytes(32));
+    new XrpVmPayloadBuilder(new bytes(32), address(gasPayer));
+  }
+
+  function test_storesGasPayer() public view {
+    assertEq(builder.GAS_PAYER(), address(gasPayer));
   }
 
   function test_rejectsUncompressedKeyPrefix() public {
@@ -89,7 +177,7 @@ contract XrpVmPayloadBuilderConstructorTest is XrpVmPayloadBuilderBase {
         bytes1(0x04)
       )
     );
-    new XrpVmPayloadBuilder(bad);
+    new XrpVmPayloadBuilder(bad, address(gasPayer));
   }
 }
 
@@ -112,7 +200,7 @@ contract XrpVmPayloadBuilderBuildPayloadTest is XrpVmPayloadBuilderBase {
       );
   }
 
-  function test_buildsNativeXrpPayment() public view {
+  function test_buildsNativeXrpPayment() public {
     BuildPayloadParams memory params = BuildPayloadParams({
       currency: NATIVE_CURRENCY,
       amount: 1000000,
@@ -120,6 +208,7 @@ contract XrpVmPayloadBuilderBuildPayloadTest is XrpVmPayloadBuilderBase {
       nonce: 0,
       data: _defaultData()
     });
+    _payGas(abi.encodePacked(ACCOUNT), params);
 
     bytes memory payload = builder.buildPayload(
       CHAIN_ID,
@@ -147,6 +236,7 @@ contract XrpVmPayloadBuilderBuildPayloadTest is XrpVmPayloadBuilderBase {
       nonce: 0,
       data: _defaultData()
     });
+    _payGas(abi.encodePacked(ACCOUNT), params);
     vm.expectRevert(
       abi.encodeWithSelector(
         XrpVmPayloadBuilder.InvalidReceiverLength.selector,
@@ -164,6 +254,7 @@ contract XrpVmPayloadBuilderBuildPayloadTest is XrpVmPayloadBuilderBase {
       nonce: 0,
       data: _defaultData()
     });
+    _payGas(hex"1234", params);
     vm.expectRevert(
       abi.encodeWithSelector(
         XrpVmPayloadBuilder.InvalidDepositoryLength.selector,
@@ -181,6 +272,7 @@ contract XrpVmPayloadBuilderBuildPayloadTest is XrpVmPayloadBuilderBase {
       nonce: 0,
       data: _defaultData()
     });
+    _payGas(abi.encodePacked(ACCOUNT), params);
     vm.expectRevert(XrpVmPayloadBuilder.UnsupportedCurrency.selector);
     builder.buildPayload(CHAIN_ID, abi.encodePacked(ACCOUNT), params);
   }
@@ -194,6 +286,7 @@ contract XrpVmPayloadBuilderBuildPayloadTest is XrpVmPayloadBuilderBase {
       nonce: 0,
       data: _defaultData()
     });
+    _payGas(abi.encodePacked(ACCOUNT), params);
     vm.expectRevert(
       abi.encodeWithSelector(
         XrpVmPayloadBuilder.AmountExceedsMaxDrops.selector,
@@ -203,7 +296,66 @@ contract XrpVmPayloadBuilderBuildPayloadTest is XrpVmPayloadBuilderBase {
     builder.buildPayload(CHAIN_ID, abi.encodePacked(ACCOUNT), params);
   }
 
-  function test_buildPayloadHashMatchesReference() public view {
+  function test_rejectsFeeAboveMaxFee() public {
+    uint64 tooLarge = MAX_FEE + 1;
+    BuildPayloadParams memory params = BuildPayloadParams({
+      currency: NATIVE_CURRENCY,
+      amount: 1000000,
+      receiver: abi.encodePacked(DESTINATION),
+      nonce: 0,
+      data: _data(
+        XrpRequestData({
+          sequence: 42,
+          fee: tooLarge,
+          lastLedgerSequence: 1000,
+          flags: 0x80000000,
+          destinationTag: 0,
+          hasDestinationTag: false
+        })
+      )
+    });
+    _payGas(abi.encodePacked(ACCOUNT), params);
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        XrpVmPayloadBuilder.FeeExceedsMaxFee.selector,
+        tooLarge,
+        MAX_FEE
+      )
+    );
+    builder.buildPayload(CHAIN_ID, abi.encodePacked(ACCOUNT), params);
+  }
+
+  function test_allowsFeeAtMaxFee() public {
+    // A fee at MAX_FEE also needs an oracle-authorized gas payment covering it.
+    string memory maxFeeChainId = "xrp-max-fee";
+
+    BuildPayloadParams memory params = BuildPayloadParams({
+      currency: NATIVE_CURRENCY,
+      amount: 1000000,
+      receiver: abi.encodePacked(DESTINATION),
+      nonce: 0,
+      data: _data(
+        XrpRequestData({
+          sequence: 42,
+          fee: MAX_FEE,
+          lastLedgerSequence: 1000,
+          flags: 0x80000000,
+          destinationTag: 0,
+          hasDestinationTag: false
+        })
+      )
+    });
+    _payGasOnChain(maxFeeChainId, abi.encodePacked(ACCOUNT), params, MAX_FEE);
+    bytes memory payload = builder.buildPayload(
+      maxFeeChainId,
+      abi.encodePacked(ACCOUNT),
+      params
+    );
+    XrpPaymentRequest memory r = abi.decode(payload, (XrpPaymentRequest));
+    assertEq(uint256(r.fee), uint256(MAX_FEE));
+  }
+
+  function test_buildPayloadHashMatchesReference() public {
     // Full path: buildPayload -> hashesToSign must equal the V1 reference.
     BuildPayloadParams memory params = BuildPayloadParams({
       currency: NATIVE_CURRENCY,
@@ -212,6 +364,7 @@ contract XrpVmPayloadBuilderBuildPayloadTest is XrpVmPayloadBuilderBase {
       nonce: 0,
       data: _defaultData()
     });
+    _payGas(abi.encodePacked(ACCOUNT), params);
     bytes memory payload = builder.buildPayload(
       CHAIN_ID,
       abi.encodePacked(ACCOUNT),
@@ -228,6 +381,96 @@ contract XrpVmPayloadBuilderBuildPayloadTest is XrpVmPayloadBuilderBase {
         hex"a434eadb919b76bc3a84a284f19bba69af15d35533e4211cb4a8e44104c4f007"
       )
     );
+  }
+}
+
+contract XrpVmPayloadBuilderGasPaymentTest is XrpVmPayloadBuilderBase {
+  function _params() internal pure returns (BuildPayloadParams memory) {
+    return _paramsWithFee(12);
+  }
+
+  function _paramsWithFee(
+    uint64 fee
+  ) internal pure returns (BuildPayloadParams memory) {
+    return
+      BuildPayloadParams({
+        currency: NATIVE_CURRENCY,
+        amount: 1000000,
+        receiver: abi.encodePacked(DESTINATION),
+        nonce: 0,
+        data: abi.encode(
+          XrpRequestData({
+            sequence: 42,
+            fee: fee,
+            lastLedgerSequence: 1000,
+            flags: 0x80000000,
+            destinationTag: 0,
+            hasDestinationTag: false
+          })
+        )
+      });
+  }
+
+  function test_allowsFeeEqualToPaidGas() public {
+    // GAS_FEE_AMOUNT (the burned amount) is below MAX_FEE, so the paid-gas
+    // bound is the binding constraint here.
+    BuildPayloadParams memory params = _paramsWithFee(uint64(GAS_FEE_AMOUNT));
+    _payGas(abi.encodePacked(ACCOUNT), params);
+
+    bytes memory payload = builder.buildPayload(
+      CHAIN_ID,
+      abi.encodePacked(ACCOUNT),
+      params
+    );
+    XrpPaymentRequest memory r = abi.decode(payload, (XrpPaymentRequest));
+    assertEq(uint256(r.fee), GAS_FEE_AMOUNT);
+  }
+
+  function test_rejectsFeeAbovePaidGas() public {
+    uint64 fee = uint64(GAS_FEE_AMOUNT) + 1; // still below MAX_FEE
+    BuildPayloadParams memory params = _paramsWithFee(fee);
+    _payGas(abi.encodePacked(ACCOUNT), params);
+
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        XrpVmPayloadBuilder.FeeExceedsPaidGas.selector,
+        fee,
+        GAS_FEE_AMOUNT
+      )
+    );
+    builder.buildPayload(CHAIN_ID, abi.encodePacked(ACCOUNT), params);
+  }
+
+  function test_rejectsBuildWithoutGasPayment() public {
+    BuildPayloadParams memory params = _params();
+    bytes32 expectedHash = keccak256(
+      abi.encode(CHAIN_ID, abi.encodePacked(ACCOUNT), params)
+    );
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        GasPaidPayloadBuilder.GasNotPaid.selector,
+        expectedHash
+      )
+    );
+    builder.buildPayload(CHAIN_ID, abi.encodePacked(ACCOUNT), params);
+  }
+
+  function test_rejectsBuildWhenGasPaidForDifferentParams() public {
+    BuildPayloadParams memory paid = _params();
+    _payGas(abi.encodePacked(ACCOUNT), paid);
+
+    BuildPayloadParams memory unpaid = _params();
+    unpaid.nonce = paid.nonce + 1;
+    bytes32 expectedHash = keccak256(
+      abi.encode(CHAIN_ID, abi.encodePacked(ACCOUNT), unpaid)
+    );
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        GasPaidPayloadBuilder.GasNotPaid.selector,
+        expectedHash
+      )
+    );
+    builder.buildPayload(CHAIN_ID, abi.encodePacked(ACCOUNT), unpaid);
   }
 }
 

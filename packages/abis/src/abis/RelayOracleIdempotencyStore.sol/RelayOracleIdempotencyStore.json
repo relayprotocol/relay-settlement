@@ -208,19 +208,6 @@
   },
   {
     "type": "function",
-    "name": "removeSource",
-    "inputs": [
-      {
-        "name": "source",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "renounceRole",
     "inputs": [
       {
@@ -414,19 +401,6 @@
     "anonymous": false
   },
   {
-    "type": "event",
-    "name": "SourceRemoved",
-    "inputs": [
-      {
-        "name": "source",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
     "type": "error",
     "name": "AccessControlBadConfirmation",
     "inputs": []
@@ -472,17 +446,6 @@
   {
     "type": "error",
     "name": "SourceAlreadyAdded",
-    "inputs": [
-      {
-        "name": "source",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "SourceNotFound",
     "inputs": [
       {
         "name": "source",

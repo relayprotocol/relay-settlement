@@ -21,6 +21,24 @@ export interface ResolveNetworkOptions {
   env?: "prod" | "dev" | "stag"
 }
 
+// `--env` selects the RelayMultisigSigner from the network config, so it is
+// required unless the signer is supplied directly (via `--relay-multisig-signer`
+// or RELAY_MULTISIG_SIGNER), which makes the env lookup irrelevant.
+export function assertEnvOrSigner(opts: {
+  env?: string
+  multisigSignerOverride?: string
+}) {
+  if (
+    !opts.env &&
+    !opts.multisigSignerOverride &&
+    !process.env.RELAY_MULTISIG_SIGNER
+  ) {
+    throw new Error(
+      "Set --env (prod | dev | stag), or supply the signer directly with --relay-multisig-signer / RELAY_MULTISIG_SIGNER."
+    )
+  }
+}
+
 const findNetworkConfig = (slug: string) => {
   const config = networks[slug]
   if (config && config.slug === slug) return config
@@ -78,8 +96,23 @@ export function resolveNetwork(
       `resolveNetwork: no RPC URL for chain ${chainId}. Pass --rpc-url or set RPC_URL.`
     )
   }
+  if (
+    !opts.rpcOverride &&
+    process.env.RPC_URL &&
+    config?.rpc?.[0] &&
+    process.env.RPC_URL !== config.rpc[0]
+  ) {
+    console.warn(
+      `⚠️  RPC_URL env var overrides the canonical RPC for ${config.slug}: using ${rpc} (canonical: ${config.rpc[0]})`
+    )
+  }
 
   const env = opts.env ?? "prod"
+  if (!["prod", "dev", "stag"].includes(env)) {
+    throw new Error(
+      `resolveNetwork: invalid env "${env}". Expected prod, dev, or stag.`
+    )
+  }
   const multisigSignerAddress = (opts.multisigSignerOverride ??
     (process.env.RELAY_MULTISIG_SIGNER as `0x${string}` | undefined) ??
     (config?.contracts?.[env]?.multisigSigner as `0x${string}` | undefined) ??
@@ -92,6 +125,10 @@ export function resolveNetwork(
       `resolveNetwork: no multisigSigner address found for ${config?.slug ?? chainId}. Pass --relay-multisig-signer or set RELAY_MULTISIG_SIGNER.`
     )
   }
+
+  console.log(
+    `🌐 Resolved ${config?.slug ?? chainId} (chain ${chainId}, env ${env}): rpc ${rpc}, multisig signer ${multisigSignerAddress}`
+  )
 
   const knownChain = findViemChain(chainId)
   const chain =

@@ -40,8 +40,7 @@
  *                                 (9 for SOL, 6 for USDC, ...).
  *   SOLANA_VM_AMOUNT              deposit amount as a decimal string in
  *                                 whole units (e.g. "0.001").
- *   SOLVER_PRIVATE_KEY            EVM solver key (0x-prefixed); pin to
- *                                 keep the deposit address stable.
+ *   SOLVER_PRIVATE_KEY            EVM solver key used to authorize the order.
  *
  *   RELAY_ORACLE_URL              oracle base URL.
  *
@@ -209,6 +208,7 @@ const derivationFields: DerivationFields = {
   depositor: funderHex,
   refundRecipient: funderHex,
   priceImpactBps: "200",
+  salt: bytesToBigInt(randomBytes(32)).toString(),
 };
 
 console.log(`==> funder / depositor / refund (solana): ${funder.publicKey.toBase58()}`);
@@ -511,6 +511,7 @@ await submitTrigger(hub, {
     depositor: derivationFields.depositor as Hex,
     refundRecipient: derivationFields.refundRecipient as Hex,
     priceImpactBps: BigInt(derivationFields.priceImpactBps),
+    salt: BigInt(derivationFields.salt),
   },
   orderId,
   nonce,
@@ -639,6 +640,7 @@ const signRequest = await addSolverRequestSignature(
         usdPrice: p.usdPrice.toString(),
         usdPriceDecimals: p.usdPriceDecimals,
         currencyDecimals: p.currencyDecimals,
+        publishTime: p.publishTime.toString(),
         expiration: p.expiration.toString(),
       })),
       extraData,

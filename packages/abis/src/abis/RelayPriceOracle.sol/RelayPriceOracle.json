@@ -12,11 +12,61 @@
   },
   {
     "type": "function",
+    "name": "MAX_AGE_SECONDS_UPPER_BOUND",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_FUTURE_SECONDS_UPPER_BOUND",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_PRICE_BATCH_SIZE",
     "inputs": [],
     "outputs": [
       {
         "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "cachedPublishTimes",
+    "inputs": [
+      {
+        "name": "providerId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "feedId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "publishTime",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -152,6 +202,25 @@
   },
   {
     "type": "function",
+    "name": "providerMaxFutureSeconds",
+    "inputs": [
+      {
+        "name": "providerId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "maxFutureSeconds",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "renounceOwnership",
     "inputs": [],
     "outputs": [],
@@ -199,6 +268,11 @@
             "internalType": "uint8"
           },
           {
+            "name": "publishTime",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
             "name": "expiration",
             "type": "uint256",
             "internalType": "uint256"
@@ -248,6 +322,11 @@
             "name": "currencyDecimals",
             "type": "uint8",
             "internalType": "uint8"
+          },
+          {
+            "name": "publishTime",
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "expiration",
@@ -313,6 +392,11 @@
             "internalType": "uint8"
           },
           {
+            "name": "publishTime",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
             "name": "expiration",
             "type": "uint256",
             "internalType": "uint256"
@@ -362,6 +446,11 @@
             "name": "currencyDecimals",
             "type": "uint8",
             "internalType": "uint8"
+          },
+          {
+            "name": "publishTime",
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "expiration",
@@ -427,6 +516,11 @@
             "internalType": "uint8"
           },
           {
+            "name": "publishTime",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
             "name": "expiration",
             "type": "uint256",
             "internalType": "uint256"
@@ -476,6 +570,11 @@
             "name": "currencyDecimals",
             "type": "uint8",
             "internalType": "uint8"
+          },
+          {
+            "name": "publishTime",
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "expiration",
@@ -544,6 +643,11 @@
             "name": "currencyDecimals",
             "type": "uint8",
             "internalType": "uint8"
+          },
+          {
+            "name": "publishTime",
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "expiration",
@@ -587,6 +691,11 @@
             "internalType": "uint8"
           },
           {
+            "name": "publishTime",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
             "name": "expiration",
             "type": "uint256",
             "internalType": "uint256"
@@ -640,6 +749,11 @@
             "internalType": "uint8"
           },
           {
+            "name": "publishTime",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
             "name": "expiration",
             "type": "uint256",
             "internalType": "uint256"
@@ -681,6 +795,11 @@
             "internalType": "uint8"
           },
           {
+            "name": "publishTime",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
             "name": "expiration",
             "type": "uint256",
             "internalType": "uint256"
@@ -720,6 +839,11 @@
             "name": "currencyDecimals",
             "type": "uint8",
             "internalType": "uint8"
+          },
+          {
+            "name": "publishTime",
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "expiration",
@@ -775,6 +899,11 @@
             "internalType": "uint8"
           },
           {
+            "name": "publishTime",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
             "name": "expiration",
             "type": "uint256",
             "internalType": "uint256"
@@ -814,6 +943,11 @@
             "name": "currencyDecimals",
             "type": "uint8",
             "internalType": "uint8"
+          },
+          {
+            "name": "publishTime",
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "expiration",
@@ -872,6 +1006,11 @@
             "name": "currencyDecimals",
             "type": "uint8",
             "internalType": "uint8"
+          },
+          {
+            "name": "publishTime",
+            "type": "uint256",
+            "internalType": "uint256"
           },
           {
             "name": "expiration",
@@ -986,6 +1125,11 @@
         "name": "adapter",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "maxFutureSeconds",
+        "type": "uint32",
+        "internalType": "uint32"
       }
     ],
     "outputs": [],
@@ -1112,6 +1256,12 @@
         "type": "address",
         "indexed": true,
         "internalType": "address"
+      },
+      {
+        "name": "maxFutureSeconds",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
       }
     ],
     "anonymous": false
@@ -1165,6 +1315,38 @@
   },
   {
     "type": "error",
+    "name": "InvalidMaxAgeSeconds",
+    "inputs": [
+      {
+        "name": "maxAgeSeconds",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "maxAgeSecondsUpperBound",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidMaxFutureSeconds",
+    "inputs": [
+      {
+        "name": "maxFutureSeconds",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "maxFutureSecondsUpperBound",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InvalidPriceFeedAdapter",
     "inputs": [
       {
@@ -1176,7 +1358,33 @@
   },
   {
     "type": "error",
+    "name": "InvalidPriceFeedAdapterOracle",
+    "inputs": [
+      {
+        "name": "adapter",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "expectedOracle",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "actualOracle",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InvalidProviderId",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidPublishTime",
     "inputs": []
   },
   {
@@ -1248,5 +1456,47 @@
     "type": "error",
     "name": "PriceFeedCallFailed",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PriceTimestampRollback",
+    "inputs": [
+      {
+        "name": "providerId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "feedId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "publishTime",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cachedPublishTime",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PriceTimestampTooFarInFuture",
+    "inputs": [
+      {
+        "name": "publishTime",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxPublishTime",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   }
 ]

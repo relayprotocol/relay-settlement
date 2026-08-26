@@ -1,4 +1,4 @@
-# lit-deposit-addresses
+# Lit Deposit Address
 
 Lit Action source for deterministic multi-VM wallet derivation and signing.
 
@@ -9,6 +9,9 @@ Supported VM types:
 - `solana-vm`
 - `hyperliquid-vm`
 - `ton-vm`
+- `tron-vm`
+
+Supported environments: `dev`, `stag`, and `prod`.
 
 Each VM is bundled as its own Lit Action. The shared action runner in `src/vm/action.ts` retrieves a Lit PKP private key **inside the TEE** with `Lit.Actions.getPrivateKey({ pkpId })`, derives deterministic VM wallets from that key, and returns an account-level public derivation root so deposit addresses can also be derived outside the TEE.
 
@@ -35,8 +38,8 @@ yarn bundle:actions -- --env dev
 yarn setup -- --env dev --mode api-key --account-api-key <key> --create-pkp
 ```
 
-Both scripts require an explicit `--env <name>` matching one of the
-`environments/*.json` files; there is no default.
+Both scripts require an explicit `--env <name>` (`dev`, `stag`, or `prod`);
+there is no default.
 
 ## Shared Account Helpers
 
@@ -169,7 +172,7 @@ IPFS CID registered on the Chipotle action registry, since that CID is
 computed over the bundled file's exact byte content (including the URL
 specifiers).
 
-Because the source files import from URLs, this package is primarily action source and test/dev tooling. Production integrators should consume the canonical bundled action code from the sibling `../lit-actions` package, which publishes the per-VM bundle/CID data used by solver callers. Local development can still use the generated per-VM action files under `dist/actions/<env>/<vm>.js`.
+Because the source files import from URLs, this package is primarily action source and test/dev tooling. Production integrators should consume the canonical bundled action code and environment config from the sibling `../lit-actions` package. Local development can still use the generated per-VM action files under `dist/actions/<env>/<vm>.js`.
 
 ## Quick local derivation example
 
@@ -213,10 +216,17 @@ The full request/response shapes, the `requestSignature` requirement, the per-VM
 
 ## Environment config
 
-Environment config lives under `environments/`:
+Each environment has its own config file under `environments/` (one JSON file per
+environment, e.g. `environments/dev.json`). Every file follows the same shape:
 
-```txt
-environments/dev.json
+```json
+{
+  "name": "<env>",
+  "depositAddressManagerAddress": "0x...",
+  "hubEvmChainId": 0,
+  "allowedOracles": ["0x..."],
+  "oracleSignatureThreshold": 1
+}
 ```
 
 The Lit Action-facing constants are exposed from `src/config.ts` and are intended to be replaced at bundle time, following the same pattern as `../lit-allocator`:
@@ -227,21 +237,6 @@ export const DEPOSIT_ADDRESS_MANAGER_ADDRESS = __DEPOSIT_ADDRESS_MANAGER_ADDRESS
 export const HUB_EVM_CHAIN_ID = Number.parseInt(__HUB_EVM_CHAIN_ID__, 10);
 export const ALLOWED_ORACLES = JSON.parse(__ALLOWED_ORACLES__) as string[];
 export const ORACLE_SIGNATURE_THRESHOLD = Number.parseInt(__ORACLE_SIGNATURE_THRESHOLD__, 10);
-```
-
-Current dev config:
-
-```json
-{
-  "name": "dev",
-  "depositAddressManagerAddress": "0xd03250b221f709abe58ff4a177d50d01d922d974",
-  "hubEvmChainId": 421614,
-  "allowedOracles": [
-    "0xcda3c24706c1a5eea958a988693e8a838d520af9",
-    "0xf24a399259f47c6360d00da3793eca9cc6ad1caa"
-  ],
-  "oracleSignatureThreshold": 2
-}
 ```
 
 ## Architecture
@@ -305,7 +300,7 @@ The full path is the VM's account path followed by every entry in `indexes`:
 - `hyperliquid-vm`: account path `m/44'/60'/0'/0`, child path `.../<i0>/<i1>/.../<iN>`, EVM-style `0x...` addresses
 - `ton-vm`: account path `m/44'/607'/0'/0`, child path `.../<i0>/<i1>/.../<iN>`, Wallet V5R1 StateInit `0:...` addresses
 
-For `wallet` and `sign`, the eight-segment `indexes` array is computed as `keccak256(abi.encode(derivationFields))` split into eight 32-bit words with the top bit of each cleared.
+For `wallet` and `sign`, the eight-segment `indexes` array is computed as `keccak256(abi.encode(derivationFields))` split into eight 32-bit words with the top bit of each cleared. `derivationFields.salt` is a caller-generated random uint256 (represented as a decimal string in JSON); generate a fresh salt for each new deposit address.
 
 ## Important Solana note
 

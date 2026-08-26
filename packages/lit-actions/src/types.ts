@@ -1,4 +1,4 @@
-export type AllocatorActionEnvironment = "dev" | "stag" | "prod"
+export type AllocatorActionEnvironment = "dev" | "stag" | "prod" | "test"
 export type AllocatorActionVersion = "v1"
 
 export interface AllocatorActionConfig {
@@ -7,8 +7,8 @@ export interface AllocatorActionConfig {
   hubEvmChainId: number
   allowedOracles: string[]
   oracleSignatureThreshold: number
-  lighterGateway: string
-  lighterGatewayChainId: number
+  lighterGateway?: string
+  lighterGatewayChainId?: number
   lighterAllowedApiKeys?: Array<{
     apiKeyIndex: number
     publicKey: string
@@ -20,7 +20,7 @@ export interface AllocatorAction {
   config: AllocatorActionConfig
 }
 
-export type DepositAddressActionEnvironment = "dev"
+export type DepositAddressActionEnvironment = "dev" | "stag" | "prod"
 export type DepositAddressActionVersion = "v1"
 
 export interface DepositAddressActionConfig {

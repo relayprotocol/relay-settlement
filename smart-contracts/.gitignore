@@ -1,4 +1,7 @@
+# Dependencies
 node_modules
+
+# Secrets
 .env
 
 # Hardhat files
@@ -10,6 +13,7 @@ node_modules
 /typechain
 /typechain-types
 
+# Scripts
 /scripts
 
 # solidity-coverage files
@@ -25,4 +29,5 @@ node_modules
 /forge-out
 foundry.lock
 
-withdrawal-test-data.json
+# AI agents
+.claude

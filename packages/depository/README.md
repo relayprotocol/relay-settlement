@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Relay Depository is a cross-chain protocol that securely manages user deposits and enables controlled withdrawals through a trusted allocator mechanism. It acts as a financial coordination layer across multiple blockchain environments, with implementations for Ethereum Virtual Machine (EVM) chains, Solana, and in development for TON.
+The Relay Depository is a cross-chain protocol that securely manages user deposits and enables controlled withdrawals through a trusted allocator mechanism. It acts as a financial coordination layer across multiple blockchain environments, with implementations for Ethereum Virtual Machine (EVM) chains and Solana.
 
 At its core, the Relay Depository provides two fundamental operations:
 
@@ -12,9 +12,8 @@ At its core, the Relay Depository provides two fundamental operations:
 
 The protocol maintains consistent behavior across all blockchain environments while adapting to each platform's specific features and security models:
 
-- [Ethereum VM](./docs/EthereumVMImplementation.md)
-- [Solana VM](./docs/SolanaVMImplementation.md)
-- [TON VM (Development)](./docs/TonVMImplementation.md)
+- [Ethereum VM](./packages/ethereum-vm/README.md)
+- [Solana VM](./packages/solana-vm/README.md)
 
 ## How It Works
 
@@ -27,8 +26,11 @@ The workflow of the Relay Depository follows this pattern:
 5. Anyone can execute the withdrawal requests on-chain, transferring funds from the depository
 6. Each executed withdrawal is recorded on-chain with an event for attestation and tracking
 
-## Security
+## Security assessments
 
-The Relay Depository contracts have undergone comprehensive security audits:
+Historical assessments cover only the commits and files stated in each report;
+they do not imply coverage of every current depository implementation:
 
-- [Certora Security Audit](./audit-reports/Certora-Relay-Escrow-Report.pdf)
+- [Security assessment index](../../docs/audits/README.md)
+- [Certora Relay Depository report](../../docs/audits/Certora-Relay-Depository.pdf)
+- [Zellic Relay Settlement report](../../docs/audits/Zellic-Relay-Settlement.pdf)

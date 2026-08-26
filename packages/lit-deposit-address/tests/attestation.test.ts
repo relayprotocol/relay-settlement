@@ -1,6 +1,6 @@
-import { getDepositAddressTriggerHash } from "@relay-protocol/settlement-sdk";
 import { beforeAll, describe, expect, it } from "vitest";
 import { privateKeyToAccount } from "viem/accounts";
+import { getDepositAddressTriggerHash } from "../src/common/relay-sdk.js";
 import type { DepositAddressTrigger } from "../src/common/types.js";
 
 const oracle = privateKeyToAccount(`0x${"01".repeat(32)}`);
@@ -26,12 +26,19 @@ const trigger: DepositAddressTrigger = {
     depositor: "0x05",
     refundRecipient: "0x06",
     priceImpactBps: "50",
+    salt: "123",
   },
   orderId: `0x${"11".repeat(32)}`,
   nonce: "1",
   currencies: [{ chainId: "solana-devnet", currency: "0x01" }],
   prices: [
-    { usdPrice: "100000000", usdPriceDecimals: 8, currencyDecimals: 18, expiration: "1735689600" },
+    {
+      usdPrice: "100000000",
+      usdPriceDecimals: 8,
+      currencyDecimals: 18,
+      publishTime: "1735689500",
+      expiration: "1735689600",
+    },
   ],
   extraData: "0x",
 };
@@ -47,6 +54,15 @@ beforeAll(() => {
 });
 
 describe("trigger attestation", () => {
+  it("binds the price publish time into the trigger hash", () => {
+    const changedTrigger: DepositAddressTrigger = {
+      ...trigger,
+      prices: [{ ...trigger.prices[0], publishTime: "1735689501" }],
+    };
+
+    expect(getDepositAddressTriggerHash(changedTrigger)).not.toBe(triggerHash);
+  });
+
   it("derives indexes solely from derivation fields", async () => {
     const { derivationFieldsToIndexes } = await import("../src/derivation/path.js");
     const indexes = derivationFieldsToIndexes(trigger.derivationFields);
@@ -60,6 +76,12 @@ describe("trigger attestation", () => {
       derivationFieldsToIndexes({
         ...trigger.derivationFields,
         outputRecipient: "0x0000000000000000000000000000000000000009",
+      }),
+    ).not.toEqual(indexes);
+    expect(
+      derivationFieldsToIndexes({
+        ...trigger.derivationFields,
+        salt: "124",
       }),
     ).not.toEqual(indexes);
     expect(

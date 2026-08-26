@@ -27,17 +27,13 @@ Types exported by this package:
 
 ## Supported values
 
-Allocator actions:
+All actions currently exposed by this package use version `v1`.
 
-- `environment`: `dev`, `stag`, `prod`
-- `version`: `v1`
-- `vmType`: `ethereum-vm`, `solana-vm` (and `ton-vm` for `dev`)
-
-Deposit-address actions:
-
-- `environment`: `dev`
-- `version`: `v1`
-- `vmType`: `ethereum-vm`, `solana-vm`, `bitcoin-vm`, `hyperliquid-vm`
+| Helper                    | Environments          | VM types                                                                                                |
+| ------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------- |
+| `getAllocatorAction`      | `dev`, `stag`, `prod` | `bitcoin-vm`, `ethereum-vm`, `hyperliquid-vm`, `lighter-vm`, `solana-vm`, `ton-vm`, `tron-vm`, `xrp-vm` |
+| `getAllocatorAction`      | `test`                | `ethereum-vm`                                                                                           |
+| `getDepositAddressAction` | `dev`, `stag`, `prod` | `bitcoin-vm`, `ethereum-vm`, `hyperliquid-vm`, `solana-vm`, `ton-vm`, `tron-vm`                         |
 
 If a version, environment, or VM type is missing, the helper throws.
 

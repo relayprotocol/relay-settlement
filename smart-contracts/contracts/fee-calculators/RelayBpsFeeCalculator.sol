@@ -3,7 +3,7 @@ pragma solidity ^0.8.28;
 
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 
-import {Price} from "../deposit-addresses/open/oracle/IPricingOracle.sol";
+import {Price} from "../deposit-addresses/oracle/IPricingOracle.sol";
 import {RelayPriceOracle} from "../RelayPriceOracle.sol";
 import {IFeeCalculator} from "./IFeeCalculator.sol";
 
@@ -20,6 +20,7 @@ contract RelayBpsFeeCalculator is IFeeCalculator {
 
   error ZeroAddress();
   error InvalidFeeBps(uint256 feeBps);
+  error FeeExceedsMax(uint256 feeAmount, uint256 maxFeeAmount);
   error InvalidFeeRecipient();
   error InvalidFeePayer();
 
@@ -37,8 +38,10 @@ contract RelayBpsFeeCalculator is IFeeCalculator {
   // Public methods
 
   /// @inheritdoc IFeeCalculator
-  /// @dev `data` is `abi.encode(uint256 feeCurrency, uint256 feeBps, address feeRecipient,
-  ///      address feePayer)`.
+  /// @dev `data` is `abi.encode(uint256 feeCurrency, uint256 feeBps, uint256 maxFeeAmount,
+  ///      address feeRecipient, address feePayer)`. `maxFeeAmount` caps the live-priced fee: the
+  ///      payer authorized at most this amount, so a larger fee (price moved since the payer signed)
+  ///      reverts the execution instead of overcharging — pass `type(uint256).max` for no cap.
   function calculateFee(
     uint256 tokenId,
     uint256 amount,
@@ -53,9 +56,10 @@ contract RelayBpsFeeCalculator is IFeeCalculator {
     )
   {
     uint256 feeBps;
-    (feeCurrency, feeBps, feeRecipient, feePayer) = abi.decode(
+    uint256 maxFeeAmount;
+    (feeCurrency, feeBps, maxFeeAmount, feeRecipient, feePayer) = abi.decode(
       data,
-      (uint256, uint256, address, address)
+      (uint256, uint256, uint256, address, address)
     );
     if (feeBps > 1e18) {
       revert InvalidFeeBps(feeBps);
@@ -73,6 +77,9 @@ contract RelayBpsFeeCalculator is IFeeCalculator {
       feeAmount = _fromUsdValue(feeCurrency, feeUsdValue);
     }
 
+    if (feeAmount > maxFeeAmount) {
+      revert FeeExceedsMax(feeAmount, maxFeeAmount);
+    }
     if (feeAmount != 0 && feeRecipient == address(0)) {
       revert InvalidFeeRecipient();
     }

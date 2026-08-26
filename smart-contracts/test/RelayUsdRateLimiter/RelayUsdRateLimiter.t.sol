@@ -3,7 +3,7 @@ pragma solidity ^0.8.28;
 
 import {BaseTest} from "../utils/BaseTest.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
-import {Price} from "../../contracts/deposit-addresses/open/oracle/IPricingOracle.sol";
+import {Price} from "../../contracts/deposit-addresses/oracle/IPricingOracle.sol";
 import {IRateLimiter} from "../../contracts/rate-limiters/IRateLimiter.sol";
 import {RelayUsdRateLimiter} from "../../contracts/rate-limiters/RelayUsdRateLimiter.sol";
 
@@ -95,6 +95,7 @@ contract RelayUsdRateLimiterTest is BaseTest {
         usdPrice: usdPrice,
         usdPriceDecimals: usdPriceDecimals,
         currencyDecimals: currencyDecimals,
+        publishTime: block.timestamp,
         expiration: block.timestamp + 1 days
       })
     );
@@ -207,8 +208,7 @@ contract RelayUsdRateLimiterTest is BaseTest {
     _consume(CHAIN_ID, 600_000e18);
 
     // the chain now has only $400k of headroom, regardless of which currency priced it
-    assertTrue(policy.canConsume(CHAIN_ID, 400_000e18), "400k fits");
-    assertFalse(policy.canConsume(CHAIN_ID, 400_001e18), "401k does not");
+    assertEq(policy.getBucket(CHAIN_ID).tokens, CAPACITY - 600_000e18);
   }
 
   function test_consumeEmitsEvent() public {
@@ -416,34 +416,6 @@ contract RelayUsdRateLimiterTest is BaseTest {
     assertEq(policy.getBucket(CHAIN_ID).tokens, uint256(RATE) * 7);
   }
 
-  function test_canConsumeWithinBudget() public {
-    _enable(CHAIN_ID, CAPACITY, RATE);
-    assertTrue(policy.canConsume(CHAIN_ID, CAPACITY));
-  }
-
-  function test_canConsumeOverBudget() public {
-    _enable(CHAIN_ID, CAPACITY, RATE);
-    vm.prank(consumer);
-    _consume(CHAIN_ID, CAPACITY);
-    assertFalse(policy.canConsume(CHAIN_ID, 1), "drained => cannot");
-  }
-
-  function test_canConsumeAboveCapacity() public {
-    _enable(CHAIN_ID, CAPACITY, RATE);
-    assertFalse(policy.canConsume(CHAIN_ID, uint256(CAPACITY) + 1));
-  }
-
-  function test_canConsumeFalseWhenChainNotEnabled() public view {
-    // Fail-closed: CHAIN_ID never configured => fast not enabled => cannot
-    assertFalse(policy.canConsume(CHAIN_ID, type(uint256).max));
-  }
-
-  function test_canConsumeZeroUsdValueIsFalse() public {
-    // Mirrors consume's fail-closed: a zero USD value can never be consumed.
-    _enable(CHAIN_ID, CAPACITY, RATE);
-    assertFalse(policy.canConsume(CHAIN_ID, 0), "zero USD value => cannot");
-  }
-
   // ----------------------------------------------------------------------
   // Roles
   // ----------------------------------------------------------------------
@@ -462,27 +434,6 @@ contract RelayUsdRateLimiterTest is BaseTest {
   // ----------------------------------------------------------------------
   // Fuzz
   // ----------------------------------------------------------------------
-
-  /// @dev The advisory view must agree with the authoritative on-chain enforcement.
-  function testFuzz_canConsumeMatchesConsume(
-    uint128 capacity,
-    uint128 rate,
-    uint256 usdValue,
-    uint32 elapsed
-  ) public {
-    capacity = uint128(bound(capacity, 1, 1e30));
-    rate = uint128(bound(rate, 0, 1e24));
-    elapsed = uint32(bound(elapsed, 0, 1e7));
-
-    _enable(CHAIN_ID, capacity, rate);
-    vm.warp(block.timestamp + elapsed);
-
-    bool predicted = policy.canConsume(CHAIN_ID, usdValue);
-
-    vm.prank(consumer);
-    bool consumed = _consume(CHAIN_ID, usdValue);
-    assertEq(consumed, predicted, "consume return must match canConsume");
-  }
 
   /// @dev Live tokens never exceed capacity.
   function testFuzz_tokensNeverExceedCapacity(
@@ -567,5 +518,136 @@ contract RelayUsdRateLimiterTest is BaseTest {
       "consume via IRateLimiter"
     );
     assertEq(policy.getBucket(CHAIN_ID).tokens, 0, "budget deducted");
+  }
+
+  // ----------------------------------------------------------------------
+  // Pre-check (resolveCanConsume / resolveCanConsumeBatch)
+  // ----------------------------------------------------------------------
+
+  /// @dev Stateful because pricing verifies a report; asserts it still writes no bucket state.
+  function test_resolveCanConsumeLeavesBucketUntouched() public {
+    _enable(CHAIN_ID, CAPACITY, RATE);
+    RelayUsdRateLimiter.TokenBucket memory before = policy.getBucket(CHAIN_ID);
+
+    assertTrue(policy.resolveCanConsume(TOKEN_ID, 1e18, abi.encode(CHAIN_ID)));
+
+    RelayUsdRateLimiter.TokenBucket memory after_ = policy.getBucket(CHAIN_ID);
+    assertEq(after_.tokens, before.tokens, "tokens unchanged");
+    assertEq(after_.capacity, before.capacity, "capacity unchanged");
+  }
+
+  function test_resolveCanConsumeRejectsDisabledChain() public {
+    assertFalse(policy.resolveCanConsume(TOKEN_ID, 1e18, abi.encode(CHAIN_ID)));
+  }
+
+  function test_resolveCanConsumeRejectsZeroAmount() public {
+    _enable(CHAIN_ID, CAPACITY, RATE);
+    assertFalse(policy.resolveCanConsume(TOKEN_ID, 0, abi.encode(CHAIN_ID)));
+  }
+
+  /// @dev An unpriced token id prices to zero — fail closed rather than consume nothing.
+  function test_resolveCanConsumeRejectsUnpricedToken() public {
+    _enable(CHAIN_ID, CAPACITY, RATE);
+    assertFalse(policy.resolveCanConsume(999, 1e18, abi.encode(CHAIN_ID)));
+  }
+
+  function test_resolveCanConsumeRejectsAboveCapacity() public {
+    _enable(CHAIN_ID, CAPACITY, RATE);
+    assertFalse(
+      policy.resolveCanConsume(TOKEN_ID, CAPACITY + 1, abi.encode(CHAIN_ID))
+    );
+  }
+
+  /// @dev Drain the bucket, then the same amount that just fit no longer does, and refills back.
+  function test_resolveCanConsumeTracksDrainAndRefill() public {
+    _enable(CHAIN_ID, CAPACITY, RATE);
+    vm.prank(consumer);
+    policy.consume(TOKEN_ID, CAPACITY, abi.encode(CHAIN_ID));
+
+    assertFalse(
+      policy.resolveCanConsume(TOKEN_ID, 1e18, abi.encode(CHAIN_ID)),
+      "drained"
+    );
+    vm.warp(block.timestamp + 1);
+    assertTrue(
+      policy.resolveCanConsume(TOKEN_ID, 1e18, abi.encode(CHAIN_ID)),
+      "refilled"
+    );
+  }
+
+  /// @dev The gap a per-message pre-check cannot see: two amounts that each fit, but not together.
+  function test_resolveCanConsumeBatchCatchesCumulativeOverBudget() public {
+    uint128 capacity = 100e18;
+    _enable(CHAIN_ID, capacity, 0);
+
+    uint256[] memory tokenIds = new uint256[](2);
+    uint256[] memory amounts = new uint256[](2);
+    tokenIds[0] = TOKEN_ID;
+    tokenIds[1] = TOKEN_ID_2;
+    amounts[0] = 60e18;
+    amounts[1] = 60e18;
+
+    assertTrue(
+      policy.resolveCanConsume(TOKEN_ID, 60e18, abi.encode(CHAIN_ID)),
+      "each fits alone"
+    );
+    assertFalse(
+      policy.resolveCanConsumeBatch(tokenIds, amounts, abi.encode(CHAIN_ID)),
+      "but not together"
+    );
+
+    amounts[1] = 40e18;
+    assertTrue(
+      policy.resolveCanConsumeBatch(tokenIds, amounts, abi.encode(CHAIN_ID)),
+      "exactly capacity fits"
+    );
+  }
+
+  function test_resolveCanConsumeBatchRevertsOnLengthMismatch() public {
+    _enable(CHAIN_ID, CAPACITY, RATE);
+    uint256[] memory tokenIds = new uint256[](2);
+    uint256[] memory amounts = new uint256[](1);
+
+    vm.expectRevert();
+    policy.resolveCanConsumeBatch(tokenIds, amounts, abi.encode(CHAIN_ID));
+  }
+
+  function test_resolveCanConsumeBatchRejectsEmpty() public {
+    _enable(CHAIN_ID, CAPACITY, RATE);
+    assertFalse(
+      policy.resolveCanConsumeBatch(
+        new uint256[](0),
+        new uint256[](0),
+        abi.encode(CHAIN_ID)
+      )
+    );
+  }
+
+  /// @dev The drift guard: whatever the bucket state and amount, the pre-check must predict exactly
+  ///      what `consume` then does. Snapshot/revert so the probe cannot influence the real call.
+  function testFuzz_resolveCanConsumeMatchesConsume(
+    uint128 amount,
+    uint128 capacity,
+    uint128 rate,
+    uint32 elapsed
+  ) public {
+    capacity = uint128(bound(capacity, 1, 1_000_000_000e18));
+    rate = uint128(bound(rate, 0, 1_000_000e18));
+    amount = uint128(bound(amount, 0, capacity * 2));
+    _enable(CHAIN_ID, capacity, rate);
+    vm.warp(block.timestamp + bound(elapsed, 0, 3600));
+
+    bool predicted = policy.resolveCanConsume(
+      TOKEN_ID,
+      amount,
+      abi.encode(CHAIN_ID)
+    );
+
+    uint256 snap = vm.snapshotState();
+    vm.prank(consumer);
+    bool actual = policy.consume(TOKEN_ID, amount, abi.encode(CHAIN_ID));
+    vm.revertToState(snap);
+
+    assertEq(predicted, actual, "pre-check must match consume");
   }
 }

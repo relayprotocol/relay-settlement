@@ -6,6 +6,10 @@ import { insertOracleExecution } from "../db/oracleExecutions.js"
 import { logger } from "../logger.js"
 
 const relayOracleExecutionInterface = new Interface(RelayOracle)
+const multicall3Interface = new Interface([
+  "function aggregate3((address target, bool allowFailure, bytes callData)[] calls) payable returns ((bool success, bytes returnData)[] returnData)",
+  "function aggregate3Value((address target, bool allowFailure, uint256 value, bytes callData)[] calls) payable returns ((bool success, bytes returnData)[] returnData)",
+])
 
 type OracleExecutionLog = {
   eventType: "Executed" | "ExecutionFailed"
@@ -44,7 +48,7 @@ export type NormalizedOracleExecution = {
 export type OracleExecutionProcessingContext = {
   provider: Provider
   oracleContractAddress: string
-  transactionCache: Map<string, Promise<DecodedOracleTransaction>>
+  transactionCache: Map<string, Promise<DecodedOracleTransaction[]>>
 }
 
 const normalizeHex = (value: string) => value.toLowerCase()
@@ -157,6 +161,77 @@ export const decodeOracleTransaction = (
   throw new Error(`Unsupported oracle transaction method: ${parsed.name}`)
 }
 
+type Multicall3Call = {
+  target?: string
+  callData?: string
+  0?: string
+  2?: string
+  3?: string
+}
+
+const decodeOracleTransactionCalls = (
+  transactionTarget: string | null,
+  data: string,
+  oracleContractAddress: string,
+  txHash: string
+) => {
+  const normalizedOracleAddress = oracleContractAddress.toLowerCase()
+  if (transactionTarget?.toLowerCase() === normalizedOracleAddress) {
+    return [decodeOracleTransaction(data)]
+  }
+
+  let parsedMulticall
+  try {
+    parsedMulticall = multicall3Interface.parseTransaction({ data })
+  } catch {
+    parsedMulticall = null
+  }
+
+  if (
+    !parsedMulticall ||
+    !["aggregate3", "aggregate3Value"].includes(parsedMulticall.name)
+  ) {
+    throw new Error(
+      `Oracle transaction target mismatch for ${txHash}: ${transactionTarget ?? "contract creation"}`
+    )
+  }
+
+  const calls = Array.from(parsedMulticall.args[0] as readonly Multicall3Call[])
+  const oracleCalls = calls.filter(
+    (call) =>
+      String(call.target ?? call[0]).toLowerCase() === normalizedOracleAddress
+  )
+
+  if (!oracleCalls.length) {
+    throw new Error(
+      `Multicall3 transaction ${txHash} does not contain an Oracle call to ${oracleContractAddress}`
+    )
+  }
+
+  const decodedCalls: DecodedOracleTransaction[] = []
+  const decodeErrors: string[] = []
+  const callDataIndex = parsedMulticall.name === "aggregate3Value" ? 3 : 2
+  for (const call of oracleCalls) {
+    try {
+      decodedCalls.push(
+        decodeOracleTransaction(
+          String(call.callData ?? call[callDataIndex as 2 | 3])
+        )
+      )
+    } catch (error) {
+      decodeErrors.push(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  if (!decodedCalls.length) {
+    throw new Error(
+      `Multicall3 Oracle calls could not be decoded for ${txHash}: ${decodeErrors.join("; ")}`
+    )
+  }
+
+  return decodedCalls
+}
+
 const getDecodedOracleTransaction = async (
   context: OracleExecutionProcessingContext,
   txHash: string
@@ -174,16 +249,12 @@ const getDecodedOracleTransaction = async (
     if (!transaction.data) {
       throw new Error(`Oracle transaction missing calldata: ${txHash}`)
     }
-    if (
-      transaction.to &&
-      transaction.to.toLowerCase() !==
-        context.oracleContractAddress.toLowerCase()
-    ) {
-      throw new Error(
-        `Oracle transaction target mismatch for ${txHash}: ${transaction.to}`
-      )
-    }
-    return decodeOracleTransaction(transaction.data)
+    return decodeOracleTransactionCalls(
+      transaction.to,
+      transaction.data,
+      context.oracleContractAddress,
+      txHash
+    )
   })().catch((error) => {
     context.transactionCache.delete(txHash)
     throw error
@@ -220,37 +291,44 @@ export const processOracleExecutionLog = async (
     return null
   }
 
-  const decodedTransaction = await getDecodedOracleTransaction(
+  const decodedTransactions = await getDecodedOracleTransaction(
     context,
     log.transactionHash
   )
-  const matchingExecution = decodedTransaction.executions.find(
-    (execution) => execution.idempotencyKey === parsedLog.idempotencyKey
+  const candidates = decodedTransactions.flatMap((transaction) =>
+    transaction.executions.map((execution) => ({ execution, transaction }))
+  )
+  const matchingIdempotencyKey = candidates.filter(
+    ({ execution }) => execution.idempotencyKey === parsedLog.idempotencyKey
+  )
+  const matchingExecution = matchingIdempotencyKey.find(({ execution }) =>
+    actionsEqual(execution.actions, parsedLog.actions)
   )
 
-  if (!matchingExecution) {
+  if (!matchingIdempotencyKey.length) {
     throw new Error(
       `Oracle execution ${parsedLog.idempotencyKey} not found in decoded transaction ${log.transactionHash}`
     )
   }
 
-  if (!actionsEqual(matchingExecution.actions, parsedLog.actions)) {
+  if (!matchingExecution) {
     throw new Error(
       `Oracle execution ${parsedLog.idempotencyKey} actions mismatch for transaction ${log.transactionHash}`
     )
   }
 
+  const { execution, transaction } = matchingExecution
   const normalized: NormalizedOracleExecution = {
     actions: parsedLog.actions,
-    aggregatedSignature: matchingExecution.aggregatedSignature,
+    aggregatedSignature: execution.aggregatedSignature,
     blockNumber: log.blockNumber,
-    executionCount: decodedTransaction.executions.length,
-    executionIndex: matchingExecution.executionIndex,
+    executionCount: transaction.executions.length,
+    executionIndex: execution.executionIndex,
     idempotencyKey: parsedLog.idempotencyKey,
     logIndex: log.index,
-    method: decodedTransaction.method,
+    method: transaction.method,
     oracleContractAddress: context.oracleContractAddress.toLowerCase(),
-    submittedOracleAddress: decodedTransaction.submittedOracleAddress,
+    submittedOracleAddress: transaction.submittedOracleAddress,
     timestamp,
     txHash: log.transactionHash,
   }

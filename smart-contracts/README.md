@@ -1,302 +1,351 @@
-# Relay Protocol
+# Relay Settlement Smart Contracts
 
-## Deployments (Foundry)
+Solidity contracts for the Relay Settlement Protocol's hub-chain accounting,
+oracle-authorized settlement, cross-chain withdrawals, deposit addresses,
+pricing, and execution infrastructure.
 
-Deployments live as Foundry scripts under [`script/`](./script). Each script is
-configured via environment variables and runs with `forge script`. Deploys are
-broadcast to the chain specified by `--rpc-url`; verification is handled by
-forge against Etherscan's v2 multi-chain API (the same API key works for every
-supported explorer) via `--verify --etherscan-api-key $ETHERSCAN_API_KEY`.
+The contracts use Solidity 0.8.28 and are built and tested with Foundry. They
+are one part of a multi-chain system: source- and destination-chain depository
+implementations live under [`packages/depository`](../packages/depository),
+off-chain observation and attestation are handled by
+[`relay-protocol-oracle`](https://github.com/relayprotocol/relay-protocol-oracle),
+and encoders and shared types live in the [`settlement-sdk`](../packages/sdk).
 
-Common environment variables:
+## Architecture
 
-- `DEPLOYER_PRIVATE_KEY` – deployer key (hex, 0x-prefixed). Required for all
-  deploy scripts. `PRIVATE_KEY` is honoured as a fallback.
-- `ETHERSCAN_API_KEY` – v2 multi-chain Etherscan API key. Forwarded via
-  `--etherscan-api-key`.
+The Hub chain is the protocol's accounting and coordination layer. Deposits on
+supported chains are represented as balances in `RelayHub`; settlement consumes
+those balances, optionally runs conversion or sponsorship logic, and turns the
+result into a destination-specific withdrawal payload.
 
-Yarn wrappers exist for each script so the CLI looks similar to the previous
-Hardhat tasks. They pass through any additional flags (e.g. `--rpc-url`,
-`--verify`).
+```mermaid
+flowchart LR
+  Depository[Source-chain depository] --> OracleNetwork[Off-chain oracle network]
+  OracleNetwork --> OracleMultisig[RelayOracleMultisig]
+  OracleMultisig -. EIP-1271 authorization .-> Oracle[RelayOracleV2]
+  Oracle --> Hub[RelayHub]
+  Hub --> Executor[RelayExecutor]
+  Executor --> Resolver[Call resolver]
+  Resolver <--> Pool[RelayFundingPool]
+  Resolver --> Executor
+  Executor --> Allocator[RelayAllocator]
+  Allocator --> Builder[VM payload builder]
+  Builder --> Signer[Lit or multisig signer]
+  Signer --> Destination[Destination-chain depository]
+```
 
-### Allocator
+### Deposit and Hub accounting
+
+1. A user deposits into a depository on an origin chain.
+2. The off-chain oracle network observes the deposit and produces an
+   authorization accepted through `RelayOracleMultisig`.
+3. `RelayOracleV2` verifies the authorization and idempotency key, then applies
+   its encoded `MINT`, `BURN`, `TRANSFER`, or `FAST_MINT` actions to `RelayHub`.
+4. `RelayHub` records the cross-chain asset as an ERC-6909 token whose ID is
+   derived from the origin chain slug and encoded currency. `ERC20View` exposes
+   any Hub token through an ERC-20-compatible interface when integrations need
+   one.
+
+`FAST_MINT` makes funds available before slow finality. When configured by the
+oracle authorization, it consumes budget through an allowlisted `IRateLimiter`
+and may calculate a fee through an allowlisted `IFeeCalculator`.
+`RelayOracleIdempotencyStore` preserves replay protection across oracle
+versions.
+
+### Order execution and withdrawal
+
+1. Funds for an order sit at its virtual address in `RelayHub`.
+2. Anyone may relay an oracle-signed request to `RelayExecutor`. The executor
+   pulls the order balance, charges signed fees at most once, and transfers the
+   net input to an `ICallResolver`.
+3. The resolver runs the solver's conversion logic without inheriting the
+   executor's Hub privileges. It must return at least the signed minimum output
+   or the complete transaction reverts.
+4. `RelayExecutor` moves the output to its allocator spender alias and submits
+   a withdrawal request to `RelayAllocator`.
+5. `RelayAllocator` burns the Hub representation, selects the payload builder
+   registered for the destination chain and depository, and records the encoded
+   payload plus the hashes that must be signed.
+6. An off-chain signer signs those hashes. A submitter combines the payload and
+   signatures and executes the withdrawal through the destination depository.
+
+Call resolvers are intentionally separate from `RelayExecutor`. The generic
+`BasicCallResolver` supports isolated arbitrary calls, while `PoolDrawResolver`
+adds bounded sponsorship and exact-output funding from `RelayFundingPool`
+accounts. Solver calls made during pool settlement run in `ResolverSandbox`,
+which holds no pool roles.
+
+### Payload configuration and gas payments
+
+`RelayAllocator` maps each `(chainId, depository)` pair to an `IPayloadBuilder`.
+Builders validate VM-specific addresses, currencies, transaction fields, and
+policy before returning an unsigned payload and its signing digests.
+
+Builders with environment-dependent settings read namespaced values from
+`Config`, whose administrator always follows the current allocator owner.
+When gas or another fee is spent from depository-held funds at withdrawal time,
+`WithdrawGasPayer` uses an oracle authorization to burn the corresponding fee
+from the spender's Hub balance before unlocking the matching payload build.
+This keeps the accounting whole: the Hub's represented supply decreases by the
+amount removed from depository reserves to pay the fee. Gateway, TON, and XRP
+withdrawals use this mechanism.
+
+### Deposit-address flow
+
+`RelayDepositAddressManager` records an order trigger together with deterministic
+derivation fields and prices returned by a selected `IPricingOracle`. The
+off-chain oracle attests that trigger, and the Lit deposit-address actions verify
+the attestation before deriving or signing with the matching deposit wallet.
+See [`lit-deposit-address`](../packages/lit-deposit-address) for the derivation
+and transaction-policy implementation.
+
+### Pricing
+
+`RelayPriceOracle` maps Hub currencies to provider feeds. It obtains the latest
+signed update from `PriceOraclePrecompile`, delegates provider-specific
+verification and decoding to an `IPriceFeedAdapter`, and enforces freshness and
+monotonic publish times. The resulting prices are consumed by USD rate limits,
+fast-mint fee calculation, and any deposit-address trigger configured to use
+this oracle.
+
+## Contract directory
+
+### Core contracts
+
+| Contract                                                                         | Purpose                                                                                                                                            |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`RelayHub.sol`](./contracts/RelayHub.sol)                                       | ERC-6909 accounting ledger for assets deposited across chains; authorized operators mint, burn, and move balances                                  |
+| [`ERC20View.sol`](./contracts/ERC20View.sol)                                     | ERC-20-compatible facade for one Hub token ID, forwarding balances, transfers, allowances, and metadata to `RelayHub`                              |
+| [`RelayOracleV2.sol`](./contracts/RelayOracleV2.sol)                             | Verifies oracle-authorized action batches, enforces shared idempotency, and executes standard or rate-limited fast settlement against the Hub      |
+| [`RelayOracleMultisig.sol`](./contracts/RelayOracleMultisig.sol)                 | Owner-managed threshold signer implementing EIP-1271 for oracle authorizations used by the oracle, executor, allocator, and related contracts      |
+| [`RelayOracleIdempotencyStore.sol`](./contracts/RelayOracleIdempotencyStore.sol) | Shared replay-protection store that can also honor keys consumed by legacy oracle contracts                                                        |
+| [`RelayExecutor.sol`](./contracts/RelayExecutor.sol)                             | Executes an oracle-signed order, charges fees, isolates solver calls in a resolver, checks minimum output, and initiates the allocator withdrawal  |
+| [`RelayAllocator.sol`](./contracts/RelayAllocator.sol)                           | Burns Hub balances for withdrawals, selects the destination payload builder, and records payloads and signing hashes                               |
+| [`Config.sol`](./contracts/Config.sol)                                           | Generic `bytes32` configuration store administered by the current owner of its configured allocator                                                |
+| [`WithdrawGasPayer.sol`](./contracts/WithdrawGasPayer.sol)                       | Burns oracle-authorized withdrawal fees from Hub balances when matching fees are spent from depository reserves, keeping protocol accounting whole |
+| [`RelayPriceOracle.sol`](./contracts/RelayPriceOracle.sol)                       | Routes currencies to provider feeds, verifies updates through adapters, and exposes normalized USD and bid/ask prices                              |
+| [`RelayGenericMapping.sol`](./contracts/RelayGenericMapping.sol)                 | Replay-protected per-user data store whose set and delete operations require an authorized oracle signature                                        |
+| [`RelayMultisigSigner.sol`](./contracts/RelayMultisigSigner.sol)                 | Safe-owned Aurora contract that approves messages and requests ECDSA or EdDSA signatures from NEAR Chain Signatures                                |
+| [`ChainSignatures.sol`](./contracts/ChainSignatures.sol)                         | Encodes JSON requests and byte strings for the NEAR Chain Signatures service                                                                       |
+| [`Utils.sol`](./contracts/Utils.sol)                                             | Shared token-ID, virtual-address, EIP-712, and endian-encoding helpers                                                                             |
+
+### `call-resolvers/`
+
+Call resolvers receive only the current order's input from `RelayExecutor` and
+return its output without receiving the executor's Hub operator privileges.
+
+| Contract                                                                    | Purpose                                                                                                         |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| [`ICallResolver.sol`](./contracts/call-resolvers/ICallResolver.sol)         | Defines the oracle-signed execute-and-withdraw request and the resolver interface                               |
+| [`BasicCallResolver.sol`](./contracts/call-resolvers/BasicCallResolver.sol) | Reference resolver that executes arbitrary calls and sweeps selected Hub token balances to specified recipients |
+| [`PoolDrawResolver.sol`](./contracts/call-resolvers/PoolDrawResolver.sol)   | Settles ordered fixed or shortfall draw legs against funding-pool accounts around the solver's request calls    |
+| [`PoolResolverBase.sol`](./contracts/call-resolvers/PoolResolverBase.sol)   | Shared trusted mechanics for payload commitments, pool debits and credits, token conversion, and final sweeps   |
+| [`ResolverSandbox.sol`](./contracts/call-resolvers/ResolverSandbox.sol)     | Unprivileged, resolver-owned executor for solver calls; it cannot invoke role-gated pool debits                 |
+
+### `deposit-addresses/`
+
+| Contract                                                                                         | Purpose                                                                                                                        |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| [`RelayDepositAddressManager.sol`](./contracts/deposit-addresses/RelayDepositAddressManager.sol) | Records uniquely identified deposit-address triggers binding order inputs, derivation fields, prices, and oracle-specific data |
+| [`oracle/IPricingOracle.sol`](./contracts/deposit-addresses/oracle/IPricingOracle.sol)           | Defines cross-chain currency, mid-price, and bid/ask types plus pricing-oracle interfaces                                      |
+| [`oracle/BasicPricingOracle.sol`](./contracts/deposit-addresses/oracle/BasicPricingOracle.sol)   | Minimal implementation that decodes caller-supplied prices directly from `extraData`                                           |
+| [`oracle/SignedPricingOracle.sol`](./contracts/deposit-addresses/oracle/SignedPricingOracle.sol) | Verifies expiring EIP-712 prices from the solver address fixed at deployment                                                   |
+
+### `fee-calculators/`
+
+| Contract                                                                             | Purpose                                                                                                |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| [`IFeeCalculator.sol`](./contracts/fee-calculators/IFeeCalculator.sol)               | Pluggable interface for calculating a `FAST_MINT` fee, its currency, payer, and recipient              |
+| [`RelayBpsFeeCalculator.sol`](./contracts/fee-calculators/RelayBpsFeeCalculator.sol) | Converts a configured fraction of deposit USD value into a capped amount of the requested fee currency |
+
+### `funding-pools/`
+
+Funding pools custody ordinary ERC-20s or Hub assets through their `ERC20View`
+contracts. Balances are attributed per account; each account independently
+sets resolver allowlists, per-order caps, budgets, expirations, and an
+authorizer for individual orders.
+
+| Contract                                                                               | Purpose                                                                                                                      |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| [`IRelayFundingPool.sol`](./contracts/funding-pools/IRelayFundingPool.sol)             | Defines pool balances, draw modes, standing sponsorship configuration, signed updates, withdrawals, and order authorizations |
+| [`RelayFundingPool.sol`](./contracts/funding-pools/RelayFundingPool.sol)               | Holds per-account token balances and permits bounded, replay-safe resolver draws plus signed or role-gated withdrawals       |
+| [`RelayFundingPoolFactory.sol`](./contracts/funding-pools/RelayFundingPoolFactory.sol) | Deterministically deploys full funding-pool contracts with `CREATE2` and tracks pools it created                             |
+
+### `payload-builders/`
+
+All primary builders implement `IPayloadBuilder`, returning an encoded payload,
+the hashes to sign, a signing curve, and a VM family name.
+
+| Contract                                                                                          | Purpose                                                                                                                        |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| [`BitcoinVmPayloadBuilder.sol`](./contracts/payload-builders/BitcoinVmPayloadBuilder.sol)         | Builds P2WPKH Bitcoin withdrawals, including allocator and fee UTXOs, change, an order identifier, and BIP-143 signing digests |
+| [`EthereumVmPayloadBuilder.sol`](./contracts/payload-builders/EthereumVmPayloadBuilder.sol)       | Builds EIP-712 EVM depository call requests, including versioned routed withdrawals through allowlisted routers                |
+| [`TronVmPayloadBuilder.sol`](./contracts/payload-builders/TronVmPayloadBuilder.sol)               | Builds Tron depository call requests using Tron address validation and EIP-712-compatible signing data                         |
+| [`SolanaVmPayloadBuilder.sol`](./contracts/payload-builders/SolanaVmPayloadBuilder.sol)           | Builds Solana depository transfer instructions from configured domains, vaults, and expiration policy                          |
+| [`TonVmPayloadBuilder.sol`](./contracts/payload-builders/TonVmPayloadBuilder.sol)                 | Builds native TON transfers for Highload Wallet V3 and requires a sufficient recorded gas payment                              |
+| [`XrpVmPayloadBuilder.sol`](./contracts/payload-builders/XrpVmPayloadBuilder.sol)                 | Builds native-XRP payment transactions for a fixed signing public key and requires a recorded gas payment                      |
+| [`HederaVmPayloadBuilder.sol`](./contracts/payload-builders/HederaVmPayloadBuilder.sol)           | Builds direct Hedera `CryptoTransfer` transactions for HBAR or one configured HTS token, with submitter-paid fees              |
+| [`HyperliquidVmPayloadBuilder.sol`](./contracts/payload-builders/HyperliquidVmPayloadBuilder.sol) | Builds Hyperliquid `usdSend` and `sendAsset` actions using configured symbols, decimals, and DEX routing                       |
+| [`LighterVmPayloadBuilder.sol`](./contracts/payload-builders/LighterVmPayloadBuilder.sol)         | Builds Lighter transfer actions using configured account route types and asset indexes                                         |
+| [`GatewayVmPayloadBuilder.sol`](./contracts/payload-builders/GatewayVmPayloadBuilder.sol)         | Builds Circle Gateway burn intents and delegates the destination execution payload to a VM-specific builder                    |
+| [`GasPaidPayloadBuilder.sol`](./contracts/payload-builders/GasPaidPayloadBuilder.sol)             | Shared mixin and hashing helpers for builders that require a matching `WithdrawGasPayer` record                                |
+
+The Gateway subdirectory contains the destination abstraction and Circle wire
+format used by `GatewayVmPayloadBuilder`:
+
+| Contract                                                                                                                                        | Purpose                                                                                                  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| [`gateway/IGatewayDestinationPayloadBuilder.sol`](./contracts/payload-builders/gateway/IGatewayDestinationPayloadBuilder.sol)                   | Interface for adapting a Gateway withdrawal to one destination VM's execution payload and signing digest |
+| [`gateway/GatewayEthereumVmDestinationPayloadBuilder.sol`](./contracts/payload-builders/gateway/GatewayEthereumVmDestinationPayloadBuilder.sol) | Builds EVM Gateway execution requests, including routed call commitments                                 |
+| [`gateway/CircleGatewayTypes.sol`](./contracts/payload-builders/gateway/CircleGatewayTypes.sol)                                                 | Shared Circle `TransferSpec` and `BurnIntent` structures                                                 |
+| [`gateway/CircleGatewayCodec.sol`](./contracts/payload-builders/gateway/CircleGatewayCodec.sol)                                                 | Encodes Circle Gateway wire data and EIP-712 hashes                                                      |
+
+Payload serialization helpers:
+
+| Contract                                                                | Purpose                                                                         |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [`utils/Protobuf.sol`](./contracts/payload-builders/utils/Protobuf.sol) | Minimal protobuf writer used to serialize Hedera transaction messages           |
+| [`utils/Sha512.sol`](./contracts/payload-builders/utils/Sha512.sol)     | Pure-Solidity SHA-512 implementation used to compute XRP Ledger signing digests |
+
+### `price-adapters/` and `precompiles/`
+
+| Contract                                                                                        | Purpose                                                                                                                        |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| [`PriceOraclePrecompile.sol`](./contracts/precompiles/PriceOraclePrecompile.sol)                | Wrapper for reading the latest raw signed provider update from the Relay price-oracle precompile                               |
+| [`ChainlinkDataStreamsAdapter.sol`](./contracts/price-adapters/ChainlinkDataStreamsAdapter.sol) | Verifies Chainlink Data Streams V3 reports through its verifier proxy and returns normalized mid, bid, ask, and timestamp data |
+| [`StorkFastAdapter.sol`](./contracts/price-adapters/StorkFastAdapter.sol)                       | Verifies Stork Fast signed batches, derives feed IDs, and returns monotonic normalized prices                                  |
+
+### `rate-limiters/`
+
+| Contract                                                                             | Purpose                                                                                                |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| [`IRateLimiter.sol`](./contracts/rate-limiters/IRateLimiter.sol)                     | Pluggable, fail-closed budget interface consulted by `RelayOracleV2` for `FAST_MINT`                   |
+| [`RelayAmountRateLimiter.sol`](./contracts/rate-limiters/RelayAmountRateLimiter.sol) | Token-bucket limiter denominated in each Hub token's native base units                                 |
+| [`RelayUsdRateLimiter.sol`](./contracts/rate-limiters/RelayUsdRateLimiter.sol)       | Per-chain token-bucket limiter that uses `RelayPriceOracle` to consume a shared USD-denominated budget |
+
+### `routers/`
+
+Routers run on destination chains. EVM payload builders can commit to a router
+and call bundle, while the destination depository controls which routers may be
+invoked.
+
+| Contract                                                           | Purpose                                                                                                                        |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| [`IMulticallRouter.sol`](./contracts/routers/IMulticallRouter.sol) | Defines the standard destination multicall structure and interface                                                             |
+| [`MulticallRouter.sol`](./contracts/routers/MulticallRouter.sol)   | Executes depository-authorized calls and provides self-call-only settlement and sweep helpers with minimum-balance enforcement |
+
+### `aurora-xcc/`
+
+These libraries support `RelayMultisigSigner` when it calls the NEAR Chain
+Signatures service from Aurora.
+
+| Contract                                                          | Purpose                                                                                    |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| [`AuroraSdk.sol`](./contracts/aurora-xcc/AuroraSdk.sol)           | High-level wrapper for Aurora-to-NEAR cross-contract calls, callbacks, and promise results |
+| [`AuroraXccUtils.sol`](./contracts/aurora-xcc/AuroraXccUtils.sol) | Low-level endian, memory, hashing, and hexadecimal helpers used by the XCC codecs          |
+| [`Borsh.sol`](./contracts/aurora-xcc/Borsh.sol)                   | Borsh serialization primitives for NEAR promise data                                       |
+| [`Codec.sol`](./contracts/aurora-xcc/Codec.sol)                   | Encodes the XCC promise types into Borsh payloads                                          |
+| [`Types.sol`](./contracts/aurora-xcc/Types.sol)                   | Shared promise, callback, execution-mode, and result structures                            |
+
+### Test support
+
+`mocks/` contains dependency doubles and harnesses used by unit tests:
+
+| Contract                                                                             | Purpose                                                                          |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| [`EmptyPayloadBuilder.sol`](./contracts/mocks/EmptyPayloadBuilder.sol)               | Payload builder that always returns an empty payload for allocator failure tests |
+| [`MockPriceFeedAdapter.sol`](./contracts/mocks/MockPriceFeedAdapter.sol)             | Adapter that decodes ABI-encoded price updates without an external provider      |
+| [`MockPricingOracle.sol`](./contracts/mocks/MockPricingOracle.sol)                   | Mutable caller-controlled `IPricingOracle` implementation                        |
+| [`MockStorkFastVerifier.sol`](./contracts/mocks/MockStorkFastVerifier.sol)           | Test double for Stork Fast payload verification and decoding                     |
+| [`MockVerifierProxy.sol`](./contracts/mocks/MockVerifierProxy.sol)                   | Test double for Chainlink's Data Streams verifier proxy                          |
+| [`MockWNEAR.sol`](./contracts/mocks/MockWNEAR.sol)                                   | Mintable wrapped-NEAR token used by multisig signer tests                        |
+| [`RelayMultisigSignerHarness.sol`](./contracts/mocks/RelayMultisigSignerHarness.sol) | Harness exposing multisig signer behavior needed by tests                        |
+
+`test-utils/` contains reusable test tokens:
+
+| Contract                                                                  | Purpose                                                                  |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [`FeeOnTransferToken.sol`](./contracts/test-utils/FeeOnTransferToken.sol) | ERC-20 that burns a fixed transfer fee for funding-pool accounting tests |
+| [`MyToken.sol`](./contracts/test-utils/MyToken.sol)                       | Mintable ERC-20 with permit support used across contract tests           |
+
+## Repository layout
+
+| Directory                                           | Purpose                                                                              |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| [`contracts/`](./contracts)                         | Production contracts, interfaces, libraries, mocks, and test helpers described above |
+| [`script/`](./script)                               | Foundry deployment and role-management scripts                                       |
+| [`deployments/contracts/`](./deployments/contracts) | Environment deployment manifests for `dev`, `stag`, `test`, and `prod`               |
+| [`deployments/scripts/`](./deployments/scripts)     | Configuration, funding, verification, and Safe deployment utilities                  |
+| [`test/`](./test)                                   | Foundry unit, fuzz, and integration tests grouped by contract                        |
+| [`tools/`](./tools)                                 | ABI export, ABI versioning, and dependency-linking utilities                         |
+
+## Development
+
+Install dependencies from the monorepo root, then run contract commands from
+this directory:
 
 ```sh
-# Deploy the main RelayAllocator contract
-OWNER=<multisig-address> HUB=<relay-hub-address> ORACLE=<oracle-address> \
-  yarn deploy:allocator --rpc-url $RPC_URL --verify --etherscan-api-key $ETHERSCAN_API_KEY
-
-# Deploy the Config contract for the allocator
-ALLOCATOR=<allocator-contract-address> \
-  yarn deploy:allocator-config --rpc-url $RPC_URL --verify
-
-# Deploy the on-chain feed pricing oracle contract. Register provider adapters
-# with setPriceFeedAdapter(providerId, adapter) after deployment.
-OWNER=<multisig-address> PRICE_PRECOMPILE=0x000000000000000000000000000000000000FEED \
-  yarn deploy:feed-pricing-oracle --rpc-url $RPC_URL --verify
-
-# Deploy the EVM payload builder
-CONFIG=<config-contract-address> \
-  yarn deploy:ethereum-vm-payload-builder --rpc-url $RPC_URL --verify
-
-# Deploy the Solana VM payload builder
-CONFIG=<config-contract-address> \
-  yarn deploy:solana-vm-payload-builder --rpc-url $RPC_URL --verify
+yarn build
+yarn test
+yarn lint
+yarn coverage
 ```
 
-`RelayAllocator` links the `Utils` library and `RelayMultisigSigner` /
-`BitcoinDepositAddress` link `AuroraSdk`, `ChainSignatures`, etc. Forge
-automatically deploys and links these libraries as part of the script run; for
-deterministic addresses pass `--libraries 'contracts/Utils.sol:Utils:0x...'`
-to reuse a pre-deployed copy (see `libraries.json` for canonical Aurora
-addresses).
+- `yarn build` compiles the contracts with Foundry
+- `yarn test` runs the Foundry test suite
+- `yarn lint` runs Solhint
+- `yarn coverage` instruments the contracts with Foundry's coverage-specific
+  IR mode, writes `out/lcov.info`, and enforces the production thresholds in
+  [`tools/coverage-thresholds.json`](./tools/coverage-thresholds.json)
 
-### Roles
+Coverage includes production sources under `contracts/`, including the linked
+EVM depository sources. Tests, deployment scripts, mocks, and test tokens are
+excluded from both the reported totals and the threshold gate. The IR mode is
+required because the unoptimized coverage build exceeds the Solidity stack
+limit in some contracts; Foundry may print its standard source-mapping warning
+for this mode.
+
+Generated `artifacts/`, `cache/`, and `out/` directories must not be edited
+manually.
+
+## Deployments and verification
+
+Foundry deployment scripts live under [`script/`](./script), with Yarn wrappers
+listed in [`package.json`](./package.json). Deployed addresses are recorded by
+environment under [`deployments/contracts/`](./deployments/contracts). Network
+metadata and published contract addresses belong in the
+[`settlement-networks`](../packages/networks) package.
+
+After deploying or changing configuration, use
+[`verify-deployment.ts`](./deployments/scripts/misc/verify-deployment.ts) as the
+canonical deployment audit instead of maintaining manual role and config
+checklists in this README:
 
 ```sh
-# Grant APPROVED_WITHDRAWER_ROLE on the allocator
-CONTRACT=<allocator-contract-address> ROLE=APPROVED_WITHDRAWER_ROLE \
-  ACCOUNT=<address> yarn grant-role --rpc-url $RPC_URL
-
-# Renounce a role held by the deployer
-CONTRACT=<contract-address> ROLE=OPERATOR_ROLE \
-  yarn renounce-role --rpc-url $RPC_URL
+yarn ts-node deployments/scripts/misc/verify-deployment.ts \
+  deployments/contracts/stag.json
 ```
 
-`ROLE` accepts either a plain string (hashed with keccak256) or a
-`0x`-prefixed bytes32 hash.
-
-### Legacy allocator orchestration tasks
-
-The Hardhat tasks below remain available for flows that integrate with NEAR /
-Aurora signing (initialization, payload signing, withdraw orchestration). They
-will be migrated separately as they primarily depend on TypeScript SDKs rather
-than EVM deployments.
-
-```sh
-# Initialize the allocator (requires 2 wNEAR on Aurora)
-yarn hardhat allocator:init --allocator <allocator-contract-address>
-
-# Set a payload builder for a specific chain
-yarn hardhat allocator:set-payload-builder --builder <builder-address> --allocator <allocator-contract-address> --chain-id <depository-contract-chain> --depository <depository-contract-address>
-
-# Submit withdraw request params (thru block explorer)
-yarn hardhat allocator:submit-withdraw --allocator <allocator-address> --chain-id <depository-chain-id> --depository <depository-contract-address>
-
-# Sign payload
-yarn hardhat allocator:sign-payload --allocator <allocator-address> --chain-id <depository-chain-id> --depository <depository-contract-address> --nonce <nonce from withdraw request>
-
-# Submit the withdrawal to the depository contract
-yarn hardhat depository:withdraw --withdraw-request-hash <withdraw-request-hash> --allocator <allocator-address> --payload-builder-type <payload-builder-name>
-```
-
-We also have "end to end" tasks which can be used to deploy everything and submit transactions. This uses a lot of defaults, and roles are granted to the caller's address (you need to set the `DEPLOYER_PRIVATE_KEY` environment variable).
-
-For EVM (Ethereum, L2... etc):
-
-```bash
-yarn run hardhat full:evm --network aurora-testnet --wnear 0x4861825E75ab14553E5aF711EbbE6873d369d146  --chain-id 84532 --depository 0x9229808f111ff3EAf6826736c74462fece0f6583
-```
-
-For Bitcoin. You first need to deploy the EVM version... because it provides the private key that needs to be supplied to the Bitcoin payload builder at deployment time (replace the last argument). Also, this script requires that you fund the Bitcoin address first (as the payload is construted from UTXO).
-
-```bash
-yarn run hardhat full:bitcoin --network aurora-testnet --wnear 0x4861825E75ab14553E5aF711EbbE6873d369d146 --recipient tb1q6xsu27js50xzvnwfgxrkhwj7a9rrch76wf7xxq --public-key 0x04e70427664177dee706e65274d3e7e7e28faa5ec10dedddf205ec49720ee9f154d4a4f09296f8f1695277413b13f78a656b72032a703d9be51baa28b733ae6376
-```
-
-### Testnet Faucet
-
-Replace `<account-name>` (eg.`relayprotocol.testnet`) with a unique account name in the following commands
-
-### Get NEAR in testnet
-
-```
-near account create-account sponsor-by-faucet-service <account-name> autogenerate-new-keypair save-to-keychain network-config testnet create
-```
-
-### Export private key and import in Meteor wallet
-
-```
-near account export-account <account-name> using-private-key network-config testnet
-```
-
-### Bridge to Aurora Testnet
-
-Bridge to Aurora Testnet Via https://testnet.rainbowbridge.app/
-
-## Relay Multisig Signer
-
-A smart contract that can use Near's Chain Signatures (via Aurora) to sign hashes submitted from a Multisig. This lets the Relay team control smart contracts (and EOAs) on various chains (EVM, Bitcoin, Solana... etc) from a multisig wallet without sharing a private key.
-
-We have deployed an instance of this contract on Aurora at `0xb538ee6515F9d16eBD0BACD0503733815c9b070c`.
-
-### Example of flow:
-
-Pre-requisite: add a `SAFE_API_KEY` env variable!
-
-1. A transactions manifest file is created. It represents the transaction(s) to be executed on each chain. This file should be created from a script (it's format is validated when loaded by the scripts below).
-2. It is possible to simulate all the transactions using `relay-multisig-signer:simulate --transactions <manifest.json>`
-3. The hashes for each transaction are generated and submitted to the SAFE multisig using the task `relay-multisig-signer:submit --transactions <manifest.json> --relay-multisig-signer <multisig signer address>`
-4. The signers on the multisig can verify that the SAFE transaction they are signing is correct by running `relay-multisig-signer:check-hashes --transactions <manifest.json> --relay-multisig-signer <multisig signer address> --safe-transaction-nonce <transaction number>`. If they match they can sign (approve the multisig tx).
-5. Once the SAFE transaction has been executed, anyone can execute all the transactions from the bundle using
-   `relay-multisig-signer:execute-transactions --transactions <manifest.json> --relay-multisig-signer <multisig signer address> --safe-transaction-nonce <transaction number>`
-
-### Solana Program Upgrades
-
-Deploy and upgrade Solana programs using a dual-wallet approach to minimize multisig transactions.
-
-**Setup:**
-
-```bash
-# Create durable nonce account
-yarn hardhat relay-multisig-signer:solana-create-nonce-account --rpc <rpc-url> --payer <private-key>
-
-# Set nonce/buffer authority (same wallet handles both nonce and buffer operations)
-export SOLANA_NONCE_AUTHORITY_PRIVATE_KEY=<private-key-base58>
-```
-
-**Generate upgrade transaction:**
-
-```bash
-# For initial deploy
-bun tasks/relayMultisigSigner/scripts/generate-solana-upgrade-transaction.ts \
-  --rpc <rpc-url> --program-path <program.so> --program-keypair <keypair.json> \
-  --upgrade-authority <multisig-address> --nonce-account <nonce-address>
-
-# For upgrade
-bun tasks/relayMultisigSigner/scripts/generate-solana-upgrade-transaction.ts \
-  --rpc <rpc-url> --program-path <program.so> --program-id <program-id> \
-  --upgrade-authority <multisig-address> --nonce-account <nonce-address>
-```
-
-The `generate-solana-upgrade-transaction.ts` script only handles the deploy/upgrade infrastructure (buffer operations, program deployment). Contract-specific initialization, migration, or other business logic should be added as additional instructions or separate transactions in the manifest. Durable nonce is required due to long multisig signing times that cause recent blockhash expiration.
-
-### Tron Transaction Support
-
-Execute Tron transactions using the RelayMultisigSigner. Supports `TransferContract` and `TriggerSmartContract`. See `tasks/relayMultisigSigner/transactions/demo-tron-*.json` for examples.
-
-**Run test:**
-
-```bash
-# Deploy and execute
-yarn hardhat full:relay-multisig-signer:tron \
-  --network aurora-testnet \
-  --transaction-file tasks/relayMultisigSigner/transactions/demo-tron-transfer.json \
-  --wnear <wnear-token-address>
-
-# Using existing RelayMultisigSigner
-yarn hardhat full:relay-multisig-signer:tron \
-  --network aurora-testnet \
-  --transaction-file tasks/relayMultisigSigner/transactions/demo-tron-transfer.json \
-  --relay-multisig-signer <existing-address>
-```
-
-**For async submit/execute workflows:** Generate transaction headers (similar to Solana's Durable Nonce) to prevent expiration during multisig signing. Tron transactions have a maximum 24-hour expiration; the command generates 16-hour headers.
-
-```bash
-yarn hardhat relay-multisig-signer:generate-tron-headers --rpc https://api.shasta.trongrid.io
-```
-
-The test task automatically derives the Tron address from the ECDSA public key. Ensure it has sufficient TRX. Faucet: https://www.trongrid.io/faucet
-
-To add support for additional contract types, define the parameter schema in `tasks/relayMultisigSigner/utils.ts` and add to `TronTxSchema`. Reference: https://github.com/tronprotocol/tronweb/blob/master/src/types/Contract.ts
-
-## Hub / Oracle
-
-### Add your hub network to the `@relay-protocol/settlement-networks` package
-
-- First you need to add a network manifest file to the [network package](`../packages/networks/src`).
-- Make sure the file has an (empty for now) `contracts` section - or it will be ignored by hardhat
-- Rebuild the package `yarn workspace @relay-protocol/settlement-networks clean && yarn workspace @relay-protocol/settlement-networks build`
-
-### Deploy the contracts
-
-Deploy the Hub, Oracle, and (optionally) OracleMultisig with Foundry. Order
-matters: deploy the hub first, then the oracle pointing at the hub, then wire
-roles via `yarn grant-role` (see below).
-
-```sh
-# Deploy the hub
-ADMIN=<admin-address> \
-  yarn deploy:hub --rpc-url $RPC_URL --verify --etherscan-api-key $ETHERSCAN_API_KEY
-
-# Deploy the oracle, pointing at the hub
-ADMIN=<admin-address> HUB=<hub-address> \
-  yarn deploy:oracle --rpc-url $RPC_URL --verify --etherscan-api-key $ETHERSCAN_API_KEY
-
-# Optional: deploy the OracleMultisig
-OWNER=<admin-address> SIGNERS=<addr1,addr2,...> THRESHOLD=<n> \
-  yarn deploy:oracle-multisig --rpc-url $RPC_URL --verify
-
-# Deploy the ERC20View helper used by the hub
-yarn deploy:erc20-view --rpc-url $RPC_URL --verify
-```
-
-### Set roles
-
-There are two main roles to set: the `ORACLE_ROLE` to allow an offchain oracle
-to send data to the hub via the oracle contract, and the `EDITOR_ROLE` that
-can update tokens metadata directly on the hub. Use the `grant-role` Foundry
-script:
-
-```sh
-# Grant the oracle OPERATOR_ROLE on the hub (so it can mint/burn)
-CONTRACT=<hub-contract> ROLE=OPERATOR_ROLE ACCOUNT=<oracle-contract> \
-  yarn grant-role --rpc-url $RPC_URL
-
-# Grant an offchain oracle signer write access to the oracle contract
-CONTRACT=<oracle-contract> ROLE=ORACLE_ROLE ACCOUNT=<offchain-oracle-signer> \
-  yarn grant-role --rpc-url $RPC_URL
-
-# Grant editors write metadata access to the hub
-CONTRACT=<hub-contract> ROLE=EDITOR_ROLE ACCOUNT=<editor-signer> \
-  yarn grant-role --rpc-url $RPC_URL
-```
-
-`grant-role` accepts a single account; loop over multiple editors if needed.
-
-### Submit HUB actions
-
-1. Edit the data to send in the `calls` array of `tasks/relayMultisigSigner/scripts/generate-hub-call.ts`
-
-2. Generate the manifest
-
-```
-bun tasks/relayMultisigSigner/scripts/generate-hub-call.ts
-```
-
-This will create a new JSON manifest.
-
-3. Submit the multisig tx
-
-```
-# simlaute first
-yarn hardhat relay-multisig-signer:simulate --transactions tasks/relayMultisigSigner/transactions/hub-calls-1.json
-
-# submit
-yarn hardhat relay-multisig-signer:submit --transactions tasks/relayMultisigSigner/transactions/hub-calls-1.json --network aurora
-```
-
-4. get all required signatures on the multitisg
-
-```
-# double check by using
-yarn hardhat relay-multisig-signer:check-hashes --transactions tasks/relayMultisigSigner/transactions/hub-calls-1.json --network aurora --safe-transaction-nonce 60
-```
-
-5. Execute the signed payload
-
-```
-yarn hardhat relay-multisig-signer:execute-transactions --transactions tasks/relayMultisigSigner/transactions/hub-calls-1.json --network aurora
-
-```
-
-## Coverage
-
-Tests live under `test/` and run with `forge` via `yarn test`.
-
-Coverage reports can be generated ad-hoc:
-
-```sh
-yarn coverage    # writes out/lcov.info
-```
+The verifier checks:
+
+- deployment addresses against the oracle Hub configuration
+- immutable links between the Hub, oracle, executor, allocator, config, gas
+  payer, resolvers, and payload builders
+- expected AccessControl role holders and unexpected holders discovered from
+  `RoleGranted` logs
+- oracle idempotency-store sources and writer permissions
+- funding-pool factory, resolver, and role wiring
+- allocator payload-builder registrations for configured chains
+- required global, per-chain, and per-currency payload-builder config values
+- Gateway domains, tokens, routing, depository, gas fee, and allocator policy
+- EVM, Tron, and Solana depository owner/allocator state on their own chains
+
+By default the script resolves environment-specific oracle configs and RPCs.
+Use `RELAY_RPC_URL`, `ORACLE_CONFIG_PATH`, or `CHAINS_CONFIG` to override those
+sources, `TESTNETS=1` for testnet oracle configs, and `--print-cast` to print
+remediation commands for missing role grants. The script is read-only unless a
+printed command is explicitly executed separately.
+
+Transaction-manifest generation, simulation, Safe submission, verification,
+and execution for `RelayMultisigSigner` are documented in
+[`@relay-settlement/multisig-tools`](../packages/multisig-tools/README.md).

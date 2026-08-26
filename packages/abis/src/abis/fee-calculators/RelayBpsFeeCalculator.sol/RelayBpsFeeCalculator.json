@@ -69,6 +69,22 @@
   },
   {
     "type": "error",
+    "name": "FeeExceedsMax",
+    "inputs": [
+      {
+        "name": "feeAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxFeeAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InvalidFeeBps",
     "inputs": [
       {

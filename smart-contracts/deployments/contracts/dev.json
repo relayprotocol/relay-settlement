@@ -1,0 +1,66 @@
+{
+  "chainId": 537724,
+  "core": {
+    "utils": "0xdc2a0dc71daacf9746a06555e27d945678eb961f",
+    "hub": "0xa884543c91156098b2e50ae17c3840770b7b55f5",
+    "oracleIdempotencyStore": "0x481456de34abffe5e72ceea597aab19d852e6413",
+    "oracle": "0x4411881acda74849c1811d0b19c8e045c8f4c280",
+    "oracleMultisig": "0xf62db37a0d07f7226292ce360225a329510a7f3a",
+    "genericMapping": "0xffb396f168d5116972a1e5cceea323b2622d288c",
+    "allocator": "0x95bb2652baa8a1177f750d92384527c5814f5254",
+    "executor": "0x8e4740962e0b8ff64a3ae44409572f33f34d97ae",
+    "config": "0x16d5c93cc672dc387bf9a3a0e77ebc6ae6b5af27",
+    "withdrawGasPayer": "0xfe04e7f7a4a614de317ca1234c69d6d039429576",
+    "protocolSafe": "0x6ab48d13b3c7b08a250a28b275d5683103eb9df1",
+    "feeCalculator": {
+      "address": "0x5bf0cf712ea7d0751bc1156447972623607af942",
+      "type": "bps"
+    },
+    "rateLimiter": {
+      "address": "0x49bc86fc092c1d66823a915eaf473cdf4324bfb2",
+      "type": "usd"
+    }
+  },
+  "payloadBuilders": {
+    "ethereumVmPayloadBuilder": "0xda67f0a7d6558c710a314a40224b71d5c64cbed5",
+    "solanaVmPayloadBuilder": "0xe85e1ec9d948fd142e605eeef61c80cf35e57ee4",
+    "tonVmPayloadBuilder": "0xe4b8cf5ab4e59c6c6c44775811df8bb162ec9749",
+    "tronVmPayloadBuilder": "0x216c3890b35ab5e5aa185f1b093d54543e56d3ff",
+    "bitcoinVmPayloadBuilder": "0x9f34c8aa3b52a88b40dd57b838ef9c634ce9b80c",
+    "hyperliquidVmPayloadBuilder": "0x27f22a0a874941188f16d13871b58bcafa904e17",
+    "lighterVmPayloadBuilder": "0x01e90e18bc5912d1aabbfabf08bd93ae5c289909",
+    "xrpVmPayloadBuilder": "0x610ae8a658fb7f2206dbd778ecc490fe118748b8",
+    "hederaVmPayloadBuilder": "0x0f32188bbcf45d63a30028bcf6c91d781a70340f",
+    "gatewayVmPayloadBuilder": "0x2c244b362b4beed59842e411c214c4d65a0e82a2",
+    "gatewayEthereumVmDestinationPayloadBuilder": "0x5badb7edea2e7f3264afd76daf4aa7494a721108"
+  },
+  "depositAddress": {
+    "depositAddressManager": "0xf4d50837c674ce6ec05527a5233651e2c842cefa"
+  },
+  "pricingOracle": {
+    "storkFastVerifier": "0x93a8aefcdc5f5734f9eb254c910dd479bcca4b30",
+    "storkFastAdapter": "0x769b1c624319ec53ec1d96a2b80b96619e7e112e",
+    "priceOracle": "0x71e55887b7c2aa0f02c110247b68281f456dc546"
+  },
+  "utils": {
+    "basicCallResolver": "0xc0f489a34672d5b960a19279d99d77e94221d0c9",
+    "fundingPoolFactory": "0x354426693ed9f0facefe4399326a236f122f46d7",
+    "poolDrawResolver": "0x37218c140017353a4a53be128f74e99acae665db",
+    "multicall3": "0x85027468725d5dd950cd78ec80e6014126039554"
+  },
+  "safe": {
+    "compatibilityFallbackHandler": "0x9ff6b39c118b8844da625b660223761e8b30da49",
+    "createCall": "0x5943b1e2169c85e5008123db089ce2d19dc5ad2d",
+    "extensibleFallbackHandler": "0x05cc0afe868ab514f05e7256ca3dd3916f4258aa",
+    "multiSend": "0x35f955abe86fa8590bd985218443556f086fc24f",
+    "multiSendCallOnly": "0x04fa861cf654625e73252e11caa5f472348f602e",
+    "safeSingleton": "0x68fddd64357b402232dafee104f13ed9673007fd",
+    "safeL2Singleton": "0x71fc9ca7a95f636b61beb0d021f1ec6977ebdee0",
+    "safeMigration": "0x25298c69724473500d30ee6faaf5df6ee44b4b20",
+    "safeProxyFactory": "0x56ac7ff4b38f77f4896e42db7b834ee12b0a21d2",
+    "safeToL2Setup": "0x1ceed6cf188615767114f14d8128a3cf51a82a60",
+    "signMessageLib": "0x6e89868544b9878d862dcac5fdc72c4a85b94d02",
+    "simulateTxAccessor": "0x341e66b14c75c1a7a2b7049993982ea08d9dab47",
+    "tokenCallbackHandler": "0x504f03cebd0f86e1bccc43b48c47ca96376bf465"
+  }
+}

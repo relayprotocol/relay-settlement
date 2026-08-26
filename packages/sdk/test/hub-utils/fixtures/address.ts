@@ -41,4 +41,23 @@ export const addressesTestCases: Array<{
     },
     name: "USDC on Base",
   },
+  // See the note on the Hedera cases in ./tokenId.ts.
+  {
+    expectedAddress: "0x3b83171A4db29E5f3e8C7c34D1B056794c566159",
+    input: {
+      address: "0.0.0",
+      chainId: "hedera",
+      family: "hedera-vm",
+    },
+    name: "HBAR on Hedera",
+  },
+  {
+    expectedAddress: "0xfa47eD5C712e8FFF60A4655CFB9A47B57B624564",
+    input: {
+      address: "0.0.456858",
+      chainId: "hedera",
+      family: "hedera-vm",
+    },
+    name: "USDC on Hedera",
+  },
 ]

@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {SafeCastLib} from "solady/utils/SafeCastLib.sol";
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
-import {Price} from "../deposit-addresses/open/oracle/IPricingOracle.sol";
+import {Price} from "../deposit-addresses/oracle/IPricingOracle.sol";
 import {RelayPriceOracle} from "../RelayPriceOracle.sol";
 import {IRateLimiter} from "./IRateLimiter.sol";
 
@@ -94,6 +94,9 @@ contract RelayUsdRateLimiter is AccessControl, IRateLimiter {
   /// @notice Thrown when a required address argument is zero
   error ZeroAddress();
 
+  /// @notice Thrown when the batch pre-check receives mismatched array lengths
+  error ArrayLengthMismatch(uint256 tokenIdsLength, uint256 amountsLength);
+
   // Constructor
 
   /// @notice Creates the rate limiter
@@ -116,7 +119,7 @@ contract RelayUsdRateLimiter is AccessControl, IRateLimiter {
   ///      revert decision so it can carry its own context. Returns false (no deduct) when the budget
   ///      is unavailable — disabled chain, zero amount/price, or over budget (fail-closed). A zero
   ///      USD value is rejected (NOT a no-op): it would consume nothing and always pass = unlimited.
-  ///      A caller's accept/reject choice must NOT depend on live budget (see canConsume).
+  ///      A caller's accept/reject choice must NOT depend on live budget (see resolveCanConsume).
   /// @param tokenId The token id for the fast mint.
   /// @param amount The gross deposit amount.
   /// @param data abi.encode(string chainId) — the oracle constructs it; chainId is the attested
@@ -197,31 +200,6 @@ contract RelayUsdRateLimiter is AccessControl, IRateLimiter {
 
   // View methods
 
-  /// @notice Advisory check of whether `consume` would currently succeed for `usdValue`.
-  /// @dev ADVISORY ONLY. MUST NOT gate a decision that needs to be deterministic across independent
-  ///      callers: it reads mutable shared state they would read inconsistently. On-chain consume()
-  ///      is the authoritative enforcement.
-  /// @param chainId Chain id (raw)
-  /// @param usdValue USD value that would be consumed (scaled by USD_DECIMALS)
-  /// @return ok True if it would currently succeed; false when the chain is disabled, the usdValue
-  ///         is zero, or it is over budget
-  function canConsume(
-    string calldata chainId,
-    uint256 usdValue
-  ) external view returns (bool ok) {
-    TokenBucket storage bucket = chainBuckets[_chainKey(chainId)];
-    if (!bucket.isEnabled) {
-      return false;
-    }
-    if (usdValue == 0) {
-      return false;
-    }
-    if (bucket.capacity < usdValue) {
-      return false;
-    }
-    return _refilledTokens(bucket) >= usdValue;
-  }
-
   /// @notice Returns the live (refilled) bucket state for a chain without mutating storage. The
   ///         struct carries `isEnabled`: when false, the chain is disabled (consume returns false).
   /// @param chainId Origin chain id
@@ -234,6 +212,84 @@ contract RelayUsdRateLimiter is AccessControl, IRateLimiter {
       bucket.tokens = _refilledTokens(bucket).toUint128();
       bucket.lastUpdated = block.timestamp.toUint32();
     }
+  }
+
+  // Pre-checks: not `view` because pricing verifies a signed report — read via `eth_call`.
+  // They duplicate `consume`'s decision (a differential fuzz pins the two) so enforcement stays untouched.
+
+  /// @notice Whether `consume` would currently accept this amount on this chain
+  /// @param tokenId Hub token id being priced
+  /// @param amount Raw token amount (currency base units)
+  /// @param data Opaque limiter data — the ABI-encoded origin chain id, same as `consume`
+  /// @return ok True if it would currently succeed
+  function resolveCanConsume(
+    uint256 tokenId,
+    uint256 amount,
+    bytes calldata data
+  ) external returns (bool ok) {
+    TokenBucket memory bucket = chainBuckets[
+      _chainKey(abi.decode(data, (string)))
+    ];
+    if (!bucket.isEnabled) {
+      return false;
+    }
+    if (amount == 0) {
+      return false;
+    }
+
+    uint256 usdValue = _toUsdValue(tokenId, amount);
+    if (usdValue == 0) {
+      return false;
+    }
+    if (bucket.capacity < usdValue) {
+      return false;
+    }
+    return _refilledTokens(bucket) >= usdValue;
+  }
+
+  /// @notice Whether `consume` would accept all these amounts charged in sequence against one bucket
+  /// @dev Per-item checks admit a set that collectively exceeds the shared budget; the sum must price here.
+  /// @param tokenIds Hub token ids being priced, one per amount
+  /// @param amounts Raw token amounts (currency base units)
+  /// @param data Opaque limiter data — the ABI-encoded origin chain id, same as `consume`
+  /// @return ok True if the whole batch would currently succeed
+  function resolveCanConsumeBatch(
+    uint256[] calldata tokenIds,
+    uint256[] calldata amounts,
+    bytes calldata data
+  ) external returns (bool ok) {
+    uint256 length = tokenIds.length;
+    if (length != amounts.length) {
+      revert ArrayLengthMismatch(length, amounts.length);
+    }
+    if (length == 0) {
+      // Fail-closed: an empty batch would total zero and always pass (= unlimited).
+      return false;
+    }
+
+    TokenBucket memory bucket = chainBuckets[
+      _chainKey(abi.decode(data, (string)))
+    ];
+    if (!bucket.isEnabled) {
+      return false;
+    }
+
+    uint256 total;
+    for (uint256 i; i < length; ++i) {
+      if (amounts[i] == 0) {
+        return false;
+      }
+      uint256 usdValue = _toUsdValue(tokenIds[i], amounts[i]);
+      if (usdValue == 0) {
+        return false;
+      }
+      total += usdValue;
+    }
+
+    if (bucket.capacity < total) {
+      return false;
+    }
+    return _refilledTokens(bucket) >= total;
   }
 
   // Internal methods

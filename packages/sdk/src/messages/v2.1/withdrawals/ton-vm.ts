@@ -35,7 +35,7 @@ const tonTransferRequestAbiParams = parseAbiParameters([
 // ====== TON Highload V3 msg_inner cell hash ======
 
 // Mirrors `TonVmPayloadBuilder._signingMessageCellHash` and the reference
-// vectors in settlement-protocol `tools/tonReferenceHashes.ts`.
+// vectors in settlement-protocol `tools/ton-reference-hashes.ts`.
 //
 // Cell layout (149 bits, 1 ref):
 //   subwallet_id  uint32

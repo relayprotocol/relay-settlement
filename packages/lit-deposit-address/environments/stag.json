@@ -1,0 +1,11 @@
+{
+  "name": "stag",
+  "depositAddressManagerAddress": "0xe3e1722cf7a58eea50989d3e0a5ee05428e988bb",
+  "hubEvmChainId": 537713,
+  "allowedOracles": [
+    "0x3001dfd9e77675afd7d3dfd6b2183399ca4f801e",
+    "0x5c8031dfae2ad620f908e7e50f88e1d4835697cd",
+    "0x8e4716438b4be24a0e1d1b7375dff45727ca120a"
+  ],
+  "oracleSignatureThreshold": 2
+}

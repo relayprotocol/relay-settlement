@@ -3,6 +3,7 @@ import { Contract, JsonRpcProvider, WebSocketProvider } from "ethers"
 import { config, validateRuntimeConfig } from "./config.js"
 import { openDb } from "./db/connection.js"
 import { backfillAndWatch } from "./indexer.js"
+import { startDepositoryBalanceAudit } from "./jobs/depositoryBalanceAudit.js"
 import { startFailedEventRetry } from "./jobs/failedEventRetry.js"
 import { startIndexerAudit } from "./jobs/indexerAudit.js"
 import { startReconciler } from "./jobs/reconciler.js"
@@ -131,6 +132,7 @@ const start = async () => {
       new Map()
     )
     startIndexerAudit(db, provider, retryContract)
+    startDepositoryBalanceAudit(db, retryContract)
     runtimeState.markBackgroundWorkReady()
   } catch (error) {
     runtimeState.markBackgroundWorkUnready(error as Error)

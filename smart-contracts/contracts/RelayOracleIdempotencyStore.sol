@@ -24,8 +24,6 @@ contract RelayOracleIdempotencyStore is AccessControl {
   event Executed(bytes32 indexed idempotencyKey, address indexed writer);
   /// @notice Emitted when an external idempotency source is added.
   event SourceAdded(address indexed source);
-  /// @notice Emitted when an external idempotency source is removed.
-  event SourceRemoved(address indexed source);
 
   // Errors
 
@@ -33,7 +31,6 @@ contract RelayOracleIdempotencyStore is AccessControl {
   error AlreadyExecuted(bytes32 idempotencyKey);
   error InvalidSource(address source);
   error SourceAlreadyAdded(address source);
-  error SourceNotFound(address source);
   error TooManySources();
 
   // Roles
@@ -55,6 +52,12 @@ contract RelayOracleIdempotencyStore is AccessControl {
   mapping(bytes32 => bool) public isStored;
 
   /// @notice External contracts whose `isExecuted` state is also honoured.
+  /// @dev Sources are add-only. Once a source is integrated its historical
+  ///      idempotency keys must be honoured for the lifetime of the store:
+  ///      removing a source would make any key recorded only in that source
+  ///      appear unexecuted again, re-opening a replay window for payloads the
+  ///      removed oracle already processed. Decommissioned oracles remain
+  ///      deployed and continue answering `isExecuted` for their history.
   address[MAX_SOURCES] public sources;
 
   /// @notice Number of active external idempotency sources.
@@ -85,28 +88,6 @@ contract RelayOracleIdempotencyStore is AccessControl {
   /// @param source The source address.
   function addSource(address source) external onlyRole(ADMIN_ROLE) {
     _addSource(source);
-  }
-
-  /// @notice Remove an external idempotency source.
-  /// @param source The source address.
-  function removeSource(address source) external onlyRole(ADMIN_ROLE) {
-    if (!isSource[source]) {
-      revert SourceNotFound(source);
-    }
-
-    uint8 count = sourceCount;
-    for (uint8 i; i < count; ++i) {
-      if (sources[i] == source) {
-        for (uint8 j = i; j < count - 1; ++j) {
-          sources[j] = sources[j + 1];
-        }
-        delete sources[count - 1];
-        sourceCount = count - 1;
-        isSource[source] = false;
-        emit SourceRemoved(source);
-        return;
-      }
-    }
   }
 
   /// @notice Whether an idempotency key has already been executed locally or by a source.

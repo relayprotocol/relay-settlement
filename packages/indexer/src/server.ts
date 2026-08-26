@@ -5,7 +5,7 @@ import { createApiKeyMiddleware } from "./auth.js"
 import { config } from "./config.js"
 import type { Database } from "./db/connection.js"
 import { listBalancesForAddress } from "./queries/balances.js"
-import { listEvents, transferStats } from "./queries/events.js"
+import { createTransferStatsService, listEvents } from "./queries/events.js"
 import { listHolders } from "./queries/holders.js"
 import { getApprovedOracleInstances } from "./queries/oracles.js"
 import { getProtocolTransactionsByHash } from "./queries/protocolTransactions.js"
@@ -26,7 +26,7 @@ import {
   normalizeProtocolTransactionHashes,
   ProtocolTransactionRequestError,
 } from "./protocol/transactionRequest.js"
-import { getHealthStatus, type HealthStatusOptions } from "./services/health.js"
+import { getHealthStatus } from "./services/health.js"
 import { getLatestIndexerAuditReport } from "./services/indexerAudit.js"
 import { TransferReplayRequestError } from "./services/transferReplay.js"
 import {
@@ -100,41 +100,17 @@ export const createServer = (
     res.json(runtimeState.getLiveness())
   })
 
-  const resolveSyncHealth = async (options?: HealthStatusOptions) => {
+  const resolveSyncHealth = async () => {
     if (!db || !healthProvider) {
       return null
     }
 
-    return getHealthStatus(db, healthProvider, options)
+    return getHealthStatus(db, healthProvider)
   }
 
-  const resolveReadinessSyncHealth = async () => {
-    if (!runtimeState.doBackgroundWork) {
-      return null
-    }
-
-    return resolveSyncHealth({ includeAudits: false })
-  }
-
-  app.get("/ready", async (_req, res) => {
+  app.get("/ready", (_req, res) => {
     const readiness = runtimeState.getReadiness()
-
-    try {
-      const sync = await resolveReadinessSyncHealth()
-      const ok = readiness.ok && (sync?.ok ?? true)
-      res
-        .status(ok ? 200 : 503)
-        .json(sync ? { ...readiness, ok, sync } : readiness)
-    } catch (error) {
-      res.status(503).json({
-        ...readiness,
-        ok: false,
-        sync: {
-          error: error instanceof Error ? error.message : String(error),
-          ok: false,
-        },
-      })
-    }
+    res.status(readiness.ok ? 200 : 503).json(readiness)
   })
 
   app.get("/", (_req, res) => {
@@ -171,6 +147,8 @@ export const createServer = (
   if (!db) {
     throw new Error("API mode requires a database connection")
   }
+
+  const transferStats = createTransferStatsService(db)
 
   if (expectedApiKey && replayProvider && hubContractAddress) {
     const replayJobs = createTransferReplayJobManager({
@@ -401,7 +379,7 @@ export const createServer = (
           ? Math.min(pointsRaw, 365)
           : 30
       const tzOffsetMinutes = parseTzOffsetMinutes(req.query.tzOffsetMinutes)
-      const rows = await transferStats(db, {
+      const rows = await transferStats({
         granularity,
         points,
         tzOffsetMinutes,
@@ -420,7 +398,7 @@ export const createServer = (
           ? Math.min(pointsRaw, 365)
           : 30
       const tzOffsetMinutes = parseTzOffsetMinutes(req.query.tzOffsetMinutes)
-      const rows = await transferStats(db, {
+      const rows = await transferStats({
         granularity,
         points,
         tokenId: req.params.id,

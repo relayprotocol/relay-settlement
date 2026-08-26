@@ -810,11 +810,42 @@ export const buildTronTransaction = async (
   }
 }
 
+// Replaces manifest `rpc` values at load time using the comma-separated
+// `from=to` URL pairs in RPC_OVERRIDES (the replacement must serve the same chain).
+const applyRpcOverrides = (
+  transactions: z.infer<typeof TransactionsSchema>
+) => {
+  const spec = process.env.RPC_OVERRIDES
+  if (!spec) return transactions
+
+  const overrides = new Map<string, string>()
+  for (const pair of spec.split(",")) {
+    const separator = pair.indexOf("=")
+    const from = pair.slice(0, separator).trim()
+    const to = pair.slice(separator + 1).trim()
+    if (separator < 1 || !from || !to) {
+      throw new Error(
+        `RPC_OVERRIDES entry "${pair}" must be "<fromUrl>=<toUrl>"`
+      )
+    }
+    overrides.set(from, to)
+  }
+
+  return transactions.map((tx) => {
+    if ("rpc" in tx && overrides.has(tx.rpc)) {
+      const rpc = overrides.get(tx.rpc)!
+      console.log(`🔁 RPC override: ${tx.rpc} -> ${rpc}`)
+      return { ...tx, rpc }
+    }
+    return tx
+  })
+}
+
 export function loadTransactions(path: string) {
   const raw = readFileSync(path, "utf8")
   const data: unknown = JSON.parse(raw)
 
-  return TransactionsSchema.parse(data)
+  return applyRpcOverrides(TransactionsSchema.parse(data))
 }
 
 const getChainNameFromTransaction = (tx: Transaction): string => {

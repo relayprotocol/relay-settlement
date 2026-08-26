@@ -5,15 +5,15 @@ import {BaseTest} from "../utils/BaseTest.sol";
 import {Eip712} from "../utils/Eip712.sol";
 
 import {RelayHub} from "../../contracts/RelayHub.sol";
-import {Price} from "../../contracts/deposit-addresses/open/oracle/IPricingOracle.sol";
+import {Price} from "../../contracts/deposit-addresses/oracle/IPricingOracle.sol";
 import {RelayBpsFeeCalculator} from "../../contracts/fee-calculators/RelayBpsFeeCalculator.sol";
-import {RelayOracle} from "../../contracts/RelayOracle.sol";
 import {RelayOracleIdempotencyStore} from "../../contracts/RelayOracleIdempotencyStore.sol";
 import {RelayOracleV2} from "../../contracts/RelayOracleV2.sol";
 import {RelayAmountRateLimiter} from "../../contracts/rate-limiters/RelayAmountRateLimiter.sol";
 import {DeployRelayAmountRateLimiter} from "../../script/DeployRelayAmountRateLimiter.s.sol";
 import {DeployRelayOracleIdempotencyStore} from "../../script/DeployRelayOracleIdempotencyStore.s.sol";
 import {DeployRelayOracleV2} from "../../script/DeployRelayOracleV2.s.sol";
+import {MockRelayOracleIdempotencySource} from "../mocks/MockRelayOracleIdempotencySource.sol";
 
 contract MockFastMintDeployPriceOracle {
   mapping(uint256 => Price) internal prices;
@@ -38,7 +38,7 @@ contract MockFastMintDeployPriceOracle {
 ///         at a time.
 contract FastMintDeployIntegrationTest is BaseTest {
   RelayHub internal hub;
-  RelayOracle internal oldOracle;
+  MockRelayOracleIdempotencySource internal legacySource;
   RelayOracleV2 internal v2;
   RelayOracleIdempotencyStore internal idempotencyStore;
   MockFastMintDeployPriceOracle internal priceOracle;
@@ -74,7 +74,7 @@ contract FastMintDeployIntegrationTest is BaseTest {
 
     // Dependencies the scripts expect to already exist on-chain (admin = deployer so it can wire).
     hub = new RelayHub(deployer);
-    oldOracle = new RelayOracle(deployer, address(hub));
+    legacySource = new MockRelayOracleIdempotencySource();
     priceOracle = new MockFastMintDeployPriceOracle();
     priceOracle.setPrice(
       _tokenId(CHAIN_ID, CURRENCY),
@@ -82,6 +82,7 @@ contract FastMintDeployIntegrationTest is BaseTest {
         usdPrice: 1e18,
         usdPriceDecimals: 18,
         currencyDecimals: 8,
+        publishTime: block.timestamp,
         expiration: block.timestamp + 1 days
       })
     );
@@ -98,8 +99,8 @@ contract FastMintDeployIntegrationTest is BaseTest {
     assertEq(address(v2.IDEMPOTENCY_STORE()), address(idempotencyStore));
 
     vm.prank(deployer);
-    idempotencyStore.addSource(address(oldOracle));
-    assertTrue(idempotencyStore.isSource(address(oldOracle)));
+    idempotencyStore.addSource(address(legacySource));
+    assertTrue(idempotencyStore.isSource(address(legacySource)));
 
     // The wiring checklist a fast deposit needs (all admin-gated; deployer holds every admin role).
     vm.startPrank(deployer);
@@ -151,7 +152,13 @@ contract FastMintDeployIntegrationTest is BaseTest {
         _tokenId(CHAIN_ID, CURRENCY),
         amount,
         address(feeCalculator),
-        abi.encode(_tokenId(CHAIN_ID, CURRENCY), feeBps, recipient, feePayer),
+        abi.encode(
+          _tokenId(CHAIN_ID, CURRENCY),
+          feeBps,
+          type(uint256).max,
+          recipient,
+          feePayer
+        ),
         address(limiter),
         bytes("")
       );

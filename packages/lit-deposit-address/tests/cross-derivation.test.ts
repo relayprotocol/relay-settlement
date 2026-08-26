@@ -10,6 +10,9 @@ import {
 } from "../scripts/client/local-derivation.js";
 
 const ROOT_KEY = `0x${"11".repeat(32)}`;
+const EXPECTED_V2_INDEXES = [
+  712433122, 929844241, 413308361, 981927593, 490777477, 1212769592, 1455078799, 128105356,
+];
 
 const derivationFields: DepositAddressTriggerDerivationFields = {
   inputVmType: "ethereum-vm",
@@ -22,6 +25,7 @@ const derivationFields: DepositAddressTriggerDerivationFields = {
   depositor: "0x000000000000000000000000000000000000beef",
   refundRecipient: "0x000000000000000000000000000000000000cafe",
   priceImpactBps: "50",
+  salt: "123",
 };
 
 function toAccountResponse(account: AccountInfo): AccountResponse {
@@ -37,10 +41,29 @@ describe("scripts/client/local-derivation parity with src/", () => {
   it("derivationFieldsToIndexes produces the same indexes off- and in-TEE", () => {
     const inTee = derivationFieldsToIndexes(derivationFields);
     const offTee = localDerivationFieldsToIndexes(derivationFields as DerivationFields);
+    expect(inTee).toEqual(EXPECTED_V2_INDEXES);
     expect(offTee).toEqual(inTee);
   });
 
-  for (const vmType of ["ethereum-vm", "bitcoin-vm", "solana-vm", "hyperliquid-vm"] as const) {
+  it("binds the derivation indexes to the v2 salt", () => {
+    const indexes = derivationFieldsToIndexes(derivationFields);
+    const changedSaltIndexes = derivationFieldsToIndexes({ ...derivationFields, salt: "124" });
+    const withoutSalt: Partial<DepositAddressTriggerDerivationFields> = { ...derivationFields };
+    delete withoutSalt.salt;
+
+    expect(changedSaltIndexes).not.toEqual(indexes);
+    expect(() =>
+      derivationFieldsToIndexes(withoutSalt as DepositAddressTriggerDerivationFields),
+    ).toThrow();
+  });
+
+  for (const vmType of [
+    "ethereum-vm",
+    "bitcoin-vm",
+    "solana-vm",
+    "hyperliquid-vm",
+    "tron-vm",
+  ] as const) {
     it(`deriveDepositWallet matches deriveWallet for ${vmType}`, async () => {
       const fields: DepositAddressTriggerDerivationFields = {
         ...derivationFields,

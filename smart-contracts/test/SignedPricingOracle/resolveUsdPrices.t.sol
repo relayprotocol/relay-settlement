@@ -2,8 +2,8 @@
 pragma solidity ^0.8.28;
 
 import {SignedPricingOracleBase} from "./SignedPricingOracleBase.sol";
-import {SignedPricingOracle} from "../../contracts/deposit-addresses/open/oracle/SignedPricingOracle.sol";
-import {Currency, Price} from "../../contracts/deposit-addresses/open/oracle/IPricingOracle.sol";
+import {SignedPricingOracle} from "../../contracts/deposit-addresses/oracle/SignedPricingOracle.sol";
+import {Currency, Price} from "../../contracts/deposit-addresses/oracle/IPricingOracle.sol";
 
 /// @notice Port of test/SignedPricingOracle/getUsdPrices.ts.
 contract SignedPricingOracleResolveUsdPricesTest is SignedPricingOracleBase {
@@ -14,6 +14,7 @@ contract SignedPricingOracleResolveUsdPricesTest is SignedPricingOracleBase {
     bytes internal constant OUTPUT_CURRENCY_BYTES =
         hex"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     uint256 internal constant FUTURE_EXPIRATION = 9_999_999_999;
+    uint256 internal constant PUBLISH_TIME = 1_700_000_000;
 
     uint256 internal constant INPUT_USD_PRICE = 100_000_000;
     uint8 internal constant INPUT_USD_DECIMALS = 8;
@@ -51,6 +52,7 @@ contract SignedPricingOracleResolveUsdPricesTest is SignedPricingOracleBase {
                 INPUT_USD_PRICE,
                 INPUT_USD_DECIMALS,
                 INPUT_CURRENCY_DECIMALS,
+                PUBLISH_TIME,
                 FUTURE_EXPIRATION
             );
     }
@@ -68,6 +70,7 @@ contract SignedPricingOracleResolveUsdPricesTest is SignedPricingOracleBase {
                 OUTPUT_USD_PRICE,
                 OUTPUT_USD_DECIMALS,
                 OUTPUT_CURRENCY_DECIMALS,
+                PUBLISH_TIME,
                 FUTURE_EXPIRATION
             );
     }
@@ -87,10 +90,12 @@ contract SignedPricingOracleResolveUsdPricesTest is SignedPricingOracleBase {
         assertEq(prices[0].usdPrice, INPUT_USD_PRICE);
         assertEq(prices[0].usdPriceDecimals, INPUT_USD_DECIMALS);
         assertEq(prices[0].currencyDecimals, INPUT_CURRENCY_DECIMALS);
+        assertEq(prices[0].publishTime, PUBLISH_TIME);
         assertEq(prices[0].expiration, FUTURE_EXPIRATION);
         assertEq(prices[1].usdPrice, OUTPUT_USD_PRICE);
         assertEq(prices[1].usdPriceDecimals, OUTPUT_USD_DECIMALS);
         assertEq(prices[1].currencyDecimals, OUTPUT_CURRENCY_DECIMALS);
+        assertEq(prices[1].publishTime, PUBLISH_TIME);
         assertEq(prices[1].expiration, FUTURE_EXPIRATION);
     }
 
@@ -138,6 +143,7 @@ contract SignedPricingOracleResolveUsdPricesTest is SignedPricingOracleBase {
             INPUT_USD_PRICE,
             INPUT_USD_DECIMALS,
             INPUT_CURRENCY_DECIMALS,
+            PUBLISH_TIME,
             FUTURE_EXPIRATION
         );
 
@@ -165,6 +171,7 @@ contract SignedPricingOracleResolveUsdPricesTest is SignedPricingOracleBase {
             INPUT_USD_PRICE,
             INPUT_USD_DECIMALS,
             INPUT_CURRENCY_DECIMALS,
+            PUBLISH_TIME,
             FUTURE_EXPIRATION
         );
 
@@ -193,6 +200,7 @@ contract SignedPricingOracleResolveUsdPricesTest is SignedPricingOracleBase {
             INPUT_USD_PRICE,
             INPUT_USD_DECIMALS,
             INPUT_CURRENCY_DECIMALS,
+            PUBLISH_TIME,
             expiration
         );
         vm.warp(expiration + 1);
@@ -220,6 +228,7 @@ contract SignedPricingOracleResolveUsdPricesTest is SignedPricingOracleBase {
             INPUT_USD_PRICE,
             INPUT_USD_DECIMALS,
             INPUT_CURRENCY_DECIMALS,
+            PUBLISH_TIME,
             FUTURE_EXPIRATION
         );
 
@@ -263,6 +272,7 @@ contract SignedPricingOracleResolveUsdPricesTest is SignedPricingOracleBase {
                 usdPrice: INPUT_USD_PRICE,
                 usdPriceDecimals: INPUT_USD_DECIMALS,
                 currencyDecimals: INPUT_CURRENCY_DECIMALS,
+                publishTime: PUBLISH_TIME,
                 expiration: FUTURE_EXPIRATION,
                 signature: ""
             });

@@ -348,8 +348,7 @@ body {
   grid-template-columns:
     minmax(140px, 1fr)
     minmax(180px, 1.2fr)
-    minmax(220px, 1.5fr)
-    minmax(180px, 1.4fr);
+    minmax(220px, 1.5fr);
 }
 
 .row-token {

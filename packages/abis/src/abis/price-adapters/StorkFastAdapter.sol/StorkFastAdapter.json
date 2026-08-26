@@ -3,12 +3,30 @@
     "type": "constructor",
     "inputs": [
       {
+        "name": "_oracle",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
         "name": "storkFastVerifier",
         "type": "address",
         "internalType": "contract IStorkFastVerifier"
       }
     ],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "ORACLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -38,7 +56,20 @@
   },
   {
     "type": "function",
-    "name": "cachedReports",
+    "name": "cachedReportHash",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "cachedReportValues",
     "inputs": [
       {
         "name": "feedId",
@@ -48,17 +79,12 @@
     ],
     "outputs": [
       {
-        "name": "reportHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
         "name": "quantizedValue",
         "type": "int192",
         "internalType": "int192"
       },
       {
-        "name": "publishTime",
+        "name": "timestampNs",
         "type": "uint64",
         "internalType": "uint64"
       }
@@ -135,12 +161,60 @@
   },
   {
     "type": "error",
+    "name": "ConflictingPriceAtTimestamp",
+    "inputs": [
+      {
+        "name": "feedId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "timestampNs",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "latestValue",
+        "type": "int192",
+        "internalType": "int192"
+      },
+      {
+        "name": "newValue",
+        "type": "int192",
+        "internalType": "int192"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "DuplicateAssetId",
+    "inputs": [
+      {
+        "name": "assetId",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "FeedNotInPayload",
     "inputs": [
       {
         "name": "feedId",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidOracle",
+    "inputs": [
+      {
+        "name": "oracle",
+        "type": "address",
+        "internalType": "address"
       }
     ]
   },
@@ -157,6 +231,38 @@
         "name": "quantizedValue",
         "type": "int192",
         "internalType": "int192"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "TimestampRollback",
+    "inputs": [
+      {
+        "name": "feedId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "timestampNs",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "latestTimestampNs",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnauthorizedCaller",
+    "inputs": [
+      {
+        "name": "caller",
+        "type": "address",
+        "internalType": "address"
       }
     ]
   }

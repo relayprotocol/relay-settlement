@@ -25,6 +25,9 @@ type TokenMetadataRow = {
   name: string | null
   symbol: string | null
   decimals: number | null
+  origin_family: string | null
+  origin_chain_id: string | null
+  origin_asset: string | null
   total_supply: string
   holders: number
 }
@@ -39,7 +42,8 @@ export type ParsedTransferLog = {
 
 const selectToken = async (db: Queryable, tokenId: string) =>
   db.oneOrNone<TokenMetadataRow>(
-    `SELECT token_id, name, symbol, decimals, total_supply, holders
+    `SELECT token_id, name, symbol, decimals, origin_family, origin_chain_id,
+            origin_asset, total_supply, holders
      FROM tokens
      WHERE token_id = $1`,
     [tokenId]
@@ -58,6 +62,9 @@ export const ensureToken = async (
   let name: string | null = null
   let symbol: string | null = null
   let decimals: number | null = null
+  let originFamily: string | null = null
+  let originChainId: string | null = null
+  let originAsset: string | null = null
 
   try {
     name = await contract.name(tokenId)
@@ -77,13 +84,39 @@ export const ensureToken = async (
     decimals = null
   }
 
+  try {
+    const metadata = await contract.tokenMetadata(tokenId)
+    originFamily = String(metadata.originFamily ?? metadata[3] ?? "") || null
+    originChainId = String(metadata.originChainId ?? metadata[4] ?? "") || null
+    originAsset = String(metadata.originAsset ?? metadata[5] ?? "") || null
+  } catch {
+    originFamily = null
+    originChainId = null
+    originAsset = null
+  }
+
   const now = new Date().toISOString()
   const resolvedName = name ?? "Unknown"
   await db.none(
-    `INSERT INTO tokens(token_id, name, symbol, decimals, total_supply, holders, transfers, created_at, updated_at)
-     VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `INSERT INTO tokens(
+       token_id, name, symbol, decimals, origin_family, origin_chain_id,
+       origin_asset, total_supply, holders, transfers, created_at, updated_at
+     ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      ON CONFLICT(token_id) DO NOTHING`,
-    [tokenId, resolvedName, symbol, decimals, "0", 0, 0, now, now]
+    [
+      tokenId,
+      resolvedName,
+      symbol,
+      decimals,
+      originFamily,
+      originChainId,
+      originAsset,
+      "0",
+      0,
+      0,
+      now,
+      now,
+    ]
   )
 
   return (
@@ -91,6 +124,9 @@ export const ensureToken = async (
       decimals,
       holders: 0,
       name: resolvedName,
+      origin_asset: originAsset,
+      origin_chain_id: originChainId,
+      origin_family: originFamily,
       symbol,
       token_id: tokenId,
       total_supply: "0",
@@ -103,11 +139,13 @@ export const refreshTokenMetadata = async (
   contract: Contract,
   tokenId: string
 ) => {
-  const [nameResult, symbolResult, decimalsResult] = await Promise.allSettled([
-    contract.name(tokenId),
-    contract.symbol(tokenId),
-    contract.decimals(tokenId),
-  ])
+  const [nameResult, symbolResult, decimalsResult, metadataResult] =
+    await Promise.allSettled([
+      contract.name(tokenId),
+      contract.symbol(tokenId),
+      contract.decimals(tokenId),
+      contract.tokenMetadata(tokenId),
+    ])
 
   const name =
     nameResult.status === "fulfilled" ? (nameResult.value as string) : null
@@ -116,14 +154,46 @@ export const refreshTokenMetadata = async (
   const decimals =
     decimalsResult.status === "fulfilled" ? Number(decimalsResult.value) : null
 
+  const metadata =
+    metadataResult.status === "fulfilled" ? metadataResult.value : null
+  const originFamily = metadata
+    ? String(metadata.originFamily ?? metadata[3] ?? "") || null
+    : null
+  const originChainId = metadata
+    ? String(metadata.originChainId ?? metadata[4] ?? "") || null
+    : null
+  const originAsset = metadata
+    ? String(metadata.originAsset ?? metadata[5] ?? "") || null
+    : null
+
   const now = new Date().toISOString()
   const resolvedName = name ?? "Unknown"
   await db.none(
-    "UPDATE tokens SET name = $1, symbol = $2, decimals = $3, updated_at = $4 WHERE token_id = $5",
-    [resolvedName, symbol, decimals, now, tokenId]
+    `UPDATE tokens
+     SET name = $1, symbol = $2, decimals = $3, origin_family = $4,
+         origin_chain_id = $5, origin_asset = $6, updated_at = $7
+     WHERE token_id = $8`,
+    [
+      resolvedName,
+      symbol,
+      decimals,
+      originFamily,
+      originChainId,
+      originAsset,
+      now,
+      tokenId,
+    ]
   )
 
-  return { decimals, name: resolvedName, symbol, token_id: tokenId }
+  return {
+    decimals,
+    name: resolvedName,
+    originAsset,
+    originChainId,
+    originFamily,
+    symbol,
+    token_id: tokenId,
+  }
 }
 
 export const refreshAddressBalances = async (

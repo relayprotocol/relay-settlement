@@ -32,6 +32,7 @@ export function makeTrigger(
       depositor: DEPOSITOR,
       refundRecipient: DEPOSITOR,
       priceImpactBps: "200",
+      salt: "123",
     },
     orderId: ORDER_ID,
     nonce: "1",

@@ -8,9 +8,12 @@ import {BuildPayloadParams, IPayloadBuilder} from "../RelayAllocator.sol";
 import {Utils} from "../Utils.sol";
 
 /// @notice Individual call within a batch request
+/// @dev A call carries either its calldata or a commitment to it, and both forms hash to the
+/// same EIP-712 digest, so the executor can supply the calldata a committed call omits
 struct Call {
   address to; /// @notice Target contract address
   bytes data; /// @notice Call data
+  bytes32 dataHash; /// @notice Commitment to the call data, zero when `data` is supplied
   uint256 value; /// @notice Native token value to send
   bool allowFailure;
 } /// @notice Whether the batch may continue if this call fails
@@ -21,6 +24,16 @@ struct CallRequest {
   uint256 nonce; /// @notice Request nonce for replay protection
   uint256 expiration;
 } /// @notice Request expiration timestamp
+
+/// @notice Versioned routed withdrawal data bundling the selected router and its call commitment
+/// @param version Routed data version, must equal ROUTED_WITHDRAWAL_DATA_VERSION
+/// @param router Allowlisted router receiving the withdrawal and executing the calls
+/// @param dataHash Commitment to the calldata of the router call, keeping the calls off-chain
+struct RoutedWithdrawalData {
+  uint8 version;
+  address router;
+  bytes32 dataHash;
+}
 
 /// @title EthereumVmPayloadBuilder
 /// @author Relay Protocol
@@ -38,6 +51,22 @@ contract EthereumVmPayloadBuilder is IPayloadBuilder {
   /// @param length Actual encoded length
   error InvalidDepositoryLength(uint256 length);
 
+  /// @notice Thrown when routed withdrawal data has an unsupported version
+  /// @param version Actual encoded version
+  error UnsupportedRoutedDataVersion(uint8 version);
+
+  /// @notice Thrown when routed withdrawal data commits to a degenerate calldata hash
+  /// @dev Zero reads as uncommitted and `keccak256("")` is a bare call. A commitment to a
+  /// bundle that runs but does nothing is not detectable from a hash.
+  error EmptyRoutedCallsHash();
+
+  /// @notice Thrown when a call supplies both its calldata and a commitment to it
+  error AmbiguousCallData();
+
+  /// @notice Thrown when the router is not allowlisted for the chain and depository
+  /// @param router Router address
+  error RouterNotAllowed(address router);
+
   /// @notice Config contract used to resolve namespaced chain metadata
   Config public immutable CONFIG;
 
@@ -48,6 +77,16 @@ contract EthereumVmPayloadBuilder is IPayloadBuilder {
   /// @notice Prefix used when deriving config keys for Ethereum VM request expiration lookups
   bytes32 internal constant ETHEREUM_VM_EXPIRATION_PREFIX =
     keccak256("ETHEREUM_VM_EXPIRATION");
+
+  /// @notice Prefix used when deriving config keys for Ethereum VM router allowlist lookups
+  bytes32 internal constant ETHEREUM_VM_ROUTER_ALLOWED_PREFIX =
+    keccak256("ETHEREUM_VM_ROUTER_ALLOWED");
+
+  /// @notice Hash of empty calldata, which no routed bundle may commit to
+  bytes32 internal constant EMPTY_CALLDATA_HASH = keccak256("");
+
+  /// @notice Supported routed withdrawal data version
+  uint8 public constant ROUTED_WITHDRAWAL_DATA_VERSION = 1;
 
   /// @notice The signing domain for EIP712
   string public constant SIGNING_DOMAIN = "RelayDepository";
@@ -71,10 +110,11 @@ contract EthereumVmPayloadBuilder is IPayloadBuilder {
   }
 
   /// @inheritdoc IPayloadBuilder
-  /// @dev Builds a single-call payload that transfers either native ETH or ERC-20 tokens.
+  /// @dev Empty `params.data` builds a single native or ERC-20 transfer to the receiver.
+  /// Routed data adds a call committing to the router calldata the executor supplies.
   function buildPayload(
-    string calldata /* chainId */,
-    bytes calldata /* depository */,
+    string calldata chainId,
+    bytes calldata depository,
     BuildPayloadParams calldata params
   ) external view override returns (bytes memory payload) {
     if (params.receiver.length != 20) {
@@ -87,35 +127,33 @@ contract EthereumVmPayloadBuilder is IPayloadBuilder {
     uint256 expirationDelay = uint256(
       CONFIG.getConfigValue(getExpirationKey())
     );
-    CallRequest memory request = CallRequest({
-      calls: new Call[](1),
-      nonce: computeNonce(params),
-      expiration: block.timestamp + expirationDelay
-    });
 
     address currencyAddress = address(bytes20(params.currency));
     address receiverAddress = address(bytes20(params.receiver));
-    if (currencyAddress == address(0)) {
-      // If this is a native transfer, we need to set the value to the amount and the data to an empty bytes array
-      request.calls[0] = Call({
-        to: receiverAddress,
+
+    Call[] memory calls = new Call[](params.data.length == 0 ? 1 : 2);
+    calls[0] = _transferCall(currencyAddress, receiverAddress, params.amount);
+    if (params.data.length != 0) {
+      RoutedWithdrawalData memory routed = _decodeRoutedWithdrawalData(
+        chainId,
+        depository,
+        params.data
+      );
+
+      calls[1] = Call({
+        to: routed.router,
         data: bytes(""),
-        value: params.amount,
-        allowFailure: false
-      });
-    } else {
-      // Otherwise we assume this is an ERC20 transfer
-      request.calls[0] = Call({
-        to: currencyAddress,
-        data: abi.encodeWithSignature(
-          "transfer(address,uint256)",
-          receiverAddress,
-          params.amount
-        ),
+        dataHash: routed.dataHash,
         value: 0,
         allowFailure: false
       });
     }
+
+    CallRequest memory request = CallRequest({
+      calls: calls,
+      nonce: computeNonce(chainId, depository, params),
+      expiration: block.timestamp + expirationDelay
+    });
 
     return abi.encode(request);
   }
@@ -163,27 +201,120 @@ contract EthereumVmPayloadBuilder is IPayloadBuilder {
     return ETHEREUM_VM_EXPIRATION_PREFIX;
   }
 
-  /// @notice Computes the request nonce from the block number and request-specific payload fields
+  /// @notice Returns the config key allowlisting a router for a chain and depository
+  /// @param chainId Relay chain id
+  /// @param depository Depository address on the withdrawal chain
+  /// @param router Router address on the withdrawal chain
+  /// @return key Config key
+  function getRouterAllowedKey(
+    string calldata chainId,
+    address depository,
+    address router
+  ) public pure returns (bytes32 key) {
+    return
+      keccak256(
+        abi.encode(
+          ETHEREUM_VM_ROUTER_ALLOWED_PREFIX,
+          keccak256(bytes(chainId)),
+          depository,
+          router
+        )
+      );
+  }
+
+  /// @notice Computes the request nonce from the block, the builder identity, and the full request
+  /// @dev Commits to `address(this)`, the chain id, the depository, and every field of `params`, so
+  /// a nonce built for one builder, chain, or depository can never be reused for another.
+  /// `block.number` leads the preimage so a rebuild of the same request in a later block yields a
+  /// fresh nonce.
+  /// @param chainId Relay chain id of the withdrawal chain
+  /// @param depository Encoded depository address on the withdrawal chain
   /// @param params Payload builder parameters supplied by the allocator
   /// @return nonce Derived request nonce
   function computeNonce(
+    string calldata chainId,
+    bytes calldata depository,
     BuildPayloadParams calldata params
   ) internal view returns (uint256 nonce) {
     nonce = uint256(
       keccak256(
-        abi.encode(
-          block.number,
-          params.nonce,
-          params.currency,
-          params.receiver,
-          params.data,
-          params.amount
-        )
+        abi.encode(block.number, address(this), chainId, depository, params)
       )
     );
   }
 
+  /// @notice Builds the native or ERC-20 withdrawal transfer call
+  /// @param currencyAddress Withdrawal currency, zero address for native transfers
+  /// @param receiverAddress Address receiving the withdrawal
+  /// @param amount Withdrawal amount
+  /// @return transferCall Depository call transferring the withdrawal
+  function _transferCall(
+    address currencyAddress,
+    address receiverAddress,
+    uint256 amount
+  ) internal pure returns (Call memory transferCall) {
+    if (currencyAddress == address(0)) {
+      // If this is a native transfer, we need to set the value to the amount and the data to an empty bytes array
+      transferCall = Call({
+        to: receiverAddress,
+        data: bytes(""),
+        dataHash: bytes32(0),
+        value: amount,
+        allowFailure: false
+      });
+    } else {
+      // Otherwise we assume this is an ERC20 transfer
+      transferCall = Call({
+        to: currencyAddress,
+        data: abi.encodeWithSignature(
+          "transfer(address,uint256)",
+          receiverAddress,
+          amount
+        ),
+        dataHash: bytes32(0),
+        value: 0,
+        allowFailure: false
+      });
+    }
+  }
+
+  /// @notice Decodes routed withdrawal data and enforces the routed-mode constraints
+  /// @param chainId Relay chain id
+  /// @param depository Encoded depository address
+  /// @param data Encoded routed withdrawal data
+  /// @return routed Decoded routed withdrawal data
+  function _decodeRoutedWithdrawalData(
+    string calldata chainId,
+    bytes calldata depository,
+    bytes calldata data
+  ) internal view returns (RoutedWithdrawalData memory routed) {
+    if (depository.length != 20) {
+      revert InvalidDepositoryLength(depository.length);
+    }
+
+    routed = abi.decode(data, (RoutedWithdrawalData));
+    if (routed.version != ROUTED_WITHDRAWAL_DATA_VERSION) {
+      revert UnsupportedRoutedDataVersion(routed.version);
+    }
+    if (
+      routed.dataHash == bytes32(0) || routed.dataHash == EMPTY_CALLDATA_HASH
+    ) {
+      revert EmptyRoutedCallsHash();
+    }
+
+    // `Config` reverts on an unset key and cannot delete one, so revoking an
+    // allowlisted router means overwriting its value: `1` allows, anything else does not
+    bytes32 allowedValue = CONFIG.getConfigValue(
+      getRouterAllowedKey(chainId, address(bytes20(depository)), routed.router)
+    );
+    if (allowedValue != bytes32(uint256(1))) {
+      revert RouterNotAllowed(routed.router);
+    }
+  }
+
   /// @notice Hashes a CallRequest and returns its EIP-712 digest
+  /// @dev A committed call substitutes its `dataHash` for `keccak256(data)`, so the digest
+  /// equals the one the depository derives from the same call with its calldata supplied
   /// @param request CallRequest to hash
   /// @param domainSeparator EIP-712 domain separator
   /// @return eip712Hash EIP-712 hash
@@ -196,12 +327,19 @@ contract EthereumVmPayloadBuilder is IPayloadBuilder {
 
     // Iterate over the underlying calls
     for (uint256 i = 0; i < request.calls.length; ++i) {
+      bytes32 dataHash = request.calls[i].dataHash;
+      if (dataHash == bytes32(0)) {
+        dataHash = keccak256(request.calls[i].data);
+      } else if (request.calls[i].data.length != 0) {
+        revert AmbiguousCallData();
+      }
+
       // Hash the call
       bytes32 callHash = keccak256(
         abi.encode(
           CALL_TYPEHASH,
           request.calls[i].to,
-          keccak256(request.calls[i].data),
+          dataHash,
           request.calls[i].value,
           request.calls[i].allowFailure
         )

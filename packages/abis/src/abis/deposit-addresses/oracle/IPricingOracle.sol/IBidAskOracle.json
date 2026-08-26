@@ -1,0 +1,75 @@
+[
+  {
+    "type": "function",
+    "name": "resolveBidAskPrices",
+    "inputs": [
+      {
+        "name": "currencies",
+        "type": "tuple[]",
+        "internalType": "struct Currency[]",
+        "components": [
+          {
+            "name": "chainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "currency",
+            "type": "bytes",
+            "internalType": "bytes"
+          }
+        ]
+      },
+      {
+        "name": "extraData",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "bidAsks",
+        "type": "tuple[]",
+        "internalType": "struct BidAsk[]",
+        "components": [
+          {
+            "name": "midPrice",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "bidPrice",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "askPrice",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "usdPriceDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "currencyDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "publishTime",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "expiration",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "nonpayable"
+  }
+]

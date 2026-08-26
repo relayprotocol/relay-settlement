@@ -8,14 +8,14 @@ import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol"
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 
 import {RelayHub} from "../../contracts/RelayHub.sol";
-import {Price} from "../../contracts/deposit-addresses/open/oracle/IPricingOracle.sol";
+import {Price} from "../../contracts/deposit-addresses/oracle/IPricingOracle.sol";
 import {IFeeCalculator} from "../../contracts/fee-calculators/IFeeCalculator.sol";
 import {RelayBpsFeeCalculator} from "../../contracts/fee-calculators/RelayBpsFeeCalculator.sol";
-import {RelayOracle} from "../../contracts/RelayOracle.sol";
 import {RelayOracleIdempotencyStore} from "../../contracts/RelayOracleIdempotencyStore.sol";
 import {RelayOracleV2} from "../../contracts/RelayOracleV2.sol";
 import {IRateLimiter} from "../../contracts/rate-limiters/IRateLimiter.sol";
 import {RelayAmountRateLimiter} from "../../contracts/rate-limiters/RelayAmountRateLimiter.sol";
+import {MockRelayOracleIdempotencySource} from "../mocks/MockRelayOracleIdempotencySource.sol";
 
 contract FlatFastMintFeeCalculator is IFeeCalculator {
   function calculateFee(
@@ -87,7 +87,7 @@ contract MockOracleV2PriceOracle {
 ///         fee), dual-key dedup against the old oracle, MINT/BURN/TRANSFER parity, fee-inv fuzz.
 contract RelayOracleV2Test is BaseTest {
   RelayHub internal hub;
-  RelayOracle internal oldOracle;
+  MockRelayOracleIdempotencySource internal legacySource;
   RelayOracleIdempotencyStore internal idempotencyStore;
   MockOracleV2PriceOracle internal priceOracle;
   RelayBpsFeeCalculator internal feeCalculator;
@@ -103,7 +103,6 @@ contract RelayOracleV2Test is BaseTest {
   address internal otherAddr;
 
   bytes32 internal v2Domain;
-  bytes32 internal oldDomain;
 
   // EIP-712 typehash matching contracts/RelayOracleV2.sol (same as RelayOracle)
   bytes32 internal constant EXECUTION_TYPEHASH =
@@ -126,7 +125,7 @@ contract RelayOracleV2Test is BaseTest {
     otherAddr = makeAddr("otherAddr");
 
     hub = new RelayHub(admin);
-    oldOracle = new RelayOracle(admin, address(hub));
+    legacySource = new MockRelayOracleIdempotencySource();
     idempotencyStore = new RelayOracleIdempotencyStore(admin);
     priceOracle = new MockOracleV2PriceOracle();
     _setUsdPrice(_tokenId(CHAIN_ID, CURRENCY), 1e18, 18, 8);
@@ -137,12 +136,10 @@ contract RelayOracleV2Test is BaseTest {
 
     bytes32 operatorRole = hub.OPERATOR_ROLE();
     vm.startPrank(admin);
-    idempotencyStore.addSource(address(oldOracle));
+    idempotencyStore.addSource(address(legacySource));
     hub.grantRole(operatorRole, address(v2));
-    hub.grantRole(operatorRole, address(oldOracle));
     idempotencyStore.grantRole(idempotencyStore.WRITE_ROLE(), address(v2));
     v2.grantRole(v2.ORACLE_ROLE(), oracleSigner);
-    oldOracle.grantRole(oldOracle.ORACLE_ROLE(), oracleSigner);
     limiter.grantRole(limiter.CONSUMER_ROLE(), address(v2));
     limiter.setBucketConfig(
       RelayAmountRateLimiter.BucketConfig({
@@ -164,12 +161,6 @@ contract RelayOracleV2Test is BaseTest {
       "2",
       block.chainid,
       address(v2)
-    );
-    oldDomain = Eip712.domainSeparator(
-      "RelayOracle",
-      "1",
-      block.chainid,
-      address(oldOracle)
     );
   }
 
@@ -194,6 +185,7 @@ contract RelayOracleV2Test is BaseTest {
         usdPrice: usdPrice,
         usdPriceDecimals: usdPriceDecimals,
         currencyDecimals: currencyDecimals,
+        publishTime: block.timestamp,
         expiration: block.timestamp + 1 days
       })
     );
@@ -258,7 +250,13 @@ contract RelayOracleV2Test is BaseTest {
         currency,
         amount,
         address(feeCalculator),
-        abi.encode(_tokenId(chainId, currency), feeBps, recipient, feePayer)
+        abi.encode(
+          _tokenId(chainId, currency),
+          feeBps,
+          type(uint256).max,
+          recipient,
+          feePayer
+        )
       );
   }
 
@@ -668,7 +666,7 @@ contract RelayOracleV2Test is BaseTest {
       tokenId,
       amount,
       address(feeCalculator),
-      abi.encode(tokenId, feeBps, feeRecipient, feePayer),
+      abi.encode(tokenId, feeBps, type(uint256).max, feeRecipient, feePayer),
       address(0), // no rateLimiter → rate limiting skipped
       bytes("")
     );
@@ -809,6 +807,40 @@ contract RelayOracleV2Test is BaseTest {
     v2.execute(_v2Exec(key, actions), oracleSigner, sig);
   }
 
+  function test_fastMint_revertsWhenFeeExceedsMax() public {
+    bytes32 key = keccak256("fast-fee-over-max");
+    uint256 amount = 100e8;
+    uint256 feeBps = 1e16; // 1% → fee 1e8, cap set just below
+    bytes[] memory actions = new bytes[](1);
+    actions[0] = _fastMintActionWithFeeCalculator(
+      orderAddr,
+      CHAIN_ID,
+      CURRENCY,
+      amount,
+      address(feeCalculator),
+      abi.encode(
+        _tokenId(CHAIN_ID, CURRENCY),
+        feeBps,
+        1e8 - 1,
+        feeRecipient,
+        feePayer
+      )
+    );
+    bytes memory sig = _sign(oracleSignerPk, v2Domain, key, actions);
+
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        RelayBpsFeeCalculator.FeeExceedsMax.selector,
+        1e8,
+        1e8 - 1
+      )
+    );
+    v2.execute(_v2Exec(key, actions), oracleSigner, sig);
+
+    // Whole execution reverted: key not consumed, so the deposit stays re-attestable as slow.
+    assertFalse(v2.isExecuted(key));
+  }
+
   function test_fastMint_revertsInvalidFeeRecipient() public {
     bytes32 key = keccak256("fast-no-recipient");
     bytes[] memory actions = new bytes[](1);
@@ -832,21 +864,8 @@ contract RelayOracleV2Test is BaseTest {
     bytes32 key = keccak256("shared-key");
     uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
 
-    // Execute the key on the OLD oracle first.
-    bytes[] memory oldActions = new bytes[](1);
-    oldActions[0] = abi.encode(
-      uint8(RelayOracle.ActionType.MINT),
-      orderAddr,
-      tokenId,
-      uint256(1e8)
-    );
-    bytes memory oldSig = _sign(oracleSignerPk, oldDomain, key, oldActions);
-    oldOracle.execute(
-      RelayOracle.Execution({idempotencyKey: key, actions: oldActions}),
-      oracleSigner,
-      oldSig
-    );
-    assertTrue(oldOracle.isExecuted(key));
+    legacySource.setExecuted(key, true);
+    assertTrue(legacySource.isExecuted(key));
 
     // The same key must be rejected on v2 (migration safety).
     assertTrue(idempotencyStore.isExecuted(key));
@@ -866,21 +885,7 @@ contract RelayOracleV2Test is BaseTest {
     bytes32 oldKey = keccak256("old-key");
     bytes32 freshKey = keccak256("fresh-key");
     uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
-    address oldRecipient = makeAddr("oldRecipient");
-
-    bytes[] memory oldActions = new bytes[](1);
-    oldActions[0] = abi.encode(
-      uint8(RelayOracle.ActionType.MINT),
-      oldRecipient,
-      tokenId,
-      uint256(1e8)
-    );
-    bytes memory oldSig = _sign(oracleSignerPk, oldDomain, oldKey, oldActions);
-    oldOracle.execute(
-      RelayOracle.Execution({idempotencyKey: oldKey, actions: oldActions}),
-      oracleSigner,
-      oldSig
-    );
+    legacySource.setExecuted(oldKey, true);
 
     // Batch: the old key is silently skipped; the fresh key executes.
     bytes[] memory skipped = new bytes[](1);
@@ -968,25 +973,12 @@ contract RelayOracleV2Test is BaseTest {
   function test_execute_checksStoreSources() public {
     bytes32 key = keccak256("store-source-old-key");
     uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
-
-    bytes[] memory oldActions = new bytes[](1);
-    oldActions[0] = abi.encode(
-      uint8(RelayOracle.ActionType.MINT),
-      orderAddr,
-      tokenId,
-      uint256(1e8)
-    );
-    bytes memory oldSig = _sign(oracleSignerPk, oldDomain, key, oldActions);
-    oldOracle.execute(
-      RelayOracle.Execution({idempotencyKey: key, actions: oldActions}),
-      oracleSigner,
-      oldSig
-    );
+    legacySource.setExecuted(key, true);
 
     RelayOracleIdempotencyStore storeB = new RelayOracleIdempotencyStore(admin);
     RelayOracleV2 v2b = new RelayOracleV2(admin, address(hub), address(storeB));
     vm.startPrank(admin);
-    storeB.addSource(address(oldOracle));
+    storeB.addSource(address(legacySource));
     hub.grantRole(hub.OPERATOR_ROLE(), address(v2b));
     storeB.grantRole(storeB.WRITE_ROLE(), address(v2b));
     v2b.grantRole(v2b.ORACLE_ROLE(), oracleSigner);
@@ -1218,70 +1210,49 @@ contract RelayOracleV2Test is BaseTest {
 
   function test_idempotencyStore_allowsUpToFiveSources() public {
     RelayOracleIdempotencyStore store = new RelayOracleIdempotencyStore(admin);
-    RelayOracle[6] memory sourceOracles;
+    MockRelayOracleIdempotencySource[6] memory sources;
     bytes32 key = keccak256("source-five-key");
 
     vm.startPrank(admin);
     for (uint256 i; i < 6; i++) {
-      sourceOracles[i] = new RelayOracle(admin, address(hub));
-      sourceOracles[i].grantRole(sourceOracles[i].ORACLE_ROLE(), oracleSigner);
+      sources[i] = new MockRelayOracleIdempotencySource();
       if (i < 5) {
-        store.addSource(address(sourceOracles[i]));
-        assertTrue(store.isSource(address(sourceOracles[i])));
+        store.addSource(address(sources[i]));
+        assertTrue(store.isSource(address(sources[i])));
       }
     }
     vm.expectRevert(RelayOracleIdempotencyStore.TooManySources.selector);
-    store.addSource(address(sourceOracles[5]));
+    store.addSource(address(sources[5]));
     vm.stopPrank();
 
-    bytes[] memory sourceActions = new bytes[](0);
-    bytes32 sourceDomain = Eip712.domainSeparator(
-      "RelayOracle",
-      "1",
-      block.chainid,
-      address(sourceOracles[4])
-    );
-    bytes memory sourceSig = _sign(
-      oracleSignerPk,
-      sourceDomain,
-      key,
-      sourceActions
-    );
-    sourceOracles[4].execute(
-      RelayOracle.Execution({idempotencyKey: key, actions: sourceActions}),
-      oracleSigner,
-      sourceSig
-    );
+    sources[4].setExecuted(key, true);
 
     assertEq(store.sourceCount(), 5);
     assertFalse(store.isStored(key));
     assertTrue(store.isExecuted(key));
   }
 
-  function test_idempotencyStore_removeSourceStopsCheckingIt() public {
-    bytes32 key = keccak256("removed-source-key");
-    uint256 tokenId = _tokenId(CHAIN_ID, CURRENCY);
+  function test_idempotencyStore_sourceHistoryIsPermanentlyHonoured() public {
+    // Sources are add-only: once a legacy oracle is integrated, keys recorded
+    // only in that source must remain flagged as executed forever, otherwise a
+    // previously processed payload could be replayed (VIG-PC-195).
+    bytes32 key = keccak256("legacy-source-key");
+    legacySource.setExecuted(key, true);
 
-    bytes[] memory oldActions = new bytes[](1);
-    oldActions[0] = abi.encode(
-      uint8(RelayOracle.ActionType.MINT),
-      orderAddr,
-      tokenId,
-      uint256(1e8)
-    );
-    bytes memory oldSig = _sign(oracleSignerPk, oldDomain, key, oldActions);
-    oldOracle.execute(
-      RelayOracle.Execution({idempotencyKey: key, actions: oldActions}),
-      oracleSigner,
-      oldSig
-    );
     assertTrue(idempotencyStore.isExecuted(key));
+    assertTrue(idempotencyStore.isSource(address(legacySource)));
 
+    // No admin action can drop the source or its replay protection.
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        RelayOracleIdempotencyStore.SourceAlreadyAdded.selector,
+        address(legacySource)
+      )
+    );
     vm.prank(admin);
-    idempotencyStore.removeSource(address(oldOracle));
+    idempotencyStore.addSource(address(legacySource));
 
-    assertFalse(idempotencyStore.isSource(address(oldOracle)));
-    assertFalse(idempotencyStore.isExecuted(key));
+    assertTrue(idempotencyStore.isExecuted(key));
   }
 
   function test_fastMint_usesActionFeeCalculatorModuleAndData() public {
@@ -1435,7 +1406,13 @@ contract RelayOracleV2Test is BaseTest {
       tokenId,
       amount,
       address(feeCalculator),
-      abi.encode(tokenId, uint256(1e16), feeRecipient, feePayer),
+      abi.encode(
+        tokenId,
+        uint256(1e16),
+        type(uint256).max,
+        feeRecipient,
+        feePayer
+      ),
       address(limiter),
       bytes("")
     );

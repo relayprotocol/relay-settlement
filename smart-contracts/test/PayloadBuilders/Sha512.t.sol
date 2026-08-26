@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
-import {Sha512} from "../../contracts/payload-builders/Sha512.sol";
+import {Sha512} from "../../contracts/payload-builders/utils/Sha512.sol";
 
 /// @notice Known-answer tests for the from-scratch SHA-512 (FIPS 180-4),
 /// including the padding boundaries (lengths around the 112/128-byte block

@@ -3,6 +3,11 @@
     "type": "constructor",
     "inputs": [
       {
+        "name": "_oracle",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
         "name": "verifierProxy",
         "type": "address",
         "internalType": "contract IVerifierProxy"
@@ -18,6 +23,19 @@
   {
     "type": "function",
     "name": "FEE_TOKEN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "ORACLE",
     "inputs": [],
     "outputs": [
       {
@@ -87,6 +105,11 @@
         "name": "benchmarkPrice",
         "type": "int192",
         "internalType": "int192"
+      },
+      {
+        "name": "validFromTimestamp",
+        "type": "uint32",
+        "internalType": "uint32"
       },
       {
         "name": "observationsTimestamp",
@@ -173,6 +196,59 @@
   },
   {
     "type": "error",
+    "name": "InvalidBidAsk",
+    "inputs": [
+      {
+        "name": "benchmarkPrice",
+        "type": "int192",
+        "internalType": "int192"
+      },
+      {
+        "name": "bid",
+        "type": "int192",
+        "internalType": "int192"
+      },
+      {
+        "name": "ask",
+        "type": "int192",
+        "internalType": "int192"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidOracle",
+    "inputs": [
+      {
+        "name": "oracle",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidReportTimeRange",
+    "inputs": [
+      {
+        "name": "validFromTimestamp",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "observationsTimestamp",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "expiresAt",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InvalidVerifierProxy",
     "inputs": []
   },
@@ -200,6 +276,38 @@
         "name": "blockTimestamp",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "TimestampRollback",
+    "inputs": [
+      {
+        "name": "feedId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "observationsTimestamp",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "latestObservationsTimestamp",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnauthorizedCaller",
+    "inputs": [
+      {
+        "name": "caller",
+        "type": "address",
+        "internalType": "address"
       }
     ]
   },

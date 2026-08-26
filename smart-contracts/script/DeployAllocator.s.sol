@@ -13,7 +13,7 @@ import {ScriptBase} from "./utils/ScriptBase.sol";
 ///   DEPLOYER_PRIVATE_KEY – deployer key (required)
 ///   OWNER                – optional, defaults to the deployer
 ///   HUB                  – required, RelayHub address
-///   ORACLE               – required, RelayOracle address used to verify spender signatures
+///   ORACLE               – required, oracle signer address used to verify spender signatures
 contract DeployAllocator is ScriptBase {
     function run() external returns (RelayAllocator allocator) {
         address owner = _envAddressOrDeployer("OWNER");

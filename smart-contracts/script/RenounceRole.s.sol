@@ -6,8 +6,7 @@ import {console} from "forge-std/console.sol";
 
 import {ScriptBase} from "./utils/ScriptBase.sol";
 
-/// @notice Renounces an AccessControl role for the deployer account. Replaces
-/// the legacy `yarn hardhat renounce-role` task.
+/// @notice Renounces an AccessControl role for the deployer account.
 ///
 /// Env:
 ///   DEPLOYER_PRIVATE_KEY – key whose role is being renounced (required)

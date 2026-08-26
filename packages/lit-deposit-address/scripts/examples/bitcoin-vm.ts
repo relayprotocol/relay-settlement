@@ -42,8 +42,7 @@
  *                                 "bitcoin").
  *   BITCOIN_VM_AMOUNT             deposit amount as a decimal BTC string
  *                                 (e.g. "0.0001"). Parsed with 8 decimals.
- *   SOLVER_PRIVATE_KEY            EVM solver key (0x-prefixed); pin to keep
- *                                 the deposit address stable.
+ *   SOLVER_PRIVATE_KEY            EVM solver key used to authorize the order.
  *
  *   RELAY_ORACLE_URL              oracle base URL.
  *
@@ -401,6 +400,7 @@ const derivationFields: DerivationFields = {
   depositor: funderEncoded,
   refundRecipient: funderEncoded,
   priceImpactBps: "200",
+  salt: bytesToBigInt(randomBytes(32)).toString(),
 };
 
 console.log(`==> funder / depositor / refund (btc): ${funderAddress}`);
@@ -674,6 +674,7 @@ await submitTrigger(hub, {
     depositor: derivationFields.depositor as Hex,
     refundRecipient: derivationFields.refundRecipient as Hex,
     priceImpactBps: BigInt(derivationFields.priceImpactBps),
+    salt: BigInt(derivationFields.salt),
   },
   orderId,
   nonce: nonceBig,
@@ -817,6 +818,7 @@ const signRequest = await addSolverRequestSignature(
         usdPrice: p.usdPrice.toString(),
         usdPriceDecimals: p.usdPriceDecimals,
         currencyDecimals: p.currencyDecimals,
+        publishTime: p.publishTime.toString(),
         expiration: p.expiration.toString(),
       })),
       extraData,

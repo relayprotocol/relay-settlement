@@ -23,13 +23,14 @@ cd "$DEPOSITORY_DIR"
 # Required env (always):
 #   ALLOCATOR              MPC signer address derived from the staging
 #                          RelayAllocator (NOT the allocator contract address).
-#                          Get with `yarn hardhat allocator:signer-address \
-#                            --network aurora --env stag --family ethereum-vm`.
+#                          Get from the repo root with
+#                          `yarn workspace @relay-settlement/multisig-tools tsx \
+#                            scripts/derive-signer-address.ts \
+#                            --env stag --family ethereum-vm`.
 #   DEPOSITORY_OWNER       MPC signer address derived from the staging
 #                          RelayMultisigSigner (the cross-chain owner).
-#                          Get with `yarn hardhat allocator:signer-address \
-#                            --network aurora --allocator <multisigSigner> \
-#                            --family ethereum-vm`.
+#                          Use the same command with
+#                          `--multisig-signer <multisigSigner>`.
 #
 # Required env (with --execute):
 #   DEPLOYER_PRIVATE_KEY   Private key of the deployer wallet

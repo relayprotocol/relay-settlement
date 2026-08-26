@@ -2,7 +2,11 @@ import type { Command } from "commander"
 import { checksumAddress } from "viem"
 import { createSafeClient } from "@safe-global/sdk-starter-kit"
 import { createTransactionBundle } from "../builders/utils"
-import { resolveNetwork } from "../helpers/network"
+import { assertEnvOrSigner, resolveNetwork } from "../helpers/network"
+import {
+  describeNonceConflicts,
+  findNonceConflicts,
+} from "../helpers/nonceConflicts"
 
 export function registerSubmit(program: Command) {
   program
@@ -20,14 +24,42 @@ export function registerSubmit(program: Command) {
     )
     .option("-n, --network <slug>", "Network slug (from settlement-networks)")
     .option("--rpc-url <url>", "RPC URL override")
+    .option(
+      "-e, --env <env>",
+      "Deployment env for the --network contract lookup (prod | dev | stag); required unless --relay-multisig-signer is set"
+    )
+    .option(
+      "--allow-nonce-conflict",
+      "Submit even if another manifest claims the same nonce slot"
+    )
     .action(
       async ({
         transactions: transactionsPath,
         relayMultisigSigner,
         network,
         rpcUrl,
+        env,
+        allowNonceConflict,
       }) => {
+        assertEnvOrSigner({ env, multisigSignerOverride: relayMultisigSigner })
+
+        // Two manifests written against the same starting nonce both pass the
+        // on-chain nonce check while both are pending; the one that executes
+        // second is left unexecutable. Catch that before owners spend a signing
+        // round on it.
+        const conflicts = await findNonceConflicts(transactionsPath)
+        if (conflicts.length > 0) {
+          const details = describeNonceConflicts(conflicts)
+          if (!allowNonceConflict) {
+            throw new Error(
+              `❌ Nonce conflict: another manifest claims the same unexecuted nonce slot(s):\n${details}\n   Whichever executes first burns the nonce and leaves the other dead. Regenerate this manifest against the current nonce, or pass --allow-nonce-conflict if the other manifest is being abandoned.`
+            )
+          }
+          console.warn(`⚠️  Submitting despite nonce conflict(s):\n${details}`)
+        }
+
         const resolved = resolveNetwork({
+          env,
           multisigSignerOverride: relayMultisigSigner as
             | `0x${string}`
             | undefined,

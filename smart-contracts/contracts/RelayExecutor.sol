@@ -181,11 +181,11 @@ contract RelayExecutor is AccessControl, EIP712, ReentrancyGuard {
   ///      address, making each authorization single-use.
   function _validateRequest(
     ExecuteAndWithdrawRequest calldata request,
-    address oracle,
+    address oracleMultisig,
     bytes calldata signature
   ) internal {
-    if (!hasRole(ORACLE_ROLE, oracle)) {
-      revert UnauthorizedOracle(oracle);
+    if (!hasRole(ORACLE_ROLE, oracleMultisig)) {
+      revert UnauthorizedOracle(oracleMultisig);
     }
 
     if (block.timestamp > request.deadline) {
@@ -199,8 +199,8 @@ contract RelayExecutor is AccessControl, EIP712, ReentrancyGuard {
     }
     usedRequests[digest] = true;
 
-    if (!oracle.isValidSignatureNow(digest, signature)) {
-      revert InvalidSignature(oracle);
+    if (!oracleMultisig.isValidSignatureNow(digest, signature)) {
+      revert InvalidSignature(oracleMultisig);
     }
   }
 

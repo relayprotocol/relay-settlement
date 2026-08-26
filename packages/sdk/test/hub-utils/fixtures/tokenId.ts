@@ -45,4 +45,27 @@ export const tokenIdTestCases: Array<{
     },
     name: "USDC on Base",
   },
+  // Hedera assets are identified by their entity id, which encodes to the
+  // 20-byte long-zero address. Pinning these guards the Hedera identity rules:
+  // the hub token id of an asset changes if that encoding ever changes.
+  {
+    expectedValue:
+      82008387505145801995258681332939590903758552456785240265431841325349665661273n,
+    input: {
+      address: "0.0.0",
+      chainId: "hedera",
+      family: "hedera-vm",
+    },
+    name: "HBAR on Hedera",
+  },
+  {
+    expectedValue:
+      31422214437438693009942685613486516593897919122845346490453851994811185382756n,
+    input: {
+      address: "0.0.456858",
+      chainId: "hedera",
+      family: "hedera-vm",
+    },
+    name: "USDC on Hedera",
+  },
 ]

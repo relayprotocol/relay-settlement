@@ -7,6 +7,12 @@ import { classicAddressToXAddress } from "ripple-address-codec"
 import { decodeAbiParameters, parseAbiParameters } from "viem"
 
 import {
+  decodeRoutedWithdrawalData,
+  encodeRoutedWithdrawalData,
+  hashRoutedCalls,
+} from "../src/messages/common/ethereum-vm/routed"
+import {
+  encodeWithdrawRequestAdditionalData,
   normalizeWithdrawRequest,
   DenormalizedWithdrawRequest,
 } from "../src/messages/v2.3/withdrawal"
@@ -57,6 +63,92 @@ describe("normalizeWithdrawRequest", () => {
       },
       "ethereum-vm",
       "ethereum-vm"
+    )
+  })
+
+  it("normalizes routed ethereum-vm withdrawal requests", () => {
+    const router = "0x4444444444444444444444444444444444444444"
+    const calls = [
+      {
+        to: "0x1111111111111111111111111111111111111111",
+        data: "0xdeadbeef",
+        value: "123",
+        allowFailure: true,
+      },
+      {
+        to: "0x2222222222222222222222222222222222222222",
+        data: "0x",
+        value: "1000000000000000000",
+        allowFailure: false,
+      },
+    ]
+
+    const normalized = normalizeWithdrawRequest({
+      chainId: "8453",
+      depository: "0x1111111111111111111111111111111111111111",
+      currency: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      amount: "1000000",
+      spenderChainId: "1",
+      spender: "0x000000000000000000000000000000000000dEaD",
+      receiver: router,
+      nonce:
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      additionalData: {
+        "ethereum-vm": { router, calls },
+      },
+      vmType: "ethereum-vm",
+      spenderVmType: "ethereum-vm",
+    })
+
+    // Only the commitment is normalized on-chain; the calls stay off-chain
+    expect(normalized.data).toBe(
+      encodeRoutedWithdrawalData({
+        version: 1,
+        router,
+        dataHash: hashRoutedCalls(calls),
+      })
+    )
+    expect(decodeRoutedWithdrawalData(normalized.data)).toEqual({
+      version: 1,
+      router,
+      dataHash: hashRoutedCalls(calls),
+    })
+    expect(normalized.receiver).toBe(encodeAddressToHex(router, "ethereum-vm"))
+  })
+
+  it("normalizes a routed request whose receiver is not the router", () => {
+    // A withdrawal may fund a smart wallet and have the router act on it
+    const router = "0x4444444444444444444444444444444444444444"
+    const receiver = "0x9876543210987654321098765432109876543210"
+    const calls = [
+      {
+        to: "0x1111111111111111111111111111111111111111",
+        data: "0xdeadbeef",
+        value: "0",
+        allowFailure: false,
+      },
+    ]
+
+    const normalized = normalizeWithdrawRequest({
+      chainId: "8453",
+      depository: "0x1111111111111111111111111111111111111111",
+      currency: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      amount: "1000000",
+      spenderChainId: "1",
+      spender: "0x000000000000000000000000000000000000dEaD",
+      receiver,
+      nonce:
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      additionalData: { "ethereum-vm": { router, calls } },
+      vmType: "ethereum-vm",
+      spenderVmType: "ethereum-vm",
+    })
+
+    expect(normalized.receiver).toBe(
+      encodeAddressToHex(receiver, "ethereum-vm")
+    )
+    expect(decodeRoutedWithdrawalData(normalized.data).router).toBe(
+      router.toLowerCase()
     )
   })
 
@@ -454,5 +546,247 @@ describe("normalizeWithdrawRequest", () => {
         },
       })
     ).toThrow("destination tag")
+  })
+
+  const hederaRequestDataAbiParams = parseAbiParameters([
+    "(uint64 payerNum, uint64 nodeAccountNum, uint64 validStartSeconds, uint32 validDurationSeconds, uint64 maxTransactionFee)",
+  ])
+
+  const hederaRequestBase = {
+    chainId: "hedera",
+    depository: "0.0.10811639",
+    currency: getVmTypeNativeCurrency("hedera-vm"),
+    amount: "250000000",
+    spenderChainId: "8453",
+    spender: "0x000000000000000000000000000000000000dEaD",
+    receiver: "0.0.1234",
+    nonce: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    vmType: "hedera-vm" as const,
+    spenderVmType: "ethereum-vm" as const,
+  }
+
+  it("normalizes hedera-vm withdrawal requests, encoding additionalData as HederaRequestData", () => {
+    const normalized = normalizeWithdrawRequest({
+      ...hederaRequestBase,
+      additionalData: {
+        "hedera-vm": {
+          payerNum: "999",
+          nodeAccountNum: 3,
+          validStartSeconds: "1787119027",
+          validDurationSeconds: 180,
+          maxTransactionFee: "100000000",
+        },
+      },
+    })
+
+    expect(normalized.depository).toBe(
+      encodeAddressToHex(hederaRequestBase.depository, "hedera-vm")
+    )
+    expect(normalized.currency).toBe(
+      encodeAddressToHex(hederaRequestBase.currency, "hedera-vm")
+    )
+    expect(normalized.receiver).toBe(
+      encodeAddressToHex(hederaRequestBase.receiver, "hedera-vm")
+    )
+
+    const [decoded] = decodeAbiParameters(
+      hederaRequestDataAbiParams,
+      normalized.data as `0x${string}`
+    )
+    expect(decoded.payerNum).toBe(999n)
+    expect(decoded.nodeAccountNum).toBe(3n)
+    expect(decoded.validStartSeconds).toBe(1787119027n)
+    expect(decoded.validDurationSeconds).toBe(180)
+    expect(decoded.maxTransactionFee).toBe(100000000n)
+  })
+
+  it("requires hedera-vm additionalData", () => {
+    expect(() => normalizeWithdrawRequest(hederaRequestBase)).toThrow(
+      "Additional data is required for hedera-vm"
+    )
+  })
+
+  const gatewayRequestDataAbiParams = parseAbiParameters([
+    "(address allocator, string destinationChainId, uint256 maxBlockHeight, bytes destinationData)",
+  ])
+
+  const gatewayRequestBase = {
+    chainId: "gateway",
+    depository: "0x15de2575afa440f7ee86850c2899b8f1f6173b01",
+    currency: "0x0000000000000000000000000000000000000000",
+    amount: "10000",
+    spenderChainId: "relay",
+    spender: "0x8e4740962E0B8fF64A3AE44409572F33f34D97AE",
+    receiver: "0xf3d63166f0ca56c3c1a3508fce03ff0cf3fb691e",
+    nonce: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    vmType: "gateway-vm" as const,
+    spenderVmType: "ethereum-vm" as const,
+  }
+
+  it("normalizes gateway-vm withdrawal requests with additionalData", () => {
+    const normalized = normalizeWithdrawRequest({
+      ...gatewayRequestBase,
+      additionalData: {
+        "gateway-vm": {
+          allocator: "0x1111111111111111111111111111111111111111",
+          destinationChainId: "polygon",
+          maxBlockHeight: "90932551",
+        },
+      },
+    })
+
+    expect(normalized).toMatchObject({
+      chainId: gatewayRequestBase.chainId,
+      depository: gatewayRequestBase.depository,
+      currency: gatewayRequestBase.currency,
+      amount: gatewayRequestBase.amount,
+      spenderChainId: gatewayRequestBase.spenderChainId,
+      spender: encodeAddressToHex(gatewayRequestBase.spender, "ethereum-vm"),
+      receiver: gatewayRequestBase.receiver,
+      nonce: gatewayRequestBase.nonce,
+    })
+
+    const [decoded] = decodeAbiParameters(
+      gatewayRequestDataAbiParams,
+      normalized.data as `0x${string}`
+    )
+    expect(decoded.allocator.toLowerCase()).toBe(
+      "0x1111111111111111111111111111111111111111"
+    )
+    expect(decoded.destinationChainId).toBe("polygon")
+    expect(decoded.maxBlockHeight).toBe(90932551n)
+    expect(decoded.destinationData).toBe("0x")
+  })
+
+  it("requires gateway-vm additionalData", () => {
+    expect(() => normalizeWithdrawRequest(gatewayRequestBase)).toThrow(
+      "Additional data is required for gateway-vm"
+    )
+  })
+})
+
+describe("encodeWithdrawRequestAdditionalData", () => {
+  it("returns 0x for VMs without additional withdrawal data", () => {
+    expect(
+      encodeWithdrawRequestAdditionalData({
+        vmType: "ethereum-vm",
+      })
+    ).toBe("0x")
+  })
+
+  it("encodes gateway-vm additionalData", () => {
+    const data = encodeWithdrawRequestAdditionalData({
+      vmType: "gateway-vm",
+      additionalData: {
+        "gateway-vm": {
+          allocator: "0x1111111111111111111111111111111111111111",
+          destinationChainId: "polygon",
+          maxBlockHeight: "90932551",
+        },
+      },
+    })
+
+    const [decoded] = decodeAbiParameters(
+      parseAbiParameters([
+        "(address allocator, string destinationChainId, uint256 maxBlockHeight, bytes destinationData)",
+      ]),
+      data
+    )
+    expect(decoded.allocator.toLowerCase()).toBe(
+      "0x1111111111111111111111111111111111111111"
+    )
+    expect(decoded.destinationChainId).toBe("polygon")
+    expect(decoded.maxBlockHeight).toBe(90932551n)
+    expect(decoded.destinationData).toBe("0x")
+  })
+
+  it("encodes gateway-vm destination data", () => {
+    const destinationData = {
+      vmType: "ethereum-vm" as const,
+      router: "0x4444444444444444444444444444444444444444",
+      calls: [
+        {
+          to: "0x1111111111111111111111111111111111111111",
+          data: "0xdeadbeef",
+          value: "0",
+          allowFailure: false,
+        },
+      ],
+    }
+    const data = encodeWithdrawRequestAdditionalData({
+      vmType: "gateway-vm",
+      additionalData: {
+        "gateway-vm": {
+          allocator: "0x1111111111111111111111111111111111111111",
+          destinationChainId: "polygon",
+          maxBlockHeight: "90932551",
+          destinationData,
+        },
+      },
+    })
+
+    const [decoded] = decodeAbiParameters(
+      parseAbiParameters([
+        "(address allocator, string destinationChainId, uint256 maxBlockHeight, bytes destinationData)",
+      ]),
+      data
+    )
+    expect(decodeRoutedWithdrawalData(decoded.destinationData)).toEqual({
+      version: 1,
+      router: destinationData.router,
+      dataHash: hashRoutedCalls(destinationData.calls),
+    })
+  })
+
+  it("matches normalizeWithdrawRequest data encoding", () => {
+    const additionalData = {
+      "gateway-vm": {
+        allocator: "0x1111111111111111111111111111111111111111",
+        destinationChainId: "polygon",
+        maxBlockHeight: "90932551",
+      },
+    }
+
+    const encoded = encodeWithdrawRequestAdditionalData({
+      vmType: "gateway-vm",
+      additionalData,
+    })
+    const normalized = normalizeWithdrawRequest({
+      chainId: "gateway",
+      depository: "0x15de2575afa440f7ee86850c2899b8f1f6173b01",
+      currency: "0x0000000000000000000000000000000000000000",
+      amount: "10000",
+      spenderChainId: "relay",
+      spender: "0x8e4740962E0B8fF64A3AE44409572F33f34D97AE",
+      receiver: "0xf3d63166f0ca56c3c1a3508fce03ff0cf3fb691e",
+      nonce:
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      additionalData,
+      vmType: "gateway-vm",
+      spenderVmType: "ethereum-vm",
+    })
+
+    expect(encoded).toBe(normalized.data)
+  })
+
+  it("requires bitcoin-vm depository to encode allocator UTXO script data", () => {
+    expect(() =>
+      encodeWithdrawRequestAdditionalData({
+        vmType: "bitcoin-vm",
+        additionalData: {
+          "bitcoin-vm": {
+            allocatorUtxos: [
+              { txid: "11".repeat(32), vout: 0, value: "10000" },
+            ],
+            feeUtxos: [],
+            feeRate: 2,
+            feeChangeAddress: bitcoin.payments.p2wpkh({
+              hash: Buffer.alloc(20, 2),
+              network: bitcoin.networks.bitcoin,
+            }).address!,
+          },
+        },
+      })
+    ).toThrow("depository is required for bitcoin-vm additionalData")
   })
 })

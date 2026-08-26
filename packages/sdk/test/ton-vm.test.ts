@@ -1,14 +1,12 @@
 // ABOUTME: Round-trip tests for ton-vm codecs in src/utils.ts
-// ABOUTME: 32-byte hash-only encoding (bytes32 order slot); workchain is chain-level, non-basechain inputs rejected.
+// ABOUTME: 32-byte hash-only address encoding; workchain is chain-level, non-basechain inputs rejected.
 
 import { Address as TonAddress } from "@ton/core"
 import { describe, expect, test } from "vitest"
 
 import {
   decodeAddress,
-  decodeTransactionId,
   encodeAddress,
-  encodeTransactionId,
   getVmTypeNativeCurrency,
 } from "../src/utils"
 
@@ -96,34 +94,6 @@ describe("ton-vm encodeAddress / decodeAddress", () => {
     const bytes = encodeAddress(upper, "ton-vm")
     expect(Buffer.from(bytes).toString("hex")).toBe(HASH_HEX_A)
     expect(decodeAddress(bytes, "ton-vm")).toBe(`0:${HASH_HEX_A}`)
-  })
-})
-
-describe("ton-vm encodeTransactionId / decodeTransactionId", () => {
-  test.each([HASH_HEX_A, HASH_HEX_B, HASH_HEX_ZERO])(
-    "round-trips hash %s as bare hex",
-    (hashHex) => {
-      const bytes = encodeTransactionId(hashHex, "ton-vm")
-      expect(bytes).toHaveLength(32)
-      expect(Buffer.from(bytes).toString("hex")).toBe(hashHex)
-      expect(decodeTransactionId(bytes, "ton-vm")).toBe(hashHex)
-    }
-  )
-
-  test("rejects short hex (would silently zero-pad without the length check)", () => {
-    expect(() => encodeTransactionId("deadbeef", "ton-vm")).toThrow(/length/i)
-  })
-
-  test("rejects 63-char (odd-length) hex", () => {
-    expect(() => encodeTransactionId("a".repeat(63), "ton-vm")).toThrow(
-      /length/i
-    )
-  })
-
-  test("rejects 0x-prefixed input (callers must pass bare hex)", () => {
-    expect(() => encodeTransactionId(`0x${HASH_HEX_A}`, "ton-vm")).toThrow(
-      /length/i
-    )
   })
 })
 

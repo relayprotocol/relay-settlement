@@ -1,6 +1,6 @@
-# ABOUTME: Foundry config matching Hardhat's solc settings.
-# ABOUTME: Provides remappings so Hardhat (via hardhat-foundry) can compile sources,
-# ABOUTME: and configures forge build/test/coverage plus the deploy scripts under script/.
+# ABOUTME: Foundry configuration for Solidity builds, tests, coverage, and scripts.
+# ABOUTME: Pins compiler settings and dependency remappings for reproducible output.
+
 [profile.default]
 src = "contracts"
 script = "script"
@@ -17,15 +17,14 @@ optimizer_runs = 200
 bytecode_hash = "none"
 cbor_metadata = false
 
+# Cross-chain deterministic deploys (MulticallRouter): pinning the lowest common
+# denominator EVM version keeps the initcode, hence the CREATE2 address, identical.
+[profile.london]
+evm_version = "london"
+
 [profile.default.fuzz]
 runs = 256
 
 [profile.default.invariant]
 runs = 256
 depth = 15
-
-# Etherscan v2 multi-chain key. forge resolves `${ETHERSCAN_API_KEY}` from the
-# environment at runtime; per-chain keys can still be supplied via the
-# `--etherscan-api-key` flag for non-v2 explorers.
-[etherscan]
-mainnet = { key = "${ETHERSCAN_API_KEY}" }

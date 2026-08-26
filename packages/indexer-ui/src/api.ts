@@ -154,12 +154,9 @@ export type TransferReplayJob = {
   state: "failed" | "running" | "succeeded"
 }
 
-export type IndexerAuditKind = "balance-drift" | "transfer-coverage"
+export type IndexerAuditKind = "transfer-coverage"
 
-export type IndexerAuditClassification =
-  | "ahead_of_checkpoint"
-  | "confirmed"
-  | "pending_head"
+export type IndexerAuditClassification = "confirmed"
 
 export type SuggestedReplayRange = {
   findingCount: number
@@ -177,7 +174,6 @@ export type IndexerAuditRun = {
   id: number
   kind: IndexerAuditKind
   latestChainBlock: number | null
-  pendingCount: number
   startedAt: string
   status: "failed" | "running" | "succeeded"
 }
@@ -191,25 +187,20 @@ export type IndexerAuditKindHealth = {
   error: string | null
   kind: IndexerAuditKind
   ok: boolean
-  pendingCount: number
   reason: string | null
   startedAt: string | null
   status: "failed" | "missing" | "running" | "stale" | "succeeded"
 }
 
 export type IndexerAuditFinding = {
-  address: string | null
   blockNumber: number | null
-  chainBalance: string | null
   classification: IndexerAuditClassification
   details: {
     suggestedReplayRanges?: SuggestedReplayRange[]
     [key: string]: unknown
   }
   id?: number
-  indexedBalance: string | null
   kind: IndexerAuditKind
-  latestEventBlock: number | null
   logIndex: number | null
   tokenId: string | null
   tokenName: string | null

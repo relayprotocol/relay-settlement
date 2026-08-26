@@ -24,8 +24,7 @@
  *   HUB_RPC_URL            Base hub RPC URL
  *   HUB_PRIVATE_KEY        EVM key that submits trigger() on the Base hub
  *   RELAY_ORACLE_URL       oracle base URL
- *   SOLVER_PRIVATE_KEY     EVM solver key (0x-prefixed); pin to keep the
- *                          deposit address stable
+ *   SOLVER_PRIVATE_KEY     EVM solver key used to authorize the order
  *   TON_VM_RPC_URL         toncenter v2 jsonRPC endpoint
  *   TON_VM_MNEMONIC        space-separated mnemonic for the funder wallet
  *                          (also the depositor + refund recipient)
@@ -134,6 +133,7 @@ const derivationFields: DerivationFields = {
   depositor: funderHex,
   refundRecipient: funderHex,
   priceImpactBps: "200",
+  salt: bytesToBigInt(randomBytes(32)).toString(),
 };
 
 console.log(`==> funder / depositor / refund (ton): ${funderAddress}`);
@@ -309,6 +309,7 @@ await submitTrigger(hub, {
     depositor: derivationFields.depositor as Hex,
     refundRecipient: derivationFields.refundRecipient as Hex,
     priceImpactBps: BigInt(derivationFields.priceImpactBps),
+    salt: BigInt(derivationFields.salt),
   },
   orderId,
   nonce,
@@ -369,6 +370,7 @@ const signRequest = await addSolverRequestSignature(
         usdPrice: p.usdPrice.toString(),
         usdPriceDecimals: p.usdPriceDecimals,
         currencyDecimals: p.currencyDecimals,
+        publishTime: p.publishTime.toString(),
         expiration: p.expiration.toString(),
       })),
       extraData,

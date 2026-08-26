@@ -12,6 +12,7 @@ export const VM_TYPES = [
   "solana-vm",
   "hyperliquid-vm",
   "ton-vm",
+  "tron-vm",
 ] as const;
 
 /** A VM family identifier. */
@@ -200,6 +201,21 @@ export interface TonVmSignedTransaction {
   externalMessage: string;
 }
 
+/** Tron protocol.Transaction.raw input authorized for a deposit stage. */
+export interface TronVmTransaction {
+  purpose: "native-deposit" | "trc20-pre-approval" | "trc20-approval" | "trc20-deposit";
+  /** Hex-encoded canonical Tron protocol.Transaction.raw protobuf bytes. */
+  rawData: string;
+}
+
+/** Signed Tron protocol.Transaction returned by the action. */
+export interface TronVmSignedTransaction {
+  /** Hex-encoded signed Tron protocol.Transaction protobuf bytes. */
+  rawTransaction: string;
+  /** Lowercase SHA-256 hash of the exact raw_data protobuf bytes. */
+  transactionHash: string;
+}
+
 /** Maps each VM family to the transaction shape its signer expects. */
 export interface VmTransactionMap {
   "ethereum-vm": EthereumVmTransaction;
@@ -207,6 +223,7 @@ export interface VmTransactionMap {
   "solana-vm": SolanaVmTransaction;
   "hyperliquid-vm": HyperliquidVmTransaction;
   "ton-vm": TonVmTransaction;
+  "tron-vm": TronVmTransaction;
 }
 
 /** Maps each VM family to the signed-transaction shape its signer returns. */
@@ -216,6 +233,7 @@ export interface VmSignedTransactionMap {
   "solana-vm": SolanaVmSignedTransaction;
   "hyperliquid-vm": HyperliquidVmSignedTransaction;
   "ton-vm": TonVmSignedTransaction;
+  "tron-vm": TronVmSignedTransaction;
 }
 
 /** Source-side description of the funds being deposited. */
@@ -238,6 +256,7 @@ export interface DepositAddressTriggerDerivationFields {
   depositor: string;
   refundRecipient: string;
   priceImpactBps: string;
+  salt: string;
 }
 
 /** Currency captured in the trigger hash for pricing purposes. */
@@ -254,6 +273,8 @@ export interface DepositAddressTriggerPrice {
   usdPriceDecimals: number;
   /** Number of decimals the currency itself uses (e.g. 18 for ETH, 6 for USDC). */
   currencyDecimals: number;
+  /** Unix timestamp in seconds when the price was published. */
+  publishTime: string;
   expiration: string;
 }
 

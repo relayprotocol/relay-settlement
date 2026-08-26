@@ -14,7 +14,7 @@ import {
 } from "../src/messages/v2.1/depository-withdrawal"
 import { getVmTypeNativeCurrency } from "../src/utils"
 
-// Reference vectors mirror smart-contracts/tools/tonReferenceHashes.ts and the
+// Reference vectors mirror smart-contracts/tools/ton-reference-hashes.ts and the
 // foundry test smart-contracts/test/PayloadBuilders/TonVmPayloadBuilder.t.sol.
 // The expected msg_inner cell hashes are taken verbatim from that foundry test,
 // so a mismatch here means the SDK has drifted from the on-chain builder.
@@ -24,7 +24,7 @@ const ZERO_RECEIVER_RAW =
   "0:0000000000000000000000000000000000000000000000000000000000000000"
 
 // SUBWALLET_ID + TIMEOUT match the canonical reference deployment used by
-// tools/tonReferenceHashes.ts. Cell hashes below are independent of where these
+// tools/ton-reference-hashes.ts. Cell hashes below are independent of where these
 // values come from (immutable vs. payload) — bit layout is unchanged.
 const SUBWALLET_ID = 0x10ad0001
 const TIMEOUT = 3600

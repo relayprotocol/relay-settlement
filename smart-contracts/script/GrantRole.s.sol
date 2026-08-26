@@ -6,8 +6,7 @@ import {console} from "forge-std/console.sol";
 
 import {ScriptBase} from "./utils/ScriptBase.sol";
 
-/// @notice Grants an AccessControl role on the target contract. Replaces the
-/// legacy `yarn hardhat grant-role` task.
+/// @notice Grants an AccessControl role on the target contract.
 ///
 /// Env:
 ///   DEPLOYER_PRIVATE_KEY – deployer key (required, must be admin of the role)

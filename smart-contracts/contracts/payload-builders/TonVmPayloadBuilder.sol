@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import {Config} from "../Config.sol";
 import {BuildPayloadParams, IPayloadBuilder} from "../RelayAllocator.sol";
+import {GasPaidPayloadBuilder} from "./GasPaidPayloadBuilder.sol";
 
 /// @notice Decoded fields for a TON Highload V3 native-coin transfer payload.
 /// @dev The signed payload is the cell hash of the Highload V3 `msg_inner`
@@ -26,7 +28,10 @@ struct TonTransferRequest {
 ///      The deployed builder is bound to a single Highload V3 wallet via the
 ///      `SUBWALLET_ID` and `TIMEOUT` immutables — those must match the
 ///      values baked into the wallet's storage at deploy time.
-contract TonVmPayloadBuilder is IPayloadBuilder {
+///      TON withdrawals spend depository funds on network fees, so building a
+///      payload requires a matching gas payment recorded via the
+///      `WithdrawGasPayer` contract (see `GasPaidPayloadBuilder`).
+contract TonVmPayloadBuilder is IPayloadBuilder, GasPaidPayloadBuilder {
   /// @notice Thrown when an encoded receiver does not have the expected length
   /// @param length Actual encoded receiver length
   error InvalidReceiverLength(uint256 length);
@@ -48,12 +53,23 @@ contract TonVmPayloadBuilder is IPayloadBuilder {
   /// @param timeout Provided timeout
   error TimeoutExceeds22Bits(uint32 timeout);
 
+  /// @notice Thrown when the recorded gas payment is below TON's configured fee
+  /// @param paidAmount Amount burned as the gas payment
+  /// @param gasFee Current TON gas fee configured by this builder
+  error PaidGasBelowGasFee(uint256 paidAmount, uint256 gasFee);
+
+  /// @notice Config contract containing TON payload-builder policy
+  Config public immutable CONFIG;
+
   /// @notice Subwallet id baked into the target Highload V3 wallet
   uint32 public immutable SUBWALLET_ID;
 
   /// @notice Timeout (seconds) baked into the target Highload V3 wallet.
   /// @dev Must fit in 22 bits — the field width Highload V3 uses on-chain.
   uint32 public immutable TIMEOUT;
+
+  /// @notice Prefix used when deriving per-chain TON gas-fee config keys
+  bytes32 internal constant GAS_FEE_PREFIX = keccak256("TON_VM_GAS_FEE");
 
   /// @notice Send mode applied by the Highload V3 wallet to the inner transfer.
   /// @dev The wallet additionally OR's in `SEND_MODE_IGNORE_ERRORS (2)` when
@@ -96,26 +112,45 @@ contract TonVmPayloadBuilder is IPayloadBuilder {
   uint32 internal constant FORBIDDEN_BIT_NUMBER = 1023;
 
   /// @notice Creates a new TON VM payload builder bound to a Highload V3 wallet
+  /// @param config Config contract containing TON gas-fee policy
   /// @param subwalletId Subwallet id stored in the wallet's data (any uint32)
   /// @param timeout Timeout (seconds) stored in the wallet's data; must fit in 22 bits
-  constructor(uint32 subwalletId, uint32 timeout) {
+  /// @param gasPayer WithdrawGasPayer contract whose payments authorize builds
+  constructor(
+    address config,
+    uint32 subwalletId,
+    uint32 timeout,
+    address gasPayer
+  ) GasPaidPayloadBuilder(gasPayer) {
     if (timeout >= (uint32(1) << 22)) {
       revert TimeoutExceeds22Bits(timeout);
     }
+    CONFIG = Config(config);
     SUBWALLET_ID = subwalletId;
     TIMEOUT = timeout;
   }
 
   /// @inheritdoc IPayloadBuilder
-  /// @dev Receiver must be a 32-byte workchain-0 std-address hash. Currency
-  ///      must be the 32-byte native TON sentinel (the all-zero address hash);
-  ///      jettons are not supported. Amount must fit in VarUInteger16
-  ///      (2^120 - 1).
+  /// @dev Reverts with `GasNotPaid` unless a gas payment is recorded for the
+  ///      exact withdraw parameters, and with `PaidGasBelowGasFee` when the
+  ///      recorded payment no longer covers this builder's configured fee —
+  ///      TON transactions carry no explicit fee field (the wallet pays
+  ///      dynamic network gas implicitly), so the TON-specific Config entry
+  ///      is the bound on what the depository spends. Receiver must be a
+  ///      32-byte workchain-0 std-address hash. Currency must be the 32-byte
+  ///      native TON sentinel (the all-zero address hash); jettons are not
+  ///      supported. Amount must fit in VarUInteger16 (2^120 - 1).
   function buildPayload(
-    string calldata /* chainId */,
-    bytes calldata /* depository */,
+    string calldata chainId,
+    bytes calldata depository,
     BuildPayloadParams calldata params
   ) external view override returns (bytes memory payload) {
+    uint256 paidAmount = _requireGasPaid(chainId, depository, params);
+    uint256 gasFee = uint256(CONFIG.getConfigValue(getGasFeeKey(chainId)));
+    if (paidAmount < gasFee) {
+      revert PaidGasBelowGasFee(paidAmount, gasFee);
+    }
+
     if (params.receiver.length != 32) {
       revert InvalidReceiverLength(params.receiver.length);
     }
@@ -140,6 +175,16 @@ contract TonVmPayloadBuilder is IPayloadBuilder {
     });
 
     return abi.encode(request);
+  }
+
+  /// @notice Returns the TON gas-fee Config key for a Relay chain
+  /// @param chainId Relay chain id
+  /// @return key Config key
+  function getGasFeeKey(
+    string calldata chainId
+  ) public pure returns (bytes32 key) {
+    return
+      keccak256(abi.encodePacked(GAS_FEE_PREFIX, keccak256(bytes(chainId))));
   }
 
   /// @inheritdoc IPayloadBuilder

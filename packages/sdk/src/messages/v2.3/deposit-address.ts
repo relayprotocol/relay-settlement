@@ -18,6 +18,7 @@ export interface DepositAddressTriggerDerivationFields {
   depositor: string
   refundRecipient: string
   priceImpactBps: string
+  salt: string
 }
 
 export interface DepositAddressTriggerCurrency {
@@ -29,6 +30,7 @@ export interface DepositAddressTriggerPrice {
   usdPrice: string
   usdPriceDecimals: number
   currencyDecimals: number
+  publishTime: string
   expiration: string
 }
 
@@ -64,6 +66,7 @@ const TRIGGER_HASH_ABI = [
       { name: "depositor", type: "bytes" },
       { name: "refundRecipient", type: "bytes" },
       { name: "priceImpactBps", type: "uint256" },
+      { name: "salt", type: "uint256" },
     ],
     type: "tuple",
   },
@@ -81,6 +84,7 @@ const TRIGGER_HASH_ABI = [
       { name: "usdPrice", type: "uint256" },
       { name: "usdPriceDecimals", type: "uint8" },
       { name: "currencyDecimals", type: "uint8" },
+      { name: "publishTime", type: "uint256" },
       { name: "expiration", type: "uint256" },
     ],
     type: "tuple[]",
@@ -109,6 +113,7 @@ export const getDepositAddressTriggerHash = (
       depositor: trigger.derivationFields.depositor as Hex,
       refundRecipient: trigger.derivationFields.refundRecipient as Hex,
       priceImpactBps: BigInt(trigger.derivationFields.priceImpactBps),
+      salt: BigInt(trigger.derivationFields.salt),
     },
     trigger.orderId as Hex,
     BigInt(trigger.nonce),
@@ -120,6 +125,7 @@ export const getDepositAddressTriggerHash = (
       usdPrice: BigInt(price.usdPrice),
       usdPriceDecimals: price.usdPriceDecimals,
       currencyDecimals: price.currencyDecimals,
+      publishTime: BigInt(price.publishTime),
       expiration: BigInt(price.expiration),
     })),
     trigger.extraData as Hex,

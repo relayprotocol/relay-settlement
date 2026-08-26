@@ -6,9 +6,40 @@
         "name": "signingPubKey",
         "type": "bytes",
         "internalType": "bytes"
+      },
+      {
+        "name": "gasPayer",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "GAS_PAYER",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_FEE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -41,7 +72,7 @@
     "name": "buildPayload",
     "inputs": [
       {
-        "name": "",
+        "name": "chainId",
         "type": "string",
         "internalType": "string"
       },
@@ -160,12 +191,44 @@
   },
   {
     "type": "error",
-    "name": "FeeExceedsMaxDrops",
+    "name": "FeeExceedsMaxFee",
     "inputs": [
       {
         "name": "fee",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "maxFee",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "FeeExceedsPaidGas",
+    "inputs": [
+      {
+        "name": "fee",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "paidAmount",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "GasNotPaid",
+    "inputs": [
+      {
+        "name": "withdrawParamsHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ]
   },

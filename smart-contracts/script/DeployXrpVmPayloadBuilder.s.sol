@@ -9,12 +9,14 @@ import {ScriptBase} from "./utils/ScriptBase.sol";
 ///   DEPLOYER_PRIVATE_KEY – deployer key (required)
 ///   SIGNING_PUBKEY       – required, 33-byte compressed secp256k1 public key
 ///                          (0x-prefixed hex) of the allocator's XRP signer
+///   GAS_PAYER            – required, WithdrawGasPayer contract address
 contract DeployXrpVmPayloadBuilder is ScriptBase {
   function run() external returns (XrpVmPayloadBuilder builder) {
     bytes memory signingPubKey = vm.envBytes("SIGNING_PUBKEY");
+    address gasPayer = _requireEnvAddress("GAS_PAYER");
 
     vm.startBroadcast(_deployerKey());
-    builder = new XrpVmPayloadBuilder(signingPubKey);
+    builder = new XrpVmPayloadBuilder(signingPubKey, gasPayer);
     vm.stopBroadcast();
 
     _logDeployment("XrpVmPayloadBuilder", address(builder));

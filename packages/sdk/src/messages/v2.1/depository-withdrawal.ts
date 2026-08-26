@@ -5,13 +5,13 @@ import {
   encodeAddressToHex,
   encodeBytesToHex,
   getChainVmType,
-  VmType,
 } from "../../utils"
 
 import {
   DecodedWithdrawal,
   DecodedWithdrawalFor,
   getWithdrawalCodec,
+  WithdrawalVmType,
 } from "./withdrawals"
 
 // Re-exported for backward compatibility: these historically lived in this
@@ -19,6 +19,13 @@ import {
 export {
   DecodedBitcoinVmWithdrawal,
   DecodedEthereumVmWithdrawal,
+  DecodedGatewayVmWithdrawal,
+  GatewayBurnIntent,
+  GatewayTransferSpec,
+  GatewayVmWithdrawal,
+  getGatewayDestinationExpiration,
+  getGatewayDestinationVmType,
+  DecodedHederaVmWithdrawal,
   DecodedHyperliquidVmWithdrawal,
   DecodedLighterVmWithdrawal,
   DecodedSolanaVmWithdrawal,
@@ -28,7 +35,10 @@ export {
   DecodedWithdrawal,
   DecodedWithdrawalFor,
   LighterTransferParams,
+  PendingWithdrawalVmType,
+  WithdrawalVmType,
   buildLighterTransferL1Message,
+  getHederaVmTransactionBody,
   getWithdrawalCodec,
 } from "./withdrawals"
 
@@ -102,7 +112,7 @@ export const encodeWithdrawal = (
     decodedWithdrawal.withdrawal
   )
 
-export const decodeWithdrawal = <V extends VmType>(
+export const decodeWithdrawal = <V extends WithdrawalVmType>(
   encodedWithdrawal: string,
   vmType: V
 ): DecodedWithdrawalFor<V> => {

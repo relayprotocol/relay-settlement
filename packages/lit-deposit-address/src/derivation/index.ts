@@ -15,6 +15,7 @@ import { EthereumVmWalletDeriver } from "./vm/ethereum/EthereumVmWalletDeriver.j
 import { HyperliquidVmWalletDeriver } from "./vm/hyperliquid/HyperliquidVmWalletDeriver.js";
 import { SolanaVmWalletDeriver } from "./vm/solana/SolanaVmWalletDeriver.js";
 import { TonVmWalletDeriver } from "./vm/ton/TonVmWalletDeriver.js";
+import { TronVmWalletDeriver } from "./vm/tron/TronVmWalletDeriver.js";
 
 /**
  * Public package entrypoint. Re-exports everything off-TEE consumers need
@@ -36,6 +37,7 @@ const VM_DERIVERS = {
   "solana-vm": new SolanaVmWalletDeriver(),
   "hyperliquid-vm": new HyperliquidVmWalletDeriver(),
   "ton-vm": new TonVmWalletDeriver(),
+  "tron-vm": new TronVmWalletDeriver(),
 } satisfies { [V in VmType]: TypedVmWalletDeriver<V> };
 
 function getDeriver<V extends VmType>(vmType: V): TypedVmWalletDeriver<V> {

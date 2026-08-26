@@ -1,18 +1,13 @@
 // ABOUTME: Round-trip tests for xrp-vm codecs in src/utils.ts
-// ABOUTME: 20-byte AccountID address encoding, 32-byte uppercase-hex tx ids, native XRP sentinel.
+// ABOUTME: 20-byte AccountID address encoding and native XRP sentinel.
 
-import {
-  classicAddressToXAddress,
-  encodeAccountID,
-} from "ripple-address-codec"
+import { classicAddressToXAddress, encodeAccountID } from "ripple-address-codec"
 import { describe, expect, test } from "vitest"
 
 import {
   decodeAddress,
-  decodeTransactionId,
   decodeXrpDestination,
   encodeAddress,
-  encodeTransactionId,
   getVmTypeNativeCurrency,
 } from "../src/utils"
 
@@ -20,8 +15,7 @@ const ACCT_HEX_A = "5e7b112523f68d2f5e879db4eac51c6698a69304"
 const ACCT_HEX_B = "b5f762798a53d543a014caf8b297cff8f2f937e8"
 const ACCT_HEX_ZERO = "0000000000000000000000000000000000000000"
 
-const classicAddress = (hex: string) =>
-  encodeAccountID(Buffer.from(hex, "hex"))
+const classicAddress = (hex: string) => encodeAccountID(Buffer.from(hex, "hex"))
 
 describe("xrp-vm encodeAddress / decodeAddress", () => {
   test.each([ACCT_HEX_A, ACCT_HEX_B, ACCT_HEX_ZERO])(
@@ -69,38 +63,6 @@ describe("xrp-vm encodeAddress / decodeAddress", () => {
   test("decodeAddress rejects non-20-byte input", () => {
     expect(() => decodeAddress(new Uint8Array(19), "xrp-vm")).toThrow(/length/i)
     expect(() => decodeAddress(new Uint8Array(21), "xrp-vm")).toThrow(/length/i)
-  })
-})
-
-describe("xrp-vm encodeTransactionId / decodeTransactionId", () => {
-  const TXID_UPPER =
-    "AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00112233445566778899"
-
-  test("round-trips a 64-char hash as canonical uppercase hex", () => {
-    const bytes = encodeTransactionId(TXID_UPPER, "xrp-vm")
-    expect(bytes).toHaveLength(32)
-    expect(decodeTransactionId(bytes, "xrp-vm")).toBe(TXID_UPPER)
-  })
-
-  test("accepts lowercase input and canonicalizes to uppercase on decode", () => {
-    const bytes = encodeTransactionId(TXID_UPPER.toLowerCase(), "xrp-vm")
-    expect(decodeTransactionId(bytes, "xrp-vm")).toBe(TXID_UPPER)
-  })
-
-  test("rejects short hex (would silently zero-pad without the length check)", () => {
-    expect(() => encodeTransactionId("deadbeef", "xrp-vm")).toThrow(/64 hex/i)
-  })
-
-  test("rejects 63-char (odd-length) hex", () => {
-    expect(() => encodeTransactionId("a".repeat(63), "xrp-vm")).toThrow(
-      /64 hex/i
-    )
-  })
-
-  test("rejects 0x-prefixed input (callers must pass bare hex)", () => {
-    expect(() => encodeTransactionId(`0x${TXID_UPPER}`, "xrp-vm")).toThrow(
-      /64 hex/i
-    )
   })
 })
 

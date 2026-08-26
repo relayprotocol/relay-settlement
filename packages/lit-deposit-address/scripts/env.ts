@@ -5,9 +5,9 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /** Supported deposit-address-manager environment names. */
-export type DepositAddressEnvironmentName = "dev";
+export type DepositAddressEnvironmentName = "dev" | "stag" | "prod";
 
-const ENVIRONMENT_NAMES = new Set<DepositAddressEnvironmentName>(["dev"]);
+const ENVIRONMENT_NAMES = new Set<DepositAddressEnvironmentName>(["dev", "stag", "prod"]);
 
 /** Supported VM-specific Lit Action sources. */
 export const VM_TYPES = [
@@ -16,6 +16,7 @@ export const VM_TYPES = [
   "solana-vm",
   "hyperliquid-vm",
   "ton-vm",
+  "tron-vm",
 ] as const;
 export type VmType = (typeof VM_TYPES)[number];
 

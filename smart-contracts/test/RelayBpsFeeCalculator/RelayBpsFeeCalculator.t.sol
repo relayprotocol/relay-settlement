@@ -3,7 +3,7 @@ pragma solidity ^0.8.28;
 
 import {BaseTest} from "../utils/BaseTest.sol";
 
-import {Price} from "../../contracts/deposit-addresses/open/oracle/IPricingOracle.sol";
+import {Price} from "../../contracts/deposit-addresses/oracle/IPricingOracle.sol";
 import {RelayBpsFeeCalculator} from "../../contracts/fee-calculators/RelayBpsFeeCalculator.sol";
 import {DeployRelayBpsFeeCalculator} from "../../script/DeployRelayBpsFeeCalculator.s.sol";
 
@@ -58,6 +58,7 @@ contract RelayBpsFeeCalculatorTest is BaseTest {
         usdPrice: usdPrice,
         usdPriceDecimals: usdPriceDecimals,
         currencyDecimals: currencyDecimals,
+        publishTime: block.timestamp,
         expiration: block.timestamp + 1 days
       })
     );
@@ -69,7 +70,18 @@ contract RelayBpsFeeCalculatorTest is BaseTest {
     address recipient,
     address payer
   ) internal pure returns (bytes memory) {
-    return abi.encode(feeCurrency, feeBps, recipient, payer);
+    return
+      _feeDataWithMax(feeBps, feeCurrency, type(uint256).max, recipient, payer);
+  }
+
+  function _feeDataWithMax(
+    uint256 feeBps,
+    uint256 feeCurrency,
+    uint256 maxFeeAmount,
+    address recipient,
+    address payer
+  ) internal pure returns (bytes memory) {
+    return abi.encode(feeCurrency, feeBps, maxFeeAmount, recipient, payer);
   }
 
   function test_calculateFeeConvertsThroughUsd() public {
@@ -138,6 +150,47 @@ contract RelayBpsFeeCalculatorTest is BaseTest {
     assertEq(feeAmount, 0);
     assertEq(recipient, address(0));
     assertEq(payer, address(0));
+  }
+
+  function test_allowsFeeAtExactMax() public {
+    (, uint256 feeAmount, , ) = calculator.calculateFee(
+      TOKEN_ID,
+      100e6,
+      _feeDataWithMax(FEE_BPS, FEE_CURRENCY, 4e6, feeRecipient, feePayer)
+    );
+
+    assertEq(feeAmount, 4e6);
+  }
+
+  function test_revertsWhenFeeExceedsMax() public {
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        RelayBpsFeeCalculator.FeeExceedsMax.selector,
+        4e6,
+        4e6 - 1
+      )
+    );
+    calculator.calculateFee(
+      TOKEN_ID,
+      100e6,
+      _feeDataWithMax(FEE_BPS, FEE_CURRENCY, 4e6 - 1, feeRecipient, feePayer)
+    );
+  }
+
+  function test_revertsOnZeroMaxWithNonZeroFee() public {
+    // Fail-closed: no special zero semantics — an unset cap rejects any non-zero fee.
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        RelayBpsFeeCalculator.FeeExceedsMax.selector,
+        4e6,
+        0
+      )
+    );
+    calculator.calculateFee(
+      TOKEN_ID,
+      100e6,
+      _feeDataWithMax(FEE_BPS, FEE_CURRENCY, 0, feeRecipient, feePayer)
+    );
   }
 
   function test_revertsInvalidFeeBps() public {

@@ -3,6 +3,9 @@ export type TokenRow = {
   name: string | null
   symbol?: string | null
   decimals: number | null
+  origin_family: string | null
+  origin_chain_id: string | null
+  origin_asset: string | null
   total_supply: string
   holders: number
   transfers?: number
