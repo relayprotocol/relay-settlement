@@ -70,7 +70,7 @@ const executions = await client.getContractEvents({
 | Payload builders  | `EthereumVmPayloadBuilder`, `BitcoinVmPayloadBuilder`, `SolanaVmPayloadBuilder`, `TonVmPayloadBuilder`, `TronVmPayloadBuilder`, `XrpVmPayloadBuilder`, `HyperliquidVmPayloadBuilder`, `LighterVmPayloadBuilder`, `GatewayVmPayloadBuilder` |
 | Deposit addresses | `RelayDepositAddressManager`, `SignedPricingOracle`, `BasicPricingOracle`                                                                                                                                                                  |
 | Call resolvers    | `BasicCallResolver`, `PoolDrawResolver`                                                                                                                                                                                                    |
-| Routers           | `MulticallRouter`, `IMulticallRouter`                                                                                                                                                                                                      |
+| Routers           | `Multicall3`, `MulticallRouter`, `IMulticallRouter`                                                                                                                                                                                        |
 
 Interfaces (`IHub`, `ICallResolver`, `IPricingOracle`, ...) and shared libraries are also
 exported. See the [TypeScript definitions](./dist/index.d.ts) for the complete list.

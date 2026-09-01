@@ -6,6 +6,7 @@ import Config from "./abis/Config.sol/Config.json"
 import IRelayAllocatorOwner from "./abis/Config.sol/IRelayAllocatorOwner.json"
 import ERC20View from "./abis/ERC20View.sol/ERC20View.json"
 import IHub from "./abis/ERC20View.sol/IHub.json"
+import Multicall3 from "./abis/Multicall3.sol/Multicall3.json"
 import IPayloadBuilder from "./abis/RelayAllocator.sol/IPayloadBuilder.json"
 import RelayAllocator from "./abis/RelayAllocator.sol/RelayAllocator.json"
 import RelayExecutor from "./abis/RelayExecutor.sol/RelayExecutor.json"
@@ -96,6 +97,7 @@ export { Config }
 export { IRelayAllocatorOwner }
 export { ERC20View }
 export { IHub }
+export { Multicall3 }
 export { IPayloadBuilder }
 export { RelayAllocator }
 export { RelayExecutor }

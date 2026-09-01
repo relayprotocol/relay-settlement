@@ -6,9 +6,27 @@
         "name": "solver",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "relayPriceOracle",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "RELAY_PRICE_ORACLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract RelayPriceOracle"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -201,12 +219,52 @@
         ]
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "nonpayable"
   },
   {
     "type": "event",
     "name": "EIP712DomainChanged",
     "inputs": [],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PricesResolved",
+    "inputs": [
+      {
+        "name": "prices",
+        "type": "tuple[]",
+        "indexed": false,
+        "internalType": "struct Price[]",
+        "components": [
+          {
+            "name": "usdPrice",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "usdPriceDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "currencyDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "publishTime",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "expiration",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
     "anonymous": false
   },
   {

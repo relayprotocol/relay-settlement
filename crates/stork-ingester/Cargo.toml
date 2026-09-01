@@ -19,10 +19,12 @@ dotenvy = { workspace = true }
 futures-util = { workspace = true, features = ["sink"] }
 hex = { workspace = true }
 opentelemetry = { workspace = true }
+opentelemetry-appender-tracing = { workspace = true }
 opentelemetry-otlp = { workspace = true }
 opentelemetry-sdk = { workspace = true }
 parking_lot = { workspace = true }
 price-oracle-ipc = { workspace = true }
+rand = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 rustls = { workspace = true }
 serde = { workspace = true }

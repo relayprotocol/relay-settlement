@@ -7,17 +7,18 @@ use anyhow::{Context as _, Result, anyhow};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::time::{sleep, timeout};
-use tracing::{debug, info, instrument, warn};
+use tracing::{Instrument as _, debug, info, info_span, instrument, warn};
 use yawc::frame::{Frame, OpCode};
 use yawc::{HttpRequestBuilder, Options, TcpWebSocket, WebSocket};
 
-use crate::Context;
 use crate::cache::{
     FeedKey, IpcServerSink, NANOS_PER_MILLISECOND, PriceUpdateSink, SignedPriceUpdate, now_unix_ms,
     now_unix_ns, provider_id,
 };
 use crate::payload::FastPayload;
 use crate::taxonomy::FastAsset;
+use crate::telemetry::TRACE_TARGET;
+use crate::{Context, metrics};
 
 const WS_API_PATH: &str = "/ws";
 const MESSAGE_TYPE: &str = "signed_ecdsa";
@@ -104,6 +105,7 @@ impl BatchWorker {
             if self.published.load(Ordering::Relaxed) > published_before {
                 backoff = base;
             }
+            metrics::on_reconnect();
             match result {
                 Ok(()) => {
                     debug!("fast stream ended, reconnecting after backoff");
@@ -120,7 +122,29 @@ impl BatchWorker {
 
     async fn pump(&self) -> Result<()> {
         info!(feed_count = self.asset_ids.len(), "connecting fast stream");
-        let mut ws = timeout(CONNECT_TIMEOUT, connect(&self.config, &self.asset_ids)).await??;
+        let mut ws = async {
+            let result =
+                match timeout(CONNECT_TIMEOUT, connect(&self.config, &self.asset_ids)).await {
+                    Ok(result) => result,
+                    Err(_) => Err(anyhow!(
+                        "timed out connecting fast stream after {CONNECT_TIMEOUT:?}"
+                    )),
+                };
+            if let Err(err) = &result {
+                let span = tracing::Span::current();
+                span.record("otel.status_code", "ERROR");
+                span.record("error.message", err.to_string().as_str());
+            }
+            result
+        }
+        .instrument(info_span!(
+            target: TRACE_TARGET,
+            "stream_connect",
+            feed_count = self.asset_ids.len(),
+            otel.status_code = tracing::field::Empty,
+            error.message = tracing::field::Empty,
+        ))
+        .await?;
         let _gauge = SocketGauge::open(&self.sockets);
         info!("fast stream connected");
 
@@ -173,6 +197,7 @@ impl BatchWorker {
             Err(e) => {
                 warn!(error = %e, "dropping malformed fast payload");
                 self.sink.record_dropped(self.assets.len() as u64);
+                metrics::on_dropped(None, "malformed", self.assets.len() as u64);
                 return;
             }
         };
@@ -192,6 +217,7 @@ impl BatchWorker {
                 .collect::<HashSet<_>>()
                 .len();
             self.sink.record_dropped(subscribed as u64);
+            metrics::on_dropped(None, "verification", subscribed as u64);
             return;
         }
 

@@ -33,4 +33,30 @@ describe("Token ID Generation", () => {
 
     expect(generateTokenId(input1)).toBe(generateTokenId(input2))
   })
+
+  test("enforces hyperliquid-vm currency length of 16 bytes (SEC-165)", () => {
+    expect(() =>
+      generateTokenId({
+        family: "hyperliquid-vm",
+        chainId: "1337",
+        address: "0x" + "00".repeat(16),
+      })
+    ).not.toThrow()
+
+    expect(() =>
+      generateTokenId({
+        family: "hyperliquid-vm",
+        chainId: "1337",
+        address: "0x30" + "00".repeat(16),
+      })
+    ).toThrow(/hyperliquid-vm byte length 17; expected 16/)
+
+    expect(() =>
+      generateTokenId({
+        family: "hyperliquid-vm",
+        chainId: "1337",
+        address: "0x" + "11".repeat(20),
+      })
+    ).toThrow(/hyperliquid-vm byte length 20; expected 16/)
+  })
 })

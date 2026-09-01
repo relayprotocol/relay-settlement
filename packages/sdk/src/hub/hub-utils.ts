@@ -20,6 +20,23 @@ export type VirtualAddress = Address
 export const arrayToHex = (arr: Uint8Array): Hex =>
   `0x${Buffer.from(arr).toString("hex")}`
 
+const HYPERLIQUID_ACCOUNT_BYTES = 20
+const HYPERLIQUID_CURRENCY_BYTES = 16
+
+const encodeHubField = (
+  address: string,
+  family: VmType,
+  hyperliquidBytes: number
+): Hex => {
+  const encoded = encodeAddress(address, family)
+  if (family === "hyperliquid-vm" && encoded.length !== hyperliquidBytes) {
+    throw new Error(
+      `Invalid hyperliquid-vm byte length ${encoded.length}; expected ${hyperliquidBytes}`
+    )
+  }
+  return arrayToHex(encoded)
+}
+
 /**
  * Generates a virtual Ethereum address from token components
  * @param components The token components (family, chainId, address)
@@ -35,7 +52,7 @@ export function generateAddress(
   const addressHash = keccak256(
     encodePacked(
       ["string", "bytes"],
-      [chainId, arrayToHex(encodeAddress(address, family))]
+      [chainId, encodeHubField(address, family, HYPERLIQUID_ACCOUNT_BYTES)]
     )
   )
   const addressBytes = addressHash.slice(2).slice(-40)
@@ -51,7 +68,7 @@ export function generateTokenId(components: TokenIdComponents): TokenId {
   const { family, chainId, address } = components
   const packedData = encodePacked(
     ["string", "bytes"],
-    [chainId, arrayToHex(encodeAddress(address, family))]
+    [chainId, encodeHubField(address, family, HYPERLIQUID_CURRENCY_BYTES)]
   )
   return BigInt(keccak256(packedData))
 }

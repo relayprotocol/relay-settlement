@@ -15,7 +15,7 @@ describe("getWithdrawalAddress (V1)", () => {
       depository: "0x1234567890123456789012345678901234567890",
       chainId: "ethereum",
       vmType: "ethereum-vm" as VmType,
-      currency: "10340230",
+      currency: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
       recipient: "0x9876543210987654321098765432109876543210",
       ownerAlias: "0x9876543210987654321098765432109876543210",
       nonce: "0",
@@ -23,7 +23,7 @@ describe("getWithdrawalAddress (V1)", () => {
 
     const address = getWithdrawalAddress(params)
     expect(address).toMatch(/^0x[0-9a-f]{40}$/i)
-    expect(address).toBe("0x1c1b40f43b18c2ff894a1bd8f1d13e0b1e92af0a")
+    expect(address).toBe("0x7e596875c1a01b49206fb48d16ff7fa4eb337543")
     expect(getAddress(address).toLowerCase()).toMatch(address)
   })
 })
@@ -34,7 +34,7 @@ describe("getWithdrawalAddressSafe", () => {
       depository: "0x1234567890123456789012345678901234567890",
       chainId: "ethereum",
       vmType: "ethereum-vm" as VmType,
-      currency: "10340230",
+      currency: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
       recipient: "0x9876543210987654321098765432109876543210",
       ownerAlias: "0x9876543210987654321098765432109876543210",
       nonce: "0",
@@ -43,7 +43,7 @@ describe("getWithdrawalAddressSafe", () => {
 
     const address = getWithdrawalAddressSafe(params)
     expect(address).toMatch(/^0x[0-9a-f]{40}$/i)
-    expect(address).toBe("0x33c0f512a96421f8c90368768733b3541e0aa9b6")
+    expect(address).toBe("0x122eb4a59a5c2228954e8c360d8c152f836efc6d")
     expect(getAddress(address).toLowerCase()).toMatch(address)
   })
 
@@ -52,7 +52,7 @@ describe("getWithdrawalAddressSafe", () => {
       depository: "0x1234567890123456789012345678901234567890",
       chainId: "ethereum",
       vmType: "ethereum-vm" as VmType,
-      currency: "10340230",
+      currency: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
       recipient: "0x9876543210987654321098765432109876543210",
       ownerAlias: "0x9876543210987654321098765432109876543210",
       nonce: "0",

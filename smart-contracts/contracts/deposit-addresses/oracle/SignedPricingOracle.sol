@@ -4,16 +4,19 @@ pragma solidity ^0.8.28;
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 
+import {RelayPriceOracle} from "../../RelayPriceOracle.sol";
 import {Currency, IPricingOracle, Price} from "./IPricingOracle.sol";
 
 /// @title SignedPricingOracle
 /// @author Relay Protocol
-/// @notice Pricing oracle that verifies USD prices signed by a single solver
-///         pinned at construction. Interim implementation used until on-chain
-///         price feeds (e.g. Chainlink-pull) are available; one instance is
-///         deployed per solver and the deposit-address derivation pairs each
-///         oracle with its solver via `derivationFields.solver`.
+/// @notice Pricing oracle that prefers prices from `RelayPriceOracle` and
+///         verifies solver-signed USD prices when an on-chain price is unavailable.
+///         One instance is deployed per solver and the deposit-address derivation
+///         pairs each oracle with its solver via `derivationFields.solver`.
 contract SignedPricingOracle is IPricingOracle, EIP712 {
+  /// @notice The on-chain oracle queried before signed prices are considered.
+  RelayPriceOracle public immutable RELAY_PRICE_ORACLE;
+
   /// @notice The only address whose signatures are accepted as valid prices.
   /// @dev Pinning the signer at construction prevents a different allowlisted
   ///      solver from producing valid prices for a deposit address derived
@@ -51,6 +54,10 @@ contract SignedPricingOracle is IPricingOracle, EIP712 {
     bytes signature;
   }
 
+  /// @notice Emitted after all requested USD prices have been resolved.
+  /// @param prices USD prices in the same order as the requested currencies
+  event PricesResolved(Price[] prices);
+
   /// @notice Thrown when the number of signed prices decoded from `extraData`
   ///         does not match the number of currencies requested.
   /// @param currencyCount Number of currencies requested
@@ -73,56 +80,85 @@ contract SignedPricingOracle is IPricingOracle, EIP712 {
 
   /// @notice Deploys a pricing oracle hard-bound to `solver`.
   /// @param solver The only address whose signatures will be accepted
-  constructor(address solver) EIP712("SignedPricingOracle", "1") {
+  /// @param relayPriceOracle The on-chain oracle to query before signed prices
+  constructor(
+    address solver,
+    address relayPriceOracle
+  ) EIP712("SignedPricingOracle", "1") {
     SOLVER = solver;
+    RELAY_PRICE_ORACLE = RelayPriceOracle(relayPriceOracle);
   }
 
   /// @inheritdoc IPricingOracle
-  /// @dev `extraData` must ABI-encode a `SignedPrice[]` of the same length as
-  ///      `currencies`. Each entry is verified to (1) describe the currency
-  ///      at the same index, (2) not be past `expiration`, and (3) carry a
-  ///      valid EIP-712 signature from `SOLVER`. `SignatureChecker` supports
-  ///      both EOAs and ERC-1271 contract signers.
+  /// @dev The full currency batch is first queried from `RELAY_PRICE_ORACLE`.
+  ///      If that query reverts, `extraData` must ABI-encode a `SignedPrice[]`
+  ///      with one entry per currency. Each fallback entry is verified to (1)
+  ///      describe its corresponding currency, (2) not be past `expiration`,
+  ///      and (3) carry a valid EIP-712 signature from `SOLVER`.
+  ///      `SignatureChecker` supports both EOAs and ERC-1271 contract signers.
   function resolveUsdPrices(
     Currency[] calldata currencies,
     bytes calldata extraData
-  ) external view returns (Price[] memory prices) {
-    SignedPrice[] memory signed = abi.decode(extraData, (SignedPrice[]));
+  ) external returns (Price[] memory prices) {
+    try RELAY_PRICE_ORACLE.resolveUsdPrices(currencies) returns (
+      Price[] memory relayPrices
+    ) {
+      prices = relayPrices;
+    } catch {
+      SignedPrice[] memory signed = abi.decode(extraData, (SignedPrice[]));
+      uint256 length = currencies.length;
+      if (signed.length != length) {
+        revert PriceCountMismatch(length, signed.length);
+      }
 
-    uint256 length = currencies.length;
-    if (signed.length != length) {
-      revert PriceCountMismatch(length, signed.length);
+      prices = new Price[](length);
+      for (uint256 i; i < length; ++i) {
+        prices[i] = _resolveSignedPrice(currencies[i], signed[i], i);
+      }
+    }
+    emit PricesResolved(prices);
+  }
+
+  /// @notice Verifies and converts a signed fallback price.
+  /// @param currency Currency requested at `index`
+  /// @param signedPrice Signed fallback price to verify
+  /// @param index Position in the original currencies array
+  /// @return price Verified USD price
+  function _resolveSignedPrice(
+    Currency calldata currency,
+    SignedPrice memory signedPrice,
+    uint256 index
+  ) internal view returns (Price memory price) {
+    if (
+      keccak256(bytes(signedPrice.chainId)) !=
+        keccak256(bytes(currency.chainId)) ||
+      keccak256(signedPrice.currency) != keccak256(currency.currency)
+    ) {
+      revert CurrencyMismatch(index);
     }
 
-    prices = new Price[](length);
-    for (uint256 i; i < length; ++i) {
-      SignedPrice memory s = signed[i];
-
-      if (
-        keccak256(bytes(s.chainId)) !=
-          keccak256(bytes(currencies[i].chainId)) ||
-        keccak256(s.currency) != keccak256(currencies[i].currency)
-      ) {
-        revert CurrencyMismatch(i);
-      }
-
-      if (block.timestamp > s.expiration) {
-        revert PriceExpired(i, s.expiration);
-      }
-
-      bytes32 digest = _hashSignedPrice(s);
-      if (!SignatureChecker.isValidSignatureNow(SOLVER, digest, s.signature)) {
-        revert InvalidSignature(i);
-      }
-
-      prices[i] = Price({
-        usdPrice: s.usdPrice,
-        usdPriceDecimals: s.usdPriceDecimals,
-        currencyDecimals: s.currencyDecimals,
-        publishTime: s.publishTime,
-        expiration: s.expiration
-      });
+    if (block.timestamp > signedPrice.expiration) {
+      revert PriceExpired(index, signedPrice.expiration);
     }
+
+    bytes32 digest = _hashSignedPrice(signedPrice);
+    if (
+      !SignatureChecker.isValidSignatureNow(
+        SOLVER,
+        digest,
+        signedPrice.signature
+      )
+    ) {
+      revert InvalidSignature(index);
+    }
+
+    price = Price({
+      usdPrice: signedPrice.usdPrice,
+      usdPriceDecimals: signedPrice.usdPriceDecimals,
+      currencyDecimals: signedPrice.currencyDecimals,
+      publishTime: signedPrice.publishTime,
+      expiration: signedPrice.expiration
+    });
   }
 
   /// @notice Returns the EIP-712 digest a `SignedPrice` must carry a signature for.

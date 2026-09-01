@@ -38,12 +38,20 @@
   },
   "pricingOracle": {
     "storkFastVerifier": "0xbb4105f349072b15e300f3daeb701ef986ae5372",
-    "storkFastAdapter": "0x76aEAf8CDd04C7ca88FDfeC3C064A49aB8B069F5",
-    "priceOracle": "0x1d01F24bc185a45a02EB20E599571ab46c830B7F"
+    "storkFastAdapter": "0x76aeaf8cdd04c7ca88fdfec3c064a49ab8b069f5",
+    "priceOracle": "0x1d01f24bc185a45a02eb20e599571ab46c830b7f",
+    "signedPricingOracle": "0xb1a79a089ad4a43ecd57db9dcc95668c2b794dbc"
+  },
+  "uniswap": {
+    "factory": "0xbaf07aa64e3ae277f8fbb2cd51875cf47059fc93",
+    "swapRouter": "0xfed8389cc942cda0d08207863d65f81326ffd12c",
+    "positionManager": "0x1ef4de4e7cf40aaec0b996be6f85524e277cbe1c",
+    "quoterV2": "0x2d37c483dd9d52c0fbfa632e33b48bce2857775e"
   },
   "utils": {
     "basicCallResolver": "0xb24ac15b9da6d88e283ffe048befe02e188ea64e",
-    "multicall3": "0x6496d6c81be24c10de548024f0431a6d9d6f8777"
+    "multicall3": "0x03a246e0bff569bca1cc76d25d6529a86b6154d3",
+    "weth9": "0x9a2f9b597f6554b93f94e1ffbafe905b74635d35"
   },
   "safe": {
     "compatibilityFallbackHandler": "0xc828f3a3c95c34ebaa4e3eef1cd3541b42738378",

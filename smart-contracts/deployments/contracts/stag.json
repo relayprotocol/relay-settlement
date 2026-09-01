@@ -11,7 +11,7 @@
     "executor": "0x797b3ce4eb08038256fe69bcfeec532a83e350c2",
     "config": "0x62cabdd3d0681536bb68f9fac28bcf6fce92d099",
     "withdrawGasPayer": "0x41dc54f5366d45ce34ac30db3a206d39ca6e7925",
-    "protocolSafe": "0x5b0782a8FD7592e231169994b3d4817c3b5Fb752",
+    "protocolSafe": "0x5b0782a8fd7592e231169994b3d4817c3b5fb752",
     "feeCalculator": {
       "address": "0xe479d8b65b603c08f4f20fb7e3931984401136c4",
       "type": "bps"
@@ -39,11 +39,19 @@
   "pricingOracle": {
     "storkFastVerifier": "0xbb4105f349072b15e300f3daeb701ef986ae5372",
     "storkFastAdapter": "0xc4a7724a637aeeabfc86cbdd3951958ffdf33a6a",
-    "priceOracle": "0x35051bb7ef67864ed1da6fe28cf3b7c32a938057"
+    "priceOracle": "0x35051bb7ef67864ed1da6fe28cf3b7c32a938057",
+    "signedPricingOracle": "0x0616d9794e74a57ecfc0c1be245ce04477d229e0"
+  },
+  "uniswap": {
+    "factory": "0x4a688f2d25d7931655633bf3014180e40c717db6",
+    "swapRouter": "0x676a83ad4b0777bbb407a5d1d75e0431b0b04c04",
+    "quoterV2": "0xfd3d1ae1edfc9cd1ada291606afc615dec69a8dd",
+    "positionManager": "0xc4d5176468ba504bf4b36c90ffdde9193fdd861c"
   },
   "utils": {
     "basicCallResolver": "0x4cece2e5935fe5b0170cae38739f3a44c2d57896",
-    "multicall3": "0x8d941db12c770b2c0412e513d8f6d6d48c220f27"
+    "multicall3": "0xf68f9d4619e36ff430629e6e0db461a6340bcb61",
+    "weth9": "0x82a577cf5a1b5d8c71df117b8ab22f72d4f77077"
   },
   "safe": {
     "compatibilityFallbackHandler": "0xe460ebb003149d409adb5d7e8ab0b2462e5223f4",

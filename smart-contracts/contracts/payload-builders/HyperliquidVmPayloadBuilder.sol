@@ -53,7 +53,7 @@ contract HyperliquidVmPayloadBuilder is IPayloadBuilder {
   /// @param txType Encoded transaction type
   error UnsupportedTransactionType(uint8 txType);
 
-  /// @notice Thrown when the provided nonce/time is outside the acceptable range
+  /// @notice Retained for ABI compatibility with earlier nonce-time validation
   error InvalidNonceTime();
 
   /// @notice Config contract used to resolve Hyperliquid currency metadata
@@ -319,8 +319,7 @@ contract HyperliquidVmPayloadBuilder is IPayloadBuilder {
       params.amount,
       _getTargetDecimals(chainId, params.currency)
     );
-    request.time = abi.decode(params.data, (uint64));
-    validateNonceTime(request.time);
+    request.time = _deriveNonce(params.data);
   }
 
   /// @notice Builds the sendAsset request body
@@ -331,8 +330,7 @@ contract HyperliquidVmPayloadBuilder is IPayloadBuilder {
     string calldata chainId,
     BuildPayloadParams calldata params
   ) internal view returns (SendAssetRequest memory request) {
-    request.nonce = abi.decode(params.data, (uint64));
-    validateNonceTime(request.nonce);
+    request.nonce = _deriveNonce(params.data);
     request.sourceDex = _bytes32ToString(
       CONFIG.getConfigValue(getSourceDexKey(chainId, params.currency))
     );
@@ -356,22 +354,15 @@ contract HyperliquidVmPayloadBuilder is IPayloadBuilder {
     request.fromSubAccount = "";
   }
 
-  /// @notice Validates that nonce/time is within acceptable range with safety buffer
-  /// @dev Nonces must be within (T - 2 days + 1 hour, T + 1 day - 1 hour) to account for signing and execution delays
-  /// @param nonce The nonce to validate (in milliseconds)
-  function validateNonceTime(uint64 nonce) internal view {
-    uint64 blockTime = uint64(block.timestamp * 1000); // Convert to milliseconds
-    uint64 twoDays = 2 * 24 * 60 * 60 * 1000; // 2 days in milliseconds
-    uint64 oneDay = 1 * 24 * 60 * 60 * 1000; // 1 day in milliseconds
-    uint64 safetyBuffer = 1 * 60 * 60 * 1000; // 1 hour buffer in milliseconds
-
-    // Check if nonce is within (T - 2 days + 1 hour, T + 1 day - 1 hour) to account for delays
-    if (
-      nonce <= blockTime - twoDays + safetyBuffer ||
-      nonce >= blockTime + oneDay - safetyBuffer
-    ) {
-      revert InvalidNonceTime();
-    }
+  /// @notice Derives a current-time Hyperliquid nonce from legacy nonce data
+  /// @dev Keeps the millisecond component supplied by existing integrations while preventing users from selecting the timestamp
+  /// @param data ABI-encoded uint64 nonce seed
+  /// @return nonce Current block time in milliseconds plus the seed's millisecond component
+  function _deriveNonce(
+    bytes calldata data
+  ) internal view returns (uint64 nonce) {
+    uint64 nonceSeed = abi.decode(data, (uint64));
+    return uint64(block.timestamp * 1000) + (nonceSeed % 1000);
   }
 
   /// @notice Returns the configured target decimals for a currency

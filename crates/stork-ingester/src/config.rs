@@ -8,7 +8,6 @@ const DEFAULT_ADDRESS: &str = "127.0.0.1:9804";
 const DEFAULT_MAX_AGE_SEC: u64 = 30;
 const DEFAULT_CHANNEL: &str = "500ms";
 const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(5);
-const DEFAULT_OTEL_SAMPLE_RATIO: f64 = 1.0;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ConfiguredFeed {
@@ -34,7 +33,22 @@ pub struct Config {
 pub struct TelemetryConfig {
     pub endpoint: String,
     pub service_name: String,
-    pub sample_ratio: f64,
+    pub instance_id: String,
+    pub auth_token: Option<String>,
+}
+
+impl TelemetryConfig {
+    pub fn traces_url(&self) -> String {
+        format!("{}/v1/traces", self.endpoint)
+    }
+
+    pub fn metrics_url(&self) -> String {
+        format!("{}/v1/metrics", self.endpoint)
+    }
+
+    pub fn logs_url(&self) -> String {
+        format!("{}/v1/logs", self.endpoint)
+    }
 }
 
 #[instrument(skip_all)]
@@ -142,28 +156,31 @@ fn parse_telemetry() -> Result<Option<TelemetryConfig>> {
             "OTEL_EXPORTER_ENDPOINT must start with http:// or https://, got {endpoint}"
         ));
     }
+    let endpoint = endpoint
+        .trim_end_matches('/')
+        .trim_end_matches("/v1/traces")
+        .to_string();
 
     Ok(Some(TelemetryConfig {
         endpoint,
         service_name: optional_env("OTEL_SERVICE_NAME")
             .unwrap_or_else(|| env!("CARGO_PKG_NAME").to_string()),
-        sample_ratio: parse_sample_ratio()?,
+        instance_id: resolve_instance_id(),
+        auth_token: optional_env("OTEL_EXPORTER_AUTH_TOKEN"),
     }))
 }
 
-fn parse_sample_ratio() -> Result<f64> {
-    let Some(raw) = optional_env("OTEL_TRACES_SAMPLE_RATIO") else {
-        return Ok(DEFAULT_OTEL_SAMPLE_RATIO);
-    };
-    let ratio = raw
-        .parse::<f64>()
-        .context("OTEL_TRACES_SAMPLE_RATIO must be a number between 0.0 and 1.0")?;
-    if !(0.0..=1.0).contains(&ratio) {
-        return Err(anyhow!(
-            "OTEL_TRACES_SAMPLE_RATIO must be between 0.0 and 1.0, got {ratio}"
-        ));
+fn resolve_instance_id() -> String {
+    if let Some(hostname) = optional_env("HOSTNAME") {
+        return hostname;
     }
-    Ok(ratio)
+    if let Ok(hostname) = std::fs::read_to_string("/proc/sys/kernel/hostname") {
+        let hostname = hostname.trim();
+        if !hostname.is_empty() {
+            return hostname.to_string();
+        }
+    }
+    format!("{:08x}", rand::random::<u32>())
 }
 
 fn parse_listen_address() -> String {

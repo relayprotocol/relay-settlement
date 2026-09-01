@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use alloy_primitives::B256;
@@ -10,14 +10,16 @@ use price_oracle_ipc::{
 };
 use tokio::io::{AsyncReadExt, AsyncWrite};
 use tokio::sync::broadcast;
-use tracing::{Instrument as _, Span, info, info_span, instrument, warn};
+use tracing::{Instrument as _, info, info_span, instrument, warn};
 
-use crate::Context;
 use crate::cache::{FeedCache, provider_id};
 use crate::telemetry::TRACE_TARGET;
+use crate::{Context, metrics};
 
 const MAX_SUBSCRIBERS: usize = 32;
 const WRITE_TIMEOUT: Duration = HEARTBEAT_INTERVAL;
+
+static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
 
 #[instrument(skip_all)]
 pub async fn run(ctx: Context) -> Result<()> {
@@ -37,6 +39,7 @@ pub async fn run(ctx: Context) -> Result<()> {
         let subscribers = ctx.cache.subscribers.fetch_add(1, Ordering::SeqCst) + 1;
         if subscribers > MAX_SUBSCRIBERS {
             ctx.cache.subscribers.fetch_sub(1, Ordering::SeqCst);
+            metrics::on_subscriber_rejected();
             warn!(
                 max = MAX_SUBSCRIBERS,
                 "rejecting sequencer connection, subscriber limit reached"
@@ -44,15 +47,22 @@ pub async fn run(ctx: Context) -> Result<()> {
             drop(stream);
             continue;
         }
-        info!(subscribers, "sequencer subscriber connected");
+        let connection_id = NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
+        info!(connection_id, subscribers, "sequencer subscriber connected");
 
         let cache = ctx.cache.clone();
         let feeds = ctx.feeds.feed_ids.clone();
         let shutdown = ctx.shutdown.subscribe();
         tokio::spawn(async move {
-            match serve(stream, cache.clone(), feeds, shutdown).await {
-                Ok(()) | Err(IpcError::Closed) => info!("sequencer subscriber disconnected"),
-                Err(other) => warn!(error = %other, "subscriber connection ended with error"),
+            match serve(stream, cache.clone(), feeds, shutdown, connection_id).await {
+                Ok(()) | Err(IpcError::Closed) => {
+                    metrics::on_subscriber_disconnected("closed");
+                    info!(connection_id, "sequencer subscriber disconnected")
+                }
+                Err(other) => {
+                    metrics::on_subscriber_disconnected("error");
+                    warn!(connection_id, error = %other, "subscriber connection error")
+                }
             }
             cache.subscribers.fetch_sub(1, Ordering::SeqCst);
         });
@@ -65,25 +75,47 @@ async fn serve(
     cache: Arc<FeedCache>,
     feeds: Vec<B256>,
     mut shutdown: broadcast::Receiver<()>,
+    connection_id: u64,
 ) -> Result<(), IpcError> {
     let (mut read_half, mut write) = tokio::io::split(stream);
 
     let mut live = cache.live.subscribe();
     let snapshot = cache.snapshot();
 
-    write_frame_with_timeout(
-        &mut write,
-        &OracleFrame::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            provider_id: provider_id(),
-            feeds,
-        },
-        WRITE_TIMEOUT,
-    )
-    .await?;
-    for frame in &snapshot {
-        write_frame_with_timeout(&mut write, frame, WRITE_TIMEOUT).await?;
+    async {
+        let result = async {
+            write_frame_with_timeout(
+                &mut write,
+                &OracleFrame::Hello {
+                    protocol_version: PROTOCOL_VERSION,
+                    provider_id: provider_id(),
+                    feeds,
+                },
+                WRITE_TIMEOUT,
+            )
+            .await?;
+            for frame in &snapshot {
+                write_frame_with_timeout(&mut write, frame, WRITE_TIMEOUT).await?;
+            }
+            Ok::<(), IpcError>(())
+        }
+        .await;
+        if let Err(err) = &result {
+            let span = tracing::Span::current();
+            span.record("otel.status_code", "ERROR");
+            span.record("error.message", err.to_string().as_str());
+        }
+        result
     }
+    .instrument(info_span!(
+        target: TRACE_TARGET,
+        "subscriber_handshake",
+        connection_id,
+        snapshot_frames = snapshot.len(),
+        otel.status_code = tracing::field::Empty,
+        error.message = tracing::field::Empty,
+    ))
+    .await?;
 
     let mut heartbeat = tokio::time::interval(HEARTBEAT_INTERVAL);
     heartbeat.tick().await;
@@ -106,22 +138,23 @@ async fn serve(
             },
             recv = live.recv() => match recv {
                 Ok(frame) => {
-                    let span = match &frame {
-                        OracleFrame::PriceUpdate { feed_id, .. } => {
-                            info_span!(target: TRACE_TARGET, "send", feed_id = %feed_id)
-                        }
-                        _ => Span::none(),
+                    let feed_id = match &frame {
+                        OracleFrame::PriceUpdate { feed_id, .. } => Some(*feed_id),
+                        _ => None,
                     };
-                    async {
-                        write_frame_with_timeout(&mut write, &frame, WRITE_TIMEOUT).await?;
-                        cache.sent.fetch_add(1, Ordering::Relaxed);
-                        Ok::<(), IpcError>(())
+                    write_frame_with_timeout(&mut write, &frame, WRITE_TIMEOUT).await?;
+                    cache.sent.fetch_add(1, Ordering::Relaxed);
+                    if let Some(feed_id) = feed_id {
+                        metrics::on_update_sent(&feed_id);
                     }
-                    .instrument(span)
-                    .await?;
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
-                    warn!(skipped = n, "subscriber lagged, resending snapshot");
+                    metrics::on_resend();
+                    warn!(
+                        connection_id,
+                        skipped = n,
+                        "subscriber lagged, resending snapshot"
+                    );
                     send_snapshot(&mut write, &cache).await?;
                 }
                 Err(broadcast::error::RecvError::Closed) => return Ok(()),
@@ -154,8 +187,14 @@ mod tests {
                 let cache = cache.clone();
                 let serve_shutdown = shutdown.subscribe();
                 tokio::spawn(async move {
-                    let _ =
-                        serve(stream, cache, vec![B256::repeat_byte(0x03)], serve_shutdown).await;
+                    let _ = serve(
+                        stream,
+                        cache,
+                        vec![B256::repeat_byte(0x03)],
+                        serve_shutdown,
+                        0,
+                    )
+                    .await;
                 });
             }
         });

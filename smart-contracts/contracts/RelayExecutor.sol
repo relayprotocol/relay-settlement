@@ -128,7 +128,13 @@ contract RelayExecutor is AccessControl, EIP712, ReentrancyGuard {
   // Public methods
 
   /// @notice Execute a signed execute and withdraw request
-  /// @dev Withdraw amount is the post-call Hub balance of the currency derived from outChainId/outCurrency.
+  /// @dev Withdraw amount is the post-call Hub balance of the currency derived
+  ///      from outChainId/outCurrency. The solver-selected `callResolver` and
+  ///      `callResolverData` are not direct fields in the EIP-712 request, so a
+  ///      generic execution plan can be refreshed after authorization. A
+  ///      specialized resolver may require its own commitment through a signed
+  ///      request field. The signed minimum output is the receiver's only
+  ///      economic guarantee.
   /// @param request Oracle-signed execute and withdraw request
   /// @param callResolver Solver-supplied ICallResolver that runs the untrusted logic
   /// @param callResolverData Arbitrary solver-supplied data forwarded to the call resolver
@@ -255,14 +261,11 @@ contract RelayExecutor is AccessControl, EIP712, ReentrancyGuard {
 
   /// @notice Pushes the pulled input into the solver-supplied call resolver and
   ///         runs the untrusted logic there
-  /// @dev Running the caller-supplied logic in an isolated, privilege-less call
-  ///      resolver that only holds this order's input funds bounds the impact of
-  ///      a malicious call to the current order. The call resolver is fully
-  ///      controlled by the solver, but because it is never a Hub operator it
-  ///      cannot leverage this contract's privileges, and it must return the
-  ///      output currency here for the withdrawal to clear. If the input is
-  ///      diverted the output falls below the signed minimum and the transaction
-  ///      reverts.
+  /// @dev Caller-supplied logic runs with the resolver as `msg.sender`, so it
+  ///      does not inherit this contract's operator privileges. The resolver may
+  ///      exercise permissions independently granted to it and may retain the
+  ///      funded input or source output independently, provided it returns at
+  ///      least the signed minimum output for withdrawal.
   function _runCalls(
     address callResolver,
     bytes calldata callResolverData,
@@ -286,6 +289,8 @@ contract RelayExecutor is AccessControl, EIP712, ReentrancyGuard {
   }
 
   /// @notice Pulls the entire source currency balance from an order address
+  /// @dev The protocol must assign each order an exclusive, non-reused address
+  ///      because this function consumes its complete live balance.
   /// @return orderBalance Amount transferred from the order address
   function _pullOrderFunds(
     address orderAddress,

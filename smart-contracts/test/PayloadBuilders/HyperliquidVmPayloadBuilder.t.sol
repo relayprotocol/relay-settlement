@@ -123,7 +123,7 @@ contract HyperliquidVmPayloadBuilderBuildPayloadTest is
       amount: 25000,
       receiver: _addrBytes(receiverAddr),
       nonce: 2,
-      data: abi.encode(VALID_NONCE)
+      data: abi.encode(VALID_NONCE + 456)
     });
 
     bytes memory payload = payloadBuilder.buildPayload(CHAIN_ID, "", params);
@@ -144,7 +144,7 @@ contract HyperliquidVmPayloadBuilderBuildPayloadTest is
     assertEq(request.token, "HYPE:0x11111111111111111111111111111111");
     assertEq(request.amount, "2.5000");
     assertEq(request.fromSubAccount, "");
-    assertEq(request.nonce, VALID_NONCE);
+    assertEq(request.nonce, VALID_NONCE + 456);
   }
 
   function test_buildsSendAssetWithConfiguredDexes() public {
@@ -202,30 +202,96 @@ contract HyperliquidVmPayloadBuilderBuildPayloadTest is
     assertEq(request.time, VALID_NONCE);
   }
 
-  function test_revertsWhenNonceTimeIsTooOld() public {
+  function test_usesMillisecondComponentFromLegacyPastNonce() public {
+    uint64 legacyNonce = uint64((NOW_SECONDS - 2 days) * 1000 + 123);
     BuildPayloadParams memory params = BuildPayloadParams({
       currency: _nativeCurrency(),
       amount: 100000000,
       receiver: _addrBytes(receiverAddr),
       nonce: 1,
-      data: abi.encode(uint64((NOW_SECONDS - 2 days) * 1000))
+      data: abi.encode(legacyNonce)
     });
 
-    vm.expectRevert(HyperliquidVmPayloadBuilder.InvalidNonceTime.selector);
-    payloadBuilder.buildPayload(CHAIN_ID, "", params);
+    bytes memory payload = payloadBuilder.buildPayload(CHAIN_ID, "", params);
+    HyperliquidPayload memory decoded = abi.decode(
+      payload,
+      (HyperliquidPayload)
+    );
+    UsdSendRequest memory request = abi.decode(
+      decoded.parameters,
+      (UsdSendRequest)
+    );
+
+    assertEq(request.time, VALID_NONCE + 123);
   }
 
-  function test_revertsWhenNonceTimeIsTooFarInFuture() public {
+  function test_limitsFutureNonceInfluenceToMillisecondComponent() public {
+    uint64 legacyNonce = uint64((NOW_SECONDS + 1 days) * 1000 + 999);
     BuildPayloadParams memory params = BuildPayloadParams({
       currency: _nativeCurrency(),
       amount: 100000000,
       receiver: _addrBytes(receiverAddr),
       nonce: 1,
-      data: abi.encode(uint64((NOW_SECONDS + 1 days) * 1000))
+      data: abi.encode(legacyNonce)
     });
 
-    vm.expectRevert(HyperliquidVmPayloadBuilder.InvalidNonceTime.selector);
-    payloadBuilder.buildPayload(CHAIN_ID, "", params);
+    bytes memory payload = payloadBuilder.buildPayload(CHAIN_ID, "", params);
+    HyperliquidPayload memory decoded = abi.decode(
+      payload,
+      (HyperliquidPayload)
+    );
+    UsdSendRequest memory request = abi.decode(
+      decoded.parameters,
+      (UsdSendRequest)
+    );
+
+    assertEq(request.time, VALID_NONCE + 999);
+  }
+
+  function test_oneHundredFutureNonceInputsCannotPoisonLaterSecond() public {
+    BuildPayloadParams memory params = BuildPayloadParams({
+      currency: _nativeCurrency(),
+      amount: 100000000,
+      receiver: _addrBytes(receiverAddr),
+      nonce: 1,
+      data: ""
+    });
+    uint64 highestAttackerNonce;
+
+    for (uint64 i; i < 100; ++i) {
+      params.data = abi.encode(uint64((NOW_SECONDS + 1 days) * 1000 + 900 + i));
+      bytes memory payload = payloadBuilder.buildPayload(CHAIN_ID, "", params);
+      HyperliquidPayload memory decoded = abi.decode(
+        payload,
+        (HyperliquidPayload)
+      );
+      UsdSendRequest memory request = abi.decode(
+        decoded.parameters,
+        (UsdSendRequest)
+      );
+
+      highestAttackerNonce = request.time;
+    }
+
+    assertEq(highestAttackerNonce, VALID_NONCE + 999);
+
+    vm.warp(NOW_SECONDS + 1);
+    params.data = abi.encode(uint64((NOW_SECONDS + 1) * 1000));
+    bytes memory laterPayload = payloadBuilder.buildPayload(
+      CHAIN_ID,
+      "",
+      params
+    );
+    HyperliquidPayload memory laterDecoded = abi.decode(
+      laterPayload,
+      (HyperliquidPayload)
+    );
+    UsdSendRequest memory laterRequest = abi.decode(
+      laterDecoded.parameters,
+      (UsdSendRequest)
+    );
+
+    assertGt(laterRequest.time, highestAttackerNonce);
   }
 
   function test_revertsWhenReceiverIsNot20Bytes() public {

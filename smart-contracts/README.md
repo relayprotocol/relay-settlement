@@ -54,13 +54,17 @@ versions.
 
 ### Order execution and withdrawal
 
-1. Funds for an order sit at its virtual address in `RelayHub`.
+1. Funds for an order sit at an exclusive, non-reused virtual address in
+   `RelayHub`.
 2. Anyone may relay an oracle-signed request to `RelayExecutor`. The executor
-   pulls the order balance, charges signed fees at most once, and transfers the
-   net input to an `ICallResolver`.
-3. The resolver runs the solver's conversion logic without inheriting the
-   executor's Hub privileges. It must return at least the signed minimum output
-   or the complete transaction reverts.
+   pulls the address's complete live order balance, charges signed fees at most
+   once, and transfers the net input to an `ICallResolver`.
+3. The submitter chooses the resolver and calldata, which are intentionally
+   outside the oracle signature so a solver can refresh its execution plan after
+   authorization. The resolver runs without inheriting the executor's Hub
+   privileges and must return at least the signed minimum output or the complete
+   transaction reverts. The receiver is not guaranteed any additional execution
+   value that the resolver does not return.
 4. `RelayExecutor` moves the output to its allocator spender alias and submits
    a withdrawal request to `RelayAllocator`.
 5. `RelayAllocator` burns the Hub representation, selects the payload builder
@@ -73,7 +77,19 @@ Call resolvers are intentionally separate from `RelayExecutor`. The generic
 `BasicCallResolver` supports isolated arbitrary calls, while `PoolDrawResolver`
 adds bounded sponsorship and exact-output funding from `RelayFundingPool`
 accounts. Solver calls made during pool settlement run in `ResolverSandbox`,
-which holds no pool roles.
+which holds no pool roles. Pool-backed resolvers additionally commit their
+resolver address and execution payload through the signed request nonce because
+they can debit shared pool accounts; the generic resolver path does not
+authorize that access.
+
+`RelayExecutor` does not enforce order-address uniqueness itself. The protocol
+must preserve the exclusive, non-reused address invariant because the executor
+pulls the address's entire live input balance.
+
+The contract does not authenticate a designated solver. Keeping the order and
+oracle signature private, or restricting signature release, can reduce competing
+fills operationally; it is not an on-chain authorization boundary once the
+signed request becomes public.
 
 ### Payload configuration and gas payments
 
@@ -128,6 +144,7 @@ this oracle.
 | [`RelayMultisigSigner.sol`](./contracts/RelayMultisigSigner.sol)                 | Safe-owned Aurora contract that approves messages and requests ECDSA or EdDSA signatures from NEAR Chain Signatures                                |
 | [`ChainSignatures.sol`](./contracts/ChainSignatures.sol)                         | Encodes JSON requests and byte strings for the NEAR Chain Signatures service                                                                       |
 | [`Utils.sol`](./contracts/Utils.sol)                                             | Shared token-ID, virtual-address, EIP-712, and endian-encoding helpers                                                                             |
+| [`Multicall3.sol`](./contracts/Multicall3.sol)                                   | Multicall-compatible batch executor that preserves the original revert data from required calls                                                    |
 
 ### `call-resolvers/`
 
@@ -149,7 +166,7 @@ return its output without receiving the executor's Hub operator privileges.
 | [`RelayDepositAddressManager.sol`](./contracts/deposit-addresses/RelayDepositAddressManager.sol) | Records uniquely identified deposit-address triggers binding order inputs, derivation fields, prices, and oracle-specific data |
 | [`oracle/IPricingOracle.sol`](./contracts/deposit-addresses/oracle/IPricingOracle.sol)           | Defines cross-chain currency, mid-price, and bid/ask types plus pricing-oracle interfaces                                      |
 | [`oracle/BasicPricingOracle.sol`](./contracts/deposit-addresses/oracle/BasicPricingOracle.sol)   | Minimal implementation that decodes caller-supplied prices directly from `extraData`                                           |
-| [`oracle/SignedPricingOracle.sol`](./contracts/deposit-addresses/oracle/SignedPricingOracle.sol) | Verifies expiring EIP-712 prices from the solver address fixed at deployment                                                   |
+| [`oracle/SignedPricingOracle.sol`](./contracts/deposit-addresses/oracle/SignedPricingOracle.sol) | Prefers `RelayPriceOracle` prices and falls back to expiring EIP-712 prices from the solver fixed at deployment                |
 
 ### `fee-calculators/`
 

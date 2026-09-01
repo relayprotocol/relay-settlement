@@ -47,7 +47,7 @@ struct TaxonomyAsset {
     asset_id: u16,
 }
 
-#[instrument(skip_all)]
+#[instrument(target = "ingest", name = "taxonomy_fetch", skip_all)]
 pub async fn fetch(ws_endpoint: &str, auth_token: &str) -> Result<TaxonomyResponse> {
     let url = taxonomy_url(ws_endpoint);
     reqwest::Client::new()

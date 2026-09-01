@@ -22,8 +22,11 @@ hex = { version = "0.4", features = ["std"] }
 hmac = { version = "0.13", default-features = false }
 k256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
 opentelemetry = "0.32"
+opentelemetry-appender-tracing = "0.32"
 opentelemetry-otlp = { version = "0.32", default-features = false, features = [
     "trace",
+    "metrics",
+    "logs",
     "http-proto",
     "reqwest-blocking-client",
     "reqwest-rustls-webpki-roots",

@@ -14,9 +14,9 @@ struct Fee {
 /// @param inCurrency Encoded address of the input currency
 /// @param outChainId Chain id of the withdrawal chain
 /// @param outCurrency Encoded address of the output currency to withdraw
-/// @param outAmountMinimum Minimum withdrawal currency amount after executing calls
+/// @param outAmountMinimum Minimum withdrawal currency amount guaranteed to the receiver
 /// @param depository Encoded address of the depository on the withdrawal chain
-/// @param orderAddress Hub account that currently holds the order funds
+/// @param orderAddress Hub account assigned exclusively to this order
 /// @param receiver Encoded address of the receiver of the withdrawn funds
 /// @param data Additional data to be passed to the payload builder
 /// @param fees Fees charged in the input currency before executing calls
@@ -50,14 +50,20 @@ struct ExecuteAndWithdrawRequest {
 ///      has complete context (input/output currencies, minimum output,
 ///      receiver, fees, etc.).
 ///
-///      Security relies on the fact that the call runs with `msg.sender` set to
-///      the resolver itself, never the RelayExecutor. Because the resolver is
-///      expected to be a plain, privilege-less contract (it is never granted a
-///      Hub operator role), it can never use the RelayExecutor's operator role
-///      to mint, burn or move funds it was not explicitly given. The worst a
-///      malicious resolver can do is divert the single order's funded input; if
-///      it does, the resulting output falls below the signed minimum and the
-///      RelayExecutor reverts the whole transaction.
+///      The call runs with `msg.sender` set to the resolver itself, never the
+///      RelayExecutor. The resolver therefore does not inherit the executor's
+///      Hub operator role. Any access beyond the funded order must come from
+///      roles, allowances or operator permissions independently granted to the
+///      resolver.
+///
+///      The resolver and its calldata are not direct fields in the executor's
+///      EIP-712 request. Generic resolver plans can therefore be refreshed after
+///      authorization. Resolvers with additional privileges may impose their
+///      own commitment through a signed request field; pool-backed resolvers,
+///      for example, bind their address and execution payload through the signed
+///      nonce. The signed minimum output is the receiver's economic guarantee:
+///      the resolver may retain the funded input or other execution value if it
+///      independently returns that minimum.
 ///
 ///      The resolver is responsible for returning the resulting output currency
 ///      to the caller (the RelayExecutor). Any funds left behind are not swept
@@ -74,7 +80,7 @@ interface ICallResolver {
   ///        Fees are charged at most once per order address, so this is false
   ///        when the order address had already been charged by a prior execution
   ///        (in which case the full input amount was funded in).
-  /// @param data Arbitrary solver-supplied data
+  /// @param data Arbitrary solver-supplied data outside the oracle signature
   function execute(
     ExecuteAndWithdrawRequest calldata request,
     bool feesCharged,

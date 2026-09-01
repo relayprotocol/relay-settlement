@@ -20,10 +20,11 @@
 // under the router's own ADMIN_ROLE, not here, and must be done first.
 //
 // Env:
-//   ENV              stag | prod. Defaults to "prod". dev is rejected: its allocator lives
-//                    on a different relay chain than relayChain.rpc[0], and dev's owner is
-//                    a single EOA, so it needs no manifest -- use
-//                    smart-contracts/deployments/scripts/configure-ethereum-vm-payload-builder.ts.
+//   ENV              dev | stag | prod. Defaults to "prod". dev targets the relay
+//                    testnet chain (537724) -- dev privileged changes go through the
+//                    multisig flow like stag/prod.
+//   CHAINS           optional comma-separated destination chain slugs (resolved from
+//                    settlement-networks). Defaults to the ROUTED_CHAINS list below.
 //   ROUTER           required 0x MulticallRouter address on the destination chains.
 //   DEPOSITORY       required 0x depository address on the destination chains.
 //   PAYLOAD_BUILDER  optional 0x builder address. Defaults to the env's
@@ -43,21 +44,30 @@ import {
 } from "viem"
 import {
   relay as relayChain,
+  relayTestnet,
   aurora,
+  networks,
 } from "@relay-protocol/settlement-networks"
 import { encodeAddress } from "@relay-protocol/settlement-sdk"
 import { deriveAllocatorSignerAddress } from "../src/crypto/signer"
 import { getManifestPath, stringifyJsonWithBigInt } from "./helpers/manifest"
 import { RELAY_CHAIN_GAS_CONFIG } from "./helpers/chains"
 
-const ENV = (process.env.ENV ?? "prod") as "stag" | "prod"
+const ENV = (process.env.ENV ?? "prod") as "dev" | "stag" | "prod"
 
 // Destination chains this ceremony covers. Each row costs one
 // ETHEREUM_VM_ROUTER_ALLOWED key, because the key is per (chainId, depository, router)
 // even when the router address is identical across chains.
-const ROUTED_CHAINS: { chainId: string; signatureChainId: number }[] = [
+const DEFAULT_ROUTED_CHAINS: { chainId: string; signatureChainId: number }[] = [
   { chainId: "base", signatureChainId: 8453 },
 ]
+const ROUTED_CHAINS = process.env.CHAINS
+  ? process.env.CHAINS.split(",").map((slug) => {
+      const net = networks[slug]
+      if (!net) throw new Error(`CHAINS contains an unknown slug: ${slug}`)
+      return { chainId: slug, signatureChainId: Number(net.chainId) }
+    })
+  : DEFAULT_ROUTED_CHAINS
 
 // Grouped into core / payloadBuilders since #631.
 const deploymentFile = JSON.parse(
@@ -226,8 +236,8 @@ const buildCalls = async (
 }
 
 const main = async () => {
-  if (ENV !== "stag" && ENV !== "prod") {
-    throw new Error(`ENV must be stag or prod (got "${ENV}")`)
+  if (ENV !== "dev" && ENV !== "stag" && ENV !== "prod") {
+    throw new Error(`ENV must be dev, stag or prod (got "${ENV}")`)
   }
 
   const router = requireAddressEnv("ROUTER")
@@ -262,8 +272,16 @@ const main = async () => {
   console.log(`env: ${ENV}`)
   console.log(`Using signer from MPC : ${signerAddress}`)
 
-  const rpcUrl = relayChain.rpc[0]
+  const chain = ENV === "dev" ? relayTestnet : relayChain
+  const rpcUrl = chain.rpc[0]
   const relayChainClient = createPublicClient({ transport: http(rpcUrl) })
+  // reads against the wrong chain silently return empty values
+  const liveChainId = await relayChainClient.getChainId()
+  if (BigInt(liveChainId) !== chain.chainId) {
+    throw new Error(
+      `RPC ${rpcUrl} serves chain ${liveChainId}, expected ${chain.chainId} for env "${ENV}"`
+    )
+  }
 
   // Every key read goes through the builder, so an undeployed address would surface as a
   // pile of unrelated reverts.
@@ -330,7 +348,11 @@ const main = async () => {
     }
   })
 
-  const path = getManifestPath("configure-routed-withdrawal", `${ENV}-${phase}`)
+  const path = getManifestPath(
+    "configure-routed-withdrawal",
+    `${ENV}-${phase}`,
+    ENV
+  )
   writeFileSync(path, stringifyJsonWithBigInt(txs))
 
   console.log(`\n✅ Generated: ${path}`)

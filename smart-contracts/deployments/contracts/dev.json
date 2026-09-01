@@ -34,19 +34,35 @@
     "gatewayVmPayloadBuilder": "0x2c244b362b4beed59842e411c214c4d65a0e82a2",
     "gatewayEthereumVmDestinationPayloadBuilder": "0x5badb7edea2e7f3264afd76daf4aa7494a721108"
   },
+  "multicallRouters": {
+    "ethereum": "0x321948bd4f25d96c9981357b39e974edf9c09464",
+    "optimism": "0x321948bd4f25d96c9981357b39e974edf9c09464",
+    "polygon": "0x321948bd4f25d96c9981357b39e974edf9c09464",
+    "abstract": "0x321948bd4f25d96c9981357b39e974edf9c09464",
+    "base": "0x321948bd4f25d96c9981357b39e974edf9c09464",
+    "arbitrum": "0x321948bd4f25d96c9981357b39e974edf9c09464"
+  },
   "depositAddress": {
     "depositAddressManager": "0xf4d50837c674ce6ec05527a5233651e2c842cefa"
   },
   "pricingOracle": {
     "storkFastVerifier": "0x93a8aefcdc5f5734f9eb254c910dd479bcca4b30",
     "storkFastAdapter": "0x769b1c624319ec53ec1d96a2b80b96619e7e112e",
-    "priceOracle": "0x71e55887b7c2aa0f02c110247b68281f456dc546"
+    "priceOracle": "0x71e55887b7c2aa0f02c110247b68281f456dc546",
+    "signedPricingOracle": "0x18535c64f75a5a4d2284e2bf51dc76ded308d314"
+  },
+  "uniswap": {
+    "factory": "0x96346ad3f3ebb64c1530d001223b4c192e9b4dbe",
+    "swapRouter": "0x81d4fd3a0f4ff154512bab304c98e597060b60d7",
+    "positionManager": "0x193265b6a8624d15d278f1fa19fdc9cd87704136",
+    "quoterV2": "0xb4bad05aba100d1cc7ccbf5ba9bd4ba277008f9e"
   },
   "utils": {
     "basicCallResolver": "0xc0f489a34672d5b960a19279d99d77e94221d0c9",
     "fundingPoolFactory": "0x354426693ed9f0facefe4399326a236f122f46d7",
     "poolDrawResolver": "0x37218c140017353a4a53be128f74e99acae665db",
-    "multicall3": "0x85027468725d5dd950cd78ec80e6014126039554"
+    "multicall3": "0x5365b15ea11403d8eb92fa7df8506882585037e5",
+    "weth9": "0x45046c91ea0c5c70f0b485209edab8e04dabc0bf"
   },
   "safe": {
     "compatibilityFallbackHandler": "0x9ff6b39c118b8844da625b660223761e8b30da49",

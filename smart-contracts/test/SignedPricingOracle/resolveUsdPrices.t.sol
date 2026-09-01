@@ -3,10 +3,13 @@ pragma solidity ^0.8.28;
 
 import {SignedPricingOracleBase} from "./SignedPricingOracleBase.sol";
 import {SignedPricingOracle} from "../../contracts/deposit-addresses/oracle/SignedPricingOracle.sol";
+import {PriceOraclePrecompile} from "../../contracts/precompiles/PriceOraclePrecompile.sol";
 import {Currency, Price} from "../../contracts/deposit-addresses/oracle/IPricingOracle.sol";
 
 /// @notice Port of test/SignedPricingOracle/getUsdPrices.ts.
 contract SignedPricingOracleResolveUsdPricesTest is SignedPricingOracleBase {
+    event PricesResolved(Price[] prices);
+
     string internal constant INPUT_CHAIN = "1";
     string internal constant OUTPUT_CHAIN = "10";
     bytes internal constant INPUT_CURRENCY_BYTES =
@@ -23,6 +26,10 @@ contract SignedPricingOracleResolveUsdPricesTest is SignedPricingOracleBase {
     uint256 internal constant OUTPUT_USD_PRICE = 200_000_000;
     uint8 internal constant OUTPUT_USD_DECIMALS = 8;
     uint8 internal constant OUTPUT_CURRENCY_DECIMALS = 6;
+
+    bytes32 internal constant INPUT_FEED_ID = keccak256("input-usd");
+    uint256 internal constant RELAY_INPUT_USD_PRICE = 150_000_000;
+    uint32 internal constant MAX_AGE_SECONDS = 60;
 
     function setUp() public override {
         super.setUp();
@@ -75,7 +82,7 @@ contract SignedPricingOracleResolveUsdPricesTest is SignedPricingOracleBase {
             );
     }
 
-    function test_returnsPricesForValidSignedAttestations() public view {
+    function test_returnsPricesForValidSignedAttestations() public {
         SignedPricingOracle.SignedPrice[]
             memory signed = new SignedPricingOracle.SignedPrice[](2);
         signed[0] = _signInput();
@@ -84,6 +91,24 @@ contract SignedPricingOracleResolveUsdPricesTest is SignedPricingOracleBase {
         Currency[] memory currencies = new Currency[](2);
         currencies[0] = _inputCurrency();
         currencies[1] = _outputCurrency();
+
+        Price[] memory expectedPrices = new Price[](2);
+        expectedPrices[0] = Price({
+            usdPrice: INPUT_USD_PRICE,
+            usdPriceDecimals: INPUT_USD_DECIMALS,
+            currencyDecimals: INPUT_CURRENCY_DECIMALS,
+            publishTime: PUBLISH_TIME,
+            expiration: FUTURE_EXPIRATION
+        });
+        expectedPrices[1] = Price({
+            usdPrice: OUTPUT_USD_PRICE,
+            usdPriceDecimals: OUTPUT_USD_DECIMALS,
+            currencyDecimals: OUTPUT_CURRENCY_DECIMALS,
+            publishTime: PUBLISH_TIME,
+            expiration: FUTURE_EXPIRATION
+        });
+        vm.expectEmit(false, false, false, true, address(oracle));
+        emit PricesResolved(expectedPrices);
 
         Price[] memory prices = oracle.resolveUsdPrices(currencies, _encode(signed));
         assertEq(prices.length, 2);
@@ -99,8 +124,91 @@ contract SignedPricingOracleResolveUsdPricesTest is SignedPricingOracleBase {
         assertEq(prices[1].expiration, FUTURE_EXPIRATION);
     }
 
-    function test_exposesBoundSolverOnContract() public view {
+    function test_exposesBoundSolverAndRelayPriceOracleOnContract()
+        public
+        view
+    {
         assertEq(oracle.SOLVER(), solver);
+        assertEq(
+            address(oracle.RELAY_PRICE_ORACLE()),
+            address(relayPriceOracle)
+        );
+    }
+
+    function test_prefersRelayPriceWithoutDecodingSignedPrices() public {
+        _setRelayInputPrice();
+
+        Currency[] memory currencies = new Currency[](1);
+        currencies[0] = _inputCurrency();
+
+        Price[] memory expectedPrices = new Price[](1);
+        expectedPrices[0] = Price({
+            usdPrice: RELAY_INPUT_USD_PRICE,
+            usdPriceDecimals: INPUT_USD_DECIMALS,
+            currencyDecimals: INPUT_CURRENCY_DECIMALS,
+            publishTime: block.timestamp,
+            expiration: block.timestamp + MAX_AGE_SECONDS
+        });
+        vm.expectEmit(false, false, false, true, address(oracle));
+        emit PricesResolved(expectedPrices);
+
+        Price[] memory prices = oracle.resolveUsdPrices(currencies, "");
+
+        assertEq(prices.length, 1);
+        assertEq(prices[0].usdPrice, RELAY_INPUT_USD_PRICE);
+        assertEq(prices[0].usdPriceDecimals, INPUT_USD_DECIMALS);
+        assertEq(prices[0].currencyDecimals, INPUT_CURRENCY_DECIMALS);
+        assertEq(prices[0].publishTime, block.timestamp);
+        assertEq(prices[0].expiration, block.timestamp + MAX_AGE_SECONDS);
+    }
+
+    function test_usesSignedPriceWhenConfiguredRelayPriceIsUnavailable()
+        public
+    {
+        vm.prank(owner);
+        relayPriceOracle.setFeedRoute(
+            _inputCurrency(),
+            PROVIDER_ID,
+            INPUT_FEED_ID,
+            INPUT_CURRENCY_DECIMALS,
+            MAX_AGE_SECONDS
+        );
+
+        SignedPricingOracle.SignedPrice[]
+            memory signed = new SignedPricingOracle.SignedPrice[](1);
+        signed[0] = _signInput();
+
+        Currency[] memory currencies = new Currency[](1);
+        currencies[0] = _inputCurrency();
+
+        Price[] memory prices = oracle.resolveUsdPrices(
+            currencies,
+            _encode(signed)
+        );
+
+        assertEq(prices[0].usdPrice, INPUT_USD_PRICE);
+        assertEq(prices[0].expiration, FUTURE_EXPIRATION);
+    }
+
+    function test_fallsBackEntireBatchWhenAnyRelayPriceIsUnavailable() public {
+        _setRelayInputPrice();
+
+        SignedPricingOracle.SignedPrice[]
+            memory signed = new SignedPricingOracle.SignedPrice[](2);
+        signed[0] = _signInput();
+        signed[1] = _signOutput();
+
+        Currency[] memory currencies = new Currency[](2);
+        currencies[0] = _inputCurrency();
+        currencies[1] = _outputCurrency();
+
+        Price[] memory prices = oracle.resolveUsdPrices(
+            currencies,
+            _encode(signed)
+        );
+
+        assertEq(prices[0].usdPrice, INPUT_USD_PRICE);
+        assertEq(prices[1].usdPrice, OUTPUT_USD_PRICE);
     }
 
     function test_returnsDigestFromHashSignedPriceMatchingOffChainSigner()
@@ -291,5 +399,26 @@ contract SignedPricingOracleResolveUsdPricesTest is SignedPricingOracleBase {
             )
         );
         oracle.resolveUsdPrices(currencies, _encode(signed));
+    }
+
+    function _setRelayInputPrice() internal {
+        vm.prank(owner);
+        relayPriceOracle.setFeedRoute(
+            _inputCurrency(),
+            PROVIDER_ID,
+            INPUT_FEED_ID,
+            INPUT_CURRENCY_DECIMALS,
+            MAX_AGE_SECONDS
+        );
+        vm.mockCall(
+            PriceOraclePrecompile.PRECOMPILE,
+            abi.encodePacked(PROVIDER_ID, INPUT_FEED_ID),
+            abi.encode(
+                INPUT_FEED_ID,
+                RELAY_INPUT_USD_PRICE,
+                INPUT_USD_DECIMALS,
+                block.timestamp
+            )
+        );
     }
 }

@@ -1,6 +1,7 @@
 mod cache;
 mod config;
 mod ingester;
+mod metrics;
 mod payload;
 mod server;
 mod taxonomy;
@@ -16,7 +17,7 @@ use tokio::signal::ctrl_c;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::broadcast;
 use tokio::time::{Duration, interval, sleep};
-use tracing::{error, info, info_span, instrument, warn};
+use tracing::{Instrument as _, error, info, info_span, instrument, warn};
 
 use crate::cache::FeedCache;
 use crate::config::Config;
@@ -38,26 +39,33 @@ async fn main() -> Result<()> {
     let _ = dotenvy::dotenv();
 
     let config = Arc::new(config::get()?);
-    let _tracer_provider = telemetry::init(config.telemetry.as_ref())?;
+    let providers = telemetry::init(config.telemetry.as_ref())?;
 
-    let startup = info_span!(target: telemetry::TRACE_TARGET, "startup").entered();
+    let startup = info_span!(target: telemetry::TRACE_TARGET, "startup");
+    let ctx = async {
+        ring::default_provider()
+            .install_default()
+            .map_err(|_| anyhow!("failed to install rustls ring crypto provider"))?;
 
-    ring::default_provider()
-        .install_default()
-        .map_err(|_| anyhow!("failed to install rustls ring crypto provider"))?;
+        if let Some(telemetry) = config.telemetry.as_ref() {
+            telemetry::probe(telemetry).await;
+        }
 
-    let feeds = Arc::new(resolve_feeds(config.as_ref()).await?);
+        let feeds = Arc::new(resolve_feeds(config.as_ref()).await?);
 
-    let (shutdown, _) = broadcast::channel::<()>(1);
-    let ctx = Context {
-        shutdown: shutdown.clone(),
-        config,
-        cache: Arc::new(FeedCache::new()),
-        sockets: Arc::new(AtomicUsize::new(0)),
-        feeds,
-    };
-
-    drop(startup);
+        let (shutdown, _) = broadcast::channel::<()>(1);
+        let ctx = Context {
+            shutdown,
+            config,
+            cache: Arc::new(FeedCache::new()),
+            sockets: Arc::new(AtomicUsize::new(0)),
+            feeds,
+        };
+        metrics::init(ctx.feeds.as_ref(), ctx.sockets.clone(), ctx.cache.clone());
+        Ok::<_, anyhow::Error>(ctx)
+    }
+    .instrument(startup)
+    .await?;
 
     tokio::select! {
         biased;
@@ -99,6 +107,9 @@ async fn main() -> Result<()> {
         },
     }
 
+    if let Some(providers) = providers {
+        providers.shutdown();
+    }
     Ok(())
 }
 

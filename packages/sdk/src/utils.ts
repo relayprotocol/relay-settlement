@@ -154,7 +154,13 @@ export const encodeAddress = (address: string, vmType: VmType): Uint8Array => {
     }
 
     case "ethereum-vm": {
-      return hexToBytes(address as Hex)
+      const encoded = hexToBytes(address as Hex)
+      if (encoded.length !== 20) {
+        throw new Error(
+          `Invalid ethereum-vm address byte length ${encoded.length}; expected 20`
+        )
+      }
+      return encoded
     }
 
     case "gateway-vm": {
@@ -171,11 +177,23 @@ export const encodeAddress = (address: string, vmType: VmType): Uint8Array => {
     }
 
     case "hyperliquid-vm": {
-      return hexToBytes(address as Hex)
+      const encoded = hexToBytes(address as Hex)
+      if (encoded.length === 0 || encoded.length > 20) {
+        throw new Error(
+          `Invalid hyperliquid-vm address byte length ${encoded.length}; expected 1 to 20`
+        )
+      }
+      return encoded
     }
 
     case "solana-vm": {
-      return bs58.decode(address)
+      const encoded = bs58.decode(address)
+      if (encoded.length !== 32) {
+        throw new Error(
+          `Invalid solana-vm address byte length ${encoded.length}; expected 32`
+        )
+      }
+      return encoded
     }
 
     case "ton-vm": {
@@ -260,6 +278,11 @@ export const decodeAddress = (address: Uint8Array, vmType: VmType): string => {
     }
 
     case "ethereum-vm": {
+      if (address.length !== 20) {
+        throw new Error(
+          `Invalid ethereum-vm address byte length ${address.length}; expected 20`
+        )
+      }
       return bytesToHex(address)
     }
 
@@ -277,10 +300,20 @@ export const decodeAddress = (address: Uint8Array, vmType: VmType): string => {
     }
 
     case "hyperliquid-vm": {
+      if (address.length === 0 || address.length > 20) {
+        throw new Error(
+          `Invalid hyperliquid-vm address byte length ${address.length}; expected 1 to 20`
+        )
+      }
       return bytesToHex(address)
     }
 
     case "solana-vm": {
+      if (address.length !== 32) {
+        throw new Error(
+          `Invalid solana-vm address byte length ${address.length}; expected 32`
+        )
+      }
       return bs58.encode(address)
     }
 

@@ -3,6 +3,8 @@ pragma solidity ^0.8.28;
 
 import {BaseTest} from "../utils/BaseTest.sol";
 import {Eip712} from "../utils/Eip712.sol";
+import {RelayPriceOracle} from "../../contracts/RelayPriceOracle.sol";
+import {MockPriceFeedAdapter} from "../../contracts/mocks/MockPriceFeedAdapter.sol";
 import {SignedPricingOracle} from "../../contracts/deposit-addresses/oracle/SignedPricingOracle.sol";
 import {Currency} from "../../contracts/deposit-addresses/oracle/IPricingOracle.sol";
 
@@ -13,8 +15,11 @@ abstract contract SignedPricingOracleBase is BaseTest {
     address internal anyone;
     uint256 internal anyonePk;
     SignedPricingOracle internal oracle;
+    RelayPriceOracle internal relayPriceOracle;
+    MockPriceFeedAdapter internal priceFeedAdapter;
     bytes32 internal domainSep;
 
+    bytes32 internal constant PROVIDER_ID = keccak256("signed-oracle-test");
     bytes32 internal constant SIGNED_PRICE_TYPEHASH =
         keccak256(
             "SignedPrice(string chainId,bytes currency,uint256 usdPrice,uint8 usdPriceDecimals,uint8 currencyDecimals,uint256 publishTime,uint256 expiration)"
@@ -25,7 +30,18 @@ abstract contract SignedPricingOracleBase is BaseTest {
         (solver, solverPk) = makeAddrAndKey("solver");
         (anyone, anyonePk) = makeAddrAndKey("anyone");
 
-        oracle = new SignedPricingOracle(solver);
+        relayPriceOracle = new RelayPriceOracle(owner);
+        priceFeedAdapter = new MockPriceFeedAdapter(
+            address(relayPriceOracle)
+        );
+        vm.prank(owner);
+        relayPriceOracle.setPriceFeedAdapter(
+            PROVIDER_ID,
+            address(priceFeedAdapter),
+            0
+        );
+
+        oracle = new SignedPricingOracle(solver, address(relayPriceOracle));
         domainSep = Eip712.domainSeparator(
             "SignedPricingOracle",
             "1",

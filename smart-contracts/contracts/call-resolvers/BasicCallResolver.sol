@@ -17,13 +17,14 @@ import {RelayHub} from "../RelayHub.sol";
 ///      multicall behaviour. Solvers are free to deploy their own
 ///      `ICallResolver` with arbitrary custom logic instead.
 ///
-///      Like any `ICallResolver`, this contract intentionally holds no roles (it
-///      is never a Hub operator) and only ever custodies the exact input pushed
-///      to it for a single execution. Because the arbitrary calls run with
-///      `msg.sender` equal to this contract, the worst a malicious call can do is
-///      move the funds that were pushed in for the current order. If those funds
-///      are diverted, the RelayExecutor's post-run minimum-output check fails and
-///      the whole transaction reverts, so no funds can actually be stolen.
+///      This reference resolver is intended to hold no Hub roles. Because the
+///      arbitrary calls run with `msg.sender` equal to this contract, they do not
+///      inherit the RelayExecutor's privileges. They can still exercise any
+///      roles, allowances or operator permissions independently granted to this
+///      resolver, so it must not be authorized over unrelated accounts. The
+///      solver controls the calls and sweeps and may retain the funded input or
+///      other execution value. The RelayExecutor only requires the resolver to
+///      return the oracle-signed minimum output.
 contract BasicCallResolver is ICallResolver, ReentrancyGuard {
   /// @notice Unsigned arbitrary call executed between funding and sweeping
   /// @param to Call target

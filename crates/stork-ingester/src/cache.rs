@@ -10,6 +10,8 @@ use tokio::sync::broadcast;
 pub use price_oracle_ipc::FeedKey;
 use price_oracle_ipc::OracleFrame;
 
+use crate::metrics;
+
 const BROADCAST_CAPACITY: usize = 1024;
 pub const NANOS_PER_MILLISECOND: u64 = 1_000_000;
 
@@ -137,17 +139,12 @@ pub struct IpcServerSink {
 
 impl PriceUpdateSink for IpcServerSink {
     fn insert(&self, update: SignedPriceUpdate) -> bool {
-        let _span = tracing::info_span!(
-            target: crate::telemetry::TRACE_TARGET,
-            "receive",
-            feed_id = %update.key.feed_id,
-        )
-        .entered();
         {
             let mut latest = self.cache.latest.lock();
             if let Some(existing) = latest.get(&update.key) {
                 if update.source_time_ns < existing.source_time_ns {
                     self.cache.dropped.fetch_add(1, Ordering::Relaxed);
+                    metrics::on_dropped(Some(&update.key.feed_id), "stale", 1);
                     tracing::warn!(
                         feed_id = %update.key.feed_id,
                         incoming_ns = update.source_time_ns,
@@ -160,6 +157,7 @@ impl PriceUpdateSink for IpcServerSink {
                     && update.quantized_value != existing.quantized_value
                 {
                     self.cache.dropped.fetch_add(1, Ordering::Relaxed);
+                    metrics::on_dropped(Some(&update.key.feed_id), "conflict", 1);
                     tracing::warn!(
                         feed_id = %update.key.feed_id,
                         timestamp_ns = update.source_time_ns,
@@ -186,6 +184,11 @@ impl PriceUpdateSink for IpcServerSink {
             source_time_ms: update.source_time_ns / NANOS_PER_MILLISECOND,
         };
         self.cache.ingested.fetch_add(1, Ordering::Relaxed);
+        metrics::on_update_accepted(
+            &update.key.feed_id,
+            update.source_time_ns,
+            update.delivery_time_ms,
+        );
         let _ = self.cache.live.send(frame);
         true
     }

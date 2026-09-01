@@ -831,7 +831,7 @@ contract RelayExecutorTest is BaseTest {
     assertEq(hub.balanceOf(address(callResolver), tokenInId), 0);
   }
 
-  function test_maliciousCallDivertingInputRevertsBelowMinimum() public {
+  function test_revertsWhenResolverDivertsInputWithoutReturningOutput() public {
     address orderAddress = otherAccounts[3];
     address attacker = otherAccounts[6];
     uint256 amount = 100;
@@ -848,10 +848,8 @@ contract RelayExecutorTest is BaseTest {
       request
     );
 
-    // A malicious call tries to divert the sandboxed input funds to the attacker.
-    // The sandbox holds the funds (msg.sender == sandbox), so the transfer would
-    // succeed on its own, but it leaves no output, so the minimum-output check
-    // reverts the entire transaction.
+    // The resolver can transfer away its funded input, but returning no output
+    // fails the signed minimum-output check and reverts the entire transaction.
     BasicCallResolver.Call[] memory calls = new BasicCallResolver.Call[](1);
     calls[0] = BasicCallResolver.Call({
       to: address(hub),
@@ -874,11 +872,63 @@ contract RelayExecutorTest is BaseTest {
       signature
     );
 
-    // Nothing was stolen and the order funds are restored by the revert
+    // The revert restores the order funds and every intermediate transfer.
     assertEq(hub.balanceOf(attacker, tokenInId), 0);
     assertEq(hub.balanceOf(orderAddress, tokenInId), amount);
     assertEq(hub.balanceOf(address(verifier), tokenInId), 0);
     assertEq(hub.balanceOf(address(callResolver), tokenInId), 0);
+  }
+
+  function test_solverMayRetainInputWhenReturningMinimumOutput() public {
+    address orderAddress = otherAccounts[3];
+    address solverRevenueRecipient = otherAccounts[6];
+    uint256 amountIn = 100;
+    uint256 amountOutMinimum = 95;
+
+    vm.startPrank(owner);
+    hub.mint(orderAddress, tokenInId, amountIn);
+    // The resolver independently sources the output floor.
+    hub.mint(address(callResolver), tokenOutId, amountOutMinimum);
+    vm.stopPrank();
+
+    ExecuteAndWithdrawRequest memory request = _swapRequest(
+      orderAddress,
+      amountOutMinimum,
+      bytes32(uint256(22))
+    );
+
+    // Resolver choice and calldata are intentionally solver-controlled. This
+    // plan retains the funded input as solver revenue and returns only the
+    // oracle-signed minimum output to the executor.
+    BasicCallResolver.Call[] memory calls = new BasicCallResolver.Call[](1);
+    calls[0] = BasicCallResolver.Call({
+      to: address(hub),
+      data: abi.encodeCall(
+        RelayHub.transfer,
+        (solverRevenueRecipient, tokenInId, amountIn)
+      )
+    });
+
+    bytes32 withdrawRequestHash = verifier.execute(
+      request,
+      address(callResolver),
+      _encode(calls),
+      oracleSigner,
+      _signExecuteAndWithdrawRequest(oracleSignerPk, request)
+    );
+
+    RelayAllocator.WithdrawRequest
+      memory allocatorRequest = _allocatorWithdrawRequest(
+        request,
+        amountOutMinimum
+      );
+    assertEq(withdrawRequestHash, keccak256(abi.encode(allocatorRequest)));
+    assertEq(hub.balanceOf(solverRevenueRecipient, tokenInId), amountIn);
+    assertEq(hub.balanceOf(orderAddress, tokenInId), 0);
+    assertEq(hub.balanceOf(address(verifier), tokenInId), 0);
+    assertEq(hub.balanceOf(address(verifier), tokenOutId), 0);
+    assertEq(hub.balanceOf(address(callResolver), tokenInId), 0);
+    assertEq(hub.balanceOf(address(callResolver), tokenOutId), 0);
   }
 
   function test_sandboxedCallsCannotUseExecutorPrivileges() public {
