@@ -10,6 +10,7 @@ import { startReconciler } from "./jobs/reconciler.js"
 import { logger } from "./logger.js"
 import { createRuntimeState } from "./runtimeState.js"
 import { createServer } from "./server.js"
+import { createTokenPriceService } from "./services/tokenPrices.js"
 
 const start = async () => {
   validateRuntimeConfig(config)
@@ -67,6 +68,10 @@ const start = async () => {
     }
   }
 
+  const tokenPriceService = provider
+    ? createTokenPriceService(provider, config.priceOracleContractAddress)
+    : undefined
+
   const app = createServer(runtimeState, {
     db,
     defaultTransferReplayBatchSize: config.batchSize,
@@ -76,7 +81,9 @@ const start = async () => {
     maxTransferReplayBlockRange: config.maxTransferReplayBlockRange,
     oracleContractAddress: config.oracleContractAddress,
     oracleProvider: provider,
+    priceOracleContractAddress: config.priceOracleContractAddress,
     replayProvider: provider,
+    tokenPriceService,
   })
   app.listen(config.port, () => {
     if (config.enableApi) {

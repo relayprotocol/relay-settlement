@@ -100,18 +100,22 @@ interface RawUsageKeyInfo {
   id?: number | string
   name?: string
   description?: string
+  can_execute_in_groups?: Array<number | string>
   execute_in_groups?: Array<number | string>
   executeInGroups?: Array<number | string>
   execute_in_group_ids?: Array<number | string>
   executeInGroupIds?: Array<number | string>
+  can_manage_ipfs_ids_in_groups?: Array<number | string>
   manage_ipfs_ids_in_groups?: Array<number | string>
   manageIPFSIdsInGroups?: Array<number | string>
   manage_ipfs_ids_in_group_ids?: Array<number | string>
   manageIPFSIdsInGroupIds?: Array<number | string>
+  can_add_pkp_to_groups?: Array<number | string>
   add_pkp_to_groups?: Array<number | string>
   addPkpToGroups?: Array<number | string>
   add_pkp_to_group_ids?: Array<number | string>
   addPkpToGroupIds?: Array<number | string>
+  can_remove_pkp_from_groups?: Array<number | string>
   remove_pkp_from_groups?: Array<number | string>
   removePkpFromGroups?: Array<number | string>
   remove_pkp_from_group_ids?: Array<number | string>
@@ -236,6 +240,16 @@ function usageKeyGroups(
   return []
 }
 
+function hasUsageKeyGroups(
+  key: RawUsageKeyInfo,
+  ...names: Array<keyof RawUsageKeyInfo>
+): boolean {
+  return names.some(
+    (name) =>
+      Array.isArray(key[name]) || Array.isArray(key.permissions?.[String(name)])
+  )
+}
+
 function groupPkpIds(group: RawGroupInfo): string[] {
   return firstStringArray(
     group.pkp_ids_permitted,
@@ -277,7 +291,11 @@ function usageKeysForGroup(
       if (explicit) {
         return true
       }
-      return inferFromSetupName && key.name === `${group.name}-usage-key`
+      return (
+        inferFromSetupName &&
+        !hasUsageKeyGroups(key, ...names) &&
+        key.name === `${group.name}-usage-key`
+      )
     })
     .map(usageKeyName)
 }
@@ -409,17 +427,24 @@ function printInventory(inventory: AccountInventory): void {
     )
     const explicitExecuteGroups = usageKeyGroups(
       key,
+      "can_execute_in_groups",
       "execute_in_groups",
       "executeInGroups",
       "execute_in_group_ids",
       "executeInGroupIds"
     )
-    const executeGroups =
-      explicitExecuteGroups.length > 0
-        ? explicitExecuteGroups
-        : inventory.groups
-            .filter((group) => key.name === `${group.name}-usage-key`)
-            .map(groupIdForApi)
+    const executeGroups = hasUsageKeyGroups(
+      key,
+      "can_execute_in_groups",
+      "execute_in_groups",
+      "executeInGroups",
+      "execute_in_group_ids",
+      "executeInGroupIds"
+    )
+      ? explicitExecuteGroups
+      : inventory.groups
+          .filter((group) => key.name === `${group.name}-usage-key`)
+          .map(groupIdForApi)
     printList(
       "execute groups",
       executeGroups.map((id) => {
@@ -431,6 +456,7 @@ function printInventory(inventory: AccountInventory): void {
       "manage action groups",
       usageKeyGroups(
         key,
+        "can_manage_ipfs_ids_in_groups",
         "manage_ipfs_ids_in_groups",
         "manageIPFSIdsInGroups",
         "manage_ipfs_ids_in_group_ids",
@@ -441,6 +467,7 @@ function printInventory(inventory: AccountInventory): void {
       "add PKP groups",
       usageKeyGroups(
         key,
+        "can_add_pkp_to_groups",
         "add_pkp_to_groups",
         "addPkpToGroups",
         "add_pkp_to_group_ids",
@@ -451,6 +478,7 @@ function printInventory(inventory: AccountInventory): void {
       "remove PKP groups",
       usageKeyGroups(
         key,
+        "can_remove_pkp_from_groups",
         "remove_pkp_from_groups",
         "removePkpFromGroups",
         "remove_pkp_from_group_ids",
@@ -504,6 +532,7 @@ function printInventory(inventory: AccountInventory): void {
         inventory.usageApiKeys,
         group,
         [
+          "can_execute_in_groups",
           "execute_in_groups",
           "executeInGroups",
           "execute_in_group_ids",
@@ -515,6 +544,7 @@ function printInventory(inventory: AccountInventory): void {
     printList(
       "manage actions",
       usageKeysForGroup(inventory.usageApiKeys, group, [
+        "can_manage_ipfs_ids_in_groups",
         "manage_ipfs_ids_in_groups",
         "manageIPFSIdsInGroups",
         "manage_ipfs_ids_in_group_ids",
@@ -524,6 +554,7 @@ function printInventory(inventory: AccountInventory): void {
     printList(
       "add PKPs",
       usageKeysForGroup(inventory.usageApiKeys, group, [
+        "can_add_pkp_to_groups",
         "add_pkp_to_groups",
         "addPkpToGroups",
         "add_pkp_to_group_ids",
@@ -533,6 +564,7 @@ function printInventory(inventory: AccountInventory): void {
     printList(
       "remove PKPs",
       usageKeysForGroup(inventory.usageApiKeys, group, [
+        "can_remove_pkp_from_groups",
         "remove_pkp_from_groups",
         "removePkpFromGroups",
         "remove_pkp_from_group_ids",

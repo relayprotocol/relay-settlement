@@ -81,6 +81,11 @@ All configuration is via environment variables, loaded from a `.env` file if pre
 - `STORK_IDLE_TIMEOUT_SEC` - optional, idle watchdog in seconds, 0 disables. Defaults to 5 seconds on fixed channels, off on `real_time`.
 - `INGESTER_ADDRESS` - TCP listen address, defaults to `127.0.0.1:9804`.
 - `RUST_LOG` - optional, tracing filter, defaults to `info`.
+- `OTEL_EXPORTER_ENABLE` - optional, enable OTLP telemetry export, defaults to `false`.
+- `OTEL_EXPORTER_ENDPOINT` - required when export is enabled, OTLP/HTTP base URL. The `/v1/traces`, `/v1/metrics`, and `/v1/logs` paths are appended.
+- `OTEL_SERVICE_NAME` - optional, exported `service.name`, defaults to `stork-ingester`.
+- `OTEL_EXPORTER_BEARER_TOKEN` - optional, sent as `Authorization: Bearer <token>`, for an OpenTelemetry collector endpoint.
+- `OTEL_EXPORTER_DD_API_KEY` - optional, sent as `dd-api-key: <key>`, for direct export to the Datadog OTLP intake.
 
 ## How to build
 

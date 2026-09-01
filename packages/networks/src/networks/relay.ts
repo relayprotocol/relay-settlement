@@ -19,6 +19,7 @@ export const relay: NetworkConfig = {
     prod: {
       hub: "0xDDD361727C22A01EB137880678A20b0BEaE69318",
       oracle: "0xd4b9fdB83C723c096d7fBE72da252aa23f1387aa",
+      priceOracle: "0x1d01F24bc185a45a02EB20E599571ab46c830B7F",
     },
   },
   earliestBlock: 1215200,

@@ -28,6 +28,7 @@ import {
 } from "./protocol/transactionRequest.js"
 import { getHealthStatus } from "./services/health.js"
 import { getLatestIndexerAuditReport } from "./services/indexerAudit.js"
+import type { TokenPriceService } from "./services/tokenPrices.js"
 import { TransferReplayRequestError } from "./services/transferReplay.js"
 import {
   createTransferReplayJobManager,
@@ -36,6 +37,8 @@ import {
 import { type RuntimeState } from "./runtimeState.js"
 
 const MAX_PAGE_LIMIT = 200
+const MAX_TOKEN_PRICE_BATCH_SIZE = 200
+const MAX_UINT256 = (1n << 256n) - 1n
 const DEFAULT_TRANSFER_REPLAY_RECONCILE_CHUNK_SIZE = 100
 
 type AsyncHandler = (
@@ -78,7 +81,9 @@ export const createServer = (
     maxTransferReplayBlockRange?: number
     oracleContractAddress?: string
     oracleProvider?: Provider
+    priceOracleContractAddress?: string
     replayProvider?: Provider
+    tokenPriceService?: Pick<TokenPriceService, "getPrices">
   } = {}
 ) => {
   const app = express()
@@ -91,7 +96,9 @@ export const createServer = (
     maxTransferReplayBlockRange = 100_000,
     oracleContractAddress,
     oracleProvider,
+    priceOracleContractAddress,
     replayProvider,
+    tokenPriceService,
   } = options
 
   app.use(express.json())
@@ -210,6 +217,7 @@ export const createServer = (
       hubContractAddress,
       mode: "query-api",
       oracleContractAddress,
+      priceOracleContractAddress,
     })
   })
 
@@ -242,6 +250,40 @@ export const createServer = (
         maxReplayRange: maxTransferReplayBlockRange,
       })
       return res.json(report)
+    })
+  )
+
+  app.post(
+    "/api/token-prices",
+    asyncHandler(async (req, res) => {
+      if (!tokenPriceService) {
+        return res.status(503).json({ error: "Token pricing is unavailable" })
+      }
+
+      const tokenIds = req.body?.tokenIds
+      if (!Array.isArray(tokenIds)) {
+        return res.status(400).json({ error: "tokenIds must be an array" })
+      }
+      if (tokenIds.length > MAX_TOKEN_PRICE_BATCH_SIZE) {
+        return res.status(400).json({
+          error: `tokenIds cannot contain more than ${MAX_TOKEN_PRICE_BATCH_SIZE} entries`,
+        })
+      }
+      if (
+        !tokenIds.every((tokenId) => {
+          if (typeof tokenId !== "string" || !/^(0|[1-9]\d*)$/.test(tokenId)) {
+            return false
+          }
+          return BigInt(tokenId) <= MAX_UINT256
+        })
+      ) {
+        return res.status(400).json({
+          error: "tokenIds must contain decimal uint256 strings",
+        })
+      }
+
+      const data = await tokenPriceService.getPrices(tokenIds)
+      return res.json({ data })
     })
   )
 

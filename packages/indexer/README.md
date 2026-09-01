@@ -1,5 +1,23 @@
 # Settlement Indexer
 
+## Token USD Prices
+
+`POST /api/token-prices` accepts up to 200 Hub token ids and returns the
+current `RelayPriceOracle` route and USD-price status for each token. Route
+configuration, adapter configuration, and current price availability are
+reported separately so a stale or temporarily unavailable price is not shown
+as an unconfigured feed. Exact fixed-point values and timestamps are returned
+as decimal strings.
+
+The API simulates `resolveUsdPrice(uint256)` through the configured Relay RPC;
+it never sends a transaction. Results are cached in each API process for up to
+five seconds and never beyond the price expiration. Concurrent reads for the
+same token share one RPC request.
+
+The production price-oracle address defaults from
+`@relay-protocol/settlement-networks`. Set
+`PRICE_ORACLE_CONTRACT_ADDRESS` to override it for another deployment.
+
 ## Transfer Statistics Cache
 
 `/api/transfers/stats` and `/api/tokens/:id/transfer-stats` cache their final

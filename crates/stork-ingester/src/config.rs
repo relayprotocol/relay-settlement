@@ -30,11 +30,28 @@ pub struct Config {
 }
 
 #[derive(Clone, Debug)]
+pub enum TelemetryAuth {
+    None,
+    BearerToken(String),
+    DatadogApiKey(String),
+}
+
+impl TelemetryAuth {
+    pub fn label(&self) -> &'static str {
+        match self {
+            TelemetryAuth::None => "none",
+            TelemetryAuth::BearerToken(_) => "bearer",
+            TelemetryAuth::DatadogApiKey(_) => "dd-api-key",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct TelemetryConfig {
     pub endpoint: String,
     pub service_name: String,
     pub instance_id: String,
-    pub auth_token: Option<String>,
+    pub auth: TelemetryAuth,
 }
 
 impl TelemetryConfig {
@@ -161,12 +178,26 @@ fn parse_telemetry() -> Result<Option<TelemetryConfig>> {
         .trim_end_matches("/v1/traces")
         .to_string();
 
+    let auth = match (
+        optional_env("OTEL_EXPORTER_BEARER_TOKEN"),
+        optional_env("OTEL_EXPORTER_DD_API_KEY"),
+    ) {
+        (Some(_), Some(_)) => {
+            return Err(anyhow!(
+                "set only one of OTEL_EXPORTER_BEARER_TOKEN and OTEL_EXPORTER_DD_API_KEY"
+            ));
+        }
+        (Some(token), None) => TelemetryAuth::BearerToken(token),
+        (None, Some(key)) => TelemetryAuth::DatadogApiKey(key),
+        (None, None) => TelemetryAuth::None,
+    };
+
     Ok(Some(TelemetryConfig {
         endpoint,
         service_name: optional_env("OTEL_SERVICE_NAME")
             .unwrap_or_else(|| env!("CARGO_PKG_NAME").to_string()),
         instance_id: resolve_instance_id(),
-        auth_token: optional_env("OTEL_EXPORTER_AUTH_TOKEN"),
+        auth,
     }))
 }
 

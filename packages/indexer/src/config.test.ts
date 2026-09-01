@@ -107,6 +107,8 @@ test("validateRuntimeConfig requires a database url for api or background work",
         oracleStartBlock: relayNetworkDefaults.startBlock,
         pollIntervalMs: 5000,
         port: 3001,
+        priceOracleContractAddress:
+          relayNetworkDefaults.priceOracleContractAddress,
         rpcHttpUrl: undefined,
         rpcWsUrl: "wss://rpc.chain.relay.link/rpc",
         startBlock: relayNetworkDefaults.startBlock,
@@ -146,6 +148,8 @@ test("validateRuntimeConfig requires an rpc ws url for background work", () => {
         oracleStartBlock: relayNetworkDefaults.startBlock,
         pollIntervalMs: 5000,
         port: 3001,
+        priceOracleContractAddress:
+          relayNetworkDefaults.priceOracleContractAddress,
         rpcHttpUrl: undefined,
         rpcWsUrl: undefined,
         startBlock: relayNetworkDefaults.startBlock,

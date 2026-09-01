@@ -8,6 +8,7 @@ import {
   IndexerAuditReport,
   RoleConfig,
   Token,
+  TokenPrice,
   fetchApprovedOracles,
   fetchIndexerAuditLatest,
   fetchEvents,
@@ -16,12 +17,14 @@ import {
   fetchHolders,
   fetchRoleConfig,
   fetchToken,
+  fetchTokenPrices,
   fetchTokens,
   TransferStat,
 } from "../api"
 import {
   displayTokenLabel,
   displayTokenName,
+  displayTokenUsdPrice,
   formatAmount,
   formatTimestamp,
   displayAddress,
@@ -68,6 +71,8 @@ export default function Home() {
   )
   const [auditError, setAuditError] = useState<string>("")
   const [error, setError] = useState<string>("")
+  const [tokenPrices, setTokenPrices] = useState<Record<string, TokenPrice>>({})
+  const [tokenPricesError, setTokenPricesError] = useState<string>("")
   const [tokenDetails, setTokenDetails] = useState<Record<string, Token>>({})
 
   const TOKENS_PER_PAGE = 20
@@ -244,6 +249,23 @@ export default function Home() {
         mapped[token.token_id] = token
       })
       setTokenDetails((prev) => ({ ...prev, ...mapped }))
+      try {
+        const prices = await fetchTokenPrices(
+          data.data.map((token) => token.token_id)
+        )
+        const pricesByTokenId: Record<string, TokenPrice> = {}
+        prices.data.forEach((price) => {
+          pricesByTokenId[price.tokenId] = price
+        })
+        setTokenPrices((prev) => ({ ...prev, ...pricesByTokenId }))
+        setTokenPricesError("")
+      } catch (priceError) {
+        setTokenPricesError(
+          priceError instanceof Error
+            ? priceError.message
+            : "Failed to load token prices"
+        )
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load tokens")
     }
@@ -728,20 +750,43 @@ export default function Home() {
             <span>Transfers</span>
             <span>Holders</span>
             <span>Total supply</span>
+            <span>USD price</span>
           </div>
-          {tokens.map((token) => (
-            <div key={token.token_id} className="table-row">
-              <span>
-                <Link className="token-link" to={tokenPath(token.token_id)}>
-                  <strong>{displayTokenName(token.name)}</strong>
-                </Link>
-                <span className="muted"> #{shortTokenId(token.token_id)}</span>
-              </span>
-              <span>{token.transfers.toLocaleString("en-US")}</span>
-              <span>{token.holders.toLocaleString("en-US")}</span>
-              <span>{formatAmount(token.total_supply, token.decimals)}</span>
-            </div>
-          ))}
+          {tokens.map((token) => {
+            const price = tokenPrices[token.token_id]
+
+            return (
+              <div key={token.token_id} className="table-row">
+                <span>
+                  <Link className="token-link" to={tokenPath(token.token_id)}>
+                    <strong>{displayTokenName(token.name)}</strong>
+                  </Link>
+                  <span className="muted">
+                    {" "}
+                    #{shortTokenId(token.token_id)}
+                  </span>
+                </span>
+                <span>{token.transfers.toLocaleString("en-US")}</span>
+                <span>{token.holders.toLocaleString("en-US")}</span>
+                <span>{formatAmount(token.total_supply, token.decimals)}</span>
+                <span
+                  title={
+                    price?.status === "available" && price.publishTime
+                      ? `Published ${formatTimestamp(Number(price.publishTime))}`
+                      : undefined
+                  }
+                >
+                  {displayTokenUsdPrice(
+                    price,
+                    tokenPricesError ? "Unknown" : "Loading"
+                  )}
+                </span>
+              </div>
+            )
+          })}
+          {tokenPricesError ? (
+            <div className="empty">Token pricing unavailable.</div>
+          ) : null}
           {!tokens.length ? (
             <div className="empty">No tokens indexed yet.</div>
           ) : null}
@@ -829,7 +874,9 @@ export default function Home() {
             </p>
           </div>
         </div>
-        {appConfig?.hubContractAddress || appConfig?.oracleContractAddress ? (
+        {appConfig?.hubContractAddress ||
+        appConfig?.oracleContractAddress ||
+        appConfig?.priceOracleContractAddress ? (
           <div className="table config-table">
             <div className="table-row header">
               <span>Contract</span>
@@ -859,6 +906,20 @@ export default function Home() {
                     rel="noreferrer"
                   >
                     {appConfig.oracleContractAddress}
+                  </a>
+                </span>
+              </div>
+            ) : null}
+            {appConfig.priceOracleContractAddress ? (
+              <div className="table-row">
+                <span>Relay Price Oracle</span>
+                <span>
+                  <a
+                    href={addressUrl(appConfig.priceOracleContractAddress)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {appConfig.priceOracleContractAddress}
                   </a>
                 </span>
               </div>

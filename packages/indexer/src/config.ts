@@ -25,6 +25,7 @@ export type RuntimeConfig = {
   oracleContractAddress: string
   oracleStartBlock: number
   port: number
+  priceOracleContractAddress: string
   pollIntervalMs: number
   rpcHttpUrl: string | undefined
   rpcWsUrl: string | undefined
@@ -38,6 +39,7 @@ const relayProdContracts = relay.contracts?.prod
 if (
   relayProdContracts?.hub == null ||
   relayProdContracts.oracle == null ||
+  relayProdContracts.priceOracle == null ||
   relay.earliestBlock == null
 ) {
   throw new Error(
@@ -48,6 +50,7 @@ if (
 export const relayNetworkDefaults = {
   hubContractAddress: relayProdContracts.hub.toLowerCase(),
   oracleContractAddress: relayProdContracts.oracle.toLowerCase(),
+  priceOracleContractAddress: relayProdContracts.priceOracle.toLowerCase(),
   startBlock: relay.earliestBlock,
 }
 
@@ -193,6 +196,10 @@ export const config: RuntimeConfig = {
   ),
   pollIntervalMs: resolveNumber(process.env.POLL_INTERVAL_MS, 5000),
   port: resolvePort(process.env.PORT),
+  priceOracleContractAddress: resolveAddress(
+    process.env.PRICE_ORACLE_CONTRACT_ADDRESS,
+    relayNetworkDefaults.priceOracleContractAddress
+  ),
   rpcHttpUrl: process.env.RPC_HTTP_URL,
   rpcWsUrl: process.env.RPC_WS_URL,
   startBlock: resolveNumber(

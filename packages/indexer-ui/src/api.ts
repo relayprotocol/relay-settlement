@@ -55,6 +55,29 @@ export type AppConfig = {
   hubContractAddress?: string
   mode: string
   oracleContractAddress?: string
+  priceOracleContractAddress?: string
+}
+
+export type TokenPriceStatus =
+  | "available"
+  | "error"
+  | "unavailable"
+  | "unconfigured"
+
+export type TokenPrice = {
+  adapterConfigured: boolean | null
+  currencyDecimals: number | null
+  expiration: string | null
+  feedId: string | null
+  maxAgeSeconds: number | null
+  observedAt: string
+  providerId: string | null
+  publishTime: string | null
+  routeConfigured: boolean | null
+  status: TokenPriceStatus
+  tokenId: string
+  usdPrice: string | null
+  usdPriceDecimals: number | null
 }
 
 export type ApprovedOracleSummary = {
@@ -272,6 +295,15 @@ export const fetchTokens = (limit = 20, cursor?: string, query?: string) => {
 
 export const fetchToken = (tokenId: string) =>
   getJson<Token>(`/api/tokens/${tokenId}`)
+
+export const fetchTokenPrices = (tokenIds: string[]) =>
+  getJson<{ data: TokenPrice[] }>("/api/token-prices", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ tokenIds }),
+  })
 
 export const fetchTokenBalances = (
   tokenId: string,

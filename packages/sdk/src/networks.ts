@@ -12,6 +12,7 @@ export interface ProtocolContracts {
   depository?: string
   oracle?: string
   hub?: string
+  priceOracle?: string
   allocator?: string
   multisigSigner?: string
 }

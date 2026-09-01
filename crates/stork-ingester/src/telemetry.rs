@@ -19,7 +19,7 @@ use tracing_subscriber::layer::SubscriberExt as _;
 use tracing_subscriber::util::SubscriberInitExt as _;
 use tracing_subscriber::{EnvFilter, Layer as _, fmt};
 
-use crate::config::TelemetryConfig;
+use crate::config::{TelemetryAuth, TelemetryConfig};
 
 pub const TRACE_TARGET: &str = "ingest";
 
@@ -97,7 +97,7 @@ pub fn init(config: Option<&TelemetryConfig>) -> Result<Option<Providers>> {
                 endpoint = %config.endpoint,
                 service_name = %config.service_name,
                 instance_id = %config.instance_id,
-                auth = config.auth_token.is_some(),
+                auth = config.auth.label(),
                 "OTLP telemetry export enabled"
             );
             Ok(Some(providers))
@@ -121,8 +121,10 @@ pub async fn probe(config: &TelemetryConfig) {
         .post(config.traces_url())
         .header("content-type", "application/x-protobuf")
         .body(Vec::new());
-    if let Some(token) = &config.auth_token {
-        request = request.bearer_auth(token);
+    match &config.auth {
+        TelemetryAuth::BearerToken(token) => request = request.bearer_auth(token),
+        TelemetryAuth::DatadogApiKey(key) => request = request.header("dd-api-key", key),
+        TelemetryAuth::None => {}
     }
 
     match request.send().await {
@@ -203,8 +205,14 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for ExportErrorThrottl
 
 fn build_providers(config: &TelemetryConfig) -> Result<Providers> {
     let mut headers = HashMap::new();
-    if let Some(token) = &config.auth_token {
-        headers.insert("Authorization".to_string(), format!("Bearer {token}"));
+    match &config.auth {
+        TelemetryAuth::BearerToken(token) => {
+            headers.insert("Authorization".to_string(), format!("Bearer {token}"));
+        }
+        TelemetryAuth::DatadogApiKey(key) => {
+            headers.insert("dd-api-key".to_string(), key.clone());
+        }
+        TelemetryAuth::None => {}
     }
 
     let resource = Resource::builder()

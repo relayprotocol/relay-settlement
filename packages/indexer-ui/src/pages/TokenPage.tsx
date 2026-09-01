@@ -4,15 +4,18 @@ import {
   Balance,
   Event,
   Token,
+  TokenPrice,
   fetchEvents,
   fetchToken,
   fetchTokenBalances,
+  fetchTokenPrices,
   fetchTokenTransferStats,
   TransferStat,
 } from "../api"
 import {
   displayTokenLabel,
   displayTokenName,
+  displayTokenUsdPrice,
   formatAmount,
   formatTimestamp,
   displayAddress,
@@ -25,6 +28,7 @@ export default function TokenPage() {
   const { id } = useParams()
   const tokenId = id ?? ""
   const [token, setToken] = useState<Token | null>(null)
+  const [tokenPrice, setTokenPrice] = useState<TokenPrice | null>(null)
   const [balances, setBalances] = useState<Balance[]>([])
   const [balancesCursor, setBalancesCursor] = useState<string | null>(null)
   const [balancesCursorStack, setBalancesCursorStack] = useState<string[]>([])
@@ -40,6 +44,7 @@ export default function TokenPage() {
   const [granularity, setGranularity] = useState<string>("day")
   const [statsError, setStatsError] = useState<string>("")
   const [error, setError] = useState<string>("")
+  const [priceError, setPriceError] = useState<string>("")
 
   const EVENTS_PER_PAGE = 20
   const eventsPage = eventsCursorStack.length + 1
@@ -58,6 +63,8 @@ export default function TokenPage() {
     setBalancesCursor(null)
     setBalancesCursorStack([])
     setBalancesNextCursor(null)
+    setTokenPrice(null)
+    setPriceError("")
   }, [tokenId])
 
   const loadToken = async () => {
@@ -82,6 +89,19 @@ export default function TokenPage() {
       setBalancesNextCursor(data.nextCursor ?? null)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load balances")
+    }
+  }
+
+  const loadTokenPrice = async () => {
+    if (!tokenId) return
+    try {
+      const data = await fetchTokenPrices([tokenId])
+      setTokenPrice(data.data[0] ?? null)
+      setPriceError("")
+    } catch (err) {
+      setPriceError(
+        err instanceof Error ? err.message : "Failed to load token price"
+      )
     }
   }
 
@@ -137,11 +157,13 @@ export default function TokenPage() {
 
   useEffect(() => {
     void loadToken()
+    void loadTokenPrice()
     void loadBalances()
     void loadEvents()
     void loadTransferStats()
     const interval = setInterval(() => {
       void loadToken()
+      void loadTokenPrice()
       void loadBalances()
       void loadEvents()
       void loadTransferStats()
@@ -325,6 +347,22 @@ export default function TokenPage() {
               <div>
                 <p className="label">Decimals</p>
                 <p className="value">{token?.decimals ?? "-"}</p>
+              </div>
+              <div>
+                <p className="label">USD price</p>
+                <p
+                  className="value"
+                  title={
+                    tokenPrice?.status === "available" && tokenPrice.publishTime
+                      ? `Published ${formatTimestamp(Number(tokenPrice.publishTime))}`
+                      : undefined
+                  }
+                >
+                  {displayTokenUsdPrice(
+                    tokenPrice,
+                    priceError ? "Unknown" : "-"
+                  )}
+                </p>
               </div>
             </div>
           </div>
