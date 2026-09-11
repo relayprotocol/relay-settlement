@@ -2,6 +2,8 @@
 node_modules
 **/node_modules
 **/dist
+**/target
+**/.env
 **/*.tsbuildinfo
 smart-contracts/ignition
 smart-contracts/artifacts

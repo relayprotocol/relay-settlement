@@ -50,13 +50,9 @@ import {
   WithdrawalVmType,
   DepositoryWithdrawalMessage,
   DepositoryWithdrawalStatus,
-  getDepositoryWithdrawalMessageId,
   encodeWithdrawal,
   decodeWithdrawal,
   getDecodedWithdrawalId,
-  getDecodedWithdrawalCurrency,
-  getDecodedWithdrawalAmount,
-  getDecodedWithdrawalRecipient,
   buildLighterTransferL1Message,
   getHederaVmTransactionBody,
 } from "./messages/v2.1/depository-withdrawal"
@@ -75,7 +71,6 @@ import {
   ActionType,
   ExecutionMessage,
   ExecutionMessageMetadata,
-  getExecutionMessageId,
   encodeAction,
   decodeAction,
 } from "./messages/v2.2/execution"
@@ -89,17 +84,10 @@ import {
 } from "./messages/v2.2/generic-mapping"
 
 import {
-  SubmitWithdrawRequest,
-  DenormalizedSubmitWithdrawRequest,
-  getSubmitWithdrawRequestHash,
-  WithdrawalAddressParams,
-  getWithdrawalAddress,
-  WithdrawalAddressSafeParams,
-  getWithdrawalAddressSafe,
   OrderAddressParams,
+  OrderAddressSafeParams,
   getOrderAddress,
   getOrderAddressSafe,
-  normalizePayloadParams,
 } from "./messages/v2.2/withdrawal"
 
 import {
@@ -298,14 +286,10 @@ export {
   WithdrawalVmType,
   DepositoryWithdrawalMessage,
   DepositoryWithdrawalStatus,
-  getDepositoryWithdrawalMessageId,
   encodeWithdrawal,
   decodeWithdrawal,
   getDecodedWithdrawalId,
-  getDecodedWithdrawalCurrency,
-  getDecodedWithdrawalAmount,
   buildLighterTransferL1Message,
-  getDecodedWithdrawalRecipient,
   getHederaVmTransactionBody,
 
   // SolverRefund
@@ -322,7 +306,6 @@ export {
   ExecutionMessage,
   ExecutionMessageMetadata,
   ActionType,
-  getExecutionMessageId,
   encodeAction,
   decodeAction,
 
@@ -334,17 +317,10 @@ export {
   getGenericMappingMessageId,
 
   // Withdrawal
-  SubmitWithdrawRequest,
-  DenormalizedSubmitWithdrawRequest,
-  getSubmitWithdrawRequestHash,
-  WithdrawalAddressParams,
-  getWithdrawalAddress,
-  WithdrawalAddressSafeParams,
-  getWithdrawalAddressSafe,
   OrderAddressParams,
+  OrderAddressSafeParams,
   getOrderAddress,
   getOrderAddressSafe,
-  normalizePayloadParams,
 
   // Messages v2.3
 

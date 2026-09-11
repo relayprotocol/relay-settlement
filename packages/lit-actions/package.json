@@ -1,6 +1,6 @@
 {
   "name": "@relay-protocol/lit-actions",
-  "version": "0.0.30",
+  "version": "0.0.32",
   "description": "Definitions and helpers for tracking Relay Lit Actions",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -12,7 +12,7 @@
     "build": "yarn generate && tsc -b"
   },
   "dependencies": {
-    "@relay-protocol/settlement-sdk": "0.0.97"
+    "@relay-protocol/settlement-sdk": "0.0.137"
   },
   "devDependencies": {
     "@relay-protocol/lit-allocator": "workspace:*",

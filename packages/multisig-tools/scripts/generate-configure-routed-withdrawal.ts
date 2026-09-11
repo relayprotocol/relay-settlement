@@ -17,18 +17,23 @@
 // on-chain reads then skip the registered builders) to generate the config manifest.
 //
 // Deploying the router and granting it DEPOSITORY_ROLE happen on the DESTINATION chain
-// under the router's own ADMIN_ROLE, not here, and must be done first.
+// under the router's own ADMIN_ROLE (generate-grant-router-depository-role.ts), not here,
+// and must be done first. The default chain set is every chain with a recorded router.
 //
 // Env:
 //   ENV              dev | stag | prod. Defaults to "prod". dev targets the relay
 //                    testnet chain (537724) -- dev privileged changes go through the
 //                    multisig flow like stag/prod.
-//   CHAINS           optional comma-separated destination chain slugs (resolved from
-//                    settlement-networks). Defaults to the ROUTED_CHAINS list below.
-//   ROUTER           required 0x MulticallRouter address on the destination chains.
-//   DEPOSITORY       required 0x depository address on the destination chains.
+//   CHAINS           optional comma-separated destination chain slugs. Defaults to
+//                    every slug under `multicallRouters` in the records file; router per
+//                    chain comes from there, depository per chain from settlement-networks.
 //   PAYLOAD_BUILDER  optional 0x builder address. Defaults to the env's
 //                    payloadBuilders.ethereumVmPayloadBuilder.
+//   ALLOWLIST_CHUNK  optional max keys per setConfigValues call (default: all in one).
+//                    The relay chain meters sponsored gas per window, so ~50 keys must
+//                    go out as several calls of ~10.
+//   RELAY_NONCE_OFFSET  optional number added to the on-chain nonce, for relay-chain
+//                    transactions queued in earlier manifests but not yet mined.
 //   SIGNER           optional 0x signer address to use as `from`. When set, the NEAR/MPC
 //                    derivation is skipped.
 import { readFileSync, writeFileSync } from "fs"
@@ -40,6 +45,7 @@ import {
   createPublicClient,
   encodeFunctionData,
   http,
+  isAddress,
   parseAbi,
 } from "viem"
 import {
@@ -55,21 +61,7 @@ import { RELAY_CHAIN_GAS_CONFIG } from "./helpers/chains"
 
 const ENV = (process.env.ENV ?? "prod") as "dev" | "stag" | "prod"
 
-// Destination chains this ceremony covers. Each row costs one
-// ETHEREUM_VM_ROUTER_ALLOWED key, because the key is per (chainId, depository, router)
-// even when the router address is identical across chains.
-const DEFAULT_ROUTED_CHAINS: { chainId: string; signatureChainId: number }[] = [
-  { chainId: "base", signatureChainId: 8453 },
-]
-const ROUTED_CHAINS = process.env.CHAINS
-  ? process.env.CHAINS.split(",").map((slug) => {
-      const net = networks[slug]
-      if (!net) throw new Error(`CHAINS contains an unknown slug: ${slug}`)
-      return { chainId: slug, signatureChainId: Number(net.chainId) }
-    })
-  : DEFAULT_ROUTED_CHAINS
-
-// Grouped into core / payloadBuilders since #631.
+// Grouped into core / payloadBuilders since #631; multicallRouters per destination chain.
 const deploymentFile = JSON.parse(
   readFileSync(
     join(
@@ -78,7 +70,40 @@ const deploymentFile = JSON.parse(
     ),
     "utf8"
   )
-) as { core: Record<string, string>; payloadBuilders: Record<string, string> }
+) as {
+  core: Record<string, string>
+  multicallRouters?: Record<string, string>
+  payloadBuilders: Record<string, string>
+}
+
+type DestinationChain = {
+  chainId: bigint
+  depository: `0x${string}`
+  router: `0x${string}`
+  slug: string
+}
+
+// Each chain costs one ETHEREUM_VM_ROUTER_ALLOWED key, because the key is per
+// (chainId, depository, router) even when the router address is identical across chains.
+const ROUTED_CHAINS: DestinationChain[] = (
+  process.env.CHAINS
+    ? process.env.CHAINS.split(",").filter(Boolean)
+    : Object.keys(deploymentFile.multicallRouters ?? {})
+).map((slug) => {
+  const net = networks[slug]
+  if (!net) throw new Error(`${slug}: not in settlement-networks`)
+  const depository = net.contracts?.[ENV]?.depository
+  if (!depository || !isAddress(depository)) {
+    throw new Error(`${slug}: no ${ENV} depository in settlement-networks`)
+  }
+  const router = deploymentFile.multicallRouters?.[slug]
+  if (!router || !isAddress(router)) {
+    throw new Error(
+      `${slug}: multicallRouters.${slug} missing from contracts/${ENV}.json`
+    )
+  }
+  return { chainId: net.chainId, depository, router, slug }
+})
 
 const allocatorAbi = parseAbi([
   "function setPayloadBuilder(string chainId, bytes depository, address builder)",
@@ -144,8 +169,7 @@ const readConfigValue = async (
 const buildCalls = async (
   client: ReturnType<typeof createPublicClient>,
   payloadBuilder: `0x${string}`,
-  depository: `0x${string}`,
-  router: `0x${string}`
+  chains: DestinationChain[]
 ): Promise<{ builderCalls: Call[]; configCalls: Call[] }> => {
   const allocator = deploymentFile.core.allocator as `0x${string}`
   const config = deploymentFile.core.config as `0x${string}`
@@ -154,7 +178,6 @@ const buildCalls = async (
   const configCalls: Call[] = []
   const keys: `0x${string}`[] = []
   const values: `0x${string}`[] = []
-  const depositoryEncoded = bytesToHex(encodeAddress(depository, "ethereum-vm"))
 
   const push = async (
     key: `0x${string}`,
@@ -171,24 +194,27 @@ const buildCalls = async (
     values.push(value)
   }
 
-  for (const chain of ROUTED_CHAINS) {
+  for (const chain of chains) {
+    const depositoryEncoded = bytesToHex(
+      encodeAddress(chain.depository, "ethereum-vm")
+    )
     const registered = (await client.readContract({
       abi: allocatorAbi,
       address: allocator,
-      args: [chain.chainId, depositoryEncoded],
+      args: [chain.slug, depositoryEncoded],
       functionName: "payloadBuilders",
     })) as `0x${string}`
 
     if (registered.toLowerCase() === payloadBuilder.toLowerCase()) {
-      console.log(`  [skip] ${chain.chainId} builder already registered`)
+      console.log(`  [skip] ${chain.slug} builder already registered`)
     } else {
       builderCalls.push({
         calldata: encodeFunctionData({
           abi: allocatorAbi,
-          args: [chain.chainId, depositoryEncoded, payloadBuilder],
+          args: [chain.slug, depositoryEncoded, payloadBuilder],
           functionName: "setPayloadBuilder",
         }),
-        label: `allocator.setPayloadBuilder(${chain.chainId}, ${depository}, ${payloadBuilder}) [was ${registered}]`,
+        label: `allocator.setPayloadBuilder(${chain.slug}, ${chain.depository}, ${payloadBuilder}) [was ${registered}]`,
         to: allocator,
       })
     }
@@ -196,19 +222,19 @@ const buildCalls = async (
     const chainIdKey = (await client.readContract({
       abi: payloadBuilderAbi,
       address: payloadBuilder,
-      args: [chain.chainId],
+      args: [chain.slug],
       functionName: "getEvmChainIdKey",
     })) as `0x${string}`
     await push(
       chainIdKey,
-      uint256Word(BigInt(chain.signatureChainId)),
-      `${chain.chainId} signatureChainId=${chain.signatureChainId}`
+      uint256Word(chain.chainId),
+      `${chain.slug} signatureChainId=${chain.chainId}`
     )
 
     const routerKey = (await client.readContract({
       abi: payloadBuilderAbi,
       address: payloadBuilder,
-      args: [chain.chainId, depository, router],
+      args: [chain.slug, chain.depository, chain.router],
       functionName: "getRouterAllowedKey",
     })) as `0x${string}`
     // The builder treats any value other than 1 as disabled; revoking a router means
@@ -216,18 +242,21 @@ const buildCalls = async (
     await push(
       routerKey,
       uint256Word(1n),
-      `${chain.chainId} routerAllowed router=${router}`
+      `${chain.slug} routerAllowed router=${chain.router}`
     )
   }
 
-  if (keys.length > 0) {
+  const chunk =
+    Number(process.env.ALLOWLIST_CHUNK ?? keys.length) || keys.length
+  for (let i = 0; i < keys.length; i += chunk) {
+    const chunkKeys = keys.slice(i, i + chunk)
     configCalls.push({
       calldata: encodeFunctionData({
         abi: configAbi,
-        args: [keys, values],
+        args: [chunkKeys, values.slice(i, i + chunk)],
         functionName: "setConfigValues",
       }),
-      label: `config.setConfigValues(${keys.length} keys)`,
+      label: `config.setConfigValues(${chunkKeys.length} keys${keys.length > chunk ? `, ${i / chunk + 1}/${Math.ceil(keys.length / chunk)}` : ""})`,
       to: config,
     })
   }
@@ -240,8 +269,6 @@ const main = async () => {
     throw new Error(`ENV must be dev, stag or prod (got "${ENV}")`)
   }
 
-  const router = requireAddressEnv("ROUTER")
-  const depository = requireAddressEnv("DEPOSITORY")
   const payloadBuilder = process.env.PAYLOAD_BUILDER
     ? requireAddressEnv("PAYLOAD_BUILDER")
     : (deploymentFile.payloadBuilders.ethereumVmPayloadBuilder as `0x${string}`)
@@ -297,8 +324,7 @@ const main = async () => {
   const { builderCalls, configCalls } = await buildCalls(
     relayChainClient,
     payloadBuilder,
-    depository,
-    router
+    ROUTED_CHAINS
   )
   if (builderCalls.length === 0 && configCalls.length === 0) {
     console.log("Nothing to do -- builder and config already match")
@@ -319,8 +345,11 @@ const main = async () => {
 
   // Nonce fetch has no data dependency on the gas estimates, so run both waves
   // concurrently instead of awaiting the nonce first.
+  const nonceOffset = Number(process.env.RELAY_NONCE_OFFSET ?? "0")
   const [baseNonce, gasEstimates] = await Promise.all([
-    relayChainClient.getTransactionCount({ address: signerAddress }),
+    relayChainClient
+      .getTransactionCount({ address: signerAddress })
+      .then((count) => count + nonceOffset),
     Promise.all(
       calls.map((call) =>
         relayChainClient.estimateGas({

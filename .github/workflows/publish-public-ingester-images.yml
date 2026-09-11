@@ -19,7 +19,7 @@ permissions:
   packages: write
 
 env:
-  PUBLIC_IMAGE_CRATES: chainlink-ingester pyth-ingester redstone-ingester stork-ingester
+  PUBLIC_IMAGE_CRATES: stork-ingester
   PUBLIC_REGISTRY_OWNER: relayprotocol
   PUBLIC_REPOSITORY_URL: https://github.com/relayprotocol/relay-settlement
 

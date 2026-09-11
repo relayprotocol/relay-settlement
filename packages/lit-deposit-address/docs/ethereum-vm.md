@@ -2,7 +2,9 @@
 
 EVM transactions for deposit-address sweeps into an EVM Relay depository.
 
-Runnable example: [`../scripts/examples/ethereum-vm.ts`](../scripts/examples/ethereum-vm.ts). See [`README.md`](./README.md) for the action API, request-signature requirement, and end-to-end design.
+Runnable example: [`../scripts/examples/ethereum-vm.ts`](../scripts/examples/ethereum-vm.ts).
+See the [package README](../README.md#action-api) for the action API and the
+[solver guide](./README.md) for the end-to-end flow.
 
 ## Wallet format
 

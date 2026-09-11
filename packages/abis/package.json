@@ -1,6 +1,6 @@
 {
   "name": "@relay-protocol/settlement-abis",
-  "version": "2.0.18",
+  "version": "2.0.19",
   "description": "Relay protocol contract ABIs",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

@@ -4,7 +4,9 @@ Hyperliquid `sendAsset` actions plus the Relay nonce-mapping authorization neede
 
 Hyperliquid deposits are not EVM transactions: the solver submits signed actions to Hyperliquid's REST `/exchange` endpoint and submits the signed nonce mapping to the solver/oracle authorize flow before broadcasting the transfer.
 
-Runnable example: [`../scripts/examples/hyperliquid-vm.ts`](../scripts/examples/hyperliquid-vm.ts). See [`README.md`](./README.md) for the action API, request-signature requirement, and end-to-end design.
+Runnable example: [`../scripts/examples/hyperliquid-vm.ts`](../scripts/examples/hyperliquid-vm.ts).
+See the [package README](../README.md#action-api) for the action API and the
+[solver guide](./README.md) for the end-to-end flow.
 
 ## Wallet format
 

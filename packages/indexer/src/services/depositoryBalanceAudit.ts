@@ -76,6 +76,7 @@ export type BalanceInput = {
 type RunOptions = {
   env?: NodeJS.ProcessEnv
   fetchChains?: () => Promise<OracleChain[]>
+  oracleApiKey?: string
   oracleApiUrl?: string
   getBalance?: (_input: BalanceInput) => Promise<bigint>
 }
@@ -171,10 +172,12 @@ export const oracleChainsUrl = (oracleApiUrl: string) =>
   `${oracleApiUrl.replace(/\/+$/, "")}/chains/v1`
 
 export const fetchOracleChains = async (
-  oracleApiUrl: string
+  oracleApiUrl: string,
+  oracleApiKey?: string
 ): Promise<OracleChain[]> => {
   const chainsUrl = oracleChainsUrl(oracleApiUrl)
   const response = await fetch(chainsUrl, {
+    headers: oracleApiKey ? { "x-api-key": oracleApiKey } : undefined,
     signal: AbortSignal.timeout(15_000),
   })
   if (!response.ok) {
@@ -707,7 +710,10 @@ export const runDepositoryBalanceAudit = async (
     }
     const chains = options.fetchChains
       ? await options.fetchChains()
-      : await fetchOracleChains(options.oracleApiUrl as string)
+      : await fetchOracleChains(
+          options.oracleApiUrl as string,
+          options.oracleApiKey
+        )
     const chainsById = new Map(chains.map((chain) => [chain.id, chain]))
     const tokens = await db.manyOrNone<TokenAuditRow>(
       `SELECT token_id, name, symbol, decimals, origin_family,

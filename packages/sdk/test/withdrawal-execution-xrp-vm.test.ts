@@ -7,12 +7,12 @@ import {
   decodeWithdrawal,
   DecodedXrpVmWithdrawal,
   encodeWithdrawal,
-  getDecodedWithdrawalAmount,
-  getDecodedWithdrawalCurrency,
   getDecodedWithdrawalId,
-  getDecodedWithdrawalRecipient,
 } from "../src/messages/v2.1/depository-withdrawal"
 import { getVmTypeNativeCurrency } from "../src/utils"
+import { getWithdrawalCodec } from "../src/messages/v2.1/withdrawals"
+
+const codec = getWithdrawalCodec("xrp-vm")
 
 // Sending depository account (r9cZA1mLK5R5Am25ArfXFmqgNwjZgnfk59) and receiver
 // (rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh). The signing hashes below are
@@ -142,18 +142,18 @@ describe("xrp-vm decoded-withdrawal helpers", () => {
     withdrawal: vectors[0].decoded,
   }
 
-  it("getDecodedWithdrawalCurrency returns the native XRP sentinel", () => {
-    expect(getDecodedWithdrawalCurrency(decoded)).toBe(
+  it("getCurrency returns the native XRP sentinel", () => {
+    expect(codec.getCurrency(decoded.withdrawal)).toBe(
       getVmTypeNativeCurrency("xrp-vm")
     )
   })
 
-  it("getDecodedWithdrawalAmount returns the raw drops amount", () => {
-    expect(getDecodedWithdrawalAmount(decoded)).toBe("1000000")
+  it("getAmount returns the raw drops amount", () => {
+    expect(codec.getAmount(decoded.withdrawal)).toBe("1000000")
   })
 
-  it("getDecodedWithdrawalRecipient returns the destination address", () => {
-    expect(getDecodedWithdrawalRecipient(decoded)).toBe(DESTINATION)
+  it("getRecipient returns the destination address", () => {
+    expect(codec.getRecipient(decoded.withdrawal)).toBe(DESTINATION)
   })
 })
 

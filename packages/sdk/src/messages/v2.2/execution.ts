@@ -2,7 +2,6 @@ import {
   Address,
   decodeAbiParameters,
   encodeAbiParameters,
-  hashStruct,
   Hex,
   parseAbiParameters,
 } from "viem"
@@ -37,22 +36,6 @@ export type ExecutionMetadata = Omit<
   ExecutionMessageMetadata,
   "oracleContract" | "oracleChainId"
 >
-
-export const getExecutionMessageId = (message: ExecutionMessage) => {
-  return hashStruct({
-    types: {
-      Execution: [
-        { name: "idempotencyKey", type: "bytes32" },
-        { name: "actions", type: "bytes[]" },
-      ],
-    },
-    primaryType: "Execution",
-    data: {
-      idempotencyKey: message.idempotencyKey as Hex,
-      actions: message.actions as Hex[],
-    },
-  })
-}
 
 export type DecodedAction =
   | {

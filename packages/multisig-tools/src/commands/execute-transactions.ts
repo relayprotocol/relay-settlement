@@ -2,11 +2,17 @@ import type { Command } from "commander"
 import {
   createPublicClient,
   createWalletClient,
-  parseSignature,
-  http,
-  recoverAddress,
-  serializeTransaction,
   formatEther,
+  http,
+  keccak256,
+  parseSignature,
+  parseTransaction,
+  type PublicClient,
+  recoverAddress,
+  recoverTransactionAddress,
+  serializeTransaction,
+  type TransactionSerialized,
+  WaitForTransactionReceiptTimeoutError,
 } from "viem"
 import { privateKeyToAccount } from "viem/accounts"
 import { networks } from "@relay-protocol/settlement-networks"
@@ -413,18 +419,7 @@ async function executeEvmTransaction(
   }
 
   try {
-    const hash = await networkClient.sendRawTransaction({
-      serializedTransaction,
-    })
-    console.log(`🚀 Transaction sent via ${tx.rpc}: ${hash}`)
-
-    const receipt = await networkClient.waitForTransactionReceipt({ hash })
-    if (receipt.status !== "success") {
-      // The nonce is consumed either way, so a re-run's nonce check would skip
-      // this transaction as executed -- surface the revert instead.
-      throw new Error(`Transaction reverted: ${receipt.transactionHash}`)
-    }
-    console.log(`✅ Transaction confirmed: ${receipt.transactionHash}`)
+    await broadcastAndConfirm(networkClient, serializedTransaction, tx.rpc)
   } catch (error: any) {
     const errorMessage = error.message?.toLowerCase() || ""
     if (
@@ -436,21 +431,171 @@ async function executeEvmTransaction(
         "⚠️  Insufficient funds error during broadcast, attempting to fund address..."
       )
       await ensureFunding(tx)
-
-      const hash = await networkClient.sendRawTransaction({
-        serializedTransaction,
-      })
-      console.log(`🚀 Transaction sent via ${tx.rpc}: ${hash}`)
-
-      const receipt = await networkClient.waitForTransactionReceipt({ hash })
-      if (receipt.status !== "success") {
-        throw new Error(`Transaction reverted: ${receipt.transactionHash}`)
-      }
-      console.log(`✅ Transaction confirmed: ${receipt.transactionHash}`)
+      await broadcastAndConfirm(networkClient, serializedTransaction, tx.rpc)
     } else {
       throw error
     }
   }
+}
+
+// A signed raw tx has a fixed hash, so a broadcast timeout is not a failure yet: wait for
+// that hash before re-sending; a rejection (e.g. the relay chain's gas meter) is retried after a pause.
+export const BROADCAST_ATTEMPTS = 6
+const CONFIRM_TIMEOUT_MS = 90_000
+export const REJECTION_BACKOFF_MS = 20_000
+const FEE_HISTORY_BLOCKS = 20
+
+const recoverSender = (serializedTransaction: `0x${string}`) =>
+  recoverTransactionAddress({
+    serializedTransaction: serializedTransaction as TransactionSerialized,
+  })
+
+const backoff = () =>
+  new Promise((resolve) => setTimeout(resolve, REJECTION_BACKOFF_MS))
+
+// Lowest base fee over the recent blocks; falls back to the latest block when the RPC
+// lacks eth_feeHistory, and is undefined on chains without a base fee (legacy fees).
+async function recentBaseFeeFloor(
+  networkClient: PublicClient
+): Promise<bigint | undefined> {
+  try {
+    const { baseFeePerGas } = await networkClient.getFeeHistory({
+      blockCount: FEE_HISTORY_BLOCKS,
+      rewardPercentiles: [],
+    })
+    const fees = baseFeePerGas.filter((fee) => fee > 0n)
+    return fees.length > 0
+      ? fees.reduce((min, fee) => (fee < min ? fee : min))
+      : undefined
+  } catch {
+    const block = await networkClient.getBlock().catch(() => undefined)
+    return block?.baseFeePerGas ?? undefined
+  }
+}
+
+export async function broadcastAndConfirm(
+  networkClient: PublicClient,
+  serializedTransaction: `0x${string}`,
+  rpc: string
+) {
+  const hash = keccak256(serializedTransaction)
+  // A tx is only includable in blocks whose base fee is <= its max fee, so a manifest
+  // fee below the recent base-fee floor has no chance soon: fail fast with the numbers.
+  const parsed = parseTransaction(serializedTransaction)
+  const maxFee = parsed.maxFeePerGas ?? parsed.gasPrice
+  const baseFeeFloor =
+    maxFee === undefined ? undefined : await recentBaseFeeFloor(networkClient)
+  if (
+    maxFee !== undefined &&
+    baseFeeFloor !== undefined &&
+    maxFee < baseFeeFloor
+  ) {
+    const message = `Transaction ${hash} is underpriced: manifest fee ${maxFee} wei/gas is below the lowest base fee of the last ${FEE_HISTORY_BLOCKS} blocks (${baseFeeFloor} wei/gas)`
+    // FORCE_BROADCAST=1 sends anyway and spends the attempts waiting for a fee dip.
+    if (process.env.FORCE_BROADCAST !== "1") {
+      throw new Error(
+        `${message} -- wait for fees to drop, regenerate the manifest for this chain, or set FORCE_BROADCAST=1`
+      )
+    }
+    console.log(`⚠️  ${message}; FORCE_BROADCAST=1, broadcasting anyway`)
+  }
+  for (let attempt = 1; attempt <= BROADCAST_ATTEMPTS; attempt++) {
+    try {
+      await networkClient.sendRawTransaction({ serializedTransaction })
+      console.log(`🚀 Transaction sent via ${rpc}: ${hash}`)
+    } catch (error: any) {
+      const message = String(
+        error?.details ?? error?.shortMessage ?? error?.message ?? error
+      )
+      const lower = message.toLowerCase()
+      if (
+        lower.includes("insufficient funds") ||
+        lower.includes("insufficient balance") ||
+        lower.includes("gas * price + value")
+      ) {
+        throw error
+      }
+      const timedOut =
+        lower.includes("took too long") || lower.includes("timed out")
+      const alreadyKnown =
+        lower.includes("already known") ||
+        lower.includes("alreadyknown") ||
+        lower.includes("known transaction")
+      const nonceUsed =
+        lower.includes("nonce too low") || lower.includes("oldnonce")
+      if (nonceUsed) {
+        // Either our earlier send was mined (node evicted it) or another tx took the
+        // nonce; only the first case has a receipt for our hash to wait for.
+        const ours = await networkClient
+          .getTransaction({ hash })
+          .catch(() => null)
+        if (!ours) {
+          const count = await networkClient.getTransactionCount({
+            address: await recoverSender(serializedTransaction),
+          })
+          throw new Error(
+            `Transaction ${hash} can never land: nonce ${parsed.nonce} was consumed by another transaction (sender count is ${count})`
+          )
+        }
+        console.log(`⏳ ${hash} was already mined, fetching its receipt...`)
+      } else if (alreadyKnown) {
+        console.log(`⏳ ${hash} is already in the mempool, waiting for it...`)
+      } else if (!timedOut) {
+        // The node refused the tx outright, so there is no receipt to wait for.
+        console.log(
+          `⚠️  Broadcast attempt ${attempt}/${BROADCAST_ATTEMPTS} rejected; retrying in ${REJECTION_BACKOFF_MS / 1000}s...`
+        )
+        console.log(error)
+        if (attempt < BROADCAST_ATTEMPTS) await backoff()
+        continue
+      } else {
+        console.log(
+          `⚠️  Broadcast attempt ${attempt}/${BROADCAST_ATTEMPTS} timed out; checking whether ${hash} landed...`
+        )
+      }
+    }
+    try {
+      const receipt = await networkClient.waitForTransactionReceipt({
+        hash,
+        timeout: CONFIRM_TIMEOUT_MS,
+      })
+      if (receipt.transactionHash.toLowerCase() !== hash.toLowerCase()) {
+        // viem follows nonce replacements: a different hash means our tx was replaced.
+        throw new Error(
+          `Transaction ${hash} was replaced by ${receipt.transactionHash} (same nonce)`
+        )
+      }
+      if (receipt.status !== "success") {
+        // The nonce is consumed either way, so a re-run's nonce check would skip
+        // this transaction as executed -- surface the revert instead.
+        throw new Error(`Transaction reverted: ${receipt.transactionHash}`)
+      }
+      console.log(`✅ Transaction confirmed: ${receipt.transactionHash}`)
+      return
+    } catch (error: any) {
+      const text = String(error?.message ?? "")
+      if (
+        text.startsWith("Transaction reverted") ||
+        text.includes("was replaced by")
+      ) {
+        throw error
+      }
+      if (error instanceof WaitForTransactionReceiptTimeoutError) {
+        console.log(
+          `⏳ ${hash} not confirmed within ${CONFIRM_TIMEOUT_MS / 1000}s, re-broadcasting...`
+        )
+      } else {
+        console.log(
+          `⏳ ${hash} receipt lookup failed, retrying in ${REJECTION_BACKOFF_MS / 1000}s...`
+        )
+        console.log(error)
+        if (attempt < BROADCAST_ATTEMPTS) await backoff()
+      }
+    }
+  }
+  throw new Error(
+    `Transaction ${hash} was not accepted after ${BROADCAST_ATTEMPTS} broadcast attempts`
+  )
 }
 
 async function executeBitcoinTransaction(
@@ -773,9 +918,23 @@ export function registerExecuteTransactions(program: Command) {
           error: string
         }> = []
 
+        // Once a tx from a sender fails on a chain, its later txs there would only queue
+        // behind the nonce gap and burn the retry budget each: skip them explicitly.
+        const brokenLanes = new Set<string>()
+        const laneOf = (tx: Transaction) =>
+          tx.family === "ethereum-vm" ? `${tx.from}@${tx.rpc}` : undefined
+
         for (let i = 0; i < transactions.length; i++) {
           console.log(`🏗️  Building transaction #${i}`)
           const tx = transactions[i]
+          const lane = laneOf(tx)
+          if (lane && brokenLanes.has(lane)) {
+            const [sender, rpc] = lane.split("@")
+            const errorMsg = `skipped: an earlier transaction from ${sender} on ${rpc} failed in this run`
+            console.error(`⏭️  Transaction #${i} ${errorMsg}`)
+            failures.push({ error: errorMsg, index: i, tx })
+            continue
+          }
 
           try {
             if (tx.family === "ethereum-vm") {
@@ -804,6 +963,7 @@ export function registerExecuteTransactions(program: Command) {
               error.message || error.toString() || "Unknown error"
             console.error(`❌ Transaction #${i} failed: ${errorMsg}`)
             failures.push({ error: errorMsg, index: i, tx })
+            if (lane) brokenLanes.add(lane)
           }
         }
 

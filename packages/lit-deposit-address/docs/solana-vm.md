@@ -2,7 +2,9 @@
 
 Solana compiled messages for Relay depository deposits.
 
-Runnable example: [`../scripts/examples/solana-vm.ts`](../scripts/examples/solana-vm.ts). See [`README.md`](./README.md) for the action API, request-signature requirement, and end-to-end design.
+Runnable example: [`../scripts/examples/solana-vm.ts`](../scripts/examples/solana-vm.ts).
+See the [package README](../README.md#action-api) for the action API and the
+[solver guide](./README.md) for the end-to-end flow.
 
 ## Wallet format
 

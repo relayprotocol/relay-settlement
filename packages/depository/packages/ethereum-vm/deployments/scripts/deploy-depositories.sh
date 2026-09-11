@@ -160,7 +160,6 @@ DEFAULT_CHAINS=(
   story
   superposition
   superseed
-  swellchain
   syndicate
   taiko
   tempo

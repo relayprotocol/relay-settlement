@@ -39,6 +39,18 @@ describe("overrides", () => {
       expect(networks.ethereum).toBe(networks["1"])
     })
 
+    it("omits the retired GUNZ network", () => {
+      const networks = initializeNetworks()
+      expect(networks.gunz).toBeUndefined()
+      expect(networks["43419"]).toBeUndefined()
+    })
+
+    it("omits the retired Animechain network", () => {
+      const networks = initializeNetworks()
+      expect(networks.anime).toBeUndefined()
+      expect(networks["69000"]).toBeUndefined()
+    })
+
     it("should apply overrides from file", () => {
       const overrideConfig: OverrideConfig = {
         ethereum: {

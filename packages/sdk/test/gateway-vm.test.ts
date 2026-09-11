@@ -16,14 +16,14 @@ import {
   decodeWithdrawal,
   encodeAddress,
   encodeWithdrawal,
-  getDecodedWithdrawalAmount,
-  getDecodedWithdrawalCurrency,
   getDecodedWithdrawalId,
-  getDecodedWithdrawalRecipient,
   getGatewayDestinationExpiration,
   getGatewayDestinationVmType,
   getVmTypeNativeCurrency,
 } from "../src"
+import { getWithdrawalCodec } from "../src/messages/v2.1/withdrawals"
+
+const codec = getWithdrawalCodec("gateway-vm")
 
 const ADDRESS = "0x1234567890123456789012345678901234567890"
 const USDC = "0x9876543210987654321098765432109876543210"
@@ -193,9 +193,9 @@ describe("gateway-vm", () => {
     expect(getDecodedWithdrawalId(gatewayWithdrawal)).toMatchInlineSnapshot(
       `"0x6ad16f316f63a851d90c575c3b6885300c09864417079194731d6c04e216735f"`
     )
-    expect(getDecodedWithdrawalCurrency(gatewayWithdrawal)).toBe(zeroAddress)
-    expect(getDecodedWithdrawalAmount(gatewayWithdrawal)).toBe("500000")
-    expect(getDecodedWithdrawalRecipient(gatewayWithdrawal)).toBe(ADDRESS)
+    expect(codec.getCurrency(gatewayWithdrawal.withdrawal)).toBe(zeroAddress)
+    expect(codec.getAmount(gatewayWithdrawal.withdrawal)).toBe("500000")
+    expect(codec.getRecipient(gatewayWithdrawal.withdrawal)).toBe(ADDRESS)
   })
 
   it("does not decode the pre-dataHash Gateway format", () => {

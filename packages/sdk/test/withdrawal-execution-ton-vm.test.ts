@@ -7,12 +7,12 @@ import {
   decodeWithdrawal,
   DecodedTonVmWithdrawal,
   encodeWithdrawal,
-  getDecodedWithdrawalAmount,
-  getDecodedWithdrawalCurrency,
   getDecodedWithdrawalId,
-  getDecodedWithdrawalRecipient,
 } from "../src/messages/v2.1/depository-withdrawal"
 import { getVmTypeNativeCurrency } from "../src/utils"
+import { getWithdrawalCodec } from "../src/messages/v2.1/withdrawals"
+
+const codec = getWithdrawalCodec("ton-vm")
 
 // Reference vectors mirror smart-contracts/tools/ton-reference-hashes.ts and the
 // foundry test smart-contracts/test/PayloadBuilders/TonVmPayloadBuilder.t.sol.
@@ -115,17 +115,17 @@ describe("ton-vm decoded-withdrawal helpers", () => {
     withdrawal: vectors[1].decoded,
   }
 
-  it("getDecodedWithdrawalCurrency returns the native TON sentinel", () => {
-    expect(getDecodedWithdrawalCurrency(decoded)).toBe(
+  it("getCurrency returns the native TON sentinel", () => {
+    expect(codec.getCurrency(decoded.withdrawal)).toBe(
       getVmTypeNativeCurrency("ton-vm")
     )
   })
 
-  it("getDecodedWithdrawalAmount returns the raw nanoton amount", () => {
-    expect(getDecodedWithdrawalAmount(decoded)).toBe("100000000")
+  it("getAmount returns the raw nanoton amount", () => {
+    expect(codec.getAmount(decoded.withdrawal)).toBe("100000000")
   })
 
-  it("getDecodedWithdrawalRecipient returns the canonical receiver", () => {
-    expect(getDecodedWithdrawalRecipient(decoded)).toBe(RECEIVER_RAW)
+  it("getRecipient returns the canonical receiver", () => {
+    expect(codec.getRecipient(decoded.withdrawal)).toBe(RECEIVER_RAW)
   })
 })

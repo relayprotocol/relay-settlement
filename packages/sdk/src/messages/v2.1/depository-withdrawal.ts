@@ -1,12 +1,3 @@
-import { hashStruct } from "viem"
-
-import {
-  ChainIdToVmType,
-  encodeAddressToHex,
-  encodeBytesToHex,
-  getChainVmType,
-} from "../../utils"
-
 import {
   DecodedWithdrawal,
   DecodedWithdrawalFor,
@@ -60,46 +51,6 @@ export type DepositoryWithdrawalMessage = {
   }
 }
 
-export const getDepositoryWithdrawalMessageId = (
-  message: DepositoryWithdrawalMessage,
-  chainsConfig: ChainIdToVmType
-) => {
-  const vmType = (chainId: string) => getChainVmType(chainId, chainsConfig)
-
-  return hashStruct({
-    types: {
-      DepositoryWithdrawal: [
-        { name: "data", type: "Data" },
-        { name: "result", type: "Result" },
-      ],
-      Data: [
-        { name: "chainId", type: "string" },
-        { name: "withdrawal", type: "bytes" },
-      ],
-      Result: [
-        { name: "withdrawalId", type: "bytes32" },
-        { name: "depository", type: "bytes" },
-        { name: "status", type: "uint8" },
-      ],
-    },
-    primaryType: "DepositoryWithdrawal",
-    data: {
-      data: {
-        chainId: message.data.chainId,
-        withdrawal: encodeBytesToHex(message.data.withdrawal),
-      },
-      result: {
-        withdrawalId: encodeBytesToHex(message.result.withdrawalId),
-        depository: encodeAddressToHex(
-          message.result.depository,
-          vmType(message.data.chainId)
-        ),
-        status: message.result.status,
-      },
-    },
-  })
-}
-
 // Encoding / decoding utilities
 //
 // The per-VM implementations live in ./withdrawals/<vm>.ts; the functions
@@ -124,26 +75,5 @@ export const getDecodedWithdrawalId = (
   decodedWithdrawal: DecodedWithdrawal
 ): string =>
   getWithdrawalCodec(decodedWithdrawal.vmType).getId(
-    decodedWithdrawal.withdrawal
-  )
-
-export const getDecodedWithdrawalCurrency = (
-  decodedWithdrawal: DecodedWithdrawal
-): string =>
-  getWithdrawalCodec(decodedWithdrawal.vmType).getCurrency(
-    decodedWithdrawal.withdrawal
-  )
-
-export const getDecodedWithdrawalAmount = (
-  decodedWithdrawal: DecodedWithdrawal
-): string =>
-  getWithdrawalCodec(decodedWithdrawal.vmType).getAmount(
-    decodedWithdrawal.withdrawal
-  )
-
-export const getDecodedWithdrawalRecipient = (
-  decodedWithdrawal: DecodedWithdrawal
-): string =>
-  getWithdrawalCodec(decodedWithdrawal.vmType).getRecipient(
     decodedWithdrawal.withdrawal
   )

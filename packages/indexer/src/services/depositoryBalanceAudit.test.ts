@@ -45,6 +45,42 @@ test("oracleChainsUrl builds the endpoint from the configured base URL", () => {
   )
 })
 
+for (const oracleApiKey of ["test-oracle-api-key", undefined, ""]) {
+  test(`runDepositoryBalanceAudit requests chain metadata with ${
+    oracleApiKey
+      ? "an API key"
+      : oracleApiKey === ""
+        ? "an empty API key"
+        : "no API key"
+  }`, async (t) => {
+    const fetchMock = t.mock.method(
+      globalThis,
+      "fetch",
+      async (url: string, options: RequestInit) => {
+        assert.equal(url, "https://oracle.example/chains/v1")
+        assert.equal(
+          new Headers(options.headers).get("x-api-key"),
+          oracleApiKey || null
+        )
+        return Response.json({ chains: [baseChain] })
+      }
+    )
+
+    const result = await runDepositoryBalanceAudit(
+      new FakeDb([]) as unknown as Queryable,
+      {} as Contract,
+      {
+        oracleApiKey,
+        oracleApiUrl: "https://oracle.example/",
+      }
+    )
+
+    assert.equal(fetchMock.mock.callCount(), 1)
+    assert.equal(result.checked, 0)
+    assert.equal(result.error, 0)
+  })
+}
+
 test("rpcEnvNameForChain normalizes Oracle chain ids", () => {
   assert.equal(rpcEnvNameForChain("base"), "BASE_RPC_URL")
   assert.equal(rpcEnvNameForChain("arbitrum_nova"), "ARBITRUM_NOVA_RPC_URL")

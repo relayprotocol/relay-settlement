@@ -13,11 +13,9 @@ import {
   DecodedHyperliquidVmWithdrawal,
   DecodedLighterVmWithdrawal,
   encodeWithdrawal,
-  getDecodedWithdrawalAmount,
-  getDecodedWithdrawalCurrency,
   getDecodedWithdrawalId,
-  getDecodedWithdrawalRecipient,
 } from "../src/messages/v2.1/depository-withdrawal"
+import { getWithdrawalCodec } from "../src/messages/v2.1/withdrawals"
 
 // ERC20 `transfer(address,uint256)` to 0x9876...3210 for 5000000
 const ERC20_TRANSFER_DATA =
@@ -30,6 +28,8 @@ const ZERO_DATA_HASH =
   "0x0000000000000000000000000000000000000000000000000000000000000000"
 
 describe("ethereum-vm withdrawal codec fixtures", () => {
+  const codec = getWithdrawalCodec("ethereum-vm")
+
   const nativeCall: DecodedEthereumVmWithdrawal = {
     vmType: "ethereum-vm",
     withdrawal: {
@@ -71,11 +71,11 @@ describe("ethereum-vm withdrawal codec fixtures", () => {
     expect(getDecodedWithdrawalId(nativeCall)).toMatchInlineSnapshot(
       `"0xd7005099805c5e730f534f546e309475b5611975fadfc9451a96a421b58409f3"`
     )
-    expect(getDecodedWithdrawalCurrency(nativeCall)).toMatchInlineSnapshot(
+    expect(codec.getCurrency(nativeCall.withdrawal)).toMatchInlineSnapshot(
       `"0x0000000000000000000000000000000000000000"`
     )
-    expect(getDecodedWithdrawalAmount(nativeCall)).toBe("1000000000000000000")
-    expect(getDecodedWithdrawalRecipient(nativeCall)).toBe(
+    expect(codec.getAmount(nativeCall.withdrawal)).toBe("1000000000000000000")
+    expect(codec.getRecipient(nativeCall.withdrawal)).toBe(
       "0x9876543210987654321098765432109876543210"
     )
     expect(
@@ -90,11 +90,11 @@ describe("ethereum-vm withdrawal codec fixtures", () => {
     expect(getDecodedWithdrawalId(erc20Call)).toMatchInlineSnapshot(
       `"0xacc729e7b128bb96d590c3ea8d3ad77de4595d20177ebef2451770a049b2f04d"`
     )
-    expect(getDecodedWithdrawalCurrency(erc20Call)).toBe(
+    expect(codec.getCurrency(erc20Call.withdrawal)).toBe(
       "0x1234567890123456789012345678901234567890"
     )
-    expect(getDecodedWithdrawalAmount(erc20Call)).toBe("5000000")
-    expect(getDecodedWithdrawalRecipient(erc20Call)).toBe(
+    expect(codec.getAmount(erc20Call.withdrawal)).toBe("5000000")
+    expect(codec.getRecipient(erc20Call.withdrawal)).toBe(
       "0x9876543210987654321098765432109876543210"
     )
     expect(
@@ -104,6 +104,8 @@ describe("ethereum-vm withdrawal codec fixtures", () => {
 })
 
 describe("tron-vm withdrawal codec fixtures", () => {
+  const codec = getWithdrawalCodec("tron-vm")
+
   const nativeCall: DecodedTronVmWithdrawal = {
     vmType: "tron-vm",
     withdrawal: {
@@ -143,11 +145,11 @@ describe("tron-vm withdrawal codec fixtures", () => {
     expect(getDecodedWithdrawalId(nativeCall)).toMatchInlineSnapshot(
       `"0xbc371a5bf7643019760e04b923c456f1fbf63bce0d0ac377670bdc2eaa111ca5"`
     )
-    expect(getDecodedWithdrawalCurrency(nativeCall)).toMatchInlineSnapshot(
+    expect(codec.getCurrency(nativeCall.withdrawal)).toMatchInlineSnapshot(
       `"T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb"`
     )
-    expect(getDecodedWithdrawalAmount(nativeCall)).toBe("1000000")
-    expect(getDecodedWithdrawalRecipient(nativeCall)).toBe(
+    expect(codec.getAmount(nativeCall.withdrawal)).toBe("1000000")
+    expect(codec.getRecipient(nativeCall.withdrawal)).toBe(
       "419876543210987654321098765432109876543210"
     )
     expect(decodeWithdrawal(encodeWithdrawal(nativeCall), "tron-vm")).toEqual(
@@ -162,11 +164,11 @@ describe("tron-vm withdrawal codec fixtures", () => {
     expect(getDecodedWithdrawalId(trc20Call)).toMatchInlineSnapshot(
       `"0xacc729e7b128bb96d590c3ea8d3ad77de4595d20177ebef2451770a049b2f04d"`
     )
-    expect(getDecodedWithdrawalCurrency(trc20Call)).toBe(
+    expect(codec.getCurrency(trc20Call.withdrawal)).toBe(
       "411234567890123456789012345678901234567890"
     )
-    expect(getDecodedWithdrawalAmount(trc20Call)).toBe("5000000")
-    expect(getDecodedWithdrawalRecipient(trc20Call)).toBe(
+    expect(codec.getAmount(trc20Call.withdrawal)).toBe("5000000")
+    expect(codec.getRecipient(trc20Call.withdrawal)).toBe(
       "0x9876543210987654321098765432109876543210"
     )
     expect(decodeWithdrawal(encodeWithdrawal(trc20Call), "tron-vm")).toEqual(
@@ -176,6 +178,8 @@ describe("tron-vm withdrawal codec fixtures", () => {
 })
 
 describe("solana-vm withdrawal codec fixtures", () => {
+  const codec = getWithdrawalCodec("solana-vm")
+
   const nativeTransfer: DecodedSolanaVmWithdrawal = {
     vmType: "solana-vm",
     withdrawal: {
@@ -205,11 +209,11 @@ describe("solana-vm withdrawal codec fixtures", () => {
     expect(getDecodedWithdrawalId(nativeTransfer)).toMatchInlineSnapshot(
       `"0x8a67bb2feb87ddb1a954ca9a980a0e6ead37a03874d8466162b60e2d6e9ed8f5"`
     )
-    expect(getDecodedWithdrawalCurrency(nativeTransfer)).toBe(
+    expect(codec.getCurrency(nativeTransfer.withdrawal)).toBe(
       "11111111111111111111111111111111"
     )
-    expect(getDecodedWithdrawalAmount(nativeTransfer)).toBe("123456789")
-    expect(getDecodedWithdrawalRecipient(nativeTransfer)).toBe(
+    expect(codec.getAmount(nativeTransfer.withdrawal)).toBe("123456789")
+    expect(codec.getRecipient(nativeTransfer.withdrawal)).toBe(
       "So11111111111111111111111111111111111111112"
     )
     expect(
@@ -224,7 +228,7 @@ describe("solana-vm withdrawal codec fixtures", () => {
     expect(getDecodedWithdrawalId(splTransfer)).toMatchInlineSnapshot(
       `"0x9eebe02238d0db346443a0278d91cb1e62d80cce625c41253d1a59f44fdb1b3d"`
     )
-    expect(getDecodedWithdrawalCurrency(splTransfer)).toBe(
+    expect(codec.getCurrency(splTransfer.withdrawal)).toBe(
       "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
     )
     expect(
@@ -234,6 +238,8 @@ describe("solana-vm withdrawal codec fixtures", () => {
 })
 
 describe("bitcoin-vm withdrawal codec fixtures", () => {
+  const codec = getWithdrawalCodec("bitcoin-vm")
+
   // encode/decode are hex passthrough and getId hashes the 0x-prefixed string,
   // so the fixture doesn't need to be a parseable PSBT. getAmount/getRecipient
   // DO finalize a real PSBT and are not pinned here (no signed PSBT fixture
@@ -252,7 +258,7 @@ describe("bitcoin-vm withdrawal codec fixtures", () => {
     expect(getDecodedWithdrawalId(withdrawal)).toMatchInlineSnapshot(
       `"0x2afe732745aaa8d89797e381b272726ba93de0e3e9d2fc248fc0b92db7da2eef"`
     )
-    expect(getDecodedWithdrawalCurrency(withdrawal)).toMatchInlineSnapshot(
+    expect(codec.getCurrency(withdrawal.withdrawal)).toMatchInlineSnapshot(
       `"bc1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqmql8k8"`
     )
     expect(
@@ -262,6 +268,8 @@ describe("bitcoin-vm withdrawal codec fixtures", () => {
 })
 
 describe("hyperliquid-vm withdrawal codec fixtures", () => {
+  const codec = getWithdrawalCodec("hyperliquid-vm")
+
   const usdSend: DecodedHyperliquidVmWithdrawal = {
     vmType: "hyperliquid-vm",
     withdrawal: {
@@ -301,11 +309,11 @@ describe("hyperliquid-vm withdrawal codec fixtures", () => {
     expect(getDecodedWithdrawalId(usdSend)).toMatchInlineSnapshot(
       `"0x3998b4cc49505e4870cb0b1d202152489e8b4237342a705f37a3444c4a9418a1"`
     )
-    expect(getDecodedWithdrawalCurrency(usdSend)).toMatchInlineSnapshot(
+    expect(codec.getCurrency(usdSend.withdrawal)).toMatchInlineSnapshot(
       `"0x00000000000000000000000000000000"`
     )
-    expect(getDecodedWithdrawalAmount(usdSend)).toBe("12345")
-    expect(getDecodedWithdrawalRecipient(usdSend)).toBe(
+    expect(codec.getAmount(usdSend.withdrawal)).toBe("12345")
+    expect(codec.getRecipient(usdSend.withdrawal)).toBe(
       "0x9876543210987654321098765432109876543210"
     )
     expect(
@@ -320,10 +328,10 @@ describe("hyperliquid-vm withdrawal codec fixtures", () => {
     expect(getDecodedWithdrawalId(sendAsset)).toMatchInlineSnapshot(
       `"0xc001e877a48c56eae6c50020a177c36b4ab06db6c0000083980e4b391b982ab6"`
     )
-    expect(getDecodedWithdrawalCurrency(sendAsset)).toMatchInlineSnapshot(
+    expect(codec.getCurrency(sendAsset.withdrawal)).toMatchInlineSnapshot(
       `"0x00000000000000000000000000000000"`
     )
-    expect(getDecodedWithdrawalAmount(sendAsset)).toBe("555")
+    expect(codec.getAmount(sendAsset.withdrawal)).toBe("555")
     expect(
       decodeWithdrawal(encodeWithdrawal(sendAsset), "hyperliquid-vm")
     ).toEqual(sendAsset)
@@ -331,6 +339,8 @@ describe("hyperliquid-vm withdrawal codec fixtures", () => {
 })
 
 describe("lighter-vm withdrawal codec fixtures", () => {
+  const codec = getWithdrawalCodec("lighter-vm")
+
   const transfer: DecodedLighterVmWithdrawal = {
     vmType: "lighter-vm",
     withdrawal: {
@@ -359,9 +369,9 @@ describe("lighter-vm withdrawal codec fixtures", () => {
     expect(getDecodedWithdrawalId(transfer)).toMatchInlineSnapshot(
       `"0xea01ccdd989a0baf828ee39059c424a6849522fb10dc114b85565179e4e9f50a"`
     )
-    expect(getDecodedWithdrawalCurrency(transfer)).toBe("0")
-    expect(getDecodedWithdrawalAmount(transfer)).toBe("1000000")
-    expect(getDecodedWithdrawalRecipient(transfer)).toBe("200")
+    expect(codec.getCurrency(transfer.withdrawal)).toBe("0")
+    expect(codec.getAmount(transfer.withdrawal)).toBe("1000000")
+    expect(codec.getRecipient(transfer.withdrawal)).toBe("200")
     expect(decodeWithdrawal(encodeWithdrawal(transfer), "lighter-vm")).toEqual(
       transfer
     )

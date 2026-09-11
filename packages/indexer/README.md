@@ -34,8 +34,13 @@ underlying depository balance every 10 minutes. Chain and production
 depository metadata comes from `$ORACLE_API_URL/chains/v1`; currency metadata
 comes from `RelayHub.tokenMetadata` and is cached on the `tokens` row.
 
-Set `ORACLE_API_URL` to the Oracle service base URL. Configure an RPC for each
-chain containing an indexed currency. Environment variable names use the
+Set `ORACLE_API_URL` to the Oracle service base URL and `ORACLE_API_KEY` to a
+valid Oracle API key. The worker sends the key in the `x-api-key` header on
+`/chains/v1` requests. If the key is unset or empty, the header is omitted.
+This is separate from `AUTH_API_KEY`, which protects the indexer's own API.
+
+Configure an RPC for each chain containing an indexed currency. Environment
+variable names use the
 uppercased Oracle chain id followed by `_RPC_URL`, for example `BASE_RPC_URL`
 and `ARBITRUM_NOVA_RPC_URL`.
 

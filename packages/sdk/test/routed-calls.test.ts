@@ -26,11 +26,12 @@ import { toExecutableCallRequest } from "../src/messages/v2.1/withdrawals/ethere
 import {
   decodeWithdrawal,
   encodeWithdrawal,
-  getDecodedWithdrawalAmount,
   getDecodedWithdrawalId,
-  getDecodedWithdrawalRecipient,
   DecodedEthereumVmWithdrawal,
 } from "../src/messages/v2.1/depository-withdrawal"
+import { getWithdrawalCodec } from "../src/messages/v2.1/withdrawals"
+
+const codec = getWithdrawalCodec("ethereum-vm")
 
 // Solver swap call + settlement call + user-intent suffix
 const calls: RoutedCall[] = [
@@ -318,7 +319,7 @@ describe("committed CallRequest", () => {
 
     const native = decodeWithdrawal(legacyNative, "ethereum-vm")
     expect(native.withdrawal.calls[0].dataHash).toBe(ZERO_HASH)
-    expect(getDecodedWithdrawalAmount(native)).toBe("1000000000000000000")
+    expect(codec.getAmount(native.withdrawal)).toBe("1000000000000000000")
     // Same id the 4-member codec produces for this payload
     expect(getDecodedWithdrawalId(native)).toBe(
       "0xd7005099805c5e730f534f546e309475b5611975fadfc9451a96a421b58409f3"
@@ -339,8 +340,8 @@ describe("committed CallRequest", () => {
 
   it("reads the transfer leg for currency, amount and recipient", () => {
     // The routed call is appended after the transfer, so these still read `calls[0]`
-    expect(getDecodedWithdrawalRecipient(decoded)).toBe(ROUTER)
-    expect(getDecodedWithdrawalAmount(decoded)).toBe(
+    expect(codec.getRecipient(decoded.withdrawal)).toBe(ROUTER)
+    expect(codec.getAmount(decoded.withdrawal)).toBe(
       (1337n * 10n ** 18n).toString()
     )
   })

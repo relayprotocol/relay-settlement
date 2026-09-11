@@ -2,7 +2,9 @@
 
 Native BTC deposit transactions for P2WPKH deposit addresses.
 
-Runnable example: [`../scripts/examples/bitcoin-vm.ts`](../scripts/examples/bitcoin-vm.ts). See [`README.md`](./README.md) for the action API, request-signature requirement, and end-to-end design.
+Runnable example: [`../scripts/examples/bitcoin-vm.ts`](../scripts/examples/bitcoin-vm.ts).
+See the [package README](../README.md#action-api) for the action API and the
+[solver guide](./README.md) for the end-to-end flow.
 
 ## Wallet format
 

@@ -1,4 +1,8 @@
-# Tron Deposit Address integration
+# Tron VM solver integration
+
+Runnable example: [`../scripts/examples/tron-vm.ts`](../scripts/examples/tron-vm.ts).
+See the [package README](../README.md#action-api) for the action API and the
+[solver guide](./README.md) for the end-to-end flow.
 
 The `tron-vm` Lit Action derives case-sensitive Tron Base58Check wallets and signs native TRX or TRC20 deposit sweeps. It is not a general Tron signer: the action decodes the exact `protocol.Transaction` protobuf bytes and rejects any batch that does not match the attested deposit trigger.
 
@@ -73,4 +77,5 @@ if (!result.result || result.txid.toLowerCase() !== signed.transactionHash) {
 }
 ```
 
-See [`../scripts/examples/tron-vm.ts`](../scripts/examples/tron-vm.ts) for building native and TRC20 protobuf batches, invoking Lit, broadcasting each signed transaction, and checking the returned hashes.
+The runnable example shows how to build native and TRC20 protobuf batches,
+invoke Lit, broadcast each signed transaction, and check the returned hashes.

@@ -222,7 +222,10 @@ export type Transaction = z.infer<typeof TransactionSchema>
 
 export const TransactionsSchema = z.array(TransactionSchema)
 
-const nonceOffsets: Record<string, Record<number, number>> = {}
+// Highest nonce built per (sender, chain) in this process: the pre-check below must
+// stay correct whether earlier txs were awaited (on-chain count already moved) or
+// fired without waiting (count still lags) -- a running offset double counts the former.
+const nextNonces: Record<string, Record<number, number>> = {}
 
 export type BuildTransactionResult = {
   hashesToSign: readonly `0x${string}`[]
@@ -280,10 +283,10 @@ export const buildEvmTransaction = async (
   const nonce = await networkClient.getTransactionCount({
     address: tx.from,
   })
-  if (!nonceOffsets[tx.from]) {
-    nonceOffsets[tx.from] = {}
+  if (!nextNonces[tx.from]) {
+    nextNonces[tx.from] = {}
   }
-  const expectedNonce = nonce + (nonceOffsets[tx.from][chainId] || 0)
+  const expectedNonce = Math.max(nonce, nextNonces[tx.from][chainId] ?? 0)
   if (tx.nonce < expectedNonce) {
     // A nonce below the expected one is already used and can never execute.
     throw new Error(
@@ -325,7 +328,10 @@ export const buildEvmTransaction = async (
     )
   }
 
-  nonceOffsets[tx.from][chainId] = (nonceOffsets[tx.from][chainId] || 0) + 1
+  nextNonces[tx.from][chainId] = Math.max(
+    nextNonces[tx.from][chainId] ?? 0,
+    tx.nonce + 1
+  )
 
   // Pick the correct transaction type from the manifest's fee fields. Not
   // every chain supports EIP-1559 (e.g. Metis), and those chains can only

@@ -47,6 +47,7 @@ export const startDepositoryBalanceAudit = (
             event: "audit_started",
           })
           const result = await runDepositoryBalanceAudit(task, hubContract, {
+            oracleApiKey: config.oracleApiKey,
             oracleApiUrl: config.oracleApiUrl,
           })
 

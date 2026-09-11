@@ -94,7 +94,7 @@ DEFAULT_CHAINS=(
   katana linea lisk manta mantle megaeth metis mode monad morph mythos
   optimism perennial plasma plume polygon polygon_zkevm rari redstone ronin
   scroll sei shape somnia soneium sonic stable story superposition superseed
-  swellchain syndicate taiko tempo unichain worldchain xai zero zircuit
+  syndicate taiko tempo unichain worldchain xai zero zircuit
   zksync zora
 )
 

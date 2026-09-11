@@ -2,7 +2,9 @@
 
 Native-TON deposits swept from a per-order deposit wallet into the Relay depository.
 
-Runnable example: [`../scripts/examples/ton-vm.ts`](../scripts/examples/ton-vm.ts). See [`README.md`](./README.md) for the action API, request-signature requirement, and end-to-end design.
+Runnable example: [`../scripts/examples/ton-vm.ts`](../scripts/examples/ton-vm.ts).
+See the [package README](../README.md#action-api) for the action API and the
+[solver guide](./README.md) for the end-to-end flow.
 
 ## Deposit model
 

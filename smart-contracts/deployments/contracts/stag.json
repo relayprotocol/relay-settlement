@@ -22,7 +22,7 @@
     }
   },
   "payloadBuilders": {
-    "ethereumVmPayloadBuilder": "0xf3c88db9aeca22e30a31e7df359f0b4fe48b0e90",
+    "ethereumVmPayloadBuilder": "0x0d891d81f14b858f4512e35db960dc42ba9dc5bf",
     "solanaVmPayloadBuilder": "0x16e1a1c4c9334419a4fc290a31369c076d2f2a27",
     "tonVmPayloadBuilder": "0x1e501cb130fac80b3cad5145abcbf7393b02c3a5",
     "tronVmPayloadBuilder": "0x5a04454fdad7d2b0be6d7a85a7cde09c1e1821fc",
@@ -43,15 +43,15 @@
     "signedPricingOracle": "0x0616d9794e74a57ecfc0c1be245ce04477d229e0"
   },
   "uniswap": {
-    "factory": "0x4a688f2d25d7931655633bf3014180e40c717db6",
-    "swapRouter": "0x676a83ad4b0777bbb407a5d1d75e0431b0b04c04",
-    "quoterV2": "0xfd3d1ae1edfc9cd1ada291606afc615dec69a8dd",
-    "positionManager": "0xc4d5176468ba504bf4b36c90ffdde9193fdd861c"
+    "factory": "0xfd1eae72a014ddb0ae4d947cd5d3a377be35b3d6",
+    "swapRouter": "0xde34a189d606ad28bebbb76713993cbda09f00cb",
+    "quoterV2": "0x015eae2f7d132b6798b20bc04e41d9cc8ade6e85",
+    "positionManager": "0xf16367d60026e7d9aa94a3e3034fab10570421fb"
   },
   "utils": {
     "basicCallResolver": "0x4cece2e5935fe5b0170cae38739f3a44c2d57896",
     "multicall3": "0xf68f9d4619e36ff430629e6e0db461a6340bcb61",
-    "weth9": "0x82a577cf5a1b5d8c71df117b8ab22f72d4f77077"
+    "weth9": "0xf02a2b5defadc5148cea9f8705b86ef1f9a6aea2"
   },
   "safe": {
     "compatibilityFallbackHandler": "0xe460ebb003149d409adb5d7e8ab0b2462e5223f4",
@@ -67,5 +67,58 @@
     "signMessageLib": "0xee7265ff8519d91eeec19ea819b52671f53452ab",
     "simulateTxAccessor": "0x20e83a32a6339e6b7fd8863d1921d2fe68a728ea",
     "tokenCallbackHandler": "0x177d58848f1d2f8909d8f12da238973ca58a5cd9"
+  },
+  "multicallRouters": {
+    "abstract": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "anime": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "apechain": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "arbitrum": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "arbitrum_nova": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "arc": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "avalanche": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "base": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "berachain": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "blast": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "bnb": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "bob": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "boba": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "celo": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "cronos": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "ethereal": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "ethereum": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "flow": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "gnosis": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "gunz": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "hyperevm": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "ink": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "katana": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "linea": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "manta": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "mantle": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "megaeth": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "metis": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "mode": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "monad": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "morph": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "mythos": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "optimism": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "plasma": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "plume": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "polygon": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "robinhood": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "ronin": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "scroll": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "shape": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "somnia": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "soneium": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "sonic": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "stable": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "superseed": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "tempo": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "unichain": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "worldchain": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "zircuit": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "zksync": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "zora": "0x403f0552401b671e04a79e7aa9eb6c9568c22911"
   }
 }

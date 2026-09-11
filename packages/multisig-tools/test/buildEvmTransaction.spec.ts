@@ -104,3 +104,34 @@ describe("buildEvmTransaction fee typing", () => {
     expect(parseTransaction(payload).type).toBe("eip1559")
   })
 })
+
+describe("buildEvmTransaction nonce pre-check", () => {
+  // Own sender so the module-level nonce tracker is not shared with the fee-typing cases.
+  const withNonce = (nonce: number) => ({
+    ...loadMetisTx(),
+    from: "0x00000000000000000000000000000000000000A1",
+    nonce,
+  })
+
+  beforeEach(() => {
+    publicClientMock.getChainId.mockResolvedValue(1088)
+    publicClientMock.estimateGas.mockResolvedValue(29994n)
+  })
+
+  it("accepts consecutive nonces when each tx is confirmed before the next", async () => {
+    // Confirmed txs move the on-chain count, so the next manifest nonce equals it.
+    publicClientMock.getTransactionCount.mockResolvedValueOnce(100)
+    await buildEvmTransaction(withNonce(100))
+    publicClientMock.getTransactionCount.mockResolvedValueOnce(101)
+    await expect(buildEvmTransaction(withNonce(101))).resolves.toBeDefined()
+  })
+
+  it("accepts consecutive nonces when txs are fired without waiting", async () => {
+    publicClientMock.getTransactionCount.mockResolvedValue(200)
+    await buildEvmTransaction(withNonce(200))
+    await expect(buildEvmTransaction(withNonce(201))).resolves.toBeDefined()
+    await expect(buildEvmTransaction(withNonce(200))).rejects.toThrow(
+      "Nonce too low"
+    )
+  })
+})

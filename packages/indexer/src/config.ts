@@ -21,6 +21,7 @@ export type RuntimeConfig = {
   indexerAuditIntervalMs: number
   indexerAuditMaxAgeMs: number
   maxTransferReplayBlockRange: number
+  oracleApiKey: string | undefined
   oracleApiUrl: string | undefined
   oracleContractAddress: string
   oracleStartBlock: number
@@ -185,6 +186,7 @@ export const config: RuntimeConfig = {
     process.env.MAX_TRANSFER_REPLAY_BLOCK_RANGE,
     100_000
   ),
+  oracleApiKey: process.env.ORACLE_API_KEY,
   oracleApiUrl: process.env.ORACLE_API_URL,
   oracleContractAddress: resolveAddress(
     process.env.ORACLE_CONTRACT_ADDRESS,

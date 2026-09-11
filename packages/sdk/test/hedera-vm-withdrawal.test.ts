@@ -8,13 +8,13 @@ import {
   DecodedHederaVmWithdrawal,
   decodeWithdrawal,
   encodeWithdrawal,
-  getDecodedWithdrawalAmount,
-  getDecodedWithdrawalCurrency,
   getDecodedWithdrawalId,
-  getDecodedWithdrawalRecipient,
 } from "../src/messages/v2.1/depository-withdrawal"
 import { getHederaVmTransactionBody } from "../src/messages/v2.1/withdrawals/hedera-vm"
 import { HEDERA_HBAR_TOKEN_ID, HEDERA_MAINNET_USDC_TOKEN_ID } from "../src"
+import { getWithdrawalCodec } from "../src/messages/v2.1/withdrawals"
+
+const codec = getWithdrawalCodec("hedera-vm")
 
 type Withdrawal = DecodedHederaVmWithdrawal["withdrawal"]
 
@@ -92,14 +92,14 @@ describe("hedera-vm withdrawal codec", () => {
   })
 
   test("exposes the withdrawal's currency, amount and recipient", () => {
-    expect(getDecodedWithdrawalCurrency(decoded())).toBe(HEDERA_HBAR_TOKEN_ID)
+    expect(codec.getCurrency(decoded().withdrawal)).toBe(HEDERA_HBAR_TOKEN_ID)
     expect(
-      getDecodedWithdrawalCurrency(
-        decoded({ token: HEDERA_MAINNET_USDC_TOKEN_ID })
+      codec.getCurrency(
+        decoded({ token: HEDERA_MAINNET_USDC_TOKEN_ID }).withdrawal
       )
     ).toBe(HEDERA_MAINNET_USDC_TOKEN_ID)
-    expect(getDecodedWithdrawalAmount(decoded())).toBe("500000000")
-    expect(getDecodedWithdrawalRecipient(decoded())).toBe("0.0.2002")
+    expect(codec.getAmount(decoded().withdrawal)).toBe("500000000")
+    expect(codec.getRecipient(decoded().withdrawal)).toBe("0.0.2002")
   })
 
   test("normalizes a long-zero address to the account id it encodes", () => {
