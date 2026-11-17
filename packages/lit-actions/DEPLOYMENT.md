@@ -68,6 +68,14 @@ Generation compares the new bundles with the latest published package and
 prints every changed config or VM bundle. Review those warnings before
 publishing `@relay-protocol/lit-actions`.
 
+After publishing, download that exact version with `npm pack
+@relay-protocol/lit-actions@<version>` and resolve the CID of the code returned
+by its `getDepositAddressAction` or `getAllocatorAction` helper through Lit's
+`/core/v1/get_lit_action_ipfs_id` endpoint. Compare it with the registered
+action hash (`keccak256` of the CID string) and group permissions. Verify the
+published tarball, not just a local rebuild: `0.0.44` shipped deposit-address
+bundles that differed from the source and dev registration.
+
 ## 5. Update and test every caller
 
 For each service that executes the action:
@@ -81,6 +89,25 @@ For each service that executes the action:
 6. switch traffic only after the signed payload succeeds on the target chain.
 
 The deployment is incomplete until all callers use the new bundle.
+
+## Adding a new action version
+
+Use this when a change must ship without disturbing callers on the current
+version.
+
+1. In the source package, bump `ACTION_VERSION` (`scripts/env.ts`) so new
+   registrations get a distinct name.
+2. In `scripts/generate-actions.ts`, turn the previous version into a frozen
+   entry pinned to the last published package that contained it, and add the
+   new version as a built entry.
+3. Run the source package `setup` for each environment **without**
+   `--prune-old-versions`. Old CIDs stay registered and permitted.
+4. Build and publish `@relay-protocol/lit-actions`; the generation log must show
+   the new version as new and report no code change for frozen versions.
+5. Promote callers one environment at a time by switching their requested
+   version.
+6. Only after no caller executes the old version, rerun `setup` with
+   `--prune-old-versions` and remove the frozen entry from the matrix.
 
 ## Rollback
 

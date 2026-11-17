@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const worldchain: NetworkConfig = {
   chainId: 480n,
@@ -10,8 +11,8 @@ export const worldchain: NetworkConfig = {
   hubChainId: "480",
   isTestnet: false,
   name: "Worldchain",
-  rpc: process.env.RPC_480
-    ? [process.env.RPC_480]
-    : ["https://worldchain-mainnet.g.alchemy.com/public"],
+  ...resolveRpc(process.env.RPC_480, [
+    "https://worldchain-mainnet.g.alchemy.com/public",
+  ]),
   slug: "worldchain",
 }

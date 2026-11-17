@@ -4,6 +4,10 @@ import { PublicKey, SystemProgram } from "@solana/web3.js"
 import { sha256 } from "js-sha256"
 
 import { RelayDepositoryIdl } from "../../common/solana-vm/idls/RelayDepositoryIdl"
+import {
+  decodeSolanaRoutedTransferRequest,
+  encodeSolanaRoutedTransferRequest,
+} from "../../common/solana-vm/routed-transfer"
 import { WithdrawalCodec } from "./codec"
 
 export type DecodedSolanaVmWithdrawal = {
@@ -16,6 +20,8 @@ export type DecodedSolanaVmWithdrawal = {
     nonce: string
     expiration: number
     vaultAddress: string
+    // Set only for routed requests, which carry their own type prefix
+    router?: string
   }
 }
 
@@ -24,6 +30,14 @@ type Withdrawal = DecodedSolanaVmWithdrawal["withdrawal"]
 const coder = new BorshCoder(RelayDepositoryIdl as Idl)
 
 const encodeTransferRequest = (withdrawal: Withdrawal): Buffer =>
+  withdrawal.router !== undefined
+    ? encodeSolanaRoutedTransferRequest({
+        ...withdrawal,
+        router: withdrawal.router,
+      })
+    : encodePlainTransferRequest(withdrawal)
+
+const encodePlainTransferRequest = (withdrawal: Withdrawal): Buffer =>
   coder.types.encode("TransferRequest", {
     domain: Buffer.from(withdrawal.domain.slice(2), "hex"),
     recipient: new PublicKey(withdrawal.recipient),
@@ -43,6 +57,12 @@ export const solanaVmCodec: WithdrawalCodec<Withdrawal> = {
 
   decode: (encodedWithdrawal) => {
     const buffer = Buffer.from(encodedWithdrawal.substring(2), "hex")
+
+    // The plain coder would accept a routed payload and ignore its tail
+    const routed = decodeSolanaRoutedTransferRequest(buffer)
+    if (routed) {
+      return routed
+    }
 
     const request = coder.types.decode("TransferRequest", buffer)
 

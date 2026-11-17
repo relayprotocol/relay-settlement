@@ -1,5 +1,10 @@
 import { VmType } from "../../../utils"
 import { WithdrawalCodec } from "./codec"
+import {
+  AtlasTransferParams,
+  atlasVmCodec,
+  DecodedAtlasVmWithdrawal,
+} from "./atlas-vm"
 import { bitcoinVmCodec, DecodedBitcoinVmWithdrawal } from "./bitcoin-vm"
 import { DecodedEthereumVmWithdrawal, ethereumVmCodec } from "./ethereum-vm"
 import {
@@ -27,6 +32,8 @@ import { DecodedTronVmWithdrawal, tronVmCodec } from "./tron-vm"
 import { DecodedXrpVmWithdrawal, xrpVmCodec } from "./xrp-vm"
 
 export {
+  AtlasTransferParams,
+  DecodedAtlasVmWithdrawal,
   DecodedBitcoinVmWithdrawal,
   DecodedEthereumVmWithdrawal,
   DecodedGatewayVmWithdrawal,
@@ -49,6 +56,7 @@ export { getHederaVmTransactionBody } from "./hedera-vm"
 export { WithdrawalCodec, defineAbiWithdrawalCodec } from "./codec"
 
 export type DecodedWithdrawal =
+  | DecodedAtlasVmWithdrawal
   | DecodedEthereumVmWithdrawal
   | DecodedGatewayVmWithdrawal
   | DecodedSolanaVmWithdrawal
@@ -85,6 +93,7 @@ const codecs: {
     DecodedWithdrawalFor<V>["withdrawal"]
   >
 } = {
+  "atlas-vm": atlasVmCodec,
   "bitcoin-vm": bitcoinVmCodec,
   "ethereum-vm": ethereumVmCodec,
   "gateway-vm": gatewayVmCodec,

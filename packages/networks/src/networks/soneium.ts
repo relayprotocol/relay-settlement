@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const soneium: NetworkConfig = {
   chainId: 1868n,
@@ -10,8 +11,6 @@ export const soneium: NetworkConfig = {
   hubChainId: "1868",
   isTestnet: false,
   name: "Soneium",
-  rpc: process.env.RPC_1868
-    ? [process.env.RPC_1868]
-    : ["https://rpc.soneium.org"],
+  ...resolveRpc(process.env.RPC_1868, ["https://rpc.soneium.org"]),
   slug: "soneium",
 }

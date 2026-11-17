@@ -194,6 +194,7 @@ const executionId = getExecutionMessageId(message)
 
 ## Supported VM Types
 
+- `atlas-vm`
 - `bitcoin-vm`
 - `ethereum-vm`
 - `gateway-vm`
@@ -231,6 +232,46 @@ Withdrawal support for each VM lives in its own module under
 4. Add round-trip and pinned-vector tests in `test/`, ideally referencing the
    corresponding on-chain payload builder's test vectors.
 
+## Removed APIs
+
+- `getOrderAddressSafe` and `OrderAddressSafeParams` (removed in 0.0.145). They
+  computed the legacy, pre-migration order address from the depositor and
+  deposit timestamp. Use `getOrderAddress` for the current derivation; the
+  legacy one is kept for recovery tooling in
+  `packages/multisig-tools/scripts/helpers/legacyOrderAddress.ts`.
+
 ## API Reference
 
 See the [TypeScript definitions](./dist/index.d.ts) for complete API documentation.
+
+### Separately funded withdrawal fees
+
+The executor's existing request tuple and signing helpers remain unchanged.
+`outAmountMinimum` applies to the full withdrawal principal. Withdrawal fees
+are collected from a separate oracle-authorized payer, without reducing swap
+output or increasing the pool resolver's output reserve. For minimum 100,
+output 120 and withdrawal fee 2, a pool settlement credits 20 to the pool,
+withdraws 100, and debits 2 from the designated payer.
+
+For new allocator deployments, import `WithdrawFeePayment`,
+`WithdrawFeePaymentAuthorization`, and `getWithdrawFeePaymentAuthorizationHash` from the
+SDK root or `messages/v2.4/withdrawal`. The oracle signs the fee digest, which
+binds the withdrawal fields except the runtime amount, plus the payer, fee
+currency, ceiling and expiration. The allocator consumes it once. The SDK sets
+amount to zero only for this fee digest; `getWithdrawRequestHash` still includes
+the real amount. Use a unique withdrawal nonce for each intent.
+
+Use `WithdrawRequestAuthorization { withdrawRequest, authorization: { expiration, signature } }`
+for signed allocator submissions. Both wrappers use the shared
+`Authorization { expiration: bigint, signature: Hex }` container. These types
+are exported from the SDK root and their v2.4 modules. Regenerate spender and
+fee signatures using the `WithdrawRequestAuthorization` and
+`WithdrawFeePaymentAuthorization` EIP-712 type names.
+For fees, pass `{ withdrawFeePayment, authorization: { expiration, signature } }` to the allocator's fee-aware submission overload,
+or as the sixth argument to `RelayExecutor.execute`. The allocator's expiring
+spender signature is independent of fee authorization; use
+`getWithdrawRequestAuthorizationHash` to authorize the exact withdrawal principal. Pass fee expiration separately to
+`getWithdrawFeePaymentAuthorizationHash(chainId, allocator, request, withdrawFeePayment, expiration)`;
+expiration is signed by the oracle and is not a payment field.
+Legacy `v2.3` signing helpers remain available for their corresponding deployed
+contracts. No fee-budget quote methods are needed for separately funded fees.

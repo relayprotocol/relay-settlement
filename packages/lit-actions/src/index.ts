@@ -6,6 +6,10 @@ export type {
   AllocatorActionEnvironment,
   AllocatorActionVersion,
   AllocatorActionConfig,
+  AllocatorActionConfigV1,
+  AllocatorActionConfigV2,
+  LighterGatewayConfig,
+  AtlasDomainConfig,
   AllocatorAction,
   DepositAddressActionEnvironment,
   DepositAddressActionVersion,
@@ -15,6 +19,8 @@ export type {
 
 import type {
   AllocatorAction,
+  AllocatorActionConfigV1,
+  AllocatorActionConfigV2,
   AllocatorActionEnvironment,
   AllocatorActionVersion,
   DepositAddressAction,
@@ -22,6 +28,21 @@ import type {
   DepositAddressActionVersion,
 } from "./types"
 
+export function getAllocatorAction(
+  environment: AllocatorActionEnvironment,
+  version: "v1",
+  vmType: VmType
+): AllocatorAction<AllocatorActionConfigV1>
+export function getAllocatorAction(
+  environment: AllocatorActionEnvironment,
+  version: "v2" | "v3",
+  vmType: VmType
+): AllocatorAction<AllocatorActionConfigV2>
+export function getAllocatorAction(
+  environment: AllocatorActionEnvironment,
+  version: AllocatorActionVersion,
+  vmType: VmType
+): AllocatorAction
 export function getAllocatorAction(
   environment: AllocatorActionEnvironment,
   version: AllocatorActionVersion,

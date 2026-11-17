@@ -1,0 +1,19 @@
+{
+  "chainId": 537713,
+  "rpcUrl": "https://rpc.chain.relay.link",
+  "explorerUrl": "https://explorer.chain.relay.link",
+  "factory": "0xa86b6f82A3317b41D9398b37886Be44b597eaEbE",
+  "governor": "0x71d8bE89D9f2339F0FE9cBA39496C6C9cbFF9da6",
+  "name": "xSOL-stag",
+  "symbol": "xSOL-stag",
+  "assetDecimals": 9,
+  "majorIndex": 0,
+  "labels": [
+    "solana",
+    "base"
+  ],
+  "tokens": [
+    "0xf4b0da038fa2cf6527bc9df8fac21287da6b5ded",
+    "0x12e763eaae7e62ac3550e47b6c8a8ddcd1371fd3"
+  ]
+}

@@ -22,6 +22,9 @@ const ACCOUNT = "r9cZA1mLK5R5Am25ArfXFmqgNwjZgnfk59"
 const DESTINATION = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
 const SIGNING_PUB_KEY =
   "0x0388935426e0d08083314842edfbb2d517bd47699f9a4527318a8e10468c97c052"
+// Fixed InvoiceID (sha256("test")) shared with the XrpVmPayloadBuilder vectors
+const INVOICE_ID =
+  "0x9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
 
 const vectors = [
   {
@@ -71,7 +74,93 @@ const vectors = [
     expectedHash:
       "0x9AEA05F716D0042D5987BCBD1F0D11076BE4CEE6B00CE22CD7D5CA525DDF2063",
   },
+  {
+    label: "V4 = V1 with InvoiceID",
+    decoded: {
+      account: ACCOUNT,
+      destination: DESTINATION,
+      amount: "1000000",
+      fee: "12",
+      sequence: 42,
+      lastLedgerSequence: 1000,
+      flags: 2147483648,
+      signingPubKey: SIGNING_PUB_KEY,
+      invoiceId: INVOICE_ID,
+    },
+    expectedHash:
+      "0xC1707ED97EB40E25A303C1D07CF71E35B1AA69CFF2A3140199061E0DE2A27EFB",
+  },
+  {
+    label: "V5 = V2 with InvoiceID",
+    decoded: {
+      account: ACCOUNT,
+      destination: DESTINATION,
+      amount: "1",
+      fee: "10",
+      sequence: 1,
+      lastLedgerSequence: 2,
+      flags: 0,
+      signingPubKey: SIGNING_PUB_KEY,
+      destinationTag: 0,
+      invoiceId: INVOICE_ID,
+    },
+    expectedHash:
+      "0x8838738B7FE9BC013CD4B2A082656A7FFD221362837CB08F39350D800850D39E",
+  },
+  {
+    label: "V6 = V3 with InvoiceID",
+    decoded: {
+      account: ACCOUNT,
+      destination: DESTINATION,
+      amount: "99999999999999999",
+      fee: "1000",
+      sequence: 4294967295,
+      lastLedgerSequence: 4294967295,
+      flags: 2147483648,
+      signingPubKey: SIGNING_PUB_KEY,
+      destinationTag: 305419896,
+      invoiceId: INVOICE_ID,
+    },
+    expectedHash:
+      "0xCCEAF04F1DCB462A5509218093E28EFDCCF2A1E364FA296B192B0EF14A33ED5A",
+  },
 ]
+
+// `abi.encode(XrpPaymentRequest)` of V1 from the builder before and after it
+// gained `invoiceId` (produced with `cast abi-encode`)
+const LEGACY_V1_PAYLOAD =
+  "0x" +
+  "0000000000000000000000000000000000000000000000000000000000000020" +
+  "5e7b112523f68d2f5e879db4eac51c6698a69304000000000000000000000000" +
+  "b5f762798a53d543a014caf8b297cff8f2f937e8000000000000000000000000" +
+  "00000000000000000000000000000000000000000000000000000000000f4240" +
+  "000000000000000000000000000000000000000000000000000000000000000c" +
+  "000000000000000000000000000000000000000000000000000000000000002a" +
+  "00000000000000000000000000000000000000000000000000000000000003e8" +
+  "0000000000000000000000000000000000000000000000000000000080000000" +
+  "0000000000000000000000000000000000000000000000000000000000000000" +
+  "0000000000000000000000000000000000000000000000000000000000000000" +
+  "0000000000000000000000000000000000000000000000000000000000000140" +
+  "0000000000000000000000000000000000000000000000000000000000000021" +
+  "0388935426e0d08083314842edfbb2d517bd47699f9a4527318a8e10468c97c0" +
+  "5200000000000000000000000000000000000000000000000000000000000000"
+const V4_PAYLOAD =
+  "0x" +
+  "0000000000000000000000000000000000000000000000000000000000000020" +
+  "5e7b112523f68d2f5e879db4eac51c6698a69304000000000000000000000000" +
+  "b5f762798a53d543a014caf8b297cff8f2f937e8000000000000000000000000" +
+  "00000000000000000000000000000000000000000000000000000000000f4240" +
+  "000000000000000000000000000000000000000000000000000000000000000c" +
+  "000000000000000000000000000000000000000000000000000000000000002a" +
+  "00000000000000000000000000000000000000000000000000000000000003e8" +
+  "0000000000000000000000000000000000000000000000000000000080000000" +
+  "0000000000000000000000000000000000000000000000000000000000000000" +
+  "0000000000000000000000000000000000000000000000000000000000000000" +
+  "0000000000000000000000000000000000000000000000000000000000000160" +
+  "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08" +
+  "0000000000000000000000000000000000000000000000000000000000000021" +
+  "0388935426e0d08083314842edfbb2d517bd47699f9a4527318a8e10468c97c0" +
+  "5200000000000000000000000000000000000000000000000000000000000000"
 
 describe("xrp-vm encodeWithdrawal / decodeWithdrawal round-trip", () => {
   for (const v of vectors) {
@@ -110,6 +199,34 @@ describe("xrp-vm encodeWithdrawal / decodeWithdrawal round-trip", () => {
   })
 })
 
+describe("xrp-vm payload layouts", () => {
+  it("decodes a pre-InvoiceID payload and keeps its signing hash", () => {
+    const decoded = decodeWithdrawal(LEGACY_V1_PAYLOAD, "xrp-vm")
+    expect(decoded).toEqual({
+      vmType: "xrp-vm",
+      withdrawal: vectors[0].decoded,
+    })
+    expect(getDecodedWithdrawalId(decoded)).toBe(vectors[0].expectedHash)
+    expect(encodeWithdrawal(decoded)).toBe(LEGACY_V1_PAYLOAD)
+  })
+
+  it("decodes a payload carrying an InvoiceID", () => {
+    const decoded = decodeWithdrawal(V4_PAYLOAD, "xrp-vm")
+    expect(decoded).toEqual({
+      vmType: "xrp-vm",
+      withdrawal: vectors[3].decoded,
+    })
+    expect(getDecodedWithdrawalId(decoded)).toBe(vectors[3].expectedHash)
+    expect(encodeWithdrawal(decoded)).toBe(V4_PAYLOAD)
+  })
+
+  it("rejects bytes that match neither layout", () => {
+    expect(() =>
+      decodeWithdrawal(V4_PAYLOAD + "00".repeat(32), "xrp-vm")
+    ).toThrow(/failed to decode xrp-vm/i)
+  })
+})
+
 describe("xrp-vm getDecodedWithdrawalId matches the XRPL signing hash", () => {
   for (const v of vectors) {
     it(`${v.label} signing hash matches reference`, () => {
@@ -133,6 +250,14 @@ describe("xrp-vm getDecodedWithdrawalId matches the XRPL signing hash", () => {
       withdrawal: noTagVariant,
     })
     expect(withoutTag).not.toBe(absent)
+  })
+
+  it("changes with the InvoiceID", () => {
+    const other = getDecodedWithdrawalId({
+      vmType: "xrp-vm",
+      withdrawal: { ...vectors[3].decoded, invoiceId: "0x" + "11".repeat(32) },
+    })
+    expect(other).not.toBe(vectors[3].expectedHash)
   })
 })
 

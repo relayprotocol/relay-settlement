@@ -351,6 +351,25 @@
   },
   {
     "type": "event",
+    "name": "SignCallbackFailed",
+    "inputs": [
+      {
+        "name": "dataHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "curve",
+        "type": "string",
+        "indexed": true,
+        "internalType": "string"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "Signed",
     "inputs": [
       {
@@ -409,17 +428,6 @@
         "name": "account",
         "type": "address",
         "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "SignCallbackFailed",
-    "inputs": [
-      {
-        "name": "payloadId",
-        "type": "bytes32",
-        "internalType": "bytes32"
       }
     ]
   },

@@ -8,6 +8,8 @@ import {
 // Re-exported for backward compatibility: these historically lived in this
 // module and are imported from here both by the package root and directly.
 export {
+  AtlasTransferParams,
+  DecodedAtlasVmWithdrawal,
   DecodedBitcoinVmWithdrawal,
   DecodedEthereumVmWithdrawal,
   DecodedGatewayVmWithdrawal,

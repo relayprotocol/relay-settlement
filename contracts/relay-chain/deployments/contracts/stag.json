@@ -1,0 +1,122 @@
+{
+  "chainId": 537713,
+  "core": {
+    "utils": "0xd89cde4ed28d80ee9da4de8668626caad0d4445a",
+    "hub": "0x3c0be5a7f32a7dfb70c156b81eb747d0e5287f30",
+    "oracleIdempotencyStore": "0x203119f280dd43bba65c48aacc81832e3e88e19d",
+    "oracle": "0x770ce7136ef2ce793c00b90c3d2361d96205b237",
+    "oracleMultisig": "0x5579a088994478257b6469b7bc417056d704a2d8",
+    "genericMapping": "0x0f8383a9d8609ff6f5de6714537f9ece16ec7c2e",
+    "allocator": "0xfe200c7f9e5dfb152bbaaf6489d97b76d36a23fa",
+    "executor": "0xcba1cb9d0198dd237619430eae6fe710cb91258d",
+    "config": "0x62cabdd3d0681536bb68f9fac28bcf6fce92d099",
+    "withdrawGasPayer": "0x86082dbbe20b36bf4de862172277cb8576c0b2f0",
+    "protocolSafe": "0x5b0782a8fd7592e231169994b3d4817c3b5fb752",
+    "feeCalculator": {
+      "address": "0xe479d8b65b603c08f4f20fb7e3931984401136c4",
+      "type": "bps"
+    },
+    "rateLimiter": {
+      "address": "0x4b2c64bdbc52c1a8da7b6dc22147a8f6e96161da",
+      "type": "usd"
+    }
+  },
+  "payloadBuilders": {
+    "ethereumVmPayloadBuilder": "0x01d26855534637e18c6dc6a99d255e2c1a6149bd",
+    "solanaVmPayloadBuilder": "0x68796fb39a1b6af097e1bdc6abbcf503e163bd13",
+    "tonVmPayloadBuilder": "0x610ae8a658fb7f2206dbd778ecc490fe118748b8",
+    "tronVmPayloadBuilder": "0x95da63a0ae51e12c5173098e01569de930620011",
+    "bitcoinVmPayloadBuilder": "0x878471d4ec0839cb5a79b75a310c4ee5c8c26dc6",
+    "hyperliquidVmPayloadBuilder": "0xb88f038d0eb9a58f656b9f67b6ee904a87e4bd70",
+    "lighterVmPayloadBuilder": "0x247ebf5d8665287eebcb73f42fd2356ae5ebf6d9",
+    "xrpVmPayloadBuilder": "0x16b3fb84f00ec4c4802c60096fff0d1d1fdc5708",
+    "gatewayVmPayloadBuilder": "0x95bb2652baa8a1177f750d92384527c5814f5254",
+    "gatewayEthereumVmDestinationPayloadBuilder": "0x85027468725d5dd950cd78ec80e6014126039554",
+    "robinhoodLighterVmPayloadBuilder": "0xda7a5F2528942fee86b7ee284ac02905d7996f6e"
+  },
+  "depositAddress": {
+    "depositAddressManager": "0xe3e1722cf7a58eea50989d3e0a5ee05428e988bb"
+  },
+  "pricingOracle": {
+    "storkFastVerifier": "0xbb4105f349072b15e300f3daeb701ef986ae5372",
+    "storkFastAdapter": "0xc4a7724a637aeeabfc86cbdd3951958ffdf33a6a",
+    "priceOracle": "0x35051bb7ef67864ed1da6fe28cf3b7c32a938057",
+    "signedPricingOracle": "0x0616d9794e74a57ecfc0c1be245ce04477d229e0"
+  },
+  "uniswap": {
+    "factory": "0xfd1eae72a014ddb0ae4d947cd5d3a377be35b3d6",
+    "swapRouter": "0xde34a189d606ad28bebbb76713993cbda09f00cb",
+    "quoterV2": "0x015eae2f7d132b6798b20bc04e41d9cc8ade6e85",
+    "positionManager": "0xf16367d60026e7d9aa94a3e3034fab10570421fb"
+  },
+  "utils": {
+    "basicCallResolver": "0x4cece2e5935fe5b0170cae38739f3a44c2d57896",
+    "multicall3": "0xf68f9d4619e36ff430629e6e0db461a6340bcb61",
+    "weth9": "0xf02a2b5defadc5148cea9f8705b86ef1f9a6aea2",
+    "poolDrawResolver": "0x0624c0909729d46feba92d3c91a37434e39ba145"
+  },
+  "safe": {
+    "compatibilityFallbackHandler": "0xe460ebb003149d409adb5d7e8ab0b2462e5223f4",
+    "createCall": "0xfde38d59e893641d7461af236f3acb772b6f4a4d",
+    "extensibleFallbackHandler": "0x31c981c06722120bae457292e59fb501df78a098",
+    "multiSend": "0x7b9659ff9a434069e95b6e189e48303d0c52f8b7",
+    "multiSendCallOnly": "0x516ae5b0abd81834561e369378295c06307d9907",
+    "safeSingleton": "0x9fc623bb94cc259983288fb1e856f46467148044",
+    "safeL2Singleton": "0x333384d02381276ff91fab6fb10e19100991747e",
+    "safeMigration": "0x6d75639d71a083545090e2cc1c0be5acfdea0f9e",
+    "safeProxyFactory": "0x214c457e52ba1166d433f9f7963a6926ca131389",
+    "safeToL2Setup": "0x1df65856515fa2f4f431c636d807930e11aafa3b",
+    "signMessageLib": "0xee7265ff8519d91eeec19ea819b52671f53452ab",
+    "simulateTxAccessor": "0x20e83a32a6339e6b7fd8863d1921d2fe68a728ea",
+    "tokenCallbackHandler": "0x177d58848f1d2f8909d8f12da238973ca58a5cd9"
+  },
+  "multicallRouters": {
+    "abstract": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "apechain": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "arbitrum": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "arc": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "avalanche": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "base": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "berachain": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "bnb": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "bob": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "boba": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "celo": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "cronos": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "elysium": "0xd5b3903e031766fa8a682bd59b06230c4d15327f",
+    "ethereum": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "flow": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "gnosis": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "hyperevm": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "ink": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "katana": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "linea": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "manta": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "mantle": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "megaeth": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "metis": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "mode": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "monad": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "morph": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "mythos": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "optimism": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "plasma": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "plume": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "polygon": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "robinhood": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "ronin": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "scroll": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "shape": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "somnia": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "soneium": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "sonic": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "stable": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "tempo": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "unichain": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "worldchain": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "xlayer": "0xd5b3903e031766fa8a682bd59b06230c4d15327f",
+    "zircuit": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "zksync": "0x403f0552401b671e04a79e7aa9eb6c9568c22911",
+    "zora": "0x403f0552401b671e04a79e7aa9eb6c9568c22911"
+  }
+}

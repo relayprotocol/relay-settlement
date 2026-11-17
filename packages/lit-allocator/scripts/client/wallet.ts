@@ -8,7 +8,7 @@
  *     --env <name> \
  *     --usage-api-key <key> \
  *     --pkp-id <pkp-address> \
- *     --vm-type <gateway-vm | ethereum-vm | tron-vm | solana-vm | ton-vm | bitcoin-vm | hyperliquid-vm | lighter-vm | xrp-vm | hedera-vm> \
+ *     --vm-type <gateway-vm | ethereum-vm | tron-vm | solana-vm | ton-vm | bitcoin-vm | hyperliquid-vm | lighter-vm | xrp-vm | hedera-vm | atlas-vm> \
  *     [--destination-vm-type <ethereum-vm | solana-vm>]
  */
 
@@ -17,7 +17,7 @@ import { CHIPOTLE_API_BASE_URL, executeLitAction } from "./index.js";
 
 const usage =
   "Usage:\n" +
-  "  tsx scripts/client/wallet.ts --env <name> --usage-api-key <key> --pkp-id <address> --vm-type <gateway-vm|ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm|hedera-vm> [--destination-vm-type <ethereum-vm|solana-vm>]";
+  "  tsx scripts/client/wallet.ts --env <name> --usage-api-key <key> --pkp-id <address> --vm-type <gateway-vm|ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm|hedera-vm|atlas-vm> [--destination-vm-type <ethereum-vm|solana-vm>]";
 
 function getOption(args: string[], name: string): string | undefined {
   const idx = args.indexOf(name);
@@ -43,7 +43,7 @@ if (!pkpId) {
 }
 if (!vmTypeArg) {
   missing.push(
-    "--vm-type <gateway-vm|ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm|hedera-vm>",
+    "--vm-type <gateway-vm|ethereum-vm|tron-vm|solana-vm|ton-vm|bitcoin-vm|hyperliquid-vm|lighter-vm|xrp-vm|hedera-vm|atlas-vm>",
   );
 }
 if (missing.length > 0 || !apiKey || !pkpId || !vmTypeArg) {

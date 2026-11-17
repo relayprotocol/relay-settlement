@@ -1,0 +1,26 @@
+{
+  "chainId": 537713,
+  "rpcUrl": "https://rpc.chain.relay.link",
+  "explorerUrl": "https://explorer.chain.relay.link",
+  "governor": "0xF61A305199fa1135d76FFaB3752D42F55cBd775A",
+  "name": "xUSDC",
+  "symbol": "xUSDC",
+  "assetDecimals": 6,
+  "majorIndex": 5,
+  "labels": [
+    "ethereum",
+    "solana",
+    "polygon",
+    "base",
+    "arbitrum",
+    "arc-gateway"
+  ],
+  "tokens": [
+    "0x69e9cc78f640e841f6d3f54cb291d16d77c29348",
+    "0xfb0fadd3b14afc8ee69031a704074d7c141d3af7",
+    "0xb91d800b5c98bd9f8840ad367b4fd8531a575fb2",
+    "0xe8b191c417b3723242e6d41b40fd826c8a6e8dad",
+    "0x75f9715b975cadfa1e93c4557feb95b18a5019c7",
+    "0xec468c697930b1d0fdb056fe4da15957d7f8444a"
+  ]
+}

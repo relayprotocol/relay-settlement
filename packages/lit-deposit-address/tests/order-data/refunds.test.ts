@@ -3,6 +3,77 @@ import type { Order } from "../../src/common/relay-sdk.js";
 import { buildTrigger, order, solver } from "./shared.js";
 
 describe("verifyOrderData", () => {
+  it("rejects a solver-signed dust refund rebound to the same deposit wallet", async () => {
+    const { verifyOrderData } = await import("../../src/attestation/index.js");
+    const { derivationFieldsToIndexes } = await import("../../src/derivation/path.js");
+    const originalTrigger = await buildTrigger();
+    const reboundOrder = structuredClone(order);
+    reboundOrder.inputs[0].refunds[0].minimumAmount = "1";
+    const trigger = await buildTrigger(reboundOrder);
+    const orderSignature = await solver.signMessage({
+      message: { raw: trigger.orderId as `0x${string}` },
+    });
+
+    expect(trigger.orderId).not.toBe(originalTrigger.orderId);
+    expect(derivationFieldsToIndexes(trigger.derivationFields)).toEqual(
+      derivationFieldsToIndexes(originalTrigger.derivationFields),
+    );
+    expect(() => verifyOrderData(trigger, reboundOrder, orderSignature)).toThrow(
+      /order refund\[0\] price impact exceeded/,
+    );
+  });
+
+  it.each([
+    { input: "1000000000000000", minimum: "0", bps: "200", accepted: false },
+    { input: "1000000000000000", minimum: "979999999999999", bps: "200", accepted: false },
+    { input: "1000000000000000", minimum: "980000000000000", bps: "200", accepted: true },
+    { input: "1000000000000000", minimum: "990000000000000", bps: "200", accepted: true },
+    { input: "101", minimum: "98", bps: "200", accepted: false },
+    { input: "101", minimum: "99", bps: "200", accepted: true },
+    { input: "101", minimum: "100", bps: "0", accepted: false },
+    { input: "101", minimum: "101", bps: "0", accepted: true },
+    { input: "101", minimum: "0", bps: "10000", accepted: true },
+  ])(
+    "enforces refund minimum $minimum for input $input at $bps bps (accepted=$accepted)",
+    async ({ input, minimum, bps, accepted }) => {
+      const { verifyOrderData } = await import("../../src/attestation/index.js");
+      const refundOrder = structuredClone(order);
+      refundOrder.inputs[0].payment.amount = input;
+      refundOrder.inputs[0].refunds[0].minimumAmount = minimum;
+      refundOrder.output.payments[0].minimumAmount = input;
+      const trigger = await buildTrigger(refundOrder);
+      trigger.input.amount = input;
+      trigger.derivationFields.priceImpactBps = bps;
+      const orderSignature = await solver.signMessage({
+        message: { raw: trigger.orderId as `0x${string}` },
+      });
+
+      const verify = () => verifyOrderData(trigger, refundOrder, orderSignature);
+      if (accepted) {
+        expect(verify).not.toThrow();
+      } else {
+        expect(verify).toThrow(/order refund\[0\] price impact exceeded/);
+      }
+    },
+  );
+
+  it("rejects an insufficient later refund even when the first refund covers the full input", async () => {
+    const { verifyOrderData } = await import("../../src/attestation/index.js");
+    const refundOrder = structuredClone(order);
+    refundOrder.inputs[0].refunds.push({
+      ...refundOrder.inputs[0].refunds[0],
+      minimumAmount: "1",
+    });
+    const trigger = await buildTrigger(refundOrder);
+    const orderSignature = await solver.signMessage({
+      message: { raw: trigger.orderId as `0x${string}` },
+    });
+
+    expect(() => verifyOrderData(trigger, refundOrder, orderSignature)).toThrow(
+      /order refund\[1\] price impact exceeded/,
+    );
+  });
+
   it("rejects an order whose input has zero refunds", async () => {
     const { verifyOrderData } = await import("../../src/attestation/index.js");
     const trigger = await buildTrigger();

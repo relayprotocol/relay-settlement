@@ -1,6 +1,6 @@
 {
   "name": "prod",
-  "allocatorAddress": "0x613d3c588f6b8f89302b463f8f19f7241b2857e2",
+  "allocatorAddress": "0xa68dcb6ca9a7bc8cac147688f1cbfe68524b38c8",
   "hubEvmChainId": 537713,
   "allowedOracles": [
     "0x2c598f73a5ab65c0510fd8efb740826d291cab0e",
@@ -10,12 +10,26 @@
     "0xeae66bc5500976e6a681d3dd0112baba0ef95149"
   ],
   "oracleSignatureThreshold": 2,
-  "lighterAllowedApiKeys": [
+  "lighterGateways": [
     {
-      "apiKeyIndex": 4,
-      "publicKey": "0xcf72c8cbd17afc724b33e2402173296f1c4a46bea48bfcc7a5da85c667a599d2ebef7c6e3714cbfc"
+      "chainId": 1,
+      "gateway": "0x3b4d794a66304f130a4db8f2551b0070dfcf5ca7",
+      "allowedApiKeys": [
+        {
+          "apiKeyIndex": 4,
+          "publicKey": "0xcf72c8cbd17afc724b33e2402173296f1c4a46bea48bfcc7a5da85c667a599d2ebef7c6e3714cbfc"
+        }
+      ]
+    },
+    {
+      "chainId": 4663,
+      "gateway": "0x94bab9693ba2f6358507effcbd372b0660afff9d",
+      "allowedApiKeys": [
+        {
+          "apiKeyIndex": 4,
+          "publicKey": "0x9c10706f9fe25fc5e7565f3101bc3197ace208dda64ccbe360376b202ebbfccb06c20e474ca922c5"
+        }
+      ]
     }
-  ],
-  "lighterGateway": "0x3b4d794a66304f130a4db8f2551b0070dfcf5ca7",
-  "lighterGatewayChainId": 1
+  ]
 }

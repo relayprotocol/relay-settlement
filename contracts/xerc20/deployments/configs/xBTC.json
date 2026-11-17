@@ -1,0 +1,27 @@
+{
+  "chainId": 537713,
+  "rpcUrl": "https://rpc.chain.relay.link",
+  "explorerUrl": "https://explorer.chain.relay.link",
+  "factory": "0x636F9Ef485CF081B8fB8875E3Dd88ce0743c9125",
+  "governor": "0xF61A305199fa1135d76FFaB3752D42F55cBd775A",
+  "name": "xBTC",
+  "symbol": "xBTC",
+  "assetDecimals": 8,
+  "majorIndex": 0,
+  "labels": [
+    "bitcoin",
+    "base"
+  ],
+  "tokens": [
+    "0x813b388e7ef54cd896cde6722560bb3bf1aad5e1",
+    "0xdb4a5233a9d88e3ecefcad962442eabafa75ab33"
+  ],
+  "mintLimits": [
+    0,
+    1500000000
+  ],
+  "burnLimits": [
+    0,
+    1500000000
+  ]
+}

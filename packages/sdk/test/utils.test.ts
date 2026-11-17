@@ -3,6 +3,7 @@ import { hexToBytes } from "viem"
 import {
   decodeAddress,
   encodeAddress,
+  encodeBytes,
   encodeAddressToHex,
 } from "../src/utils"
 
@@ -72,12 +73,12 @@ describe("address length validation (SEC-165)", () => {
   })
 
   test("accepts hyperliquid-vm identifiers between 1 and 20 bytes", () => {
-    expect(encodeAddress("0x" + "11".repeat(20), "hyperliquid-vm")).toHaveLength(
-      20
-    )
-    expect(encodeAddress("0x" + "00".repeat(16), "hyperliquid-vm")).toHaveLength(
-      16
-    )
+    expect(
+      encodeAddress("0x" + "11".repeat(20), "hyperliquid-vm")
+    ).toHaveLength(20)
+    expect(
+      encodeAddress("0x" + "00".repeat(16), "hyperliquid-vm")
+    ).toHaveLength(16)
   })
 
   test("rejects an oversized hyperliquid-vm identifier", () => {
@@ -90,5 +91,69 @@ describe("address length validation (SEC-165)", () => {
     expect(() => encodeAddress("0x", "hyperliquid-vm")).toThrow(
       /hyperliquid-vm address byte length 0/
     )
+  })
+})
+
+describe("hex prefix validation", () => {
+  test("encodeBytes rejects un-prefixed hex instead of truncating", () => {
+    expect(() => encodeBytes("deadbeef")).toThrow(/0x-prefixed/)
+  })
+
+  test("encodeBytes rejects odd-length and non-hex input", () => {
+    expect(() => encodeBytes("0xabc")).toThrow(/0x-prefixed/)
+    expect(() => encodeBytes("0xzz")).toThrow(/0x-prefixed/)
+  })
+
+  test("encodeBytes accepts prefixed and empty hex", () => {
+    expect(encodeBytes("0xdeadbeef")).toEqual(hexToBytes("0xdeadbeef"))
+    expect(encodeBytes("0x")).toHaveLength(0)
+  })
+
+  test("encodeAddress rejects un-prefixed ethereum-vm and hyperliquid-vm addresses", () => {
+    const bare = "11".repeat(20)
+    expect(() => encodeAddress(bare, "ethereum-vm")).toThrow(/0x-prefixed/)
+    expect(() => encodeAddress(bare, "hyperliquid-vm")).toThrow(/0x-prefixed/)
+  })
+})
+
+describe("address encoding strictness", () => {
+  test("rejects a bitcoin base58 address with a bad checksum", () => {
+    expect(() =>
+      encodeAddress("1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN3", "bitcoin-vm")
+    ).toThrow()
+  })
+
+  test("rejects a bitcoin base58 address with a non-mainnet version", () => {
+    expect(() =>
+      encodeAddress("mipcBbFg9gMiCh81Kj8tqqdgoZub1ZJRfn", "bitcoin-vm")
+    ).toThrow()
+  })
+
+  test("round-trips mainnet P2PKH and P2SH addresses", () => {
+    for (const address of [
+      "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
+      "3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy",
+    ]) {
+      expect(
+        decodeAddress(encodeAddress(address, "bitcoin-vm"), "bitcoin-vm")
+      ).toBe(address)
+    }
+  })
+
+  test.each([
+    [`0:${"11".repeat(32)}a`, "trailing hex"],
+    [`0:${"11".repeat(31)}`, "short hex"],
+    [`0x0:${"11".repeat(32)}`, "hex-prefixed workchain"],
+    [` 0:${"11".repeat(32)}`, "leading whitespace"],
+  ])("rejects malformed raw TON address %s (%s)", (address) => {
+    expect(() => encodeAddress(address, "ton-vm")).toThrow(
+      /Invalid TON address/
+    )
+  })
+
+  test("accepts a well-formed raw TON address", () => {
+    expect(
+      decodeAddress(encodeAddress(`0:${"11".repeat(32)}`, "ton-vm"), "ton-vm")
+    ).toBe(`0:${"11".repeat(32)}`)
   })
 })

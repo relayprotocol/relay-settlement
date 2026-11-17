@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const apechain: NetworkConfig = {
   chainId: 33139n,
@@ -10,8 +11,8 @@ export const apechain: NetworkConfig = {
   hubChainId: "33139",
   isTestnet: false,
   name: "Apechain",
-  rpc: process.env.RPC_33139
-    ? [process.env.RPC_33139]
-    : ["https://apechain.calderachain.xyz/http"],
+  ...resolveRpc(process.env.RPC_33139, [
+    "https://apechain.calderachain.xyz/http",
+  ]),
   slug: "apechain",
 }

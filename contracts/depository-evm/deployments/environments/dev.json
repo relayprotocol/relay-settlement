@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "environment": "dev",
+  "factory": "0x4e59b44847b379578588920ca78fbf26c0b4956c",
+  "salt": "0x0000000000000000000000000000000000000000000000000000000000000001",
+  "constructor": {
+    "owner": "0xf3d63166f0ca56c3c1a3508fce03ff0cf3fb691e",
+    "allocator": "0x3ddb9b2297027681357e1e35680867d5dc27b63d"
+  },
+  "variants": {
+    "cancun": {
+      "address": "0x5cb1de3603a71ac2f67b12bfbf095013fe4ac299",
+      "artifact": "releases/dev-cancun.json"
+    }
+  }
+}

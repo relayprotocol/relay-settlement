@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const bitcoin: NetworkConfig = {
   chainId:
@@ -13,8 +14,6 @@ export const bitcoin: NetworkConfig = {
     "56960375584792109628315999883526364004747792730920852649053369508622489636429",
   isTestnet: false,
   name: "Bitcoin",
-  rpc: process.env.RPC_BITCOIN
-    ? [process.env.RPC_BITCOIN]
-    : ["https://blockstream.info/api"],
+  ...resolveRpc(process.env.RPC_BITCOIN, ["https://blockstream.info/api"]),
   slug: "bitcoin",
 }

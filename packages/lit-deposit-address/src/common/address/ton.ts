@@ -44,6 +44,10 @@ export function decodeTonAddress(encoded: Uint8Array): string {
 /** Decode a base64 "friendly" TON address, validating its CRC16 checksum. */
 function decodeFriendly(address: string): Uint8Array {
   const normalized = address.replace(/-/g, "+").replace(/_/g, "/");
+  // Canonical 48-char base64 only, so every base64 backend decodes it identically.
+  if (!/^[A-Za-z0-9+/]{48}$/.test(normalized)) {
+    throw new Error(`invalid TON address: ${address}`);
+  }
   let bytes: Uint8Array;
   try {
     bytes = base64ToBytes(normalized);
@@ -58,7 +62,12 @@ function decodeFriendly(address: string): Uint8Array {
   if (crc16(payload) !== checksum) {
     throw new Error(`invalid TON address checksum: ${address}`);
   }
-  // payload[0] is the tag (bounceable/test flags); payload[1] is the workchain.
+  // payload[0] is the tag: bounceable (0x11) or non-bounceable (0x51), optionally
+  // with the test-only flag (0x80). Matches the oracle's TON address library.
+  if ((payload[0] & 0x7f) !== 0x11 && (payload[0] & 0x7f) !== 0x51) {
+    throw new Error(`invalid TON address tag: ${address}`);
+  }
+  // payload[1] is the workchain.
   const workchain = payload[1] === 0xff ? -1 : payload[1];
   if (workchain !== 0) {
     throw new Error(

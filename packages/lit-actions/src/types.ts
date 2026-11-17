@@ -1,12 +1,16 @@
 export type AllocatorActionEnvironment = "dev" | "stag" | "prod" | "test"
-export type AllocatorActionVersion = "v1"
+export type AllocatorActionVersion = "v1" | "v2" | "v3"
 
-export interface AllocatorActionConfig {
+interface AllocatorActionConfigBase {
   name: AllocatorActionEnvironment
   allocatorAddress: string
   hubEvmChainId: number
   allowedOracles: string[]
   oracleSignatureThreshold: number
+}
+
+/** `v1` configuration: a single Lighter gateway. */
+export interface AllocatorActionConfigV1 extends AllocatorActionConfigBase {
   lighterGateway?: string
   lighterGatewayChainId?: number
   lighterAllowedApiKeys?: Array<{
@@ -15,13 +19,46 @@ export interface AllocatorActionConfig {
   }>
 }
 
-export interface AllocatorAction {
+/** One Lighter deployment, keyed by the EIP-155 chain id of its L1. */
+export interface LighterGatewayConfig {
+  chainId: number
+  gateway: string
+  allowedApiKeys: Array<{
+    apiKeyIndex: number
+    publicKey: string
+  }>
+}
+
+/** Deployment-specific fields of the Atlas EIP-712 signing domain. */
+export interface AtlasDomainConfig {
+  chainId: number
+  /** Set on versions built before the Oct 29 Atlas release, which signed without a salt. */
+  verifyingContract?: string
+  salt?: string
+}
+
+/** `v2` and `v3` configuration: one or more Lighter gateways and an optional Atlas domain. */
+export interface AllocatorActionConfigV2 extends AllocatorActionConfigBase {
+  lighterGateways?: LighterGatewayConfig[]
+  atlasDomain?: AtlasDomainConfig
+}
+
+/**
+ * Configuration shared by every packaged allocator version. Every Lighter
+ * field is optional so existing consumers keep compiling; use the `V1`/`V2`
+ * types (or the version-specific `getAllocatorAction` overloads) for precision.
+ */
+export interface AllocatorActionConfig
+  extends AllocatorActionConfigV1,
+    AllocatorActionConfigV2 {}
+
+export interface AllocatorAction<Config = AllocatorActionConfig> {
   code: string
-  config: AllocatorActionConfig
+  config: Config
 }
 
 export type DepositAddressActionEnvironment = "dev" | "stag" | "prod"
-export type DepositAddressActionVersion = "v1"
+export type DepositAddressActionVersion = "v1" | "v1.1" | "v1.2"
 
 export interface DepositAddressActionConfig {
   name: DepositAddressActionEnvironment

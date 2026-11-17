@@ -1,15 +1,18 @@
 /** Lighter-specific build-time configuration. Imported only by the Lighter action. */
-declare const __LIGHTER_ALLOWED_API_KEYS__: string;
-declare const __LIGHTER_GATEWAY__: string;
-declare const __LIGHTER_GATEWAY_CHAIN_ID__: string;
+declare const __LIGHTER_GATEWAYS__: string;
 
-/** Lighter API keys this action may register via ChangePubKey. */
-export const LIGHTER_ALLOWED_API_KEYS = JSON.parse(__LIGHTER_ALLOWED_API_KEYS__) as Array<{
-  apiKeyIndex: number;
-  publicKey: string;
-}>;
+/** One Lighter deployment this action may register API keys on. */
+export interface LighterGateway {
+  /** EIP-155 chain id of the L1 hosting the gateway; selects the entry and signs the transaction. */
+  chainId: number;
+  /** ZkLighter gateway contract address on that L1. */
+  gateway: string;
+  /** API keys this action may register on this gateway via ChangePubKey. */
+  allowedApiKeys: Array<{
+    apiKeyIndex: number;
+    publicKey: string;
+  }>;
+}
 
-/** Lighter gateway contract address on the gateway chain. */
-export const LIGHTER_GATEWAY = __LIGHTER_GATEWAY__;
-/** EIP-155 gateway chain id used for Lighter ChangePubKey transactions. */
-export const LIGHTER_GATEWAY_CHAIN_ID = Number.parseInt(__LIGHTER_GATEWAY_CHAIN_ID__, 10);
+/** Lighter gateways compiled into this environment, keyed by L1 chain id. */
+export const LIGHTER_GATEWAYS = JSON.parse(__LIGHTER_GATEWAYS__) as LighterGateway[];

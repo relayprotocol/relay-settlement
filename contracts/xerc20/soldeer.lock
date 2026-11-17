@@ -1,0 +1,29 @@
+[[dependencies]]
+name = "@openzeppelin-contracts"
+version = "4.9.3"
+git = "https://github.com/OpenZeppelin/openzeppelin-contracts"
+rev = "fd81a96f01cc42ef1c9a5399364968d0e07e9e90"
+
+[[dependencies]]
+name = "ds-test"
+version = "9310e87"
+git = "https://github.com/dapphub/ds-test"
+rev = "9310e879db8ba3ea6d5c6489a579118fd264a3f5"
+
+[[dependencies]]
+name = "forge-std"
+version = "1.7.3"
+git = "https://github.com/foundry-rs/forge-std"
+rev = "2f112697506eab12d433a65fdc31a639548fe365"
+
+[[dependencies]]
+name = "isolmate"
+version = "73ce8b9"
+git = "https://github.com/defi-wonderland/isolmate"
+rev = "73ce8b9adaf951e3ec702493bd4da010d74eaa74"
+
+[[dependencies]]
+name = "prb-test"
+version = "0.1.1"
+git = "https://github.com/PaulRBerg/prb-test"
+rev = "ce5d128391feb6f64dff05d8d4431c799646b2c5"

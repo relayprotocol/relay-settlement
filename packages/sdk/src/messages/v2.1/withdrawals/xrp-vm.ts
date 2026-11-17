@@ -7,7 +7,12 @@ import {
   encodeAddress,
   getVmTypeNativeCurrency,
 } from "../../../utils"
-import { defineAbiWithdrawalCodec, WithdrawalCodec } from "./codec"
+import {
+  AbiValues,
+  decodeUnderSchema,
+  defineAbiWithdrawalCodec,
+  WithdrawalCodec,
+} from "./codec"
 
 export type DecodedXrpVmWithdrawal = {
   vmType: "xrp-vm"
@@ -24,6 +29,9 @@ export type DecodedXrpVmWithdrawal = {
     flags: number /// XRPL transaction flags
     signingPubKey: string /// 33-byte signing public key, 0x-prefixed hex
     destinationTag?: number /// optional XRPL destination tag
+    /// 32-byte XRPL InvoiceID binding the Payment to its Relay request,
+    /// 0x-prefixed hex. Absent on payloads built before the builder set it.
+    invoiceId?: string
     /// Issued-currency code (3-char ISO or 160-bit hex). Omit for native XRP.
     /// Reserved for forward compatibility: the payload builder is native-only
     /// in v1, so the codec rejects issued currencies until it gains the
@@ -62,6 +70,12 @@ const assertNativeXrp = (withdrawal: Withdrawal): void => {
 // carried as an explicit presence flag so a `DestinationTag` of 0 is
 // distinguishable from "no destination tag" (the two serialize differently).
 const xrpPaymentRequestAbiParams = parseAbiParameters([
+  "(bytes20 account, bytes20 destination, uint64 amount, uint64 fee, uint32 sequence, uint32 lastLedgerSequence, uint32 flags, uint32 destinationTag, bool hasDestinationTag, bytes signingPubKey, bytes32 invoiceId)",
+])
+
+// The layout without `invoiceId`, still stored for payloads built before the
+// builder bound the request
+const legacyXrpPaymentRequestAbiParams = parseAbiParameters([
   "(bytes20 account, bytes20 destination, uint64 amount, uint64 fee, uint32 sequence, uint32 lastLedgerSequence, uint32 flags, uint32 destinationTag, bool hasDestinationTag, bytes signingPubKey)",
 ])
 
@@ -88,51 +102,80 @@ const getXrpVmWithdrawalSigningHash = (withdrawal: Withdrawal): string => {
   if (withdrawal.destinationTag !== undefined) {
     tx.DestinationTag = withdrawal.destinationTag
   }
+  if (withdrawal.invoiceId !== undefined) {
+    tx.InvoiceID = withdrawal.invoiceId.replace(/^0x/, "").toUpperCase()
+  }
 
   const signingData = encodeForSigning(tx)
   const digest = sha512(hexToBytes(`0x${signingData}`)).slice(0, 32)
   return bytesToHex(digest).toUpperCase().replace(/^0X/, "0x")
 }
 
-export const xrpVmCodec: WithdrawalCodec<Withdrawal> = {
-  ...defineAbiWithdrawalCodec({
-    params: xrpPaymentRequestAbiParams,
-    toAbi: (withdrawal: Withdrawal) => {
-      assertNativeXrp(withdrawal)
-      return [
-        {
-          account: bytesToHex(encodeAddress(withdrawal.account, "xrp-vm")),
-          destination: bytesToHex(
-            encodeAddress(withdrawal.destination, "xrp-vm")
-          ),
-          amount: BigInt(withdrawal.amount),
-          fee: BigInt(withdrawal.fee),
-          sequence: withdrawal.sequence,
-          lastLedgerSequence: withdrawal.lastLedgerSequence,
-          flags: withdrawal.flags,
-          destinationTag: withdrawal.destinationTag ?? 0,
-          hasDestinationTag: withdrawal.destinationTag !== undefined,
-          signingPubKey: withdrawal.signingPubKey as Hex,
-        },
-      ]
-    },
-    fromAbi: ([result]): Withdrawal => ({
-      account: decodeAddress(hexToBytes(result.account as Hex), "xrp-vm"),
-      destination: decodeAddress(
-        hexToBytes(result.destination as Hex),
-        "xrp-vm"
-      ),
-      amount: result.amount.toString(),
-      fee: result.fee.toString(),
-      sequence: Number(result.sequence),
-      lastLedgerSequence: Number(result.lastLedgerSequence),
-      flags: Number(result.flags),
-      signingPubKey: result.signingPubKey as Hex,
-      ...(result.hasDestinationTag
-        ? { destinationTag: Number(result.destinationTag) }
-        : {}),
-    }),
+const paymentToAbi = (withdrawal: Withdrawal) => {
+  assertNativeXrp(withdrawal)
+  return {
+    account: bytesToHex(encodeAddress(withdrawal.account, "xrp-vm")),
+    destination: bytesToHex(encodeAddress(withdrawal.destination, "xrp-vm")),
+    amount: BigInt(withdrawal.amount),
+    fee: BigInt(withdrawal.fee),
+    sequence: withdrawal.sequence,
+    lastLedgerSequence: withdrawal.lastLedgerSequence,
+    flags: withdrawal.flags,
+    destinationTag: withdrawal.destinationTag ?? 0,
+    hasDestinationTag: withdrawal.destinationTag !== undefined,
+    signingPubKey: withdrawal.signingPubKey as Hex,
+  }
+}
+
+const paymentFromAbi = (
+  result: AbiValues<typeof legacyXrpPaymentRequestAbiParams>[0]
+): Withdrawal => ({
+  account: decodeAddress(hexToBytes(result.account as Hex), "xrp-vm"),
+  destination: decodeAddress(hexToBytes(result.destination as Hex), "xrp-vm"),
+  amount: result.amount.toString(),
+  fee: result.fee.toString(),
+  sequence: Number(result.sequence),
+  lastLedgerSequence: Number(result.lastLedgerSequence),
+  flags: Number(result.flags),
+  signingPubKey: result.signingPubKey as Hex,
+  ...(result.hasDestinationTag
+    ? { destinationTag: Number(result.destinationTag) }
+    : {}),
+})
+
+const abiCodec = defineAbiWithdrawalCodec({
+  params: xrpPaymentRequestAbiParams,
+  toAbi: (withdrawal: Withdrawal) => [
+    { ...paymentToAbi(withdrawal), invoiceId: withdrawal.invoiceId as Hex },
+  ],
+  fromAbi: ([result]): Withdrawal => ({
+    ...paymentFromAbi(result),
+    invoiceId: result.invoiceId,
   }),
+})
+
+const legacyAbiCodec = defineAbiWithdrawalCodec({
+  params: legacyXrpPaymentRequestAbiParams,
+  toAbi: (withdrawal: Withdrawal) => [paymentToAbi(withdrawal)],
+  fromAbi: ([result]) => paymentFromAbi(result),
+})
+
+export const xrpVmCodec: WithdrawalCodec<Withdrawal> = {
+  encode: (withdrawal) =>
+    withdrawal.invoiceId === undefined
+      ? legacyAbiCodec.encode(withdrawal)
+      : abiCodec.encode(withdrawal),
+
+  // A legacy payload hashes without InvoiceID, so its id is preserved
+  decode: (encodedWithdrawal) => {
+    const withdrawal =
+      decodeUnderSchema(abiCodec, encodedWithdrawal) ??
+      decodeUnderSchema(legacyAbiCodec, encodedWithdrawal)
+    if (!withdrawal) {
+      throw new Error("Failed to decode xrp-vm Payment")
+    }
+    return withdrawal
+  },
 
   getId: getXrpVmWithdrawalSigningHash,
 

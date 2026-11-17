@@ -243,6 +243,170 @@
   },
   {
     "type": "function",
+    "name": "execute",
+    "inputs": [
+      {
+        "name": "request",
+        "type": "tuple",
+        "internalType": "struct ExecuteAndWithdrawRequest",
+        "components": [
+          {
+            "name": "inChainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "inCurrency",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "outChainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "outCurrency",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "outAmountMinimum",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "depository",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "orderAddress",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "receiver",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "data",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "fees",
+            "type": "tuple[]",
+            "internalType": "struct Fee[]",
+            "components": [
+              {
+                "name": "recipient",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "amount",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "nonce",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "deadline",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "callResolver",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "callResolverData",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "oracle",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "signature",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "withdrawFeePaymentAuthorization",
+        "type": "tuple",
+        "internalType": "struct WithdrawFeePaymentAuthorization",
+        "components": [
+          {
+            "name": "withdrawFeePayment",
+            "type": "tuple",
+            "internalType": "struct WithdrawFeePayment",
+            "components": [
+              {
+                "name": "payerChainId",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "payer",
+                "type": "bytes",
+                "internalType": "bytes"
+              },
+              {
+                "name": "currency",
+                "type": "bytes",
+                "internalType": "bytes"
+              },
+              {
+                "name": "maxAmount",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "authorization",
+            "type": "tuple",
+            "internalType": "struct Authorization",
+            "components": [
+              {
+                "name": "expiration",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "signature",
+                "type": "bytes",
+                "internalType": "bytes"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "withdrawRequestHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "feesChargedByOrderAddress",
     "inputs": [
       {
@@ -558,6 +722,37 @@
   },
   {
     "type": "event",
+    "name": "OrderFeeCharged",
+    "inputs": [
+      {
+        "name": "orderAddress",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "recipient",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "RoleAdminChanged",
     "inputs": [
       {
@@ -696,6 +891,27 @@
   },
   {
     "type": "error",
+    "name": "InsufficientFeeBalance",
+    "inputs": [
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "balance",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "fee",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InsufficientMinimumAmount",
     "inputs": [
       {
@@ -766,6 +982,27 @@
         "name": "str",
         "type": "string",
         "internalType": "string"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "TokenBalanceDecreased",
+    "inputs": [
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "before_",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "after_",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ]
   },

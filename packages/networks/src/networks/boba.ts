@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const boba: NetworkConfig = {
   chainId: 288n,
@@ -10,8 +11,6 @@ export const boba: NetworkConfig = {
   hubChainId: "288",
   isTestnet: false,
   name: "Boba",
-  rpc: process.env.RPC_288
-    ? [process.env.RPC_288]
-    : ["https://mainnet.boba.network"],
+  ...resolveRpc(process.env.RPC_288, ["https://mainnet.boba.network"]),
   slug: "boba",
 }

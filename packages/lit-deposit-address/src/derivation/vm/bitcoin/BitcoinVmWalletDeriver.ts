@@ -30,11 +30,12 @@ export class BitcoinVmWalletDeriver extends Secp256k1VmWalletDeriver<
     trigger: DepositAddressTrigger,
     attestation: DepositAddressTriggerAttestation,
     transactions: readonly BitcoinVmTransaction[],
+    wallet?: WalletInfo,
   ): void {
     if (transactions.length !== 1) {
       throw new Error(`bitcoin deposit requires exactly 1 transaction, got ${transactions.length}`);
     }
-    assertBitcoinDepositTransaction(trigger, attestation, transactions[0]);
+    assertBitcoinDepositTransaction(trigger, attestation, transactions[0], wallet);
   }
 
   protected walletFromNode(indexes: readonly number[], childNode: SLIP10Node): WalletInfo {

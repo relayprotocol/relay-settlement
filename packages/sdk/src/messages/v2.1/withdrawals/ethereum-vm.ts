@@ -10,7 +10,11 @@ import {
 } from "viem"
 
 import { getVmTypeNativeCurrency } from "../../../utils"
-import { defineAbiWithdrawalCodec, WithdrawalCodec } from "./codec"
+import {
+  decodeUnderSchema,
+  defineAbiWithdrawalCodec,
+  WithdrawalCodec,
+} from "./codec"
 
 export type DecodedEthereumVmWithdrawal = {
   vmType: "ethereum-vm"
@@ -272,23 +276,6 @@ const legacyAbiCodec = defineAbiWithdrawalCodec({
     expiration: Number(result.expiration.toString()),
   }),
 })
-
-// Neither shape can be told from the other by decoding alone, so a candidate only
-// counts if it re-encodes to its own input
-const decodeUnderSchema = <W>(
-  codec: { encode: (w: W) => string; decode: (encoded: string) => W },
-  encodedWithdrawal: string
-): W | undefined => {
-  try {
-    const withdrawal = codec.decode(encodedWithdrawal)
-    return codec.encode(withdrawal).toLowerCase() ===
-      encodedWithdrawal.toLowerCase()
-      ? withdrawal
-      : undefined
-  } catch {
-    return undefined
-  }
-}
 
 export const ethereumVmCodec: WithdrawalCodec<CommittedCallRequestWithdrawal> =
   {

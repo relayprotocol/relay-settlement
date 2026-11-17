@@ -1,0 +1,19 @@
+# Anchor
+.anchor
+
+# Build
+target
+
+# Dependencies
+node_modules
+
+# Misc
+.DS_Store
+**/*.rs.bk
+test-ledger
+
+# Program keypairs
+keys
+
+# Scripts
+.yarn

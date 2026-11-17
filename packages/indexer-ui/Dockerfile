@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:24.22.3-alpine AS builder
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ ENV YARN_NETWORK_CONCURRENCY=8
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn ./.yarn
 COPY packages ./packages
-COPY smart-contracts ./smart-contracts
+COPY contracts ./contracts
 
 RUN node .yarn/releases/yarn-4.9.1.cjs install --immutable
 RUN node .yarn/releases/yarn-4.9.1.cjs workspace @relay-settlement/indexer-ui build
@@ -19,7 +19,6 @@ FROM nginx:1.27-alpine AS runner
 
 COPY --chown=root:root --chmod=755 packages/indexer-ui/entrypoint.sh /entrypoint.sh
 COPY packages/indexer-ui/nginx.conf /etc/nginx/templates/default.conf.template
-COPY packages/indexer-ui/config.template.js /usr/share/nginx/html/config.template.js
 COPY --from=builder /app/packages/indexer-ui/dist /usr/share/nginx/html
 
 EXPOSE 3000

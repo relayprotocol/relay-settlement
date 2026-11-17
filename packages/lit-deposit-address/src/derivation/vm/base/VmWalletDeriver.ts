@@ -74,28 +74,33 @@ export abstract class VmWalletDeriver<Tx = unknown, SignedTx = unknown> {
    *
    * Called by the action before signing so a malicious caller can't trick
    * the TEE into signing an arbitrary transaction with the deposit wallet.
+   * `wallet` is the deposit wallet about to sign.
    */
   verifyTransactions(
     _trigger: DepositAddressTrigger,
     _attestation: DepositAddressTriggerAttestation,
     _transactions: readonly Tx[],
+    _wallet?: WalletInfo,
   ): void {
     // no-op by default
   }
 
   /**
    * Sign one or more VM-native transactions with the child wallet at `indexes`.
-   * The wallet's private key is derived once and reused for every transaction.
+   * The wallet's private key is derived once and reused for every transaction;
+   * `authorize` sees the derived wallet and can throw before anything is signed.
    */
   async signTransactions(
     rootKeyHex: string,
     indexes: readonly number[],
     transactions: readonly Tx[],
+    authorize: (wallet: WalletInfo) => void | Promise<void>,
   ): Promise<{ wallet: WalletInfo; signedTransactions: SignedTx[] }> {
     if (transactions.length === 0) {
       throw new Error("at least one transaction is required");
     }
     const { wallet, privateKey } = await this.deriveChildKey(rootKeyHex, indexes);
+    await authorize(wallet);
     const signedTransactions = await Promise.all(
       transactions.map((tx) => this.signTransactionWithKey(privateKey, tx)),
     );

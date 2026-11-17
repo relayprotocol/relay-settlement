@@ -7,6 +7,7 @@ import type { Database } from "../db/connection.js"
 import {
   buildSuggestedReplayRanges,
   getIndexerAuditHealth,
+  getLatestIndexerAuditReport,
   mergeSuggestedReplayRanges,
   runTransferCoverageAudit,
 } from "./indexerAudit.js"
@@ -21,6 +22,8 @@ if (!transferEvent) {
 class FakeAuditDb {
   findings: unknown[][] = []
   runId = 0
+  updates: unknown[][] = []
+  queries: string[] = []
   private options: {
     eventRows?: unknown[]
     latestRuns?: unknown[]
@@ -46,7 +49,8 @@ class FakeAuditDb {
   }
 
   manyOrNone = async (query: string, params?: unknown[]) => {
-    if (query.includes("FROM events") && query.includes("BETWEEN")) {
+    this.queries.push(query)
+    if (query.includes("FROM events") && query.includes("unnest")) {
       return this.options.eventRows ?? []
     }
     if (query.includes("FROM tokens")) {
@@ -62,6 +66,8 @@ class FakeAuditDb {
   }
 
   none = async (query: string, params?: unknown[]) => {
+    if (query.includes("UPDATE indexer_audit_runs"))
+      this.updates.push(params ?? [])
     if (query.includes("INSERT INTO indexer_audit_findings")) {
       this.findings.push(params ?? [])
     }
@@ -148,10 +154,11 @@ test("runTransferCoverageAudit records a missing hub transfer log", async () => 
     to: "0x0000000000000000000000000000000000000001",
     tokenId,
   })
-  const db = new FakeAuditDb({
+  const fakeDb = new FakeAuditDb({
     eventRows: [],
     tokenRows: [{ name: "Test token", token_id: tokenId.toString() }],
-  }) as unknown as Database
+  })
+  const db = fakeDb as unknown as Database
   const provider = {
     getBlockNumber: async () => 120,
     getLogs: async () => [log],
@@ -168,8 +175,8 @@ test("runTransferCoverageAudit records a missing hub transfer log", async () => 
 
   assert.equal(result.checkedCount, 1)
   assert.equal(result.confirmedCount, 1)
-  assert.equal(result.findings[0].blockNumber, 95)
-  assert.equal(result.findings[0].classification, "confirmed")
+  assert.equal(fakeDb.findings[0][5], 95)
+  assert.equal(fakeDb.findings[0][2], "confirmed")
 })
 
 test("getIndexerAuditHealth fails after consecutive confirmed findings", async () => {
@@ -244,4 +251,170 @@ test("getIndexerAuditHealth does not fail without confirmed findings", async () 
 
   assert.equal(health.ok, true)
   assert.equal(health.kinds[0].ok, true)
+})
+
+const auditOptions = {
+  auditBlock: 100,
+  latestChainBlock: 112,
+  lookbackBlocks: 100,
+  maxReplayRange: 1000,
+  replayPaddingBlocks: 5,
+}
+const auditHub = {
+  target: "0x0000000000000000000000000000000000000002",
+} as unknown as Contract
+const auditLog = (index: number, tokenId = 1n) =>
+  makeTransferLog(100, index, {
+    amount: 10n,
+    from: ZeroAddress,
+    operator: ZeroAddress,
+    to: "0x0000000000000000000000000000000000000001",
+    tokenId,
+  })
+
+test("coverage preserves excluded/malformed semantics for both indexed and missing events", async () => {
+  const excludedId =
+    645919125454048919867832098713637349341491234231283657783660937934976435626n
+  const logs = [
+    auditLog(0),
+    auditLog(1),
+    auditLog(2, excludedId),
+    auditLog(3, excludedId),
+    { ...auditLog(4), data: "0x" },
+    { ...auditLog(5), data: "0x" },
+  ]
+  const db = new FakeAuditDb({
+    eventRows: [logs[0], logs[2], logs[4]].map((log) => ({
+      log_index: log.index,
+      tx_hash: log.transactionHash,
+    })),
+  })
+  const provider = { getLogs: async () => logs } as unknown as Provider
+  const result = await runTransferCoverageAudit(
+    db as unknown as Database,
+    provider,
+    auditHub,
+    auditOptions
+  )
+  assert.equal(result.checkedCount, 2)
+  assert.equal(result.confirmedCount, 1)
+  assert.equal(db.findings.length, 1)
+  assert.equal(db.findings[0][7], 1)
+})
+
+test("large covered audits yield and look up only bounded pages of identities", async () => {
+  const size = 244130
+  const base = auditLog(0)
+  let maxLookup = 0
+  let lookups = 0
+  const db = new FakeAuditDb({})
+  db.manyOrNone = async (query, params) => {
+    if (!query.includes("FROM events")) return []
+    const hashes = params?.[0] as string[]
+    const indices = params?.[1] as number[]
+    maxLookup = Math.max(maxLookup, hashes.length)
+    lookups++
+    return hashes.map((tx_hash, index) => ({
+      log_index: indices[index],
+      tx_hash,
+    }))
+  }
+  const provider = {
+    getLogs: async () => {
+      throw Object.assign(new Error("Response size exceeds limit"), {
+        code: -32005,
+      })
+    },
+    send: async (_method: string, [filter]: [{ cursor?: string }]) => {
+      const start = Number(filter.cursor ?? 0)
+      const end = Math.min(start + 1000, size)
+      return {
+        cursor: end < size ? String(end) : null,
+        logs: Array.from({ length: end - start }, (_, i) => ({
+          ...base,
+          index: start + i,
+        })),
+      }
+    },
+  } as unknown as Provider
+  let ticks = 0
+  let handle: NodeJS.Immediate
+  const beat = () => {
+    ticks++
+    handle = setImmediate(beat)
+  }
+  handle = setImmediate(beat)
+  try {
+    const result = await runTransferCoverageAudit(
+      db as unknown as Database,
+      provider,
+      auditHub,
+      { ...auditOptions, lookbackBlocks: 1 }
+    )
+    assert.equal(result.checkedCount, size)
+    assert.equal(result.confirmedCount, 0)
+    assert.ok(maxLookup <= 1000)
+    assert.equal(lookups, Math.ceil(size / 1000))
+    assert.ok(ticks >= Math.floor(size / 100), `only ${ticks} scheduler turns`)
+  } finally {
+    clearImmediate(handle)
+  }
+})
+
+test("missing findings persist before the next cursor fetch and incomplete audits fail", async () => {
+  const db = new FakeAuditDb({})
+  let calls = 0
+  const provider = {
+    getLogs: async () => {
+      throw Object.assign(new Error("Response size exceeds limit"), {
+        code: -32005,
+      })
+    },
+    send: async () => {
+      if (++calls === 2) {
+        assert.equal(db.findings.length, 3)
+        throw new Error("cursor unavailable")
+      }
+      return { cursor: "next", logs: [auditLog(0), auditLog(1), auditLog(2)] }
+    },
+  } as unknown as Provider
+  await assert.rejects(
+    runTransferCoverageAudit(db as unknown as Database, provider, auditHub, {
+      ...auditOptions,
+      lookbackBlocks: 1,
+    }),
+    /cursor unavailable/
+  )
+  assert.equal(db.updates[db.updates.length - 1]?.[0], "failed")
+})
+
+test("partial findings from failed audits are excluded from the report", async () => {
+  const now = new Date().toISOString()
+  const db = new FakeAuditDb({
+    latestRuns: [
+      {
+        audit_block: null,
+        checked_count: 0,
+        completed_at: now,
+        confirmed_count: 0,
+        error: "RPC failed",
+        id: 1,
+        kind: "transfer-coverage",
+        latest_chain_block: null,
+        started_at: now,
+        status: "failed",
+      },
+    ],
+  })
+  const report = await getLatestIndexerAuditReport(db as unknown as Database, {
+    consecutiveFailures: 2,
+    failureThreshold: 1,
+    maxAgeMs: 60000,
+    maxReplayRange: 1000,
+  })
+  assert.equal(report.ok, false)
+  assert.deepEqual(report.findings, [])
+  assert.ok(
+    !db.queries.some((query) => query.includes("FROM indexer_audit_findings"))
+  )
 })

@@ -1,0 +1,23 @@
+[package]
+name = "relay-gateway-depository"
+version = "0.1.0"
+description = "Relay Circle Gateway depository program"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "relay_gateway_depository"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+
+[dependencies]
+anchor-lang = "1.2.1"
+anchor-spl = "1.2.1"
+solana-instructions-sysvar = "3"
+solana-sha256-hasher = "3"

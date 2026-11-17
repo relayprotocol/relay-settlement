@@ -1,0 +1,44 @@
+{
+  "rootKeyHex": "0x1111111111111111111111111111111111111111111111111111111111111111",
+  "derivationFields": {
+    "depositAddressId": "deposit-address-xrp-test-1",
+    "inputVmType": "xrp-vm",
+    "outputVmType": "ethereum-vm",
+    "outputChainId": "8453",
+    "outputCurrency": "0x0000000000000000000000000000000000000000",
+    "outputRecipient": "0x000000000000000000000000000000000000dead",
+    "solver": "0x0000000000000000000000000000000000000001",
+    "pricingOracle": "0x0000000000000000000000000000000000000002",
+    "depositor": "0xb5f762798a53d543a014caf8b297cff8f2f937e8",
+    "refundRecipient": "0xf40b468d5ac0dba36e2941877ac2e9bbd48262a1",
+    "priceImpactBps": "50"
+  },
+  "protocolDerivationFields": {
+    "inputVmType": "xrp-vm",
+    "outputVmType": "ethereum-vm",
+    "outputChainId": "8453",
+    "outputCurrency": "0x0000000000000000000000000000000000000000",
+    "outputRecipient": "0x000000000000000000000000000000000000dead",
+    "solver": "0x0000000000000000000000000000000000000001",
+    "pricingOracle": "0x0000000000000000000000000000000000000002",
+    "depositor": "0xb5f762798a53d543a014caf8b297cff8f2f937e8",
+    "refundRecipient": "0xf40b468d5ac0dba36e2941877ac2e9bbd48262a1",
+    "priceImpactBps": "50",
+    "salt": "53552401258262602942404939395176260450060029122422742159561011766917581917658"
+  },
+  "account": {
+    "vmType": "xrp-vm",
+    "accountPath": "m/44'/144'/0'/0",
+    "publicKey": "0x0263842088f9cb4fdcc0251c8e522c6721f5e5b00b76bed3dd9ce3658a8c458fdb",
+    "extendedPublicKey": "xpub6E4krZ1sdVjYzBm2XMXuP7xzEpWyuVyY2w4YDAtUESdrV1kwRj2VU4qgsFr3PA9mMRhsrCK8LUVrb61kADWv8B7JcTkGtfUbbVsTKKCrLej"
+  },
+  "wallet": {
+    "vmType": "xrp-vm",
+    "indexes": [
+      874957613, 500458788, 892511761, 728232669, 64274631, 1358825959, 975354366, 1474136121
+    ],
+    "path": "m/44'/144'/0'/0/874957613/500458788/892511761/728232669/64274631/1358825959/975354366/1474136121",
+    "address": "r9U92oHPmAdTTbXf8pFLAJUJsERqiDRxMQ",
+    "publicKey": "0x03b2cda593562e3d483d167f5b3c7ec643b9280f38cdccc7fc258e6481baf1a339"
+  }
+}

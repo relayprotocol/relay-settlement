@@ -1,0 +1,23 @@
+# Anchor
+.anchor
+
+# Build
+target
+
+# Dependencies
+node_modules
+
+# Misc
+.DS_Store
+**/*.rs.bk
+test-ledger
+
+# Program keypairs
+keys
+
+# Downloaded with `yarn fetch:fixtures`
+tests/fixtures/circle-gateway/*.so
+tests/fixtures/circle-gateway/*.json
+
+# Scripts
+.yarn

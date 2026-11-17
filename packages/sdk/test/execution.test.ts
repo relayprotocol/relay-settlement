@@ -134,7 +134,7 @@ describe("execution", () => {
     expect(decoded.data.rateLimiterData).toBe(action.data.rateLimiterData)
   })
 
-  // The encoded layout must match exactly what RelayOracleV2._executeFastMint decodes —
+  // The encoded layout must match exactly what RelayInbox._executeFastMint decodes —
   // abi.decode(action, (uint8, address, uint256, uint256, address, bytes, address, bytes)).
   it("FAST_MINT layout matches the contract decode tuple", () => {
     const action = actions[3]

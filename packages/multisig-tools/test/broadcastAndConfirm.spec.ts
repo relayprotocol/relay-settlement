@@ -33,11 +33,22 @@ const makeClient = (overrides: Record<string, unknown> = {}) =>
   }) as never
 
 describe("broadcastAndConfirm", () => {
+  it("rejects a stale current base fee even if recent blocks were cheap", async () => {
+    const client = makeClient({
+      getBlock: vi.fn().mockResolvedValue({ baseFeePerGas: MAX_FEE + 1n }),
+    })
+    await expect(broadcastAndConfirm(client, SIGNED_TX, "rpc")).rejects.toThrow(
+      "new Safe approval and MPC signature"
+    )
+    expect((client as any).sendRawTransaction).not.toHaveBeenCalled()
+  })
   beforeEach(() => {
+    vi.stubEnv("FORCE_BROADCAST", "")
     // the helper logs every retry; keep the test output readable
     vi.spyOn(console, "log").mockImplementation(() => undefined)
   })
   afterEach(() => {
+    vi.unstubAllEnvs()
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
@@ -109,19 +120,36 @@ describe("broadcastAndConfirm", () => {
     expect((client as any).sendRawTransaction).toHaveBeenCalledTimes(2)
   })
 
-  it("broadcasts an underpriced tx when FORCE_BROADCAST=1", async () => {
-    process.env.FORCE_BROADCAST = "1"
-    try {
+  it.each([MAX_FEE - 1n, MAX_FEE + 1n])(
+    "broadcasts with FORCE_BROADCAST=1 when the latest fee exceeds the cap and the recent floor is %s",
+    async (floor) => {
+      vi.stubEnv("FORCE_BROADCAST", "1")
       const client = makeClient({
+        getBlock: vi.fn().mockResolvedValue({ baseFeePerGas: MAX_FEE + 1n }),
         getFeeHistory: vi
           .fn()
-          .mockResolvedValue({ baseFeePerGas: [MAX_FEE + 10n, MAX_FEE + 1n] }),
+          .mockResolvedValue({ baseFeePerGas: [MAX_FEE + 10n, floor] }),
       })
       await broadcastAndConfirm(client, SIGNED_TX, "rpc")
       expect((client as any).sendRawTransaction).toHaveBeenCalledTimes(1)
-    } finally {
-      delete process.env.FORCE_BROADCAST
     }
+  )
+
+  it("waits for an already-known underpriced tx with FORCE_BROADCAST=1", async () => {
+    vi.stubEnv("FORCE_BROADCAST", "1")
+    const client = makeClient({
+      getBlock: vi.fn().mockResolvedValue({ baseFeePerGas: MAX_FEE + 1n }),
+      getFeeHistory: vi
+        .fn()
+        .mockResolvedValue({ baseFeePerGas: [MAX_FEE + 10n, MAX_FEE + 1n] }),
+      sendRawTransaction: vi.fn().mockRejectedValue(new Error("already known")),
+    })
+    await broadcastAndConfirm(client, SIGNED_TX, "rpc")
+    expect((client as any).waitForTransactionReceipt).toHaveBeenCalledWith({
+      hash: HASH,
+      timeout: expect.any(Number),
+    })
+    expect((client as any).sendRawTransaction).toHaveBeenCalledTimes(1)
   })
 
   it("treats 'already known' as pending instead of re-sending", async () => {

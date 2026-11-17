@@ -1,0 +1,121 @@
+{
+  "chainId": 537724,
+  "core": {
+    "utils": "0xdc2a0dc71daacf9746a06555e27d945678eb961f",
+    "hub": "0xa884543c91156098b2e50ae17c3840770b7b55f5",
+    "oracleIdempotencyStore": "0x481456de34abffe5e72ceea597aab19d852e6413",
+    "oracle": "0x5c091ac7e7513bb1f92ae2ebdc3d2e99917c3605",
+    "oracleMultisig": "0x192e7ce6ea995c0678fa016265f1c2929907800b",
+    "genericMapping": "0x833acfb0e41c1e1433efe57fafb09521e8889923",
+    "allocator": "0xca657865a6976d9bc39392f9af71ea09476fbbb1",
+    "executor": "0xf66336f95556e476e30788c4253df4dafc39ebad",
+    "config": "0x16d5c93cc672dc387bf9a3a0e77ebc6ae6b5af27",
+    "withdrawGasPayer": "0xcb3807c1d9605b2de68566ff89986fda5d549edb",
+    "protocolSafe": "0x6ab48d13b3c7b08a250a28b275d5683103eb9df1",
+    "feeCalculator": {
+      "address": "0x5bf0cf712ea7d0751bc1156447972623607af942",
+      "type": "bps"
+    },
+    "rateLimiter": {
+      "address": "0x49bc86fc092c1d66823a915eaf473cdf4324bfb2",
+      "type": "usd"
+    }
+  },
+  "payloadBuilders": {
+    "ethereumVmPayloadBuilder": "0xe5705677c88046d4b4fca44c10e2c6bb6515ff70",
+    "solanaVmPayloadBuilder": "0xf2af0084f0b5efdcd313488d74bcd169e239e0b2",
+    "tonVmPayloadBuilder": "0xbf1a537f83f9549309965ab251112ef9aca0b7e6",
+    "tronVmPayloadBuilder": "0x547b2064549dd3b420ff9d566db364ac57c8f36d",
+    "bitcoinVmPayloadBuilder": "0x414f8ad31cb907472fafcfcbeb40e672f034ed64",
+    "hyperliquidVmPayloadBuilder": "0x2637ec7be001bfe8fe4b1360d2747e069c141031",
+    "lighterVmPayloadBuilder": "0xd4b7a6bbafd7f9b39639b9f2c40af3c2ee8e5b86",
+    "xrpVmPayloadBuilder": "0xdd00a9313d8c6f2834101ffda55ee6f5af7eb2db",
+    "hederaVmPayloadBuilder": "0xc10f4a063cb2bf79e9978cf68add28a6dcba9ec1",
+    "gatewayVmPayloadBuilder": "0x346999a9739bee1627c43eaa8ba54a3ee3c6469d",
+    "gatewayEthereumVmDestinationPayloadBuilder": "0x5badb7edea2e7f3264afd76daf4aa7494a721108",
+    "robinhoodLighterVmPayloadBuilder": "0xa68dcB6ca9A7bC8cAC147688F1Cbfe68524b38C8",
+    "atlasVmPayloadBuilder": "0x3ef0dbced4665a46a8e2325fd3e3bcce4762d86d"
+  },
+  "multicallRouters": {
+    "ethereum": "0x321948bd4f25d96c9981357b39e974edf9c09464",
+    "optimism": "0x321948bd4f25d96c9981357b39e974edf9c09464",
+    "polygon": "0x321948bd4f25d96c9981357b39e974edf9c09464",
+    "abstract": "0x321948bd4f25d96c9981357b39e974edf9c09464",
+    "base": "0x321948bd4f25d96c9981357b39e974edf9c09464",
+    "arbitrum": "0x321948bd4f25d96c9981357b39e974edf9c09464",
+    "ink": "0x4ca468bbfbc11b692efc62ae7a0ebf47e539a4ab",
+    "linea": "0x4ca468bbfbc11b692efc62ae7a0ebf47e539a4ab",
+    "megaeth": "0x4ca468bbfbc11b692efc62ae7a0ebf47e539a4ab",
+    "tempo": "0x4ca468bbfbc11b692efc62ae7a0ebf47e539a4ab"
+  },
+  "routerRollout": {
+    "gatewayDestinations": [
+      {
+        "chain": "ethereum",
+        "depository": "0x06622432e1cf0a943c1bde11fa6464ee695870d7",
+        "router": "0x321948bd4f25d96c9981357b39e974edf9c09464"
+      },
+      {
+        "chain": "optimism",
+        "depository": "0x06622432e1cf0a943c1bde11fa6464ee695870d7",
+        "router": "0x321948bd4f25d96c9981357b39e974edf9c09464"
+      },
+      {
+        "chain": "polygon",
+        "depository": "0x06622432e1cf0a943c1bde11fa6464ee695870d7",
+        "router": "0x321948bd4f25d96c9981357b39e974edf9c09464"
+      },
+      {
+        "chain": "base",
+        "depository": "0x06622432e1cf0a943c1bde11fa6464ee695870d7",
+        "router": "0x321948bd4f25d96c9981357b39e974edf9c09464"
+      },
+      {
+        "chain": "arbitrum",
+        "depository": "0x06622432e1cf0a943c1bde11fa6464ee695870d7",
+        "router": "0x321948bd4f25d96c9981357b39e974edf9c09464"
+      }
+    ]
+  },
+  "solanaRouters": {
+    "solana": "9QybjuydfDYwJkdDLMJJaHEcQPaYeRoiJ5cYj7qLd5Su"
+  },
+  "depositAddress": {
+    "depositAddressManager": "0xf4d50837c674ce6ec05527a5233651e2c842cefa"
+  },
+  "pricingOracle": {
+    "storkFastVerifier": "0x93a8aefcdc5f5734f9eb254c910dd479bcca4b30",
+    "storkFastAdapter": "0x769b1c624319ec53ec1d96a2b80b96619e7e112e",
+    "priceOracle": "0x71e55887b7c2aa0f02c110247b68281f456dc546",
+    "signedPricingOracle": "0x18535c64f75a5a4d2284e2bf51dc76ded308d314"
+  },
+  "uniswap": {
+    "factory": "0x96346ad3f3ebb64c1530d001223b4c192e9b4dbe",
+    "swapRouter": "0x81d4fd3a0f4ff154512bab304c98e597060b60d7",
+    "positionManager": "0x193265b6a8624d15d278f1fa19fdc9cd87704136",
+    "quoterV2": "0xb4bad05aba100d1cc7ccbf5ba9bd4ba277008f9e"
+  },
+  "utils": {
+    "basicCallResolver": "0xc0f489a34672d5b960a19279d99d77e94221d0c9",
+    "fundingPoolFactory": "0xd0155a06742eadd0dd1bb28e960c1d739c1bc0d9",
+    "fundingPool": "0x9d541ad6da83303eb603aa1bfb8c540edf9acf0b",
+    "poolDrawResolver": "0x0e73b7a1f6c19b75601b8bf8a2018553d177caac",
+    "multicall3": "0x5365b15ea11403d8eb92fa7df8506882585037e5",
+    "weth9": "0x45046c91ea0c5c70f0b485209edab8e04dabc0bf"
+  },
+  "safe": {
+    "compatibilityFallbackHandler": "0x9ff6b39c118b8844da625b660223761e8b30da49",
+    "createCall": "0x5943b1e2169c85e5008123db089ce2d19dc5ad2d",
+    "extensibleFallbackHandler": "0x05cc0afe868ab514f05e7256ca3dd3916f4258aa",
+    "multiSend": "0x35f955abe86fa8590bd985218443556f086fc24f",
+    "multiSendCallOnly": "0x04fa861cf654625e73252e11caa5f472348f602e",
+    "safeSingleton": "0x68fddd64357b402232dafee104f13ed9673007fd",
+    "safeL2Singleton": "0x71fc9ca7a95f636b61beb0d021f1ec6977ebdee0",
+    "safeMigration": "0x25298c69724473500d30ee6faaf5df6ee44b4b20",
+    "safeProxyFactory": "0x56ac7ff4b38f77f4896e42db7b834ee12b0a21d2",
+    "safeToL2Setup": "0x1ceed6cf188615767114f14d8128a3cf51a82a60",
+    "signMessageLib": "0x6e89868544b9878d862dcac5fdc72c4a85b94d02",
+    "simulateTxAccessor": "0x341e66b14c75c1a7a2b7049993982ea08d9dab47",
+    "tokenCallbackHandler": "0x504f03cebd0f86e1bccc43b48c47ca96376bf465"
+  }
+}

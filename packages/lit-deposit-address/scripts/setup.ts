@@ -20,6 +20,8 @@
  * creation when so. PKP selection is explicit: pass `--create-pkp` to mint a
  * fresh PKP or `--pkp-id <address>` to reuse an existing one. Exactly one of
  * the two must be supplied.
+ * Existing action versions remain registered and permitted unless
+ * `--prune-old-versions` is explicitly supplied after migration is complete.
  *
  * Usage:
  *   tsx scripts/setup.ts --env <name> --mode api-key       --account-api-key <key> (--create-pkp | --pkp-id <address>) [--dry-run]
@@ -30,12 +32,14 @@
  * a live admin signature.
  */
 
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { keccak_256 } from "@noble/hashes/sha3.js";
 import {
-  VM_TYPES,
+  ACTION_VERSION,
+  vmTypesForEnvironment,
   loadEnvironment,
   parseEnvArg,
   type DepositAddressEnvironmentName,
@@ -67,6 +71,9 @@ function getOption(args: string[], name: string): string | undefined {
 
 /** Read one bundled VM action file from disk, trying a few candidate paths. */
 function loadBundledActionFile(envName: DepositAddressEnvironmentName, vmType: VmType): string {
+  if (envName === "dev") {
+    return readFileSync(resolve(__dirname, "../dist/actions", envName, `${vmType}.js`), "utf-8");
+  }
   const filename = `${vmType}.js`;
   const candidates = [
     resolve(__dirname, "../actions", envName, filename),
@@ -188,26 +195,38 @@ const USAGE =
   "\n" +
   "  --calldata: emit the contract calldata to relay via the account owner (MPC/multisig)\n" +
   "              instead of broadcasting. Requires --pkp-id and an already-provisioned\n" +
-  "              usage key (PKP/usage-key minting need a live admin signature).";
+  "              usage key (PKP/usage-key minting need a live admin signature).\n" +
+  "  --prune-old-versions: remove older managed action versions after registering and\n" +
+  "                        attaching replacements. Only use after legacy wallets are migrated.";
 
-async function main() {
-  const { envName, rest: args } = parseEnvArg(process.argv.slice(2));
+export async function main(argv = process.argv.slice(2)) {
+  const { envName, rest: args } = parseEnvArg(argv);
   if (!envName) {
     console.error(`Missing --env <name>.\n\n${USAGE}`);
     process.exit(1);
   }
 
   const env = loadEnvironment(envName);
+  const vmTypes = vmTypesForEnvironment(env.name);
 
   const groupName = `deposit-address-${env.name}`;
   const usageKeyName = `deposit-address-${env.name}-usage-key`;
   const actionNamePrefix = `deposit-address-${env.name}-action-`;
-  const actionNameForVm = (vmType: VmType) => `${actionNamePrefix}${vmType}`;
+  /** Names this source tree registers: version-suffixed so several releases can coexist. */
+  const actionNameForVm = (vmType: VmType) => `${actionNamePrefix}${vmType}-${ACTION_VERSION}`;
   const actionDescriptionForVm = (vmType: VmType) =>
     `Lit Deposit Address signing action (${vmType})`;
-  const managedActionNames = new Set(VM_TYPES.map(actionNameForVm));
+  /**
+   * Names eligible for `--prune-old-versions`: the current versioned names,
+   * the unversioned names used by v1 registrations, and any other version
+   * suffix of a managed VM. Unrelated actions are never touched.
+   */
+  const managedActionNamePattern = new RegExp(
+    `^${actionNamePrefix}(${vmTypes.join("|")})(-v\\d+(\\.\\d+)?)?$`,
+  );
 
   const dryRun = args.includes("--dry-run");
+  const pruneOldVersions = args.includes("--prune-old-versions");
   const calldataMode = args.includes("--calldata");
   const createPkp = args.includes("--create-pkp");
   const providedPkpId = getOption(args, "--pkp-id")?.trim();
@@ -238,8 +257,11 @@ async function main() {
 
   console.log(`🔥 Lit Deposit Address Setup (idempotent${dryRun ? ", dry run" : ""})`);
   console.log(`   Environment: ${env.name}`);
-  console.log(`   Mode: ${backend.mode}${calldataMode ? " (calldata — no broadcast)" : ""}`);
-  console.log(`   Dry run: ${dryRun ? "yes — no writes will be performed" : "no"}`);
+  console.log(`   Mode: ${backend.mode}${calldataMode ? " (calldata - no broadcast)" : ""}`);
+  console.log(`   Dry run: ${dryRun ? "yes - no writes will be performed" : "no"}`);
+  console.log(
+    `   Prune old versions: ${pruneOldVersions ? "yes" : "no - preserving legacy actions"}`,
+  );
   console.log(`   Deposit address manager: ${env.depositAddressManagerAddress}`);
   console.log(`   Hub chain id: ${env.hubEvmChainId}`);
   console.log(`   API: ${BASE_URL}`);
@@ -257,7 +279,7 @@ async function main() {
       throw new Error(`--pkp-id not found in account wallets: ${providedPkpId}`);
     }
     pkpId = existing.walletAddress;
-    console.log(`   ✓ Exists — using account wallet: ${pkpId}`);
+    console.log(`   ✓ Exists - using account wallet: ${pkpId}`);
   } else if (dryRun) {
     pkpId = "<new-pkp-wallet>";
     console.log("1. Would create a fresh deposit-address PKP wallet");
@@ -274,17 +296,17 @@ async function main() {
   const groups = await backend.listGroups();
   // `group` stays undefined until it exists on-chain. A missing group is
   // created fully populated in step 4 with a single addGroup call, so we never
-  // need to know its id up front — this is what lets calldata mode emit one
+  // need to know its id up front - this is what lets calldata mode emit one
   // self-contained batch (create group + permissions) instead of two.
   let group = groups.find((g) => g.name === groupName);
   const groupExists = group !== undefined;
 
   if (groupExists) {
-    console.log(`   ✓ Exists — using group: "${group!.name}" (id=${group!.id})`);
+    console.log(`   ✓ Exists - using group: "${group!.name}" (id=${group!.id})`);
   } else if (dryRun) {
     console.log(`   Would create group "${groupName}" (fully populated)`);
   } else {
-    console.log(`   Group "${groupName}" is missing — will create it fully populated below`);
+    console.log(`   Group "${groupName}" is missing - will create it fully populated below`);
   }
   const requireGroup = () => {
     if (!group) {
@@ -304,10 +326,54 @@ async function main() {
   const currentPkpSet = new Set(walletsInGroup.map((w) => w.walletAddress.toLowerCase()));
   const pkpInGroup = currentPkpSet.has(pkpId.toLowerCase());
 
+  // ── 4. Register the Lit Actions in the group ───────────────────────────
+  console.log("4. Registering per-VM Lit Actions in group...");
+
+  const existingActions = await backend.listActions();
+  console.log(`   account has ${existingActions.length} action(s) before sync`);
+
+  // Actions already attached to the group (its permitted CID hashes) so we can
+  // skip on-chain writes when everything is already in place.
+  const actionsInGroup = groupExists ? await backend.listActionsInGroup(requireGroup().id) : [];
+  if (actionsInGroup === undefined && pruneOldVersions) {
+    throw new Error("Cannot prune action versions without a complete group permission list");
+  }
+  const attachedHashes = new Set((actionsInGroup ?? []).map((a) => a.actionHash));
+
+  if (env.name === "dev") {
+    // Compute every dev CID from the same fresh build.
+    execFileSync(process.execPath, [
+      fileURLToPath(import.meta.resolve("tsx/cli")),
+      resolve(__dirname, "bundle-actions.ts"), "--env", env.name,
+    ], { cwd: resolve(__dirname, ".."), stdio: "pipe" });
+  }
+
+  // Compute target CIDs/hashes for every VM up front so group permissions can
+  // be synced once against the union of all current CIDs.
+  const targetCids = new Map<VmType, { cid: string; actionHash: bigint }>();
+  for (const vmType of vmTypes) {
+    const code = loadBundledActionFile(env.name, vmType);
+    const cid = await getLitActionIpfsCid(code);
+    const actionHash = hashCidToBigInt(cid);
+    targetCids.set(vmType, { cid, actionHash });
+    console.log(`   ${vmType} target CID: ${cid} (hash=${formatHash(actionHash)})`);
+  }
+  const targetHashes = new Set([...targetCids.values()].map((t) => t.actionHash));
+
+  // Only canonical per-VM names in this environment are eligible for explicit
+  // pruning. Legacy versions may still be needed to sign funded deposit wallets.
+  const stale = existingActions.filter((a) => {
+    return (
+      a.name !== undefined &&
+      managedActionNamePattern.test(a.name) &&
+      !targetHashes.has(a.actionHash)
+    );
+  });
+
   if (!groupExists) {
-    console.log("   Group missing — PKP will be included when the group is created");
+    console.log("   Group missing - PKP will be included when the group is created");
   } else if (pkpInGroup) {
-    console.log("   ✓ Exists — PKP already in group");
+    console.log("   ✓ Exists - PKP already in group");
   } else if (dryRun) {
     console.log(
       `   Would add ${providedPkpId ? `PKP ${pkpId}` : "the newly created PKP"} to group "${groupName}"`,
@@ -320,61 +386,8 @@ async function main() {
   }
   console.log();
 
-  // ── 4. Register the Lit Actions in the group ───────────────────────────
-  console.log("4. Registering per-VM Lit Actions in group...");
-
-  const existingActions = await backend.listActions();
-  console.log(`   account has ${existingActions.length} action(s) before sync`);
-
-  // Actions already attached to the group (its permitted CID hashes) so we can
-  // skip on-chain writes when everything is already in place.
-  const actionsInGroup = groupExists ? await backend.listActionsInGroup(requireGroup().id) : [];
-  const attachedHashes = new Set(actionsInGroup.map((a) => a.actionHash));
-
-  // Compute target CIDs/hashes for every VM up front so group permissions can
-  // be synced once against the union of all current CIDs.
-  const targetCids = new Map<VmType, { cid: string; actionHash: bigint }>();
-  for (const vmType of VM_TYPES) {
-    const code = loadBundledActionFile(env.name, vmType);
-    const cid = await getLitActionIpfsCid(code);
-    const actionHash = hashCidToBigInt(cid);
-    targetCids.set(vmType, { cid, actionHash });
-    console.log(`   ${vmType} target CID: ${cid} (hash=${formatHash(actionHash)})`);
-  }
-  const targetHashes = new Set([...targetCids.values()].map((t) => t.actionHash));
-
-  // Always sweep up stale entries on every setup pass (not only when adding a
-  // new CID), otherwise stale registrations from past bundles accumulate in
-  // the account. Be conservative: only actions whose name exactly matches one
-  // of this environment's canonical per-VM action names are managed here. This
-  // avoids deleting unrelated actions in the same Chipotle account that happen
-  // to share a broader prefix such as `deposit-address-${env.name}`.
-  const stale = existingActions.filter((a) => {
-    return (
-      a.name !== undefined && managedActionNames.has(a.name) && !targetHashes.has(a.actionHash)
-    );
-  });
-
-  if (stale.length === 0) {
-    console.log(
-      `   no stale action registrations to prune (managed names: ${[...managedActionNames].join(", ")})`,
-    );
-  }
-  for (const action of stale) {
-    console.log(
-      `   ${dryRun ? "Would prune" : "pruning"} stale action: name=${action.name ?? "<unnamed>"} hash=${formatHash(action.actionHash)}`,
-    );
-    if (!dryRun) {
-      if (groupExists) {
-        await backend.removeActionFromGroup(requireGroup().id, action.actionHash);
-        attachedHashes.delete(action.actionHash);
-      }
-      await backend.removeAction(action.actionHash);
-    }
-  }
-
   // Register / refresh each per-VM action and attach it to the group.
-  for (const vmType of VM_TYPES) {
+  for (const vmType of vmTypes) {
     const { cid, actionHash } = targetCids.get(vmType)!;
     const matching = existingActions.find((a) => a.actionHash === actionHash);
 
@@ -407,7 +420,9 @@ async function main() {
   const permittedPkpIds = Array.from(
     new Set([...walletsInGroup.map((w) => w.walletAddress), pkpId]),
   );
-  const targetActionHashes = [...targetCids.values()].map((t) => t.actionHash);
+  // Preserve existing permissions, including legacy and unrelated actions.
+  // Explicit pruning happens only after every replacement is registered and attached.
+  const targetActionHashes = [...new Set([...attachedHashes, ...targetHashes])];
 
   if (!groupExists) {
     // Fresh group: create it fully populated in a single call. No id is needed,
@@ -438,14 +453,16 @@ async function main() {
       }
       console.log("   ✓ Group created with permissions");
     }
+  } else if (actionsInGroup === undefined) {
+    console.log("   Group action list unavailable; using only per-action permission additions");
   } else {
     // Existing group: sync only what is out of date. Because the individual
     // addPkpToGroup / addActionToGroup writes above were tracked locally, a
     // fully-synced group emits no updateGroup call.
     const pkpsInSync = permittedPkpIds.every((p) => currentPkpSet.has(p.toLowerCase()));
     const actionsSynced =
-      attachedHashes.size === targetHashes.size &&
-      [...targetHashes].every((h) => attachedHashes.has(h));
+      targetActionHashes.length === attachedHashes.size &&
+      targetActionHashes.every((h) => attachedHashes.has(h));
     const permissionsInSync = pkpsInSync && actionsSynced;
 
     if (permissionsInSync) {
@@ -465,7 +482,33 @@ async function main() {
         pkpIdsPermitted: permittedPkpIds,
         cidHashesPermitted: targetActionHashes,
       });
+      attachedHashes.clear();
+      for (const hash of targetActionHashes) {
+        attachedHashes.add(hash);
+      }
       console.log("   ✓ Group permissions synced");
+    }
+  }
+
+  if (!pruneOldVersions) {
+    console.log(
+      `   Preserving ${stale.length} old action version(s); use --prune-old-versions after migration`,
+    );
+  } else {
+    if (stale.length === 0) {
+      console.log("   no stale action registrations to prune");
+    }
+    for (const action of stale) {
+      console.log(
+        `   ${dryRun ? "Would prune" : "pruning"} stale action: name=${action.name ?? "<unnamed>"} hash=${formatHash(action.actionHash)}`,
+      );
+      if (!dryRun) {
+        if (groupExists && attachedHashes.has(action.actionHash)) {
+          await backend.removeActionFromGroup(requireGroup().id, action.actionHash);
+          attachedHashes.delete(action.actionHash);
+        }
+        await backend.removeAction(action.actionHash);
+      }
     }
   }
   console.log();
@@ -477,7 +520,7 @@ async function main() {
 
   let usageApiKeyValue: string | undefined;
   if (existing) {
-    console.log(`   ✓ Exists — usage key "${usageKeyName}" already exists`);
+    console.log(`   ✓ Exists - usage key "${usageKeyName}" already exists`);
     console.log("   ⚠️  The key value was shown only at creation time. Delete and");
     console.log("      re-run setup to mint a new one if you lost the original.");
   } else if (dryRun) {
@@ -496,7 +539,7 @@ async function main() {
       [requireGroup().id],
     );
     console.log("   ✓ Usage API key created");
-    console.log(`   ⚠️  SAVE THIS NOW — it won't be shown again: ${usageApiKeyValue}`);
+    console.log(`   ⚠️  SAVE THIS NOW - it won't be shown again: ${usageApiKeyValue}`);
   }
   console.log();
 
@@ -510,9 +553,9 @@ async function main() {
   console.log(
     `  ${
       dryRun
-        ? "Dry run complete — no changes were made. Target environment values:"
+        ? "Dry run complete - no changes were made. Target environment values:"
         : calldataMode
-          ? "Calldata emitted above — relay it via the account owner. Environment values:"
+          ? "Calldata emitted above - relay it via the account owner. Environment values:"
           : "Setup complete! Add these to your environment:"
     }`,
   );
@@ -522,7 +565,7 @@ async function main() {
     `  export LIT_API_KEY="${usageApiKeyValue ?? "<your-previously-saved-usage-api-key>"}"`,
   );
   console.log(`  export LIT_PKP_ID="${pkpId}"`);
-  for (const vmType of VM_TYPES) {
+  for (const vmType of vmTypes) {
     const { cid } = targetCids.get(vmType)!;
     const envSuffix = vmType.replace("-", "_").toUpperCase();
     console.log(`  export LIT_DEPOSIT_ADDRESSES_ACTION_CID_${envSuffix}="${cid}"`);
@@ -530,7 +573,9 @@ async function main() {
   console.log();
 }
 
-main().catch((err) => {
-  console.error("Error:", err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main().catch((err) => {
+    console.error("Error:", err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}

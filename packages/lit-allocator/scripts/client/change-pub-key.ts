@@ -8,6 +8,7 @@
  *     --env <name> \
  *     --usage-api-key <key> \
  *     --pkp-id <pkp-address> \
+ *     --gateway-chain-id <chainId> \
  *     --account-index <uint48> \
  *     --api-key-index <uint8> \
  *     --public-key <hex> \
@@ -21,7 +22,7 @@ import { CHIPOTLE_API_BASE_URL, executeLitAction } from "./index.js";
 
 const usage =
   "Usage:\n" +
-  "  tsx scripts/client/change-pub-key.ts --env <name> --usage-api-key <key> --pkp-id <address> --account-index <uint48> --api-key-index <uint8> --public-key <hex> --tx-nonce <nonce> --gas-price <wei> --gas-limit <gas>";
+  "  tsx scripts/client/change-pub-key.ts --env <name> --usage-api-key <key> --pkp-id <address> --gateway-chain-id <chainId> --account-index <uint48> --api-key-index <uint8> --public-key <hex> --tx-nonce <nonce> --gas-price <wei> --gas-limit <gas>";
 
 function getOption(args: string[], name: string): string | undefined {
   const idx = args.indexOf(name);
@@ -36,6 +37,7 @@ if (!envName) {
 
 const apiKey = getOption(args, "--usage-api-key");
 const pkpId = getOption(args, "--pkp-id");
+const gatewayChainId = getOption(args, "--gateway-chain-id");
 const accountIndex = getOption(args, "--account-index");
 const apiKeyIndex = getOption(args, "--api-key-index");
 const publicKey = getOption(args, "--public-key");
@@ -49,6 +51,9 @@ if (!apiKey) {
 }
 if (!pkpId) {
   missing.push("--pkp-id <address>");
+}
+if (!gatewayChainId) {
+  missing.push("--gateway-chain-id <chainId>");
 }
 if (!accountIndex) {
   missing.push("--account-index <uint48>");
@@ -72,6 +77,7 @@ if (
   missing.length > 0 ||
   !apiKey ||
   !pkpId ||
+  !gatewayChainId ||
   !accountIndex ||
   !apiKeyIndex ||
   !publicKey ||
@@ -90,6 +96,7 @@ const result = await executeLitAction(
   {
     action: "changePubKey",
     changePubKey: {
+      gatewayChainId,
       accountIndex,
       apiKeyIndex,
       publicKey,

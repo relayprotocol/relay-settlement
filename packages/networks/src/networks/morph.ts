@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const morph: NetworkConfig = {
   chainId: 2818n,
@@ -10,8 +11,6 @@ export const morph: NetworkConfig = {
   hubChainId: "2818",
   isTestnet: false,
   name: "Morph",
-  rpc: process.env.RPC_2818
-    ? [process.env.RPC_2818]
-    : ["https://rpc.morphl2.io"],
+  ...resolveRpc(process.env.RPC_2818, ["https://rpc.morphl2.io"]),
   slug: "morph",
 }

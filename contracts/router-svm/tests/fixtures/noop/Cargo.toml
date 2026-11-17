@@ -1,0 +1,15 @@
+[package]
+name = "noop"
+version = "0.1.0"
+description = "Test-only program that accepts any instruction"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+solana-program = "=1.18.26"
+
+# Built on its own for the test validator, outside the program workspace
+[workspace]

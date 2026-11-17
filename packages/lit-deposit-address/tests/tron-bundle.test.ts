@@ -1,12 +1,16 @@
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build, type Plugin } from "esbuild";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { DepositAddressTriggerDerivationFields, WalletInfo } from "../src/common/types.js";
+import {
+  VM_TYPES,
+  type DepositAddressTriggerDerivationFields,
+  type WalletInfo,
+} from "../src/common/types.js";
 import {
   encodeSignedTronTransaction,
   type ParsedTronTransaction,
@@ -157,5 +161,26 @@ describe("generated tron-vm Lit Action bundle", () => {
     })) as WalletInfo;
 
     expect(actual).toEqual(expected);
+  });
+});
+
+describe("generated Lit Action dependencies", () => {
+  it.each(VM_TYPES)("isolates XRP CDN imports in %s", async (vmType) => {
+    const code = await readFile(resolve(packageRoot, `dist/actions/dev/${vmType}.js`), "utf8");
+    const rippleImports = code.match(/https:\/\/cdn\.jsdelivr\.net\/npm\/ripple-[^"'\s]+/g) ?? [];
+
+    if (vmType === "xrp-vm") {
+      expect(code).not.toContain("https://cdn.jsdelivr.net/npm/@scure/base@2.0.0/+esm");
+      expect(code).not.toContain("// src/common/address.ts");
+      expect(rippleImports).toEqual(
+        expect.arrayContaining([
+          "https://cdn.jsdelivr.net/npm/ripple-address-codec@5.0.1/+esm",
+          "https://cdn.jsdelivr.net/npm/ripple-binary-codec@2.8.0/dist/index.js/+esm",
+          "https://cdn.jsdelivr.net/npm/ripple-keypairs@2.0.0/dist/index.js/+esm",
+        ]),
+      );
+    } else {
+      expect(rippleImports).toEqual([]);
+    }
   });
 });

@@ -12,6 +12,7 @@ export type RuntimeReadinessSnapshot = RuntimeRoles & {
 export type RuntimeLivenessResponse = {
   ok: true
   roles: RuntimeRoles
+  version?: string
 }
 
 export type RuntimeReadinessResponse = {
@@ -29,10 +30,12 @@ export type RuntimeReadinessResponse = {
 }
 
 export const buildLivenessResponse = (
-  roles: RuntimeRoles
+  roles: RuntimeRoles,
+  options: { version?: string } = {}
 ): RuntimeLivenessResponse => ({
   ok: true,
   roles,
+  ...(options.version ? { version: options.version } : {}),
 })
 
 export const buildReadinessResponse = ({
@@ -68,7 +71,10 @@ export const buildReadinessResponse = ({
 
 export type RuntimeState = ReturnType<typeof createRuntimeState>
 
-export const createRuntimeState = (roles: RuntimeRoles) => {
+export const createRuntimeState = (
+  roles: RuntimeRoles,
+  options: { version?: string } = {}
+) => {
   let apiReady = false
   let backgroundWorkReady = false
   let backgroundWorkError: string | null = null
@@ -77,7 +83,7 @@ export const createRuntimeState = (roles: RuntimeRoles) => {
     doBackgroundWork: roles.doBackgroundWork,
     enableApi: roles.enableApi,
     getLiveness() {
-      return buildLivenessResponse(roles)
+      return buildLivenessResponse(roles, options)
     },
     getReadiness() {
       return buildReadinessResponse({

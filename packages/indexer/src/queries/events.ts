@@ -62,18 +62,32 @@ export const listEvents = async (db: Database, filter: EventsFilter) => {
 }
 
 const TRANSFER_STATS_CACHE_TTL_MS = 10 * 60 * 1000
-const TRANSFER_STATS_TIMEZONE = "UTC"
+const TRANSFER_STATS_MAX_AGE_MS = 30 * 60 * 1000
+const TRANSFER_STATS_RETRY_MS = 30 * 1000
+const MAX_REFRESHES = 2
+const MAX_WAITING_REFRESHES = 8
+const REFRESH_WAIT_MS = 2000
+const MAX_FAILURES = 1000
 
 type TransferStatsGranularity = "day" | "hour" | "minute" | "month" | "week"
-
 type TransferStatsArgs = {
   tokenId?: string
   granularity: string
   points: number
   tzOffsetMinutes: number
 }
+export type TransferStatsResult = {
+  rows: TransferStatRow[]
+  updatedAt: string
+  stale: boolean
+}
+type CachedStats = { rows: TransferStatRow[]; fetchedAt: number; since: number }
+type TransferStatsCacheLogger = Pick<
+  typeof jsonLogger,
+  "debug" | "error" | "info"
+>
 
-type TransferStatsCacheLogger = Pick<typeof jsonLogger, "debug" | "error">
+export class TransferStatsUnavailableError extends Error {}
 
 const granularityConfig: Record<
   TransferStatsGranularity,
@@ -85,57 +99,67 @@ const granularityConfig: Record<
   month: { format: "YYYY-MM", seconds: 2592000 },
   week: { format: "YYYY-MM-DD", seconds: 604800 },
 }
-
 const normalizeGranularity = (granularity: string): TransferStatsGranularity =>
   Object.prototype.hasOwnProperty.call(granularityConfig, granularity)
     ? (granularity as TransferStatsGranularity)
     : "day"
-
 const normalizePoints = (points: number) =>
   Number.isFinite(points) && points > 0 ? Math.min(points, 365) : 30
+const normalizeTzOffsetMinutes = (offset: number) =>
+  Number.isFinite(offset)
+    ? Math.max(-720, Math.min(840, Math.trunc(offset)))
+    : 0
 
-const normalizeTzOffsetMinutes = (tzOffsetMinutes: number) =>
-  Number.isFinite(tzOffsetMinutes) ? Math.trunc(tzOffsetMinutes) : 0
-
-const buildBucketExpr = (
-  granularity: TransferStatsGranularity,
-  format: string
-) => {
-  const shiftedTs = `(to_timestamp(timestamp) AT TIME ZONE '${TRANSFER_STATS_TIMEZONE}' + make_interval(mins => $/tzOffsetMinutes/))`
-  return `to_char(date_trunc('${granularity}', ${shiftedTs}), '${format}')`
-}
-
-const buildTransferStatsCacheKey = (input: {
-  format: string
-  granularity: TransferStatsGranularity
-  points: number
-  since: number
-  tokenId: string | null
-  timezone: string
-  tzOffsetMinutes: number
-}) => {
-  const digest = createHash("sha256")
-    .update(JSON.stringify(input))
-    .digest("hex")
-  return `indexer:transfer-stats:v1:${digest}`
-}
-
-const parseCachedRows = (value: string): TransferStatRow[] => {
-  const rows: unknown = JSON.parse(value)
+const parseCachedStats = (value: string): CachedStats => {
+  const entry = JSON.parse(value) as CachedStats | null
   if (
-    !Array.isArray(rows) ||
-    !rows.every(
+    !entry ||
+    !Number.isFinite(entry.fetchedAt) ||
+    !Number.isFinite(entry.since) ||
+    !Array.isArray(entry.rows) ||
+    !entry.rows.every(
       (row) =>
-        typeof row === "object" &&
-        row !== null &&
-        typeof (row as TransferStatRow).bucket === "string" &&
-        Number.isInteger((row as TransferStatRow).count)
+        row && typeof row.bucket === "string" && Number.isInteger(row.count)
     )
-  ) {
+  )
     throw new Error("Invalid transfer stats cache value")
-  }
+  return entry
+}
 
-  return rows as TransferStatRow[]
+// Both readiness and data are read in one statement snapshot. Until the explicit
+// backfill finishes, use the cheaper raw query. Format only the final buckets.
+export const queryTransferStats = async (
+  db: Database,
+  query: {
+    granularity: TransferStatsGranularity
+    since: number
+    tokenId?: string
+    tzOffsetMinutes: number
+  }
+) => {
+  const { format } = granularityConfig[query.granularity]
+  const tokenFilter = query.tokenId ? "token_id = $/tokenId/ AND " : ""
+  return db.manyOrNone<TransferStatRow>(
+    `WITH ready AS MATERIALIZED (
+       SELECT 1 FROM transfer_stats_backfill WHERE id = 1 AND completed_at IS NOT NULL
+     ), source AS (
+       SELECT timestamp, 1::bigint AS transfers FROM events
+       WHERE ${tokenFilter}timestamp >= $/since/ AND NOT EXISTS(SELECT 1 FROM ready)
+       UNION ALL
+       SELECT minute_start AS timestamp, transfers FROM transfer_stats_minutes
+       WHERE ${tokenFilter}minute_start >= $/completeMinute/ AND EXISTS(SELECT 1 FROM ready)
+       UNION ALL
+       SELECT timestamp, 1::bigint AS transfers FROM events
+       WHERE ${tokenFilter}timestamp >= $/since/ AND timestamp < $/completeMinute/
+         AND EXISTS(SELECT 1 FROM ready)
+     ), counts AS (
+       SELECT date_trunc('${query.granularity}',
+         to_timestamp(timestamp) AT TIME ZONE 'UTC' + make_interval(mins => $/tzOffsetMinutes/)
+       ) AS bucket, SUM(transfers)::int AS count
+       FROM source GROUP BY bucket
+     ) SELECT to_char(bucket, '${format}') AS bucket, count FROM counts ORDER BY bucket`,
+    { ...query, completeMinute: Math.ceil(query.since / 60) * 60 }
+  )
 }
 
 export const createTransferStatsService = (
@@ -149,77 +173,139 @@ export const createTransferStatsService = (
   const cache = options.cache ?? new MemoryCacheBackend()
   const logger = options.logger ?? jsonLogger
   const now = options.now ?? Date.now
-  const inFlight = new Map<string, Promise<TransferStatRow[]>>()
+  const inFlight = new Map<string, Promise<TransferStatsResult>>()
+  const retryAfter = new Map<string, number>()
+  const waitingRefreshes = new Set<(_acquired: boolean) => void>()
+  let activeRefreshes = 0
+
+  const acquireRefresh = async () => {
+    if (activeRefreshes < MAX_REFRESHES) {
+      activeRefreshes++
+      return true
+    }
+    if (waitingRefreshes.size >= MAX_WAITING_REFRESHES) return false
+    return new Promise<boolean>((resolve) => {
+      const finish = (acquired: boolean) => {
+        clearTimeout(timer)
+        waitingRefreshes.delete(finish)
+        resolve(acquired)
+      }
+      const timer = setTimeout(() => finish(false), REFRESH_WAIT_MS)
+      waitingRefreshes.add(finish)
+    })
+  }
+  const releaseRefresh = () => {
+    const next = waitingRefreshes.values().next().value
+    // Transfer the occupied slot directly so new arrivals cannot jump the queue.
+    if (next) next(true)
+    else activeRefreshes--
+  }
 
   const load = async (
     key: string,
-    query: {
-      bucketExpr: string
-      since: number
-      tokenId?: string
-      tzOffsetMinutes: number
-    }
-  ) => {
+    query: Parameters<typeof queryTransferStats>[1]
+  ): Promise<TransferStatsResult> => {
+    let cached: CachedStats | undefined
     try {
-      const cached = await cache.get(key)
-      if (cached !== null) {
-        const rows = parseCachedRows(cached)
-        logger.debug("transfer-stats-cache", "Cache hit", { cacheKey: key })
-        return rows
+      const value = await cache.get(key)
+      if (value !== null) {
+        const entry = parseCachedStats(value)
+        const age = now() - entry.fetchedAt
+        if (age >= 0 && age < TRANSFER_STATS_MAX_AGE_MS) cached = entry
       }
     } catch (error) {
-      logger.error("transfer-stats-cache", "Cache read failed", {
-        cacheKey: key,
-        error,
-      })
+      logger.error("transfer-stats-cache", "Cache read failed", { error })
     }
+    const result = (
+      entry: CachedStats,
+      stale: boolean
+    ): TransferStatsResult => ({
+      rows: entry.rows,
+      stale,
+      updatedAt: new Date(entry.fetchedAt).toISOString(),
+    })
+    if (
+      cached &&
+      cached.since === query.since &&
+      now() - cached.fetchedAt < TRANSFER_STATS_CACHE_TTL_MS
+    ) {
+      logger.debug("transfer-stats-cache", "Cache hit", { cacheKey: key })
+      return result(cached, false)
+    }
+    const staleOrThrow = () => {
+      if (cached && now() - cached.fetchedAt < TRANSFER_STATS_MAX_AGE_MS) {
+        logger.info("transfer-stats-cache", "Serving stale statistics", {
+          cacheKey: key,
+          updatedAt: cached.fetchedAt,
+        })
+        return result(cached, true)
+      }
+      throw new TransferStatsUnavailableError(
+        "Transfer statistics temporarily unavailable; retry shortly"
+      )
+    }
+    for (const [failedKey, until] of retryAfter) {
+      if (until <= now()) retryAfter.delete(failedKey)
+    }
+    if (retryAfter.has(key) || (cached && activeRefreshes >= MAX_REFRESHES))
+      return staleOrThrow()
+    if (!(await acquireRefresh())) return staleOrThrow()
 
+    const startedAt = now()
     logger.debug("transfer-stats-cache", "Cache miss", { cacheKey: key })
-
-    const rows = await db.manyOrNone<TransferStatRow>(
-      `SELECT ${query.bucketExpr} AS bucket, COUNT(*)::int AS count
-       FROM events
-       WHERE ${query.tokenId ? "token_id = $/tokenId/ AND " : ""}timestamp >= $/since/
-       GROUP BY bucket
-       ORDER BY bucket ASC`,
-      {
-        since: query.since,
-        tokenId: query.tokenId,
-        tzOffsetMinutes: query.tzOffsetMinutes,
-      }
-    )
-
     try {
-      await cache.set(key, JSON.stringify(rows), TRANSFER_STATS_CACHE_TTL_MS)
-    } catch (error) {
-      logger.error("transfer-stats-cache", "Cache write failed", {
-        cacheKey: key,
-        error,
+      const rows = await queryTransferStats(db, query)
+      const entry = { fetchedAt: startedAt, rows, since: query.since }
+      logger.info("transfer-stats-query", "Statistics refreshed", {
+        durationMs: now() - startedAt,
+        granularity: query.granularity,
+        since: query.since,
+        tokenId: query.tokenId ?? null,
       })
+      try {
+        await cache.set(key, JSON.stringify(entry), TRANSFER_STATS_MAX_AGE_MS)
+      } catch (error) {
+        logger.error("transfer-stats-cache", "Cache write failed", { error })
+      }
+      return result(entry, false)
+    } catch (error) {
+      if (retryAfter.size >= MAX_FAILURES)
+        retryAfter.delete(retryAfter.keys().next().value!)
+      retryAfter.set(key, now() + TRANSFER_STATS_RETRY_MS)
+      logger.error("transfer-stats-query", "Statistics refresh failed", {
+        durationMs: now() - startedAt,
+        error,
+        granularity: query.granularity,
+        since: query.since,
+        tokenId: query.tokenId ?? null,
+      })
+      return staleOrThrow()
+    } finally {
+      releaseRefresh()
     }
-
-    return rows
   }
 
-  return async (args: TransferStatsArgs) => {
+  return (args: TransferStatsArgs): Promise<TransferStatsResult> => {
     const granularity = normalizeGranularity(args.granularity)
     const points = normalizePoints(args.points)
     const tzOffsetMinutes = normalizeTzOffsetMinutes(args.tzOffsetMinutes)
-    const { format, seconds } = granularityConfig[granularity]
     const normalizedNow =
       Math.floor(now() / TRANSFER_STATS_CACHE_TTL_MS) *
       TRANSFER_STATS_CACHE_TTL_MS
-    const since = Math.floor(normalizedNow / 1000) - points * seconds
-    const key = buildTransferStatsCacheKey({
-      format,
-      granularity,
-      points,
-      since,
-      timezone: TRANSFER_STATS_TIMEZONE,
-      tokenId: args.tokenId ?? null,
-      tzOffsetMinutes,
-    })
-
+    const since =
+      Math.floor(normalizedNow / 1000) -
+      points * granularityConfig[granularity].seconds
+    // Stable identity retains the last successful chart across window boundaries.
+    const key = `indexer:transfer-stats:v2:${createHash("sha256")
+      .update(
+        JSON.stringify({
+          granularity,
+          points,
+          tokenId: args.tokenId ?? null,
+          tzOffsetMinutes,
+        })
+      )
+      .digest("hex")}`
     const existing = inFlight.get(key)
     if (existing) {
       logger.debug("transfer-stats-cache", "Joined in-flight query", {
@@ -227,21 +313,15 @@ export const createTransferStatsService = (
       })
       return existing
     }
-
     const pending = load(key, {
-      bucketExpr: buildBucketExpr(granularity, format),
+      granularity,
       since,
       tokenId: args.tokenId,
       tzOffsetMinutes,
+    }).finally(() => {
+      inFlight.delete(key)
     })
     inFlight.set(key, pending)
-
-    try {
-      return await pending
-    } finally {
-      if (inFlight.get(key) === pending) {
-        inFlight.delete(key)
-      }
-    }
+    return pending
   }
 }

@@ -1,0 +1,19 @@
+{
+  "chainId": 537713,
+  "rpcUrl": "https://rpc.chain.relay.link",
+  "explorerUrl": "https://explorer.chain.relay.link",
+  "factory": "0xa86b6f82A3317b41D9398b37886Be44b597eaEbE",
+  "governor": "0x71d8bE89D9f2339F0FE9cBA39496C6C9cbFF9da6",
+  "name": "xBTC-stag",
+  "symbol": "xBTC-stag",
+  "assetDecimals": 8,
+  "majorIndex": 0,
+  "labels": [
+    "bitcoin",
+    "base"
+  ],
+  "tokens": [
+    "0x5b6ca028cd5aa3fe638b85dab42a264211595955",
+    "0x0b0c8eddb8ff7dc1671b0ac284aef4e07a144f34"
+  ]
+}

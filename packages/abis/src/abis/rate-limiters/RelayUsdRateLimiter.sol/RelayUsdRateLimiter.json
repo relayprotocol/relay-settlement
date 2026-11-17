@@ -132,8 +132,8 @@
           },
           {
             "name": "lastUpdated",
-            "type": "uint32",
-            "internalType": "uint32"
+            "type": "uint48",
+            "internalType": "uint48"
           },
           {
             "name": "isEnabled",
@@ -406,7 +406,7 @@
       {
         "name": "chainId",
         "type": "string",
-        "indexed": true,
+        "indexed": false,
         "internalType": "string"
       },
       {
@@ -512,7 +512,7 @@
       {
         "name": "chainId",
         "type": "string",
-        "indexed": true,
+        "indexed": false,
         "internalType": "string"
       },
       {

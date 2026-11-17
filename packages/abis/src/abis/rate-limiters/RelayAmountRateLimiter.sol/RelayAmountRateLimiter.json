@@ -75,6 +75,30 @@
   },
   {
     "type": "function",
+    "name": "canConsumeBatch",
+    "inputs": [
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "amounts",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "ok",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "consume",
     "inputs": [
       {
@@ -125,8 +149,8 @@
           },
           {
             "name": "lastUpdated",
-            "type": "uint32",
-            "internalType": "uint32"
+            "type": "uint48",
+            "internalType": "uint48"
           },
           {
             "name": "isEnabled",

@@ -1,6 +1,6 @@
 import { readFileSync } from "fs"
 import { join } from "path"
-import { keccak256, parseTransaction } from "viem"
+import { keccak256, parseTransaction, serializeTransaction } from "viem"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 // Mock the network client so `buildEvmTransaction` can run without RPC access.
@@ -9,6 +9,7 @@ const publicClientMock = {
   estimateGas: vi.fn(),
   getChainId: vi.fn(),
   getTransactionCount: vi.fn(),
+  simulateBlocks: vi.fn(),
 }
 
 vi.mock("viem", async () => {
@@ -17,6 +18,84 @@ vi.mock("viem", async () => {
     ...actual,
     createPublicClient: () => publicClientMock,
   }
+})
+
+describe("dependent EVM transactions", () => {
+  const tx = (nonce: number, sender: string) =>
+    EthereumTxSchema.parse({
+      amount: "0",
+      calldata: "0x1234",
+      family: "ethereum-vm",
+      from: sender,
+      gas: "100000",
+      maxFeePerGas: "100",
+      maxPriorityFeePerGas: "0",
+      nonce,
+      rpc: "https://rpc.mainnet.chain.robinhood.com",
+      to: "0x0000000000000000000000000000000000000002",
+    })
+  beforeEach(() => {
+    publicClientMock.getChainId.mockResolvedValue(4663)
+    publicClientMock.getTransactionCount.mockResolvedValue(0)
+    publicClientMock.estimateGas.mockRejectedValue(
+      new Error("insufficient token balance")
+    )
+    publicClientMock.simulateBlocks.mockReset()
+  })
+  it("simulates a preceding funding transaction before the dependent call", async () => {
+    publicClientMock.simulateBlocks.mockResolvedValue([
+      {
+        calls: [
+          { data: "0x", gasUsed: 40000n, status: "success" },
+          { data: "0x", gasUsed: 30000n, status: "success" },
+        ],
+      },
+    ])
+    const sender = "0x0000000000000000000000000000000000000003"
+    await expect(
+      buildEvmTransaction(tx(1, sender), [tx(0, sender)])
+    ).resolves.toBeDefined()
+    expect(
+      publicClientMock.simulateBlocks.mock.calls[0][0].blocks[0].calls.map(
+        (call: { nonce: number }) => call.nonce
+      )
+    ).toEqual([0, 1])
+  })
+  it("rejects failure of either transaction in the sequence", async () => {
+    for (const failure of [0, 1]) {
+      publicClientMock.simulateBlocks.mockResolvedValue([
+        {
+          calls: [0, 1].map((i) =>
+            i === failure
+              ? {
+                  data: "0x",
+                  error: new Error("reverted"),
+                  gasUsed: 30000n,
+                  status: "failure",
+                }
+              : { data: "0x", gasUsed: 30000n, status: "success" }
+          ),
+        },
+      ])
+      const sender = `0x${(10 + failure).toString(16).padStart(40, "0")}`
+      await expect(
+        buildEvmTransaction(tx(1, sender), [tx(0, sender)])
+      ).rejects.toThrow("Sequential EVM simulation")
+    }
+  })
+  it("does not use a different sender, RPC, or nonce gap as a prerequisite", async () => {
+    const sender = "0x0000000000000000000000000000000000000004"
+    for (const preceding of [
+      tx(0, "0x0000000000000000000000000000000000000005"),
+      { ...tx(0, sender), rpc: "https://example.com" },
+      tx(2, sender),
+    ]) {
+      await expect(
+        buildEvmTransaction(tx(1, sender), [preceding])
+      ).rejects.toThrow("insufficient token balance")
+    }
+    expect(publicClientMock.simulateBlocks).not.toHaveBeenCalled()
+  })
 })
 
 import { buildEvmTransaction, EthereumTxSchema } from "../src/builders/utils"
@@ -133,5 +212,105 @@ describe("buildEvmTransaction nonce pre-check", () => {
     await expect(buildEvmTransaction(withNonce(200))).rejects.toThrow(
       "Nonce too low"
     )
+  })
+})
+
+describe("approval-only simulation skipping", () => {
+  it("requires a different approval hash when an EIP-1559 fee cap changes", async () => {
+    publicClientMock.getChainId.mockResolvedValueOnce(1088)
+    const tx = {
+      ...loadMetisTx(),
+      from: "0x0000000000000000000000000000000000000093",
+      gasPrice: undefined,
+      maxFeePerGas: "24000000",
+      maxPriorityFeePerGas: "0",
+      nonce: 0,
+    }
+    const result = await buildEvmTransaction(tx, [], { skipSimulation: true })
+    const repriced = serializeTransaction({
+      ...result.transaction,
+      maxFeePerGas: 25000000n,
+    })
+    expect(keccak256(repriced)).not.toBe(result.hashesToSign[0])
+  })
+  beforeEach(() => {
+    publicClientMock.getChainId.mockResolvedValue(1088)
+    publicClientMock.getTransactionCount.mockResolvedValue(0)
+    publicClientMock.estimateGas
+      .mockReset()
+      .mockRejectedValue(new Error("awaiting withdrawal funds"))
+    publicClientMock.simulateBlocks.mockReset()
+  })
+
+  it("constructs the exact transaction hash without executing an unfunded call", async () => {
+    const tx = {
+      ...loadMetisTx(),
+      from: "0x0000000000000000000000000000000000000091",
+      nonce: 0,
+    }
+    const result = await buildEvmTransaction(tx, [], { skipSimulation: true })
+    expect(result.hashesToSign).toEqual([keccak256(result.payload)])
+    expect(parseTransaction(result.payload)).toMatchObject({
+      chainId: 1088,
+      nonce: 0,
+      to: tx.to.toLowerCase(),
+    })
+    expect(publicClientMock.estimateGas).not.toHaveBeenCalled()
+    expect(publicClientMock.simulateBlocks).not.toHaveBeenCalled()
+  })
+
+  it("still rejects spent nonces, and simulates by default for execution", async () => {
+    const tx = {
+      ...loadMetisTx(),
+      from: "0x0000000000000000000000000000000000000092",
+      nonce: 0,
+    }
+    publicClientMock.getTransactionCount.mockResolvedValueOnce(1)
+    await expect(
+      buildEvmTransaction(tx, [], { skipSimulation: true })
+    ).rejects.toThrow("Nonce too low")
+    await expect(buildEvmTransaction(tx)).rejects.toThrow(
+      "awaiting withdrawal funds"
+    )
+    expect(publicClientMock.estimateGas).toHaveBeenCalledOnce()
+  })
+})
+
+describe("historical EVM verification", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    publicClientMock.getChainId.mockResolvedValue(1088)
+    publicClientMock.getTransactionCount.mockResolvedValue(999)
+    publicClientMock.estimateGas.mockRejectedValue(
+      new Error("already executed")
+    )
+  })
+
+  it("rebuilds an executed transaction without querying its nonce or simulating", async () => {
+    const tx = loadMetisTx()
+    const result = await buildEvmTransaction(tx, [], {
+      skipEvmStateChecks: true,
+    })
+    expect(parseTransaction(result.payload)).toMatchObject({
+      chainId: 1088,
+      gasPrice: BigInt(tx.gasPrice!),
+      nonce: tx.nonce,
+      to: tx.to.toLowerCase(),
+    })
+    expect(result.hashesToSign).toEqual([keccak256(result.payload)])
+    expect(publicClientMock.getChainId).toHaveBeenCalledOnce()
+    expect(publicClientMock.getTransactionCount).not.toHaveBeenCalled()
+    expect(publicClientMock.estimateGas).not.toHaveBeenCalled()
+    expect(publicClientMock.simulateBlocks).not.toHaveBeenCalled()
+  })
+
+  it("still requires destination chain ID lookup for historical verification", async () => {
+    publicClientMock.getChainId.mockRejectedValueOnce(
+      new Error("RPC unavailable")
+    )
+    await expect(
+      buildEvmTransaction(loadMetisTx(), [], { skipEvmStateChecks: true })
+    ).rejects.toThrow("RPC unavailable")
+    expect(publicClientMock.getTransactionCount).not.toHaveBeenCalled()
   })
 })

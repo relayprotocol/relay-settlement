@@ -12,6 +12,10 @@ import {
 } from "./accessControlProcessor.js"
 
 const erc6909TransferWithCaller = new Interface(RelayHub)
+const transferTopic = erc6909TransferWithCaller.getEvent("Transfer")!.topicHash
+const addressWord = /^0x0{24}[0-9a-f]{40}$/i
+const uintWord = /^0x[0-9a-f]{64}$/i
+const transferData = /^0x0{24}[0-9a-f]{104}$/i
 
 const SKIP_TOKEN_IDS = new Set<string>([
   "645919125454048919867832098713637349341491234231283657783660937934976435626",
@@ -101,7 +105,8 @@ export const ensureToken = async (
     `INSERT INTO tokens(
        token_id, name, symbol, decimals, origin_family, origin_chain_id,
        origin_asset, total_supply, holders, transfers, created_at, updated_at
-     ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9,
+       (SELECT COUNT(*)::int FROM events WHERE token_id = $1), $10, $11)
      ON CONFLICT(token_id) DO NOTHING`,
     [
       tokenId,
@@ -112,7 +117,6 @@ export const ensureToken = async (
       originChainId,
       originAsset,
       "0",
-      0,
       0,
       now,
       now,
@@ -369,23 +373,23 @@ const getTotalSupply = async (
   return BigInt(totalSupply.toString())
 }
 
+// Explicit repair only. Lock before taking the COUNT snapshot so concurrent
+// insert-and-increment statements cannot have their increments overwritten.
 export const syncTokenTransfersFromEvents = async (
   db: Queryable,
   tokenId: string
-) => {
-  const now = new Date().toISOString()
-  await db.none(
-    `UPDATE tokens
-     SET transfers = (
-       SELECT COUNT(*)::int
-       FROM events
-       WHERE token_id = $1
-     ),
-     updated_at = $2
-     WHERE token_id = $1`,
-    [tokenId, now]
-  )
-}
+) =>
+  db.tx(async (tx) => {
+    await tx.one("SELECT token_id FROM tokens WHERE token_id = $1 FOR UPDATE", [
+      tokenId,
+    ])
+    await tx.none(
+      `UPDATE tokens SET transfers = (
+       SELECT COUNT(*)::int FROM events WHERE token_id = $1
+     ), updated_at = NOW() WHERE token_id = $1`,
+      [tokenId]
+    )
+  })
 
 export const reconcileTransferStateFromChain = async (
   db: Queryable,
@@ -441,12 +445,29 @@ export const insertEvent = async (
   }
 ) => {
   const now = new Date().toISOString()
-  const inserted = await db.result(
-    `INSERT INTO events(
+  const result = await db.one<{ inserted: number; token_exists: boolean }>(
+    `WITH token AS (
+       SELECT token_id FROM tokens WHERE token_id = $7 FOR UPDATE
+     ), inserted AS (
+       INSERT INTO events(
       block_number, tx_hash, log_index, operator, from_addr, to_addr, token_id, amount, timestamp, created_at, updated_at
-    ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-     ON CONFLICT(tx_hash, log_index) DO NOTHING
-     RETURNING 1`,
+       ) SELECT $1, $2, $3, $4, $5, $6, token_id, $8, $9, $10, $11 FROM token
+       ON CONFLICT(tx_hash, log_index) DO NOTHING
+       RETURNING token_id, timestamp
+     ), counted AS (
+       UPDATE tokens SET transfers = transfers + 1, updated_at = $11
+       FROM inserted WHERE tokens.token_id = inserted.token_id
+       RETURNING 1
+     ), minute_counted AS (
+       INSERT INTO transfer_stats_minutes(token_id, minute_start, transfers)
+       SELECT token_id, FLOOR(timestamp::numeric / 60)::bigint * 60, 1
+       FROM inserted
+       ON CONFLICT(token_id, minute_start) DO UPDATE
+       SET transfers = transfer_stats_minutes.transfers + EXCLUDED.transfers
+       RETURNING 1
+     )
+     SELECT (SELECT COUNT(*)::int FROM counted) AS inserted,
+            EXISTS(SELECT 1 FROM token) AS token_exists`,
     [
       log.blockNumber,
       log.transactionHash,
@@ -459,10 +480,14 @@ export const insertEvent = async (
       log.timestamp,
       now,
       now,
-    ],
-    (result) => result.rowCount
+    ]
   )
-  return inserted
+  if (!result.token_exists) {
+    throw new Error(
+      `Token ${log.tokenId} must exist before inserting a transfer`
+    )
+  }
+  return result.inserted
 }
 
 const transferArg = (
@@ -511,6 +536,26 @@ export const parseTransferLog = (log: {
   }
 }
 
+// The fixed-width fast path validates the complete canonical Transfer layout
+// without materializing/checksumming three addresses. Fall back to the ABI parser
+// for non-canonical encodings so coverage counts retain the parser's semantics.
+export const getTransferTokenId = (log: {
+  topics: readonly string[]
+  data: string
+}): string | null => {
+  if (
+    log.topics.length === 4 &&
+    log.topics[0].toLowerCase() === transferTopic &&
+    addressWord.test(log.topics[1]) &&
+    addressWord.test(log.topics[2]) &&
+    uintWord.test(log.topics[3]) &&
+    transferData.test(log.data)
+  ) {
+    return BigInt(log.topics[3]).toString()
+  }
+  return parseTransferLog(log)?.tokenId ?? null
+}
+
 export const insertParsedTransferLog = async (
   db: Queryable,
   transfer: ParsedTransferLog,
@@ -547,6 +592,7 @@ export const replayTransferLogFromChain = async (
   },
   timestamp: number
 ) => {
+  await ensureToken(db, contract, transfer.tokenId)
   const { inserted } = await insertParsedTransferLog(
     db,
     transfer,
@@ -561,8 +607,6 @@ export const replayTransferLogFromChain = async (
     [transfer.from, transfer.to],
     timestamp
   )
-  await syncTokenTransfersFromEvents(db, transfer.tokenId)
-
   return { inserted }
 }
 

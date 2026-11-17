@@ -1,14 +1,11 @@
-import {
-  decodeAbiParameters,
-  encodeAbiParameters,
-  hashStruct,
-  Hex,
-  parseAbiParameters,
-  parseUnits,
-} from "viem"
+import { hashStruct, Hex, parseAbiParameters, parseUnits } from "viem"
 
 import { getVmTypeNativeCurrency } from "../../../utils"
-import { defineAbiWithdrawalCodec, WithdrawalCodec } from "./codec"
+import {
+  decodeUnderSchema,
+  defineAbiWithdrawalCodec,
+  WithdrawalCodec,
+} from "./codec"
 
 export type DecodedHyperliquidVmWithdrawal = {
   vmType: "hyperliquid-vm"
@@ -43,7 +40,20 @@ type SendAssetParameters = Extract<
   { type: "SendAsset" }
 >
 
-const envelopeAbiParams = parseAbiParameters([
+// Mirrors HyperliquidVmPayloadBuilder.sol: the transaction type word followed
+// directly by the request fields, `abi.encode(uint8 txType, <request fields>...)`
+const usdSendPayloadAbiParams = parseAbiParameters(
+  "uint8 txType, string hyperliquidChain, string destination, string amount, uint64 time"
+)
+
+const sendAssetPayloadAbiParams = parseAbiParameters(
+  "uint8 txType, string hyperliquidChain, string destination, string sourceDex, string destinationDex, string token, string amount, string fromSubAccount, uint64 nonce"
+)
+
+// The envelope `abi.encode((uint8 txType, bytes parameters))` around
+// `abi.encode(<request>)`, still stored for payloads built before the builder
+// inlined the request
+const legacyEnvelopeAbiParams = parseAbiParameters([
   "(uint8 txType, bytes parameters)",
 ])
 
@@ -101,20 +111,113 @@ const sendAssetCodec = defineAbiWithdrawalCodec({
   }),
 })
 
+const usdSendPayloadCodec = defineAbiWithdrawalCodec({
+  params: usdSendPayloadAbiParams,
+  toAbi: (withdrawal: Withdrawal & { parameters: UsdSendParameters }) => {
+    const { txType, parameters } = withdrawal
+    return [
+      txType,
+      parameters.hyperliquidChain,
+      parameters.destination,
+      parameters.amount,
+      BigInt(parameters.time),
+    ]
+  },
+  fromAbi: ([txType, hyperliquidChain, destination, amount, time]) => ({
+    txType,
+    parameters: {
+      type: "UsdSend" as const,
+      hyperliquidChain,
+      destination,
+      amount,
+      time: time.toString(),
+    },
+  }),
+})
+
+const sendAssetPayloadCodec = defineAbiWithdrawalCodec({
+  params: sendAssetPayloadAbiParams,
+  toAbi: (withdrawal: Withdrawal & { parameters: SendAssetParameters }) => {
+    const { txType, parameters } = withdrawal
+    return [
+      txType,
+      parameters.hyperliquidChain,
+      parameters.destination,
+      parameters.sourceDex,
+      parameters.destinationDex,
+      parameters.token,
+      parameters.amount,
+      parameters.fromSubAccount,
+      BigInt(parameters.nonce),
+    ]
+  },
+  fromAbi: ([
+    txType,
+    hyperliquidChain,
+    destination,
+    sourceDex,
+    destinationDex,
+    token,
+    amount,
+    fromSubAccount,
+    nonce,
+  ]) => ({
+    txType,
+    parameters: {
+      type: "SendAsset" as const,
+      hyperliquidChain,
+      destination,
+      sourceDex,
+      destinationDex,
+      token,
+      amount,
+      fromSubAccount,
+      nonce: nonce.toString(),
+    },
+  }),
+})
+
+const legacyAbiCodec = defineAbiWithdrawalCodec({
+  params: legacyEnvelopeAbiParams,
+  toAbi: ({ txType, parameters }: Withdrawal) => [
+    {
+      txType,
+      parameters: (parameters.type === "UsdSend"
+        ? usdSendCodec.encode(parameters)
+        : sendAssetCodec.encode(parameters)) as Hex,
+    },
+  ],
+  fromAbi: ([{ txType, parameters }]): Withdrawal => {
+    switch (txType) {
+      case 0: {
+        return { txType, parameters: usdSendCodec.decode(parameters) }
+      }
+
+      case 1: {
+        return { txType, parameters: sendAssetCodec.decode(parameters) }
+      }
+
+      default: {
+        throw new Error(`Unsupported Hyperliquid transaction type: ${txType}`)
+      }
+    }
+  },
+})
+
+// The transaction type each request is signed under
+const TX_TYPES = { UsdSend: 0, SendAsset: 1 } as const
+
 export const hyperliquidVmCodec: WithdrawalCodec<Withdrawal> = {
   encode: (withdrawal) => {
     const { txType, parameters } = withdrawal
 
-    let encodedParameters: string
     switch (parameters.type) {
       case "UsdSend": {
-        encodedParameters = usdSendCodec.encode(parameters)
-        break
+        return usdSendPayloadCodec.encode({ txType, parameters })
       }
 
       case "SendAsset": {
-        encodedParameters = sendAssetCodec.encode(parameters)
-        break
+        return sendAssetPayloadCodec.encode({ txType, parameters })
       }
 
       default: {
@@ -123,42 +226,26 @@ export const hyperliquidVmCodec: WithdrawalCodec<Withdrawal> = {
         )
       }
     }
-
-    return encodeAbiParameters(envelopeAbiParams, [
-      {
-        txType,
-        parameters: encodedParameters as Hex,
-      },
-    ])
   },
 
+  // The leading type word selects the layout; payloads stored before the
+  // request was inlined keep the envelope layout and the same signed request
   decode: (encodedWithdrawal) => {
-    const result = decodeAbiParameters(
-      envelopeAbiParams,
-      encodedWithdrawal as Hex
-    )
-
-    const { txType, parameters } = result[0]
-
-    switch (txType) {
-      case 0: {
-        return {
-          txType: Number(txType),
-          parameters: usdSendCodec.decode(parameters),
-        }
-      }
-
-      case 1: {
-        return {
-          txType: Number(txType),
-          parameters: sendAssetCodec.decode(parameters),
-        }
-      }
-
-      default: {
-        throw new Error(`Unsupported Hyperliquid transaction type: ${txType}`)
-      }
+    const withdrawal =
+      decodeUnderSchema(usdSendPayloadCodec, encodedWithdrawal) ??
+      decodeUnderSchema(sendAssetPayloadCodec, encodedWithdrawal) ??
+      decodeUnderSchema(legacyAbiCodec, encodedWithdrawal)
+    if (!withdrawal) {
+      throw new Error("Failed to decode hyperliquid-vm payload")
     }
+
+    if (withdrawal.txType !== TX_TYPES[withdrawal.parameters.type]) {
+      throw new Error(
+        `Unsupported Hyperliquid transaction type: ${withdrawal.txType}`
+      )
+    }
+
+    return withdrawal
   },
 
   getId: (withdrawal) => {
@@ -254,9 +341,10 @@ export const hyperliquidVmCodec: WithdrawalCodec<Withdrawal> = {
   },
 
   getAmount: (withdrawal) => {
-    // The assumption here is that the amount is always encoded with the full decimals of the currency
-    const decimals = withdrawal.parameters.amount.split(".")[1].length
-    return parseUnits(withdrawal.parameters.amount, decimals).toString()
+    // The payload builder includes all target decimals, omitting the point when there are none.
+    const { amount } = withdrawal.parameters
+    const [, fraction = ""] = amount.split(".")
+    return parseUnits(amount, fraction.length).toString()
   },
 
   getRecipient: (withdrawal) => withdrawal.parameters.destination,

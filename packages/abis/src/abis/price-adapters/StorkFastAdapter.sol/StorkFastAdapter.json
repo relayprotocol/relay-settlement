@@ -160,6 +160,37 @@
     "stateMutability": "nonpayable"
   },
   {
+    "type": "event",
+    "name": "ReportAccepted",
+    "inputs": [
+      {
+        "name": "feedId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "reportHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "timestampNs",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "quantizedValue",
+        "type": "int192",
+        "indexed": false,
+        "internalType": "int192"
+      }
+    ],
+    "anonymous": false
+  },
+  {
     "type": "error",
     "name": "ConflictingPriceAtTimestamp",
     "inputs": [

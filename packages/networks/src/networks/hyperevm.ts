@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const hyperevm: NetworkConfig = {
   chainId: 999n,
@@ -10,8 +11,6 @@ export const hyperevm: NetworkConfig = {
   hubChainId: "999",
   isTestnet: false,
   name: "HyperEVM",
-  rpc: process.env.RPC_999
-    ? [process.env.RPC_999]
-    : ["https://rpc.hyperliquid.xyz/evm"],
+  ...resolveRpc(process.env.RPC_999, ["https://rpc.hyperliquid.xyz/evm"]),
   slug: "hyperevm",
 }

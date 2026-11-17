@@ -1,6 +1,6 @@
 {
   "name": "@relay-protocol/lit-actions",
-  "version": "0.0.32",
+  "version": "0.0.50",
   "description": "Definitions and helpers for tracking Relay Lit Actions",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,18 +9,22 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo src/generated.ts",
     "prepublishOnly": "yarn clean && yarn build",
     "generate": "tsx scripts/generate-actions.ts",
-    "build": "yarn generate && tsc -b"
+    "build": "yarn generate && tsc -b",
+    "lint": "tsc --noEmit -p tsconfig.scripts.json",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@relay-protocol/settlement-sdk": "0.0.137"
+    "@relay-protocol/settlement-sdk": "0.0.157"
   },
   "devDependencies": {
     "@relay-protocol/lit-allocator": "workspace:*",
     "@relay-protocol/lit-deposit-address": "workspace:*",
     "@relay-settlement/tsconfig": "workspace:*",
+    "@types/node": "25.5.2",
     "eslint": "9.36.0",
     "tsx": "4.21.0",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "4.1.2"
   },
   "files": [
     "dist/**/*"

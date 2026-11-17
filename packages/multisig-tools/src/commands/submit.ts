@@ -25,8 +25,12 @@ export function registerSubmit(program: Command) {
     .option("-n, --network <slug>", "Network slug (from settlement-networks)")
     .option("--rpc-url <url>", "RPC URL override")
     .option(
+      "--skip-simulation",
+      "Skip EVM execution simulation when building approvals; execution still checks live state"
+    )
+    .option(
       "-e, --env <env>",
-      "Deployment env for the --network contract lookup (prod | dev | stag); required unless --relay-multisig-signer is set"
+      "Deployment env for the --network contract lookup (prod | dev | stag | test | deployers); required unless --relay-multisig-signer is set"
     )
     .option(
       "--allow-nonce-conflict",
@@ -38,6 +42,7 @@ export function registerSubmit(program: Command) {
         relayMultisigSigner,
         network,
         rpcUrl,
+        skipSimulation,
         env,
         allowNonceConflict,
       }) => {
@@ -91,7 +96,8 @@ export function registerSubmit(program: Command) {
 
         const transactionBundle = await createTransactionBundle(
           transactionsPath,
-          resolved.multisigSignerAddress
+          resolved.multisigSignerAddress,
+          { skipSimulation }
         )
 
         for (let i = 0; i < transactionBundle.length; i++) {

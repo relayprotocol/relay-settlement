@@ -9,6 +9,13 @@ export type DepositAddressEnvironmentName = "dev" | "stag" | "prod";
 
 const ENVIRONMENT_NAMES = new Set<DepositAddressEnvironmentName>(["dev", "stag", "prod"]);
 
+/**
+ * Version label of the actions this source tree builds. Registered action
+ * names carry it so several versions can coexist in one Lit account. Bump it
+ * whenever a release must live alongside the previous one.
+ */
+export const ACTION_VERSION = "v1.2";
+
 /** Supported VM-specific Lit Action sources. */
 export const VM_TYPES = [
   "ethereum-vm",
@@ -17,8 +24,14 @@ export const VM_TYPES = [
   "hyperliquid-vm",
   "ton-vm",
   "tron-vm",
+  "xrp-vm",
 ] as const;
 export type VmType = (typeof VM_TYPES)[number];
+
+/** Keep XRP setup registration in dev until its rollout prerequisites pass. */
+export function vmTypesForEnvironment(envName: DepositAddressEnvironmentName): readonly VmType[] {
+  return VM_TYPES.filter((vmType) => envName === "dev" || vmType !== "xrp-vm");
+}
 
 /** Parsed contents of an `environments/<env>.json` config file. */
 export interface DepositAddressEnvironment {

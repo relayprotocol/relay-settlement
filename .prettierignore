@@ -5,7 +5,9 @@
 **/cache
 **/cache_hardhat
 **/node_modules
+contracts/*/dependencies
+contracts/xerc20
 **/typechain-types
 .yarn
 .yarnrc.yml
-smart-contracts/ignition/deployments
+contracts/relay-chain/ignition/deployments

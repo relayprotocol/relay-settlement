@@ -51,6 +51,24 @@ describe("overrides", () => {
       expect(networks["69000"]).toBeUndefined()
     })
 
+    it("omits the retired Blast network", () => {
+      const networks = initializeNetworks()
+      expect(networks.blast).toBeUndefined()
+      expect(networks["81457"]).toBeUndefined()
+    })
+
+    it("omits the retired Superseed network", () => {
+      const networks = initializeNetworks()
+      expect(networks.superseed).toBeUndefined()
+      expect(networks["5330"]).toBeUndefined()
+    })
+
+    it("omits the retired Ethereal network", () => {
+      const networks = initializeNetworks()
+      expect(networks.ethereal).toBeUndefined()
+      expect(networks["5064014"]).toBeUndefined()
+    })
+
     it("should apply overrides from file", () => {
       const overrideConfig: OverrideConfig = {
         ethereum: {
@@ -66,6 +84,7 @@ describe("overrides", () => {
 
       expect(networks.ethereum?.name).toBe("Ethereum Custom")
       expect(networks.ethereum?.rpc).toEqual(["https://custom-rpc.example.com"])
+      expect(networks.ethereum?.usesDefaultRpc).toBe(false)
       expect(networks["1"]?.name).toBe("Ethereum Custom")
     })
   })

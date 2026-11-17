@@ -1,6 +1,9 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { buildReadinessResponse } from "./runtimeState.js"
+import {
+  buildLivenessResponse,
+  buildReadinessResponse,
+} from "./runtimeState.js"
 
 test("buildReadinessResponse is ready when required roles are ready", () => {
   const response = buildReadinessResponse({
@@ -54,4 +57,15 @@ test("buildReadinessResponse reports background errors", () => {
     ready: false,
     required: true,
   })
+})
+
+test("buildLivenessResponse reports the image version when set", () => {
+  const roles = { doBackgroundWork: true, enableApi: false }
+
+  assert.deepEqual(buildLivenessResponse(roles, { version: "abc123" }), {
+    ok: true,
+    roles,
+    version: "abc123",
+  })
+  assert.deepEqual(buildLivenessResponse(roles), { ok: true, roles })
 })

@@ -1,0 +1,2 @@
+solady/=dependencies/solady-0.1.26/src/
+forge-std/=dependencies/forge-std-1.16.1-4-g8b531a0/src/

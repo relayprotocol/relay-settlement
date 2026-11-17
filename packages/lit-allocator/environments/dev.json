@@ -1,18 +1,36 @@
 {
   "name": "dev",
-  "allocatorAddress": "0x95bb2652BaA8a1177f750d92384527c5814f5254",
+  "allocatorAddress": "0xCa657865A6976d9bC39392F9af71eA09476fBbB1",
   "hubEvmChainId": 537724,
   "allowedOracles": [
     "0xcda3c24706c1a5eea958a988693e8a838d520af9",
     "0xf24a399259f47c6360d00da3793eca9cc6ad1caa"
   ],
   "oracleSignatureThreshold": 2,
-  "lighterAllowedApiKeys": [
+  "lighterGateways": [
     {
-      "apiKeyIndex": 4,
-      "publicKey": "0xf5f3c22e57c906b6f3c8b927fa1d5f7ec701086f02da98b10b13984b96bc3e4a58385e8696b2d5ab"
+      "chainId": 1,
+      "gateway": "0x3b4d794a66304f130a4db8f2551b0070dfcf5ca7",
+      "allowedApiKeys": [
+        {
+          "apiKeyIndex": 4,
+          "publicKey": "0xf5f3c22e57c906b6f3c8b927fa1d5f7ec701086f02da98b10b13984b96bc3e4a58385e8696b2d5ab"
+        }
+      ]
+    },
+    {
+      "chainId": 4663,
+      "gateway": "0x94bab9693ba2f6358507effcbd372b0660afff9d",
+      "allowedApiKeys": [
+        {
+          "apiKeyIndex": 4,
+          "publicKey": "0x58ddad743c9c70408d20223e0c3adb07968e3aceeb797edb8e6d06048930dd4ebd3d105f534fbb50"
+        }
+      ]
     }
   ],
-  "lighterGateway": "0x3b4d794a66304f130a4db8f2551b0070dfcf5ca7",
-  "lighterGatewayChainId": 1
+  "atlasDomain": {
+    "chainId": 21337,
+    "salt": "0xcc279b865244fb243618dfc109dced1cae0e32662920805f8b64813411597338"
+  }
 }

@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const polygon: NetworkConfig = {
   chainId: 137n,
@@ -11,8 +12,9 @@ export const polygon: NetworkConfig = {
   hubChainId: "137",
   isTestnet: false,
   name: "Polygon",
-  rpc: process.env.RPC_137
-    ? [process.env.RPC_137]
-    : ["https://polygon.drpc.org", "https://polygon-rpc.com"],
+  ...resolveRpc(process.env.RPC_137, [
+    "https://polygon.drpc.org",
+    "https://polygon-rpc.com",
+  ]),
   slug: "polygon",
 }

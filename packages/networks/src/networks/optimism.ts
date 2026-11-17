@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const optimism: NetworkConfig = {
   chainId: 10n,
@@ -11,8 +12,9 @@ export const optimism: NetworkConfig = {
   hubChainId: "10",
   isTestnet: false,
   name: "Optimism",
-  rpc: process.env.RPC_10
-    ? [process.env.RPC_10]
-    : ["https://mainnet.optimism.io", "https://rpc.ankr.com/optimism"],
+  ...resolveRpc(process.env.RPC_10, [
+    "https://mainnet.optimism.io",
+    "https://rpc.ankr.com/optimism",
+  ]),
   slug: "optimism",
 }

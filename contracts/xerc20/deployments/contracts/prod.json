@@ -1,0 +1,154 @@
+{
+  "environment": "prod",
+  "chainId": 537713,
+  "rpcUrl": "https://rpc.chain.relay.link",
+  "explorerUrl": "https://explorer.chain.relay.link",
+  "factory": "0x636F9Ef485CF081B8fB8875E3Dd88ce0743c9125",
+  "factoryTransaction": "0x6c74ffec94e57bdb7fd583cad136939b20c460b25e7f7db1296ac0955fd3c342",
+  "tokens": {
+    "xusdc": {
+      "address": "0xB1d88cA11af48E114e01e1079dA6Af9B81260E22",
+      "name": "xUSDC",
+      "symbol": "xUSDC",
+      "governor": "0xF61A305199fa1135d76FFaB3752D42F55cBd775A",
+      "deployer": "0xf3d63166F0Ca56C3c1A3508FcE03Ff0Cf3Fb691e",
+      "assetDecimals": 6,
+      "xerc20Decimals": 18,
+      "lockboxes": [
+        {
+          "label": "ethereum",
+          "token": "0x69E9cC78f640e841f6d3f54cb291d16D77C29348",
+          "lockbox": "0xabf009d820969b167f24dB15Fc6f7D6513C348C0",
+          "privileged": false
+        },
+        {
+          "label": "solana",
+          "token": "0xFB0fadd3B14aFc8ee69031A704074d7c141d3AF7",
+          "lockbox": "0x6ab2BC81C894e4b7c6533d178a1DfF1Bc98C5Df6",
+          "privileged": false
+        },
+        {
+          "label": "polygon",
+          "token": "0xb91D800B5C98bd9F8840Ad367b4Fd8531a575Fb2",
+          "lockbox": "0xfD23d7Ce4025c5DAbB92506a5691bC05b8847d8C",
+          "privileged": false
+        },
+        {
+          "label": "base",
+          "token": "0xe8B191C417B3723242e6D41B40fd826C8a6e8dad",
+          "lockbox": "0x7132fe92732D9157b3B90aFe2Dd99F7DFbD034B5",
+          "privileged": false
+        },
+        {
+          "label": "arbitrum",
+          "token": "0x75f9715b975cADFA1E93C4557feB95B18a5019C7",
+          "lockbox": "0xe1b402A9cdb4677349461c94dfBB6074923feeBC",
+          "privileged": false
+        },
+        {
+          "label": "arc-gateway",
+          "token": "0xeC468c697930b1D0fDb056fE4Da15957D7F8444A",
+          "lockbox": "0xAA6ff1045D999Bad42EBd172cb03369f93a01981",
+          "privileged": true
+        }
+      ],
+      "deployment": {
+        "firstBlock": 5811797,
+        "lastBlock": 5811801,
+        "configHash": "0xe9ebedf70145c717d72448977300687aa18ed8208f125f179887457ccf5ee955",
+        "xerc20Transaction": "0x5d56293c389ee0711f7fcad9dd96af76838c98737fb21045c872b4ce286a6eef",
+        "ownershipTransaction": "0xd16b8fbf3e669fa3c7ffd36db0a546e2fbbe1965a308bff5bfb2655c3b578d42"
+      }
+    },
+    "xsol": {
+      "address": "0x688CC5e3f11446eCa87B25cA16B920E09a89BB4D",
+      "name": "xSOL",
+      "symbol": "xSOL",
+      "governor": "0xF61A305199fa1135d76FFaB3752D42F55cBd775A",
+      "deployer": "0x57768C7c683Da89d01d0c6b5c79f7ef0aFF75569",
+      "assetDecimals": 9,
+      "xerc20Decimals": 18,
+      "lockboxes": [
+        {
+          "label": "solana",
+          "token": "0x8cb83eca98BC0eD4Df4049aDfCc16C7B1Ea30822",
+          "lockbox": "0xEcC2B953Fd2F29ce7CB9CA3D74dA45Af58A0b3E1",
+          "privileged": true
+        },
+        {
+          "label": "base",
+          "token": "0xc83d553171f328E78dfA29B5F75377267d656A00",
+          "lockbox": "0x5f930090e9e36cBfE7Fa8c5582Af6469CC36E4fF",
+          "privileged": false
+        }
+      ],
+      "deployment": {
+        "firstBlock": 6317189,
+        "lastBlock": 6317199,
+        "configHash": "0x8fdf3a3864d4c3d7e3847eb0a5755af99f63c247b2a9ef9a401297ce7ab6a9b1",
+        "xerc20Transaction": "0xd8053de731c0ba36a0d3d957a0182ebeed94276b26f5f9a774e63452a46731aa",
+        "ownershipTransaction": "0x56560c5722bfff8b8de00af39f311046481266122280645e263dda41e91ad0c0"
+      }
+    },
+    "xeth": {
+      "address": "0x9d8bdaeE78aF8BBf9837eBB1fDC7358F58deeE15",
+      "name": "xETH",
+      "symbol": "xETH",
+      "governor": "0xF61A305199fa1135d76FFaB3752D42F55cBd775A",
+      "deployer": "0x57768C7c683Da89d01d0c6b5c79f7ef0aFF75569",
+      "assetDecimals": 18,
+      "xerc20Decimals": 18,
+      "lockboxes": [
+        {
+          "label": "ethereum",
+          "token": "0xDf6850310956164E755FCc405CcaDf29A4246CdA",
+          "lockbox": "0xfdCEcabb791A107e4d9ffFf68c5fe47f846eA583",
+          "privileged": true
+        },
+        {
+          "label": "base",
+          "token": "0x01A6b92c0623A254505225418BB77cB5aa7fa6B5",
+          "lockbox": "0x67d839A1F38E18aC37375a134666546174f52258",
+          "privileged": false
+        }
+      ],
+      "deployment": {
+        "firstBlock": 6317333,
+        "lastBlock": 6317340,
+        "configHash": "0x0d0c56b4598c2ada5dc2cf7c8459a405ab6a9ebf60c23010b5b8a12eaabc9707",
+        "xerc20Transaction": "0xe3e15b78a363735e9ac209f11fb2b84b7d32ce8088f75c84e8b930dfde573cd8",
+        "ownershipTransaction": "0xad1a98fd109420f22bd70030eac5373902469254c60cea88f1945c26e871a255"
+      }
+    },
+    "xbtc": {
+      "address": "0xB50A9C7E5cB0C80a88751A2b302217d75EE2E3Ae",
+      "name": "xBTC",
+      "symbol": "xBTC",
+      "governor": "0xF61A305199fa1135d76FFaB3752D42F55cBd775A",
+      "deployer": "0x57768C7c683Da89d01d0c6b5c79f7ef0aFF75569",
+      "assetDecimals": 8,
+      "xerc20Decimals": 18,
+      "lockboxes": [
+        {
+          "label": "bitcoin",
+          "token": "0x813b388e7EF54CD896cdE6722560bB3BF1aaD5e1",
+          "lockbox": "0x5c28dcA042f5C4a3560D543B3e121326d74aAB0B",
+          "privileged": true
+        },
+        {
+          "label": "base",
+          "token": "0xdB4A5233A9D88E3ecEFcAd962442eabAfa75Ab33",
+          "lockbox": "0xfe5248B9dB9268334Ee47bE78f12bD44EfBe4d83",
+          "privileged": false
+        }
+      ],
+      "deployment": {
+        "firstBlock": 6317425,
+        "lastBlock": 6317438,
+        "configHash": "0x3b6f4446dd7b2ada7152d0b5362ae0f1a4f2ec798f419782c5a128d0cf7d7fce",
+        "xerc20Transaction": "0xcc4fa4d933a55931e4e46c2e85aa90daa7123322fb680c83324feec095871ac7",
+        "ownershipTransaction": "0x7f10d43bada93069a0f2723f9599197c09a11ecddf311ad821137fc499822620"
+      }
+    }
+  }
+}

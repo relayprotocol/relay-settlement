@@ -1,4 +1,5 @@
 import type { Command } from "commander"
+import { createHash } from "crypto"
 import {
   Connection,
   PublicKey,
@@ -11,7 +12,6 @@ import {
 import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes"
 import * as fs from "fs"
 import { BpfLoaderUpgradeableProgram } from "./bpf-upgradeable-browser/bpf-upgradeable-browser"
-import * as anchor from "@coral-xyz/anchor"
 
 export const BPF_LOADER_UPGRADEABLE_PROGRAM_ID = new PublicKey(
   "BPFLoaderUpgradeab1e11111111111111111111111"
@@ -144,6 +144,7 @@ async function deployOrUpgradeProgram(
   bufferAccount: PublicKey,
   upgradeAuthority: Keypair,
   maxDataLen: number,
+  chainId: string,
   programKeypair?: Keypair
 ): Promise<{ programId: PublicKey; wasExisting: boolean }> {
   const programAccount = programKeypair || Keypair.generate()
@@ -162,6 +163,7 @@ async function deployOrUpgradeProgram(
     await connection.getAccountInfo(programAccountPubkey)
 
   if (programAccountInfo) {
+    await assertDomainSeparatorReady(connection, programAccountPubkey, chainId)
     console.log("📝 Program account already exists, performing upgrade...")
 
     // Program exists, perform upgrade
@@ -349,146 +351,44 @@ async function ensureAccountBalance(
   }
 }
 
-// Migration function - calls migrate_domain_separator after program upgrade
-async function executeMigration(
-  _connection: Connection,
+async function assertDomainSeparatorReady(
+  connection: Connection,
   programId: PublicKey,
-  migrationAuthority: Keypair,
-  migrationFunction: string
+  chainId: string
 ): Promise<void> {
-  console.log(`🔄 Executing migration function: ${migrationFunction}`)
-  console.log(`Program ID: ${programId.toBase58()}`)
-  console.log(`Migration authority: ${migrationAuthority.publicKey.toBase58()}`)
-
-  // Wait a moment for the upgraded program to be available
-  console.log("⏳ Waiting for upgraded program to be ready...")
-  await new Promise((resolve) => setTimeout(resolve, 2000))
-
-  try {
-    // Check MOCK_OWNER balance before migration
-    const ownerBalance = await _connection.getBalance(MOCK_OWNER.publicKey)
-    console.log(`💰 MOCK_OWNER balance: ${ownerBalance / LAMPORTS_PER_SOL} SOL`)
-
-    if (ownerBalance < 0.1 * LAMPORTS_PER_SOL) {
-      throw new Error(
-        `MOCK_OWNER has insufficient balance for reallocation. Current: ${ownerBalance / LAMPORTS_PER_SOL} SOL, required: at least 0.1 SOL`
-      )
-    }
-
-    // Use the same owner keypair from the deployment
-    const [relayDepositoryPDA] = PublicKey.findProgramAddressSync(
-      [Buffer.from("relay_depository")],
-      programId
+  const [depository] = PublicKey.findProgramAddressSync(
+    [Buffer.from("relay_depository")],
+    programId
+  )
+  const account = await connection.getAccountInfo(depository, "confirmed")
+  const discriminator = createHash("sha256")
+    .update("account:RelayDepository")
+    .digest()
+    .subarray(0, 8)
+  const flagOffset = 8 + 32 + 32 + 1
+  if (
+    !account ||
+    !account.owner.equals(programId) ||
+    !account.data.subarray(0, 8).equals(discriminator) ||
+    account.data.length < flagOffset + 1 + 32 ||
+    account.data[flagOffset] !== 1
+  ) {
+    throw new Error(
+      "Depository has no valid domain separator. Use an initial program that supports initialize(chain_id), or migrate the legacy account before upgrading."
     )
-
-    // Check current PDA account info
-    const pdaInfo = await _connection.getAccountInfo(relayDepositoryPDA)
-    if (pdaInfo) {
-      console.log(`📊 PDA account current size: ${pdaInfo.data.length} bytes`)
-      console.log(`📊 PDA account owner: ${pdaInfo.owner.toBase58()}`)
-    }
-
-    // Call migrate_domain_separator to set the domain separator
-    console.log("🔄 Calling migrate_domain_separator...")
-    const chainId = "solana" // You can make this configurable if needed
-
-    // Create the migrate_domain_separator instruction manually to avoid IDL version issues
-    // The discriminator for migrate_domain_separator from the upgraded IDL
-    const migrateDomainSeparatorDiscriminator = [
-      125, 28, 21, 67, 230, 227, 107, 79,
-    ]
-
-    // Serialize chain_id as String (Rust String serialization: length + bytes)
-    const chainIdBytes = Buffer.from(chainId, "utf8")
-    const chainIdLength = Buffer.alloc(4)
-    chainIdLength.writeUInt32LE(chainIdBytes.length, 0)
-
-    const instructionData = Buffer.concat([
-      Buffer.from(migrateDomainSeparatorDiscriminator),
-      chainIdLength,
-      chainIdBytes,
-    ])
-
-    const migrateTx = new Transaction().add({
-      data: instructionData,
-      keys: [
-        { isSigner: false, isWritable: true, pubkey: relayDepositoryPDA },
-        { isSigner: true, isWritable: true, pubkey: MOCK_OWNER.publicKey },
-        { isSigner: false, isWritable: false, pubkey: SystemProgram.programId },
-        {
-          isSigner: false,
-          isWritable: false,
-          pubkey: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
-        },
-      ],
-      programId: programId,
-    })
-
-    // Read account data before migration
-    console.log("📊 Reading account data before migration...")
-    const preMigrationPdaInfo =
-      await _connection.getAccountInfo(relayDepositoryPDA)
-    if (preMigrationPdaInfo) {
-      console.log(
-        `📊 Pre-migration account size: ${preMigrationPdaInfo.data.length} bytes`
-      )
-      console.log(
-        `📊 Pre-migration account data (hex): ${preMigrationPdaInfo.data.toString("hex")}`
-      )
-      console.log(
-        `📊 Pre-migration account lamports: ${preMigrationPdaInfo.lamports}`
-      )
-    }
-
-    const signature = await sendAndConfirmTransaction(
-      _connection,
-      migrateTx,
-      [MOCK_OWNER],
-      { commitment: "confirmed" }
-    )
-
-    // Read account data after migration
-    console.log("📊 Reading account data after migration...")
-    const postMigrationPdaInfo =
-      await _connection.getAccountInfo(relayDepositoryPDA)
-    if (postMigrationPdaInfo) {
-      console.log(
-        `📊 Post-migration account size: ${postMigrationPdaInfo.data.length} bytes`
-      )
-      console.log(
-        `📊 Post-migration account data (hex): ${postMigrationPdaInfo.data.toString("hex")}`
-      )
-      console.log(
-        `📊 Post-migration account lamports: ${postMigrationPdaInfo.lamports}`
-      )
-
-      // Compare sizes
-      if (preMigrationPdaInfo) {
-        const sizeDiff =
-          postMigrationPdaInfo.data.length - preMigrationPdaInfo.data.length
-        const lamportsDiff =
-          postMigrationPdaInfo.lamports - preMigrationPdaInfo.lamports
-        console.log(
-          `📊 Size change: ${sizeDiff > 0 ? "+" : ""}${sizeDiff} bytes`
-        )
-        console.log(
-          `📊 Lamports change: ${lamportsDiff > 0 ? "+" : ""}${lamportsDiff} lamports`
-        )
-      }
-    }
-
-    console.log(`✅ Domain separator migration completed for chain: ${chainId}`)
-    console.log(`✅ Migration transaction: ${signature}`)
-    console.log(
-      `✅ Migration function '${migrationFunction}' executed successfully`
-    )
-  } catch (error) {
-    console.error("❌ Migration failed:", error)
-    // If migration fails, it might be because domain separator is already set or other reasons
-    // Log the error but don't fail the entire process
-    console.warn(
-      "⚠️  Migration may have failed, but this could be expected (e.g., domain separator already set)"
-    )
+  }
+  const expectedDomain = createHash("sha256")
+    .update("RelayDepository")
+    .update("1")
+    .update(chainId, "utf8")
+    .update(programId.toBuffer())
+    .digest()
+  if (
+    !account.data
+      .subarray(flagOffset + 1, flagOffset + 33)
+      .equals(expectedDomain)
+  ) {
+    throw new Error("Depository domain separator does not match --chain-id")
   }
 }
 
@@ -497,7 +397,8 @@ async function executePostDeploymentHook(
   _connection: Connection,
   programId: PublicKey,
   deploymentAuthority: Keypair,
-  initFunction: string
+  initFunction: string,
+  chainId: string
 ): Promise<void> {
   console.log(`🚀 Executing post-deployment hook: ${initFunction}`)
   console.log(`Program ID: ${programId.toBase58()}`)
@@ -534,8 +435,14 @@ async function executePostDeploymentHook(
     // The discriminator for initialize from the IDL
     const initializeDiscriminator = [175, 175, 109, 31, 13, 152, 155, 237]
 
-    // For the initial version, initialize() takes no parameters
-    const instructionData = Buffer.from(initializeDiscriminator)
+    const chainIdBytes = Buffer.from(chainId, "utf8")
+    const chainIdLength = Buffer.alloc(4)
+    chainIdLength.writeUInt32LE(chainIdBytes.length)
+    const instructionData = Buffer.concat([
+      Buffer.from(initializeDiscriminator),
+      chainIdLength,
+      chainIdBytes,
+    ])
 
     const initializeIx = new Transaction().add({
       data: instructionData,
@@ -556,7 +463,8 @@ async function executePostDeploymentHook(
       { commitment: "confirmed" }
     )
 
-    console.log("✅ Relay depository initialized (without domain separator)")
+    await assertDomainSeparatorReady(_connection, programId, chainId)
+    console.log("✅ Relay depository initialized with domain separator")
     console.log(`✅ Initialize transaction: ${signature}`)
     console.log(
       `✅ Post-deployment hook '${initFunction}' executed successfully`
@@ -570,13 +478,15 @@ async function executePostDeploymentHook(
 export function registerSolanaProgramUpgrade(program: Command) {
   program
     .command("solana-program-upgrade")
-    .description(
-      "Deploy an initial Solana program, upgrade it, and execute a migration function."
-    )
+    .description("Deploy and initialize a Solana program, then upgrade it.")
     .requiredOption("--rpc <url>", "Solana RPC endpoint")
     .requiredOption(
+      "--chain-id <id>",
+      "Exact chain ID used by the depository domain separator"
+    )
+    .requiredOption(
       "--initial-program-path <path>",
-      "Path to the initial .so program file"
+      "Path to an initial .so program supporting initialize(chain_id)"
     )
     .requiredOption(
       "--upgrade-program-path <path>",
@@ -595,34 +505,26 @@ export function registerSolanaProgramUpgrade(program: Command) {
       "Path to program keypair JSON file (if not provided, will generate new program)"
     )
     .option(
-      "--migration-function <name>",
-      "Name of migration function to execute after upgrade",
-      "migrate"
-    )
-    .option(
       "--auto-create",
       "Automatically create test accounts and airdrop SOL (for local test validator)"
     )
     .action(
       async ({
         rpc,
+        chainId,
         initialProgramPath,
         upgradeProgramPath,
         bufferAuthority,
         upgradeAuthority,
         programKeypair,
-        migrationFunction,
         autoCreate,
       }: any) => {
         const connection = new Connection(rpc, "confirmed")
 
-        console.log(
-          "🚀 Starting Solana program upgrade with migration workflow..."
-        )
+        console.log("🚀 Starting Solana program upgrade workflow...")
         console.log(`RPC: ${rpc}`)
         console.log(`Initial program: ${initialProgramPath}`)
         console.log(`Upgrade program: ${upgradeProgramPath}`)
-        console.log(`Migration function: ${migrationFunction}`)
         if (programKeypair) {
           console.log(`Program keypair: ${programKeypair}`)
         }
@@ -806,6 +708,7 @@ export function registerSolanaProgramUpgrade(program: Command) {
             initialBufferAccount,
             upgradeAuthorityKeypair,
             Math.max(initialProgramData.length, upgradeProgramData.length), // Max of both versions
+            chainId,
             programKeypairData || undefined
           )
 
@@ -822,13 +725,15 @@ export function registerSolanaProgramUpgrade(program: Command) {
               connection,
               programId,
               upgradeAuthorityKeypair,
-              "initialize"
+              "initialize",
+              chainId
             )
           } else {
             console.log("\n=== PHASE 1.5: Skipping Post-Deployment Hook ===")
             console.log(
-              "Program already exists, assuming it's already initialized"
+              "Program already exists; validating its domain separator"
             )
+            await assertDomainSeparatorReady(connection, programId, chainId)
           }
 
           // Phase 2: Prepare upgrade
@@ -878,22 +783,11 @@ export function registerSolanaProgramUpgrade(program: Command) {
 
           console.log("✅ Program successfully upgraded to new version")
 
-          // Phase 4: Execute migration
-          console.log("\n=== PHASE 4: Execute Migration ===")
-
-          await executeMigration(
-            connection,
-            programId,
-            upgradeAuthorityKeypair,
-            migrationFunction
-          )
-
-          console.log("\n🎉 === UPGRADE WITH MIGRATION COMPLETE ===")
+          console.log("\n🎉 === UPGRADE COMPLETE ===")
           console.log(`✅ Program ID: ${programId.toBase58()}`)
           console.log("✅ Initial deployment: SUCCESS")
           console.log("✅ Post-deployment hook: SUCCESS")
           console.log("✅ Program upgrade: SUCCESS")
-          console.log("✅ Migration execution: SUCCESS")
 
           console.log("\n📋 Summary:")
           console.log(
@@ -903,10 +797,9 @@ export function registerSolanaProgramUpgrade(program: Command) {
             `2. Deploy/upgrade operations performed by: ${upgradeAuthorityKeypair.publicKey.toBase58()}`
           )
           console.log("3. Post-deployment hook 'initialize' executed")
-          console.log(`4. Migration function '${migrationFunction}' executed`)
-          console.log(`5. Final program ID: ${programId.toBase58()}`)
+          console.log(`4. Final program ID: ${programId.toBase58()}`)
         } catch (error) {
-          console.error("❌ Upgrade with migration failed:", error)
+          console.error("❌ Program upgrade failed:", error)
           throw error
         }
       }

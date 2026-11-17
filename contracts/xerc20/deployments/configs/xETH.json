@@ -1,0 +1,27 @@
+{
+  "chainId": 537713,
+  "rpcUrl": "https://rpc.chain.relay.link",
+  "explorerUrl": "https://explorer.chain.relay.link",
+  "factory": "0x636F9Ef485CF081B8fB8875E3Dd88ce0743c9125",
+  "governor": "0xF61A305199fa1135d76FFaB3752D42F55cBd775A",
+  "name": "xETH",
+  "symbol": "xETH",
+  "assetDecimals": 18,
+  "majorIndex": 0,
+  "labels": [
+    "ethereum",
+    "base"
+  ],
+  "tokens": [
+    "0xdf6850310956164e755fcc405ccadf29a4246cda",
+    "0x01a6b92c0623a254505225418bb77cb5aa7fa6b5"
+  ],
+  "mintLimits": [
+    0,
+    500000000000000000000
+  ],
+  "burnLimits": [
+    0,
+    500000000000000000000
+  ]
+}

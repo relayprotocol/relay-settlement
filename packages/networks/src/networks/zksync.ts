@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const zksync: NetworkConfig = {
   chainId: 324n,
@@ -10,8 +11,6 @@ export const zksync: NetworkConfig = {
   hubChainId: "324",
   isTestnet: false,
   name: "zkSync",
-  rpc: process.env.RPC_324
-    ? [process.env.RPC_324]
-    : ["https://mainnet.era.zksync.io"],
+  ...resolveRpc(process.env.RPC_324, ["https://mainnet.era.zksync.io"]),
   slug: "zksync",
 }

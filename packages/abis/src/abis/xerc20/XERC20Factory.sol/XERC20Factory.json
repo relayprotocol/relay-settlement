@@ -1,0 +1,116 @@
+[
+  {
+    "type": "function",
+    "name": "deployLockbox",
+    "inputs": [
+      {
+        "name": "_xerc20",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_baseToken",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_isNative",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "_lockbox",
+        "type": "address",
+        "internalType": "address payable"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "deployXERC20",
+    "inputs": [
+      {
+        "name": "_name",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "_symbol",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "_minterLimits",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "_burnerLimits",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "_bridges",
+        "type": "address[]",
+        "internalType": "address[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "_xerc20",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "LockboxDeployed",
+    "inputs": [
+      {
+        "name": "_lockbox",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "XERC20Deployed",
+    "inputs": [
+      {
+        "name": "_xerc20",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "IXERC20Factory_BadTokenAddress",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "IXERC20Factory_InvalidLength",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "IXERC20Factory_LockboxAlreadyDeployed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "IXERC20Factory_NotOwner",
+    "inputs": []
+  }
+]

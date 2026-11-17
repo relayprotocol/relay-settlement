@@ -7,9 +7,12 @@
 // already holds the role are skipped, so re-runs are safe.
 //
 // Router per chain comes from `multicallRouters` in contracts/<ENV>.json, depository per
-// chain from settlement-networks (it differs within one env) -- nothing from the command line.
+// chain from settlement-networks (it differs within one env); explicit Gateway tuples
+// come from routerRollout or ROUTER_ROLLOUT_FILE.
 //
 // Env:
+//   ROUTER_ROLLOUT_FILE optional JSON with retiredRouters and gatewayDestinations;
+//                    added to deployment records routerRollout (see README migration runbook).
 //   ENV              dev | stag | prod. Defaults to "prod". Selects the records file
 //                    and the multisig signer used to derive the council wallet.
 //   CHAINS           optional comma-separated destination chain slugs. Defaults to
@@ -24,18 +27,33 @@
 //   SIGNER           optional 0x signer address to use as `from`. When set, the
 //                    NEAR/MPC derivation is skipped.
 import { readFileSync, writeFileSync } from "fs"
+import {
+  assertRetiredRoutersInactive,
+  destinationDepositoryMismatch,
+  loadRouterRollout,
+  readConfigWord,
+  readDestinationDepositoryKey,
+  type RouterRollout,
+  type RouterTuple,
+} from "../../../contracts/relay-chain/deployments/scripts/routerRollout"
 import { join } from "path"
 import {
   createPublicClient,
   encodeFunctionData,
   http,
   isAddress,
+  type PublicClient,
   keccak256,
   parseAbi,
   parseGwei,
   stringToBytes,
 } from "viem"
-import { aurora, networks } from "@relay-protocol/settlement-networks"
+import {
+  aurora,
+  networks,
+  relay as relayChain,
+  relayTestnet,
+} from "@relay-protocol/settlement-networks"
 import { deriveAllocatorSignerAddress } from "../src/crypto/signer"
 import { getManifestPath, stringifyJsonWithBigInt } from "./helpers/manifest"
 
@@ -81,20 +99,32 @@ const deploymentFile = JSON.parse(
   readFileSync(
     join(
       __dirname,
-      `../../../smart-contracts/deployments/contracts/${ENV}.json`
+      `../../../contracts/relay-chain/deployments/contracts/${ENV}.json`
     ),
     "utf8"
   )
-) as { multicallRouters?: Record<string, string> }
+) as {
+  core?: Record<string, string>
+  multicallRouters?: Record<string, string>
+  payloadBuilders?: Record<string, string>
+  routerRollout?: RouterRollout
+}
 
-const buildGrant = async (slug: string, signerAddress: Address) => {
+export const buildGrant = async (
+  slug: string,
+  signerAddress: Address,
+  tuple?: RouterTuple,
+  nonceOffset = 0,
+  destinationClient: (_rpc: string) => PublicClient = (rpc) =>
+    createPublicClient({ transport: http(rpc) })
+) => {
   const net = networks[slug]
   if (!net) throw new Error("not in settlement-networks")
-  const depository = net.contracts?.[ENV]?.depository
+  const depository = tuple?.depository ?? net.contracts?.[ENV]?.depository
   if (!depository || !isAddress(depository)) {
     throw new Error(`no ${ENV} depository in settlement-networks`)
   }
-  const router = deploymentFile.multicallRouters?.[slug]
+  const router = tuple?.router ?? deploymentFile.multicallRouters?.[slug]
   if (!router || !isAddress(router)) {
     throw new Error(
       `multicallRouters.${slug} missing from contracts/${ENV}.json`
@@ -104,7 +134,7 @@ const buildGrant = async (slug: string, signerAddress: Address) => {
   if (!rpc)
     throw new Error(`no rpc in settlement-networks (set RPC_${net.chainId})`)
   const chain = { chainId: net.chainId, depository, router, rpc, slug }
-  const client = createPublicClient({ transport: http(rpc) })
+  const client = destinationClient(rpc)
 
   // reads against the wrong chain silently return empty values
   const liveChainId = await client.getChainId()
@@ -168,7 +198,7 @@ const buildGrant = async (slug: string, signerAddress: Address) => {
   const [nonce, feeFields, gasEstimate] = await Promise.all([
     client
       .getTransactionCount({ address: signerAddress })
-      .then((count) => count + (NONCE_OFFSETS[slug] ?? 0)),
+      .then((count) => count + (NONCE_OFFSETS[slug] ?? 0) + nonceOffset),
     fees,
     client.estimateGas({
       account: signerAddress,
@@ -192,6 +222,56 @@ const buildGrant = async (slug: string, signerAddress: Address) => {
   }
 }
 
+// A recorded router that is also retired must not receive a grant, whichever
+// chains were selected, and a Gateway tuple's depository must be the one the
+// relay chain's Config resolves for that destination: it becomes the sole caller
+// of the router's multicall.
+export const resolveGrants = async (
+  slugs: string[],
+  rollout: ReturnType<typeof loadRouterRollout>,
+  records = deploymentFile,
+  relayChainClient?: Pick<PublicClient, "readContract">
+): Promise<{ slug: string; tuple?: RouterTuple }[]> => {
+  assertRetiredRoutersInactive(rollout, records.multicallRouters, ENV)
+  if (rollout.gatewayDestinations.length > 0) {
+    const config = records.core?.config
+    const gatewayBuilder = records.payloadBuilders?.gatewayVmPayloadBuilder
+    if (
+      !relayChainClient ||
+      !config ||
+      !isAddress(config) ||
+      !gatewayBuilder ||
+      !isAddress(gatewayBuilder)
+    ) {
+      throw new Error(
+        `core.config and payloadBuilders.gatewayVmPayloadBuilder missing from contracts/${ENV}.json`
+      )
+    }
+    for (const tuple of rollout.gatewayDestinations) {
+      const mismatch = destinationDepositoryMismatch(
+        await readConfigWord(
+          relayChainClient as never,
+          config,
+          await readDestinationDepositoryKey(
+            relayChainClient as never,
+            gatewayBuilder,
+            tuple.chain
+          )
+        ),
+        tuple.depository
+      )
+      if (mismatch) throw new Error(`${tuple.chain}: ${mismatch}`)
+    }
+  }
+  return [
+    ...slugs.map((slug) => ({ slug })),
+    ...rollout.gatewayDestinations.map((tuple) => ({
+      slug: tuple.chain,
+      tuple,
+    })),
+  ]
+}
+
 const main = async () => {
   if (ENV !== "dev" && ENV !== "stag" && ENV !== "prod") {
     throw new Error(`ENV must be dev, stag or prod (got "${ENV}")`)
@@ -199,7 +279,11 @@ const main = async () => {
   const slugs = process.env.CHAINS
     ? process.env.CHAINS.split(",").filter(Boolean)
     : Object.keys(deploymentFile.multicallRouters ?? {})
-  if (slugs.length === 0) {
+  if (
+    slugs.length === 0 &&
+    loadRouterRollout(deploymentFile.routerRollout).gatewayDestinations
+      .length === 0
+  ) {
     throw new Error(
       `no chains: contracts/${ENV}.json has no multicallRouters and CHAINS is unset`
     )
@@ -227,12 +311,42 @@ const main = async () => {
   console.log(`Using signer from MPC : ${signerAddress}`)
 
   const txs = []
-  for (const slug of slugs) {
+  const relayNet = ENV === "dev" ? relayTestnet : relayChain
+  const relayChainClient = createPublicClient({
+    transport: http(relayNet.rpc[0]),
+  })
+  // reads against the wrong chain silently return empty values
+  const relayChainId = await relayChainClient.getChainId()
+  if (BigInt(relayChainId) !== relayNet.chainId) {
+    throw new Error(
+      `RPC ${relayNet.rpc[0]} serves chain ${relayChainId}, expected ${relayNet.chainId} for env "${ENV}"`
+    )
+  }
+  const grants = await resolveGrants(
+    slugs,
+    loadRouterRollout(deploymentFile.routerRollout),
+    deploymentFile,
+    relayChainClient
+  )
+  const generatedByChain: Record<string, number> = {}
+  const generatedTuples = new Set<string>()
+  for (const { slug, tuple } of grants) {
+    const identity = `${slug}:${(tuple?.depository ?? networks[slug]?.contracts?.[ENV]?.depository)?.toLowerCase()}:${(tuple?.router ?? deploymentFile.multicallRouters?.[slug])?.toLowerCase()}`
+    if (generatedTuples.has(identity)) continue
+    generatedTuples.add(identity)
     // one flaky public RPC out of ~50 must at least say which chain it was
-    const tx = await buildGrant(slug, signerAddress).catch((error) => {
+    const tx = await buildGrant(
+      slug,
+      signerAddress,
+      tuple,
+      generatedByChain[slug] ?? 0
+    ).catch((error) => {
       throw new Error(`${slug}: ${(error as Error).message}`)
     })
-    if (tx) txs.push(tx)
+    if (tx) {
+      txs.push(tx)
+      generatedByChain[slug] = (generatedByChain[slug] ?? 0) + 1
+    }
   }
 
   if (txs.length === 0) {
@@ -246,7 +360,8 @@ const main = async () => {
   console.log(`📝 Generated ${txs.length} transaction(s)`)
 }
 
-main().catch((error) => {
-  console.error(error)
-  process.exit(1)
-})
+if (require.main === module)
+  main().catch((error) => {
+    console.error(error)
+    process.exit(1)
+  })

@@ -15,6 +15,7 @@ import { keccak_256 } from "@noble/hashes/sha3.js";
 import { bech32 } from "@scure/base";
 import { WalletContractV5R1 } from "@ton/ton";
 import bs58 from "bs58";
+import { deriveAddress } from "ripple-keypairs";
 import { encodeAbiParameters, keccak256, type Address, type Hex } from "viem";
 
 export type VmType =
@@ -23,7 +24,8 @@ export type VmType =
   | "solana-vm"
   | "hyperliquid-vm"
   | "ton-vm"
-  | "tron-vm";
+  | "tron-vm"
+  | "xrp-vm";
 
 export interface AccountResponse {
   vmType: VmType;
@@ -171,6 +173,11 @@ const VM_DERIVATION: Record<VmType, VmDerivation> = {
   "tron-vm": {
     ed25519Bip32: false,
     formatAddress: tronAddress,
+    formatPublicKey: compressedPublicKey,
+  },
+  "xrp-vm": {
+    ed25519Bip32: false,
+    formatAddress: (node) => deriveAddress(node.compressedPublicKey.slice(2)),
     formatPublicKey: compressedPublicKey,
   },
 };

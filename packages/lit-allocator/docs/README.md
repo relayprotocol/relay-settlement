@@ -48,8 +48,18 @@ only the hashes covered by the oracle signatures.
 ```ts
 import { getAllocatorAction } from "@relay-protocol/lit-actions";
 
-const { code, config } = getAllocatorAction(environment, "v1", vmType);
+// Pick the version of the allocator the withdrawal was submitted to:
+// in every environment, "v3" for the redeployed allocator and "v2" for the
+// previous one.
+const { code, config } = getAllocatorAction(environment, version, vmType);
 ```
+
+`v1` and `v2` are packaged in every environment; every environment also has
+`v3`, which signs for their redeployed allocator while `v2` keeps signing for the
+previous one.
+Callers pick the version that matches the allocator the withdrawal was submitted
+to and that they have integration-tested (see
+[`packages/lit-actions/README.md`](../../lit-actions/README.md)).
 
 Confirm that `config.name`, `config.hubEvmChainId`, and
 `config.allocatorAddress` match the environment used for the Hub request and

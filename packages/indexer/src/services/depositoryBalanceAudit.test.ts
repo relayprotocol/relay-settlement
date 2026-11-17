@@ -16,6 +16,7 @@ import {
   rpcEnvNameForChain,
   runDepositoryBalanceAudit,
 } from "./depositoryBalanceAudit.js"
+import { findSharedReserveGroup } from "./sharedReserves.js"
 
 const baseChain = {
   depository: "0x4cD00E387622C35bDDB9b4c962C136462338BC31",
@@ -528,4 +529,248 @@ test("runDepositoryBalanceAudit checks Hyperliquid and Lighter currencies", asyn
     balanceInputs.map((input) => (input as { vmType: string }).vmType),
     ["hyperliquid-vm", "hyperliquid-vm", "lighter-vm"]
   )
+})
+
+const arcChain = {
+  depository: "0x4cD00E387622C35bDDB9b4c962C136462338BC31",
+  id: "arc",
+  vmType: "ethereum-vm",
+}
+const ARC_USDC = "0x3600000000000000000000000000000000000000"
+const arcToken = (currency: string, decimals: number) => ({
+  decimals,
+  name: currency === ARC_USDC ? "USDC on Arc" : "USDC (gas) on Arc",
+  origin_asset: currency,
+  origin_chain_id: "5042",
+  origin_family: "ethereum-vm",
+  symbol: "arc-USDC",
+  token_id: generateTokenId({
+    address: currency,
+    chainId: "arc",
+    family: "ethereum-vm",
+  }).toString(),
+})
+const arcNative = arcToken(getVmTypeNativeCurrency("ethereum-vm"), 18)
+const arcErc20 = arcToken(ARC_USDC, 6)
+
+// Both representations read the same physical balance: 3,000 USDC
+const arcBalance = async (input: { currency: string }) =>
+  input.currency === ARC_USDC ? 3_000n * 10n ** 6n : 3_000n * 10n ** 18n
+
+const runArcAudit = (
+  supplies: Record<string, bigint>,
+  getBalance = arcBalance
+) =>
+  runDepositoryBalanceAudit(
+    new FakeDb([arcNative, arcErc20]) as unknown as Queryable,
+    {
+      totalSupply: async (tokenId: string) => supplies[tokenId],
+    } as unknown as Contract,
+    {
+      env: { ARC_RPC_URL: "https://arc.example" },
+      fetchChains: async () => [arcChain],
+      getBalance,
+    }
+  )
+
+test("findSharedReserveGroup matches native and facade currencies per chain", () => {
+  assert.equal(findSharedReserveGroup("5042", ARC_USDC)?.name, "arc-usdc")
+  assert.equal(
+    findSharedReserveGroup("5042", getVmTypeNativeCurrency("ethereum-vm"))
+      ?.name,
+    "arc-usdc"
+  )
+  assert.equal(
+    findSharedReserveGroup("988", "0x779DED0c9e1022225f8E0630b35a9b54bE713736")
+      ?.name,
+    "stable-usdt0"
+  )
+  assert.equal(findSharedReserveGroup("8453", ARC_USDC), undefined)
+  assert.equal(findSharedReserveGroup("5042", null), undefined)
+})
+
+test("runDepositoryBalanceAudit flags a shared reserve that each token alone reports covered", async () => {
+  // 2,000 native + 2,000 ERC-20 against one 3,000 balance: each token alone
+  // is covered, but together they are 1,000 short
+  const result = await runArcAudit({
+    [arcNative.token_id]: 2_000n * 10n ** 18n,
+    [arcErc20.token_id]: 2_000n * 10n ** 6n,
+  })
+
+  assert.equal(result.covered, 2)
+  assert.equal(result.deficit, 0)
+  assert.equal(result.sharedReserveDeficit, 1)
+  assert.equal(result.sharedReserves.length, 1)
+  const [reserve] = result.sharedReserves
+  assert.equal(reserve.group, "arc-usdc")
+  assert.equal(reserve.status, "deficit")
+  assert.equal(reserve.chainId, "arc")
+  assert.equal(reserve.decimals, 18)
+  assert.equal(reserve.totalSupplyFormatted, "4000.0")
+  assert.equal(reserve.depositoryBalanceFormatted, "3000.0")
+  assert.equal(reserve.deltaFormatted, "-1000.0")
+  assert.deepEqual(
+    reserve.members.map((member) => member.tokenId).sort(),
+    [arcNative.token_id, arcErc20.token_id].sort()
+  )
+})
+
+test("runDepositoryBalanceAudit reports a covered shared reserve with scaled decimals", async () => {
+  const result = await runArcAudit({
+    [arcNative.token_id]: 1_000n * 10n ** 18n,
+    [arcErc20.token_id]: 1_500_500_000n,
+  })
+
+  assert.equal(result.sharedReserveDeficit, 0)
+  const [reserve] = result.sharedReserves
+  assert.equal(reserve.status, "covered")
+  assert.equal(reserve.totalSupplyFormatted, "2500.5")
+  assert.equal(reserve.deltaFormatted, "499.5")
+})
+
+test("runDepositoryBalanceAudit reports a shared reserve error when a member check fails", async () => {
+  const result = await runArcAudit(
+    {
+      [arcNative.token_id]: 1n,
+      [arcErc20.token_id]: 1n,
+    },
+    async (input) => {
+      if (input.currency === ARC_USDC) {
+        throw new Error("rpc down")
+      }
+      return 1n
+    }
+  )
+
+  assert.equal(result.error, 1)
+  assert.equal(result.sharedReserveError, 1)
+  const [reserve] = result.sharedReserves
+  assert.equal(reserve.status, "error")
+  assert.match(reserve.error ?? "", new RegExp(arcErc20.token_id))
+})
+
+test("runDepositoryBalanceAudit skips the shared check when only one member is indexed", async () => {
+  const result = await runDepositoryBalanceAudit(
+    new FakeDb([arcErc20]) as unknown as Queryable,
+    { totalSupply: async () => 1n } as unknown as Contract,
+    {
+      env: { ARC_RPC_URL: "https://arc.example" },
+      fetchChains: async () => [arcChain],
+      getBalance: arcBalance,
+    }
+  )
+
+  assert.equal(result.covered, 1)
+  assert.equal(result.sharedReserves.length, 0)
+})
+
+test("runDepositoryBalanceAudit uses declared group decimals when token decimals are not indexed", async () => {
+  // A NULL decimals column must not turn a successful member into a failed
+  // group check; the group's declared on-chain decimals are used instead
+  const result = await runDepositoryBalanceAudit(
+    new FakeDb([
+      arcNative,
+      { ...arcErc20, decimals: null },
+    ]) as unknown as Queryable,
+    {
+      totalSupply: async (tokenId: string) =>
+        tokenId === arcErc20.token_id
+          ? 2_000n * 10n ** 6n
+          : 2_000n * 10n ** 18n,
+    } as unknown as Contract,
+    {
+      env: { ARC_RPC_URL: "https://arc.example" },
+      fetchChains: async () => [arcChain],
+      getBalance: arcBalance,
+    }
+  )
+
+  assert.equal(result.covered, 2)
+  assert.equal(result.sharedReserveError, 0)
+  const [reserve] = result.sharedReserves
+  assert.equal(reserve.status, "deficit")
+  assert.equal(reserve.totalSupplyFormatted, "4000.0")
+  assert.equal(reserve.depositoryBalanceFormatted, "3000.0")
+})
+
+test("runDepositoryBalanceAudit reports a shared reserve error when indexed and declared decimals disagree", async () => {
+  const result = await runDepositoryBalanceAudit(
+    new FakeDb([
+      arcNative,
+      { ...arcErc20, decimals: 18 },
+    ]) as unknown as Queryable,
+    { totalSupply: async () => 1n } as unknown as Contract,
+    {
+      env: { ARC_RPC_URL: "https://arc.example" },
+      fetchChains: async () => [arcChain],
+      getBalance: arcBalance,
+    }
+  )
+
+  assert.equal(result.sharedReserveError, 1)
+  const [reserve] = result.sharedReserves
+  assert.equal(reserve.status, "error")
+  assert.equal(reserve.totalSupply, null)
+  assert.match(
+    reserve.error ?? "",
+    new RegExp(`${arcErc20.token_id} \\(indexed 18, declared 6\\)`)
+  )
+})
+
+test("runDepositoryBalanceAudit re-reads a shared reserve at one instant before comparing", async () => {
+  // A 1,000 USDC deposit lands between the two member checks: the native
+  // check sees 3,000 of balance, and the reserve is then 4,000 against 4,000
+  // of supply. Mixing the stale balance with the later supply would report a
+  // false 1,000 deficit.
+  let nativeBalanceReads = 0
+  const result = await runDepositoryBalanceAudit(
+    new FakeDb([arcNative, arcErc20]) as unknown as Queryable,
+    {
+      totalSupply: async (tokenId: string) =>
+        tokenId === arcErc20.token_id
+          ? 2_000n * 10n ** 6n
+          : 2_000n * 10n ** 18n,
+    } as unknown as Contract,
+    {
+      env: { ARC_RPC_URL: "https://arc.example" },
+      fetchChains: async () => [arcChain],
+      getBalance: async (input) => {
+        if (input.currency === ARC_USDC) {
+          return 4_000n * 10n ** 6n
+        }
+        nativeBalanceReads += 1
+        return (nativeBalanceReads === 1 ? 3_000n : 4_000n) * 10n ** 18n
+      },
+    }
+  )
+
+  assert.equal(nativeBalanceReads, 2)
+  const [reserve] = result.sharedReserves
+  assert.equal(reserve.status, "covered")
+  assert.equal(reserve.depositoryBalanceFormatted, "4000.0")
+  assert.equal(reserve.totalSupplyFormatted, "4000.0")
+})
+
+test("runDepositoryBalanceAudit reports a shared reserve error when the re-read fails", async () => {
+  let nativeBalanceReads = 0
+  const result = await runDepositoryBalanceAudit(
+    new FakeDb([arcNative, arcErc20]) as unknown as Queryable,
+    { totalSupply: async () => 1n } as unknown as Contract,
+    {
+      env: { ARC_RPC_URL: "https://arc.example" },
+      fetchChains: async () => [arcChain],
+      getBalance: async (input) => {
+        if (input.currency !== ARC_USDC && ++nativeBalanceReads > 1) {
+          throw new Error("rpc down")
+        }
+        return arcBalance(input)
+      },
+    }
+  )
+
+  assert.equal(result.covered, 2)
+  assert.equal(result.sharedReserveError, 1)
+  const [reserve] = result.sharedReserves
+  assert.equal(reserve.status, "error")
+  assert.match(reserve.error ?? "", /re-read failed: rpc down/)
 })

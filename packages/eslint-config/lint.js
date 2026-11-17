@@ -46,6 +46,17 @@ const binDir = findBinDir(cwd)
 const prettierBin = path.join(binDir, "prettier")
 const eslintBin = path.join(binDir, "eslint")
 
+// Keep caches local to each workspace so parallel lint processes cannot
+// overwrite one another. Content hashes survive fresh checkout timestamps.
+const cacheDir = path.join(cwd, "node_modules", ".cache", "lint")
+const cacheArgs = (tool) => [
+  "--cache",
+  "--cache-strategy",
+  "content",
+  "--cache-location",
+  path.join(cacheDir, tool),
+]
+
 // Determine if we're in the root (has workspaces)
 const packageJson = JSON.parse(
   fs.readFileSync(path.join(cwd, "package.json"), "utf8")
@@ -63,6 +74,7 @@ if (isRoot) {
   const prettierArgs = hasFix
     ? ["--write", ".", "--ignore-path", prettierIgnorePath]
     : ["--check", ".", "--ignore-path", prettierIgnorePath]
+  prettierArgs.push(...cacheArgs("prettier"))
 
   try {
     execFileSync(process.execPath, [prettierBin, ...prettierArgs], {
@@ -87,6 +99,7 @@ if (isRoot) {
   const prettierArgs = hasFix
     ? ["--write", ".", "--ignore-path", prettierIgnorePath]
     : ["--check", ".", "--ignore-path", prettierIgnorePath]
+  prettierArgs.push(...cacheArgs("prettier"))
 
   try {
     execFileSync(process.execPath, [prettierBin, ...prettierArgs], {
@@ -98,6 +111,7 @@ if (isRoot) {
   }
 
   const eslintArgs = hasFix ? [".", "--fix"] : ["."]
+  eslintArgs.push(...cacheArgs("eslint"))
 
   try {
     execFileSync(process.execPath, [eslintBin, ...eslintArgs], {

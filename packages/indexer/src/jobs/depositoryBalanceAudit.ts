@@ -95,12 +95,54 @@ export const startDepositoryBalanceAudit = (
             }
           }
 
+          for (const reserve of result.sharedReserves) {
+            const reserveData = {
+              auditStatus: reserve.status,
+              chainId: reserve.chainId,
+              decimals: reserve.decimals,
+              delta: reserve.deltaFormatted,
+              deltaBaseUnits: reserve.delta,
+              depository: reserve.depository,
+              depositoryBalance: reserve.depositoryBalanceFormatted,
+              depositoryBalanceBaseUnits: reserve.depositoryBalance,
+              error: reserve.error,
+              event: "shared_reserve_check",
+              group: reserve.group,
+              members: reserve.members,
+              totalSupply: reserve.totalSupplyFormatted,
+              totalSupplyBaseUnits: reserve.totalSupply,
+            }
+
+            if (reserve.status === "deficit") {
+              jsonLogger.error(
+                LOG_SCOPE,
+                "Shared depository balance is below combined Hub total supply",
+                reserveData
+              )
+            } else if (reserve.status === "covered") {
+              jsonLogger.info(
+                LOG_SCOPE,
+                "Shared depository balance covers combined Hub total supply",
+                reserveData
+              )
+            } else {
+              jsonLogger.error(
+                LOG_SCOPE,
+                "Shared reserve check failed",
+                reserveData
+              )
+            }
+          }
+
           jsonLogger.info(LOG_SCOPE, "Audit completed", {
             checked: result.checked,
             covered: result.covered,
             deficits: result.deficit,
             errors: result.error,
             event: "audit_completed",
+            sharedReserveDeficits: result.sharedReserveDeficit,
+            sharedReserveErrors: result.sharedReserveError,
+            sharedReserves: result.sharedReserves.length,
             unsupported: result.unsupported,
           })
         } finally {

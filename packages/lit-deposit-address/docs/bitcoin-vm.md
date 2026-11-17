@@ -29,7 +29,8 @@ The action recomputes every sighash from `unsignedTransaction` + `inputValues` +
 ### Policy
 
 - Sends exactly `trigger.input.amount` satoshis to the scripts encoded by `attestation.inputDepository`.
-- Any non-depository, non-`OP_RETURN` output must pay `trigger.derivationFields.refundRecipient`.
+- Any non-depository, non-`OP_RETURN` output must pay `trigger.derivationFields.refundRecipient` or the deposit wallet's own P2WPKH script, so an overpayment can stay at the deposit address.
+- Change to the deposit wallet must be at least 546 sats. It leaves later through a refund sweep under its own trigger for the same derivation fields.
 - Contains an `OP_RETURN` output whose UTF-8 payload starts with `trigger.orderId` and includes `|depositor=<address>|`.
 - The depositor encoded from the `OP_RETURN` metadata matches `trigger.derivationFields.depositor`.
 - `inputValues.length == sighashes.length == input count`.

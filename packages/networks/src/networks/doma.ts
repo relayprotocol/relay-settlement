@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const doma: NetworkConfig = {
   chainId: 97477n,
@@ -10,8 +11,6 @@ export const doma: NetworkConfig = {
   hubChainId: "97477",
   isTestnet: false,
   name: "Doma",
-  rpc: process.env.RPC_97477
-    ? [process.env.RPC_97477]
-    : ["https://rpc.doma.xyz"],
+  ...resolveRpc(process.env.RPC_97477, ["https://rpc.doma.xyz"]),
   slug: "doma",
 }

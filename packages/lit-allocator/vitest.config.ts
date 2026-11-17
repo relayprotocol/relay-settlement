@@ -6,6 +6,8 @@ export default defineConfig({
     __HUB_EVM_CHAIN_ID__: JSON.stringify("421614"),
     __ALLOWED_ORACLES__: JSON.stringify("[]"),
     __ORACLE_SIGNATURE_THRESHOLD__: JSON.stringify("0"),
+    __LIGHTER_GATEWAYS__: JSON.stringify("[]"),
+    __ATLAS_DOMAIN__: JSON.stringify("null"),
   },
   resolve: {
     alias: {

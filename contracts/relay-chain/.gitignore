@@ -1,0 +1,38 @@
+# Dependencies
+/dependencies/
+node_modules
+
+# Secrets
+.env
+
+# Hardhat files
+/cache
+/cache_hardhat
+/artifacts
+
+# TypeChain files
+/typechain
+/typechain-types
+
+# Scripts
+/scripts
+/.verify-deployment-cache/
+
+# solidity-coverage files
+/coverage
+/coverage.json
+
+# Foundry deployments
+/broadcast
+
+# Foundry build output
+/broadcast
+/out
+/forge-out
+foundry.lock
+
+# AI agents
+.claude
+
+# Redeploy tool state (per-env progress, local only)
+/deployments/redeploy/

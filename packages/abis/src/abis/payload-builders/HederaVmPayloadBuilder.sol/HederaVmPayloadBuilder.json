@@ -66,8 +66,18 @@
       {
         "name": "params",
         "type": "tuple",
-        "internalType": "struct BuildPayloadParams",
+        "internalType": "struct WithdrawRequest",
         "components": [
+          {
+            "name": "chainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "depository",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
           {
             "name": "currency",
             "type": "bytes",
@@ -79,19 +89,29 @@
             "internalType": "uint256"
           },
           {
+            "name": "spenderChainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "spender",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
             "name": "receiver",
             "type": "bytes",
             "internalType": "bytes"
           },
           {
-            "name": "nonce",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "data",
             "type": "bytes",
             "internalType": "bytes"
+          },
+          {
+            "name": "nonce",
+            "type": "bytes32",
+            "internalType": "bytes32"
           }
         ]
       }
@@ -101,6 +121,23 @@
         "name": "payload",
         "type": "bytes",
         "internalType": "bytes"
+      },
+      {
+        "name": "withdrawFee",
+        "type": "tuple",
+        "internalType": "struct WithdrawFee",
+        "components": [
+          {
+            "name": "currency",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
       }
     ],
     "stateMutability": "view"

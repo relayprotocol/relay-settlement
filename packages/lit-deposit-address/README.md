@@ -44,6 +44,77 @@ separate bundle for:
 - `hyperliquid-vm`
 - `ton-vm`
 - `tron-vm`
+- `xrp-vm` (native XRP Payment sweeps)
+
+### XRP Payment sweeps
+
+The XRP source supports public derivation through `account` and `wallet`. The
+`sign` operation accepts one serialized unsigned native `Payment` in
+`unsignedTransaction` (hex without `0x`). It returns `rawTransaction` and the
+uppercase XRPL `transactionHash`.
+
+The input protocol chain id must be `xrp` (XRPL Mainnet). Mainnet Payments
+omit `NetworkID`; Relay's numeric chain row is a separate identifier.
+The policy binds `Account` to the derived wallet, `Destination` to the attested
+depository, and `Amount` to the full trigger input. Fund the wallet with enough
+additional XRP for its fee and the ledger-required account reserve. The
+[funding steps](./docs/README.md#3-fund-the-wallet) describe the balance check.
+
+Exactly one `MemoData` contains UTF-8
+`<orderId>|depositor=<classic XRP address>|`. Its depositor AccountID must equal
+`trigger.derivationFields.depositor`. The companion Oracle must parse this
+format to preserve the original depositor for recovery.
+
+Before recording the Hub trigger, encode a validated ledger reference in
+`trigger.extraData` as ABI `(uint32 ledgerIndex, uint64 observedAt)`, where
+`observedAt` is Unix time in seconds. Oracle checks the index against its
+configured XRP RPC and accepts references at most four validated ledgers behind.
+At attestation, Oracle requires a reference at most 15 seconds old and rejects
+future timestamps.
+
+Lit calculates the ledger window from the attested `observedAt` so every node
+uses the same time. `LastLedgerSequence` must exceed the reference index by at
+most 32 (about 2 minutes). When a price expires
+within 320 seconds of `observedAt`, the window allows 10 seconds per ledger
+between `observedAt` and the earliest price expiry. Shared checks still reject
+expired prices and require over one hour before settlement and refund deadlines.
+
+For XRP, construct the trigger data with the validated ledger index:
+
+```ts
+import { encodeAbiParameters } from "viem";
+
+const extraData = encodeAbiParameters(
+  [{ type: "uint32" }, { type: "uint64" }],
+  [validatedLedgerIndex, BigInt(Math.floor(Date.now() / 1000))],
+);
+```
+
+Select a pricing oracle that resolves every requested currency without decoding
+`extraData`, such as `RelayPriceOracle` with configured feeds. Its returned prices
+belong in `trigger.prices`. The example helper `encodePricesExtraData` encodes a
+different payload for `BasicPricingOracle`. XRP's ledger payload is incompatible
+with that oracle and with the signed-price fallback in `SignedPricingOracle`.
+
+The 15-second budget includes Hub inclusion and Oracle attestation. If Oracle
+rejects an expired reference, record a new trigger for the same order with a
+fresh reference and a new nonce, then obtain its attestation and sign a new
+request. The derivation fields stay the same, preserving the funded wallet.
+Measure this complete flow in dev before relying on XRP sweeps.
+
+Fees must be from 1 through 10,000 drops. `Sequence` must be a positive uint32.
+Only `tfFullyCanonicalSig` may be set in `Flags`. Tags and issued assets are
+outside this step. Ledger expiry measures ledger progress, so a ledger halt can
+extend its wall-clock lifetime. Submission must recheck order validity.
+
+Bundle generation and package exports include XRP `v1.2` in dev, stag, and prod.
+Packaged `v1.2` allows the 32-ledger window above; the CIDs registered in stag
+and prod allow at most 4 ledgers until their rebuilt `v1.2` is registered.
+Setup registration currently includes XRP only in dev. The action signs sweeps
+that pass the policy above. Deploy and verify the
+companion Oracle changes for memo attribution and ledger-reference validation
+before registering the dev XRP action. Reserve and fee funding, recovery of
+retained XRP, and refund signing require separate implementation.
 
 The exact code released to integrators is packaged by
 [`@relay-protocol/lit-actions`](../lit-actions).
@@ -73,6 +144,20 @@ Before signing, the action verifies:
 5. the supplied trigger hashes to the attested trigger hash;
 6. the order and order signature match the trigger; and
 7. every VM-native transaction satisfies the deposit policy for that VM.
+
+The output and every refund must have deadlines more than one hour after the
+current Unix time in seconds when signing, allowing time for broadcast and
+confirmation. Every refund deadline must also be at or after the output deadline
+so the refund window covers the fill window. Every refund minimum must cover at least
+`input.amount * (10000 - priceImpactBps) / 10000`, rounded up to the next raw
+token unit. Refunds use the input currency and the same `priceImpactBps` tolerance
+as the output's USD-value check.
+
+The price-impact check requires `usdPriceDecimals` and `currencyDecimals` for
+both input and output prices to be JSON numbers that are integers from 0 to 255.
+Numeric strings such as `"18"` are rejected even though they produce the same
+ABI trigger hash as `18`; callers must preserve numeric types when passing
+prices to the action.
 
 The exact request and response types, trigger fields, transaction policies, and
 end-to-end solver recipe are in the [solver integration guide](./docs). Start
@@ -134,9 +219,25 @@ yarn workspace @relay-protocol/lit-deposit-address setup -- \
 ```
 
 The command manages the `deposit-address-<env>` group and
-`deposit-address-<env>-usage-key`, registers every per-VM action, prunes stale
-deposit-address registrations, and prints `LIT_API_KEY`, `LIT_PKP_ID`, and the
+`deposit-address-<env>-usage-key`, registers every per-VM action, preserves older
+action registrations and group permissions, and prints `LIT_API_KEY`, `LIT_PKP_ID`, and the
 per-VM action CIDs. Pass `--dry-run` to inspect the changes first.
+
+Disabling XRP signing in dev requires each attached hash to match a freshly built
+target or a named action in the account or group listing. Setup stops before
+changing group permissions when a hash has no match. Review the reported hashes
+and name or revoke those actions before retrying.
+
+Pass `--prune-old-versions` to explicitly remove older versions of this
+environment's canonical per-VM actions from the group and account. Replacements
+are registered and attached before pruning; in `--calldata` mode, additions
+precede removals in the emitted batch. Unrelated actions are preserved.
+
+Only prune after verifying the replacement actions and completing migration or
+sweeping all wallets that depend on the old derivation. A derivation change can
+make legacy wallets unsignable with the new action. Keep the existing PKP and
+legacy action CIDs available until those wallets no longer need signing. Use
+`--dry-run --prune-old-versions` to preview cleanup.
 
 Account modes, PKP creation, ownership, billing, usage-key rotation, and
 MPC/multisig `--calldata` mode are documented once in

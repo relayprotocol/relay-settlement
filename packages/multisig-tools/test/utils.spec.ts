@@ -11,7 +11,7 @@ const TRANSACTIONS_DIR = join(__dirname, "..", "transactions")
 const hasUnparseableRpcPlaceholder = (raw: string) => raw.includes("[REDACTED")
 
 // Manifests live under per-env subdirectories (transactions/<env>/); scan all.
-const MANIFEST_ENVS = ["dev", "stag", "prod"] as const
+const MANIFEST_ENVS = ["dev", "stag", "test", "prod"] as const
 
 const manifestFiles = MANIFEST_ENVS.flatMap((env) => {
   let entries: string[]

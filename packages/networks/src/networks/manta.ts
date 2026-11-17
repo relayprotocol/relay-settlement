@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const manta: NetworkConfig = {
   chainId: 169n,
@@ -10,8 +11,8 @@ export const manta: NetworkConfig = {
   hubChainId: "169",
   isTestnet: false,
   name: "Manta",
-  rpc: process.env.RPC_169
-    ? [process.env.RPC_169]
-    : ["https://pacific-rpc.manta.network/http"],
+  ...resolveRpc(process.env.RPC_169, [
+    "https://pacific-rpc.manta.network/http",
+  ]),
   slug: "manta",
 }

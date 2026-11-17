@@ -1,14 +1,14 @@
 # Packages
 
 The `packages/` directory contains the Relay Settlement Protocol's published
-TypeScript libraries, internal services, contract implementations, command-line
+TypeScript libraries, internal services, command-line
 tools, shared configuration, and Lit Action tooling. These directories are
-managed by the root Yarn workspace unless noted otherwise.
+managed by the root Yarn workspace unless noted otherwise. Contract projects
+live under [`contracts/`](../contracts/README.md).
 
 | Directory                                      | Package                               | Purpose                                                                                                                                                  |
 | ---------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`abis`](./abis)                               | `@relay-protocol/settlement-abis`     | Publishes the protocol's current and historical contract ABIs as plain arrays for contract calls, event queries, and transaction decoding                |
-| [`depository`](./depository)                   | N/A                                   | Contains the Ethereum and Solana Relay Depository contract implementations for receiving deposits and executing allocator-authorized withdrawals         |
 | [`eslint-config`](./eslint-config)             | `@relay-settlement/eslint-config`     | Provides the shared ESLint flat config and the `lint` command used across the monorepo, including Prettier and repository-specific rules                 |
 | [`indexer`](./indexer)                         | `@relay-settlement/indexer`           | Runs the PostgreSQL-backed settlement indexer and API, including transfer ingestion, balance and coverage audits, and bounded replay tooling             |
 | [`indexer-ui`](./indexer-ui)                   | `@relay-settlement/indexer-ui`        | Provides the React/Vite UI for browsing indexed addresses and tokens, viewing indexer health, and operating transfer replays                             |

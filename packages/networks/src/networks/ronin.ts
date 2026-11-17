@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const ronin: NetworkConfig = {
   chainId: 2020n,
@@ -10,8 +11,6 @@ export const ronin: NetworkConfig = {
   hubChainId: "2020",
   isTestnet: false,
   name: "Ronin",
-  rpc: process.env.RPC_2020
-    ? [process.env.RPC_2020]
-    : ["https://api.roninchain.com/rpc"],
+  ...resolveRpc(process.env.RPC_2020, ["https://api.roninchain.com/rpc"]),
   slug: "ronin",
 }

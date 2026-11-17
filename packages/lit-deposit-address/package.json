@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "lint": "tsc --noEmit && eslint .",
+    "lint": "tsc --noEmit && eslint . --cache --cache-strategy content --cache-location node_modules/.cache/lint/eslint",
     "test": "vitest run tests",
     "test:watch": "vitest",
     "bundle:actions": "tsx scripts/bundle-actions.ts",
@@ -25,6 +25,9 @@
     "@noble/hashes": "2.0.1",
     "@scure/base": "2.0.0",
     "bs58": "6.0.0",
+    "ripple-address-codec": "5.0.1",
+    "ripple-binary-codec": "2.8.0",
+    "ripple-keypairs": "2.0.0",
     "tronweb": "6.1.0",
     "viem": "2.48.11"
   },

@@ -1,23 +1,29 @@
 import { describe, expect, it } from "vitest"
-import { keccak256 } from "viem"
+import { keccak256, toHex } from "viem"
 
 import {
   DrawLegKind,
   PoolDrawResolverExecution,
   decodePoolDrawResolverData,
   decodePoolDrawResolverExecution,
+  encodeFundingPoolDrawAuthorization,
   encodePoolDrawResolverData,
   encodePoolDrawResolverExecution,
+  fundingPoolDrawConfigUpdateTypes,
+  fundingPoolDrawResolverUpdateTypes,
   getFundingPoolDrawAuthorizationHash,
-  getFundingPoolSponsorshipConfigUpdateHash,
-  getFundingPoolSponsorshipResolverUpdateHash,
+  getFundingPoolDrawConfigUpdateHash,
+  getFundingPoolDrawResolverUpdateHash,
+  getFundingPoolDrawRevocationHash,
   getFundingPoolWithdrawalHash,
   getPoolDrawResolverCommitmentNonce,
+  getPoolDrawResolverPlanHash,
 } from "../src/messages/v2.3/funding-pool"
 import { getExecuteAndWithdrawRequestHash } from "../src/messages/v2.3/withdrawal"
+import * as sdk from "../src"
 
 // Expected values generated from the Solidity contracts with a Foundry test
-// (chain id 31337) calling `RelayFundingPool.hashWithdrawal`,
+// (chain id 31337) calling `FundingPool.hashWithdrawal`,
 // `RelayExecutor.hashExecuteAndWithdrawRequest`, and
 // `keccak256(abi.encode(PoolDrawResolver.Execution))`
 
@@ -36,12 +42,12 @@ describe("funding pool helpers", () => {
           deadline: 2_000_000_000n,
         }
       )
-    ).toBe("0xbf3a8c5753e01d1e57bca04b80127256061f32b6a00252b1f799f529d834c5cc")
+    ).toBe("0x347fc83e26bcfb55a01c19ab40f48bcdfee43a6a83b647e20b6743977611801a")
   })
 
-  it("hashes the Solidity SponsorshipConfigUpdate EIP-712 shape", () => {
+  it("hashes the Solidity DrawConfigUpdate EIP-712 shape", () => {
     expect(
-      getFundingPoolSponsorshipConfigUpdateHash(
+      getFundingPoolDrawConfigUpdateHash(
         31337,
         "0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f",
         {
@@ -51,15 +57,16 @@ describe("funding pool helpers", () => {
           perOrderCap: 50_000_000n,
           budget: 2_000_000_000n,
           expiry: 1_900_000_000n,
+          epoch: 3n,
           nonce: 7n,
           deadline: 2_000_000_000n,
         }
       )
-    ).toBe("0xc3afa856adedc926115e74f6a4357e34c14ee01ace83783e7af7f731ea2a4769")
+    ).toBe("0xcd5f661b4b25090775010e3ef9ed18007115af07aadfb22c47dd5311a76dd9d3")
   })
 
   // Fixture mirrored by `test_drawAuthorizationHashMatchesSdkFixture` in
-  // smart-contracts/test/RelayFundingPool/RelayFundingPool.t.sol — the platform
+  // contracts/relay-chain/test/FundingPool/FundingPool.t.sol — the platform
   // signs this digest per order, so both sides must derive it identically
   it("hashes the Solidity DrawAuthorization EIP-712 shape", () => {
     expect(
@@ -69,25 +76,87 @@ describe("funding pool helpers", () => {
         {
           account: "0x3333333333333333333333333333333333333333",
           orderAddress: "0x9999999999999999999999999999999999999999",
+          planHash:
+            "0x0000000000000000000000000000000000000000000000000000000000000001",
+          nonce: 7n,
+          deadline: 1_900_000_000n,
         }
       )
-    ).toBe("0xb530232c7a8705c344cff4fd54c62e3b276647566e8013ff846baa11aa690a8e")
+    ).toBe("0x5f1c6995884f4040d0720471c804c403f6d83c7f14989b943dd32f32cab7e734")
   })
 
-  it("hashes the Solidity SponsorshipResolverUpdate EIP-712 shape", () => {
+  // Fixture mirrored by `test_drawAuthorizationEnvelopeMatchesSdkFixture` in
+  // contracts/relay-chain/test/FundingPool/FundingPool.t.sol — the pool
+  // abi.decodes this envelope, so the layout must match byte for byte
+  it("encodes the DrawAuthorization envelope", () => {
     expect(
-      getFundingPoolSponsorshipResolverUpdateHash(
+      keccak256(
+        encodeFundingPoolDrawAuthorization(
+          {
+            account: "0x3333333333333333333333333333333333333333",
+            orderAddress: "0x9999999999999999999999999999999999999999",
+            planHash:
+              "0x0000000000000000000000000000000000000000000000000000000000000001",
+            nonce: 7n,
+            deadline: 1_900_000_000n,
+          },
+          "0xaabbcc"
+        )
+      )
+    ).toBe("0x12e1e65c98713446c6e1af1aa89bb5db05e61f49175ee934234b662baa5fba82")
+  })
+
+  it("hashes the Solidity DrawResolverUpdate EIP-712 shape", () => {
+    expect(
+      getFundingPoolDrawResolverUpdateHash(
         31337,
         "0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f",
         {
           account: "0x3333333333333333333333333333333333333333",
           resolver: "0x5555555555555555555555555555555555555555",
           allowed: true,
+          epoch: 3n,
           nonce: 8n,
           deadline: 2_000_000_000n,
         }
       )
-    ).toBe("0x5f0af5dd252b51c4c4519a0f9dcc4621126b506412c67d952a25f6e00c168a4e")
+    ).toBe("0x39c3126664603b97648fc979cef3b8a15727408dc7d85ba8cee683ebc9de3641")
+  })
+
+  it("hashes the Solidity DrawRevocation EIP-712 shape", () => {
+    expect(
+      getFundingPoolDrawRevocationHash(
+        31337,
+        "0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f",
+        {
+          account: "0x3333333333333333333333333333333333333333",
+          epoch: 3n,
+          deadline: 2_000_000_000n,
+        }
+      )
+    ).toBe("0x51a1d7381d0a3825608ae5049ff07673e57f2d104dd393f58307e01ead5bf56e")
+  })
+
+  // Fixtures mirrored by `test_drawConfigTypehashesMatchSdkFixtures` in
+  // contracts/relay-chain/test/FundingPool/FundingPool.t.sol — the
+  // primary type names and field lists must match the Solidity type strings.
+  // `DrawRevocation` moved to v2.4 (it gained a nonce) and is checked there
+  it.each([
+    [
+      "DrawConfigUpdate",
+      fundingPoolDrawConfigUpdateTypes.DrawConfigUpdate,
+      "0x342c027017bc0f827fe315c4d4c6f2e19aba6699bb67191b1009ed32e7a839c1",
+    ],
+    [
+      "DrawResolverUpdate",
+      fundingPoolDrawResolverUpdateTypes.DrawResolverUpdate,
+      "0x3f1aa20f0d81c90a3255ec38475748a2f4263dfe9911e18e021d5caf84cfa2b1",
+    ],
+  ] as const)("derives the Solidity %s typehash", (name, fields, typehash) => {
+    const encodedType = `${name}(${fields
+      .map((field) => `${field.type} ${field.name}`)
+      .join(",")})`
+    expect(keccak256(toHex(encodedType))).toBe(typehash)
   })
 
   it("encodes the PoolDrawResolver Execution tuple", () => {
@@ -125,15 +194,19 @@ describe("funding pool helpers", () => {
           data: "0x05060708",
         },
       ],
+      surplusPool: "0x5656565656565656565656565656565656565656",
+      surplusAccount: "0x1212121212121212121212121212121212121212",
       salt: "0x000000000000000000000000000000000000000000000000000000000000002a",
     }
 
     const encoded = encodePoolDrawResolverExecution(execution)
     // Fixture mirrored by `test_executionEncodingMatchesSdkFixture` in
-    // smart-contracts/test/PoolResolvers/PoolDrawResolver.t.sol
+    // contracts/relay-chain/test/PoolResolvers/PoolDrawResolver.t.sol
     expect(keccak256(encoded)).toBe(
-      "0x79bea5134464aa47b9d4993ae0f08bd33f0a9469f675a0a3de105aabc05f8ac5"
+      "0x1fc0ce0d00a2547fb5f07a47d1506c86145a87b069f868af9b585b988d755bce"
     )
+    // The plan hash the authorizer signs is that same hash of the plan bytes
+    expect(getPoolDrawResolverPlanHash(encoded)).toBe(keccak256(encoded))
     expect(decodePoolDrawResolverExecution(encoded)).toEqual(execution)
   })
 
@@ -141,6 +214,8 @@ describe("funding pool helpers", () => {
     const executionData = encodePoolDrawResolverExecution({
       legs: [],
       calls: [],
+      surplusPool: "0x0000000000000000000000000000000000000000",
+      surplusAccount: "0x0000000000000000000000000000000000000000",
       salt: "0x0000000000000000000000000000000000000000000000000000000000000001",
     })
     // Two legs naming the same account carry the same bytes; the array is
@@ -174,15 +249,36 @@ describe("funding pool helpers", () => {
     const encoded = encodePoolDrawResolverExecution({
       legs: [],
       calls: [],
+      surplusPool: "0x0000000000000000000000000000000000000000",
+      surplusAccount: "0x0000000000000000000000000000000000000000",
       salt: "0x0000000000000000000000000000000000000000000000000000000000000000",
     })
     expect(keccak256(encoded)).toBe(
-      "0xaa24fcd8c28149a79d01f9c0cf6bb6702236970a1d13e5ccb1aaa71eb3202763"
+      "0x7331d610cb5b94931dd18390c544d76c8205c1ac2ce32a0df5b920bcb6be6323"
     )
   })
 
+  // The relayer consumes these through the package root, not the deep module
+  // path this file imports from, so the barrel must carry every helper
+  it("exports the draw authorization helpers from the package root", () => {
+    expect(sdk.encodeFundingPoolDrawAuthorization).toBe(
+      encodeFundingPoolDrawAuthorization
+    )
+    expect(sdk.getPoolDrawResolverPlanHash).toBe(getPoolDrawResolverPlanHash)
+    expect(sdk.getFundingPoolDrawAuthorizationHash).toBe(
+      getFundingPoolDrawAuthorizationHash
+    )
+    expect(sdk.fundingPoolDrawAuthorizationTypes.DrawAuthorization).toEqual([
+      { name: "account", type: "address" },
+      { name: "orderAddress", type: "address" },
+      { name: "planHash", type: "bytes32" },
+      { name: "nonce", type: "uint256" },
+      { name: "deadline", type: "uint256" },
+    ])
+  })
+
   // Fixture mirrored by `test_commitmentNonceMatchesSdkFixture` in
-  // smart-contracts/test/PoolResolvers/PoolDrawResolver.t.sol — both sides
+  // contracts/relay-chain/test/PoolResolvers/PoolDrawResolver.t.sol — both sides
   // must derive `keccak256(resolver ‖ keccak256(payload))`
   it("derives the payload commitment nonce the resolver verifies", () => {
     expect(

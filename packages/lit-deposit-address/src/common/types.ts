@@ -13,6 +13,7 @@ export const VM_TYPES = [
   "hyperliquid-vm",
   "ton-vm",
   "tron-vm",
+  "xrp-vm",
 ] as const;
 
 /** A VM family identifier. */
@@ -216,6 +217,20 @@ export interface TronVmSignedTransaction {
   transactionHash: string;
 }
 
+/** XRP signing input: canonical XRPL binary bytes for one unsigned native Payment. */
+export interface XrpVmTransaction {
+  /** Hex-encoded unsigned Payment without a 0x prefix. */
+  unsignedTransaction: string;
+}
+
+/** XRP transaction ready for submission through the XRPL RPC. */
+export interface XrpVmSignedTransaction {
+  /** Uppercase hex-encoded signed transaction blob without a 0x prefix. */
+  rawTransaction: string;
+  /** Uppercase SHA512Half transaction id, including the XRPL transaction prefix. */
+  transactionHash: string;
+}
+
 /** Maps each VM family to the transaction shape its signer expects. */
 export interface VmTransactionMap {
   "ethereum-vm": EthereumVmTransaction;
@@ -224,6 +239,7 @@ export interface VmTransactionMap {
   "hyperliquid-vm": HyperliquidVmTransaction;
   "ton-vm": TonVmTransaction;
   "tron-vm": TronVmTransaction;
+  "xrp-vm": XrpVmTransaction;
 }
 
 /** Maps each VM family to the signed-transaction shape its signer returns. */
@@ -234,6 +250,7 @@ export interface VmSignedTransactionMap {
   "hyperliquid-vm": HyperliquidVmSignedTransaction;
   "ton-vm": TonVmSignedTransaction;
   "tron-vm": TronVmSignedTransaction;
+  "xrp-vm": XrpVmSignedTransaction;
 }
 
 /** Source-side description of the funds being deposited. */

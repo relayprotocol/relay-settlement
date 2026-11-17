@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const bnb: NetworkConfig = {
   chainId: 56n,
@@ -10,8 +11,9 @@ export const bnb: NetworkConfig = {
   hubChainId: "56",
   isTestnet: false,
   name: "BNB Chain",
-  rpc: process.env.RPC_56
-    ? [process.env.RPC_56]
-    : ["https://bsc-dataseed.binance.org", "https://rpc.ankr.com/bsc"],
+  ...resolveRpc(process.env.RPC_56, [
+    "https://bsc-dataseed.binance.org",
+    "https://rpc.ankr.com/bsc",
+  ]),
   slug: "bnb",
 }

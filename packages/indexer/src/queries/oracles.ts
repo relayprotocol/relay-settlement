@@ -1,6 +1,6 @@
 import {
   RelayOracle,
-  RelayOracleMultisig,
+  RelayInboxMultisig,
 } from "@relay-protocol/settlement-abis"
 import { Contract, getAddress, id, type Provider } from "ethers"
 import type { Queryable } from "../db/connection.js"
@@ -75,7 +75,7 @@ const readMultisigState = async (
 ): Promise<OracleMultisigState | null> => {
   const contract = new Contract(
     approvedOracleAddress,
-    RelayOracleMultisig,
+    RelayInboxMultisig,
     provider
   )
 

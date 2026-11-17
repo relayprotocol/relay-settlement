@@ -1,0 +1,19 @@
+{
+  "chainId": 537724,
+  "rpcUrl": "https://rpc.testnet.relay.link",
+  "explorerUrl": "https://relay-sov-testnet.cloud.blockscout.com",
+  "factory": "0xFd980bf509687cfba5324ca88D0Adbc81281F284",
+  "governor": "0x33eB6a492221d23695Bb830Bc5DC905B7Ff9D2d7",
+  "name": "xBTC-dev",
+  "symbol": "xBTC-dev",
+  "assetDecimals": 8,
+  "majorIndex": 0,
+  "labels": [
+    "bitcoin",
+    "base"
+  ],
+  "tokens": [
+    "0x6dc80ebec4c8791bd3e9b0337cfaaec7547b1b9a",
+    "0x672450dfcf8fe7b99bfab05803281645b1e0c8d9"
+  ]
+}

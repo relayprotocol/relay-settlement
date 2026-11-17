@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "environment": "prod",
+  "factory": "0x4e59b44847b379578588920ca78fbf26c0b4956c",
+  "salt": "0x0000000000000000000000000000000000000000000000000000000000000001",
+  "constructor": {
+    "owner": "0xf3d63166f0ca56c3c1a3508fce03ff0cf3fb691e",
+    "allocator": "0x51203c6be98052fb6d7fe1333ee6859b90d21cdf"
+  },
+  "variants": {
+    "cancun": {
+      "address": "0x4cd00e387622c35bddb9b4c962c136462338bc31",
+      "artifact": "releases/prod-cancun.json"
+    },
+    "london": {
+      "address": "0x59916da825d2d2ec1bf878d71c88826f6633ecca",
+      "artifact": "releases/prod-london.json"
+    }
+  }
+}

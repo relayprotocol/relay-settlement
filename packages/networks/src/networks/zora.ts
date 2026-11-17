@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const zora: NetworkConfig = {
   chainId: 7777777n,
@@ -10,8 +11,6 @@ export const zora: NetworkConfig = {
   hubChainId: "7777777",
   isTestnet: false,
   name: "Zora",
-  rpc: process.env.RPC_7777777
-    ? [process.env.RPC_7777777]
-    : ["https://rpc.zora.energy"],
+  ...resolveRpc(process.env.RPC_7777777, ["https://rpc.zora.energy"]),
   slug: "zora",
 }

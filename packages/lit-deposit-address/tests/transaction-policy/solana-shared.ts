@@ -1,3 +1,4 @@
+import { encodeSolanaAddress } from "../../src/common/address/solana.js";
 import type {
   DepositAddressTrigger,
   DepositAddressTriggerAttestation,
@@ -17,6 +18,10 @@ export const DEPOSIT_NATIVE_DISCRIMINATOR_BYTES = new Uint8Array([
 export const DEPOSIT_TOKEN_DISCRIMINATOR_BYTES = new Uint8Array([
   0x0b, 0x9c, 0x60, 0xda, 0x27, 0xa3, 0xb4, 0x13,
 ]);
+
+export const COMPUTE_BUDGET_PROGRAM_KEY = encodeSolanaAddress(
+  "ComputeBudget111111111111111111111111111111",
+);
 
 export function hexToBytes32(hex: string): Uint8Array {
   const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
@@ -72,10 +77,10 @@ function concat(...arrays: Uint8Array[]): Uint8Array {
 }
 
 /**
- * Build a base64-encoded legacy Solana compiled message containing exactly
- * one instruction. The instruction's `data` carries the Anchor discriminator
+ * Build a base64-encoded legacy Solana compiled message from the given
+ * instructions. The deposit instruction's `data` carries the Anchor discriminator
  * + Borsh-encoded `(amount, id)` args. `accountIndexes` is an array of
- * static-account-key indexes that the instruction references in Anchor order.
+ * static-account-key indexes that each instruction references (Anchor order for the deposit).
  */
 export interface SolanaMessageInputs {
   numRequiredSignatures?: number; // defaults to 1
@@ -119,6 +124,29 @@ export function buildDepositArgs(
   orderId: `0x${string}`,
 ): Uint8Array {
   return concat(discriminator, encodeU64LE(amount), hexToBytes32(orderId));
+}
+
+type SolanaInstruction = SolanaMessageInputs["instructions"][number];
+
+/** `SetComputeUnitLimit(units)`: tag 2 + u32 LE (the low 4 bytes of the u64 LE encoding). */
+export function computeUnitLimitIx(units: number, programIdIndex: number): SolanaInstruction {
+  return {
+    programIdIndex,
+    accountIndexes: [],
+    data: concat(new Uint8Array([2]), encodeU64LE(BigInt(units)).slice(0, 4)),
+  };
+}
+
+/** `SetComputeUnitPrice(microLamports)`: tag 3 + u64 LE. */
+export function computeUnitPriceIx(
+  microLamports: bigint,
+  programIdIndex: number,
+): SolanaInstruction {
+  return {
+    programIdIndex,
+    accountIndexes: [],
+    data: concat(new Uint8Array([3]), encodeU64LE(microLamports)),
+  };
 }
 
 export function makeSolanaTrigger(

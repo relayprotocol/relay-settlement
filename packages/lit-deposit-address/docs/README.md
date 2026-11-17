@@ -37,6 +37,7 @@ different environments.
 | [`hyperliquid-vm`](./hyperliquid-vm.md) | `sendAsset` deposits           |
 | [`ton-vm`](./ton-vm.md)                 | Native TON deposits            |
 | [`tron-vm`](./tron-vm.md)               | Native TRX and TRC20 deposits  |
+| [`xrp-vm`](../README.md#xrp-payment-sweeps) | Native XRP Payment sweeps     |
 
 ## Derivation fields
 
@@ -100,6 +101,25 @@ yarn workspace @relay-protocol/lit-deposit-address client derive -- \
 Send the exact input amount to `wallet.address`. Add native gas separately when
 the input chain requires the deposit wallet to pay its sweep fee. The per-VM
 guide states the accepted transaction shape.
+
+For XRP, fund the wallet with the full input amount plus enough additional XRP
+to pay the sweep fee and retain the account's ledger-required reserve. Read the
+current reserve and account balance from the configured ledger. A fresh account
+needs its reserve funded; a reused account needs a top-up for any shortfall.
+Keep principal reserved for other pending deposits separate from these funds.
+The sweep sends the full signed input amount.
+
+Before requesting an XRP signature, verify that the available balance covers
+`input.amount + Fee + requiredReserve`. The Lit Action validates the signed
+Payment fields without reading the ledger balance. If funding falls short,
+wait for the top-up before signing or submitting the sweep. Sending the full
+input amount from an account funded only with that principal can fail on the
+ledger. See [XRPL reserves](https://xrpl.org/docs/concepts/accounts/reserves).
+
+The reserve payer, recovery of retained XRP, and funding checks require separate
+implementation. XRP setup is restricted to dev. Before activation, deploy and
+verify Oracle support for the attributed sweep memo and the ledger reference
+specified in [XRP Payment sweeps](../README.md#xrp-payment-sweeps).
 
 ### 4. Record the Hub trigger
 

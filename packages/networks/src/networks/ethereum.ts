@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const ethereum: NetworkConfig = {
   chainId: 1n,
@@ -11,8 +12,9 @@ export const ethereum: NetworkConfig = {
   hubChainId: "1",
   isTestnet: false,
   name: "Ethereum",
-  rpc: process.env.RPC_1
-    ? [process.env.RPC_1]
-    : ["https://eth.rpc.blxrbdn.com", "https://rpc.ankr.com/eth"],
+  ...resolveRpc(process.env.RPC_1, [
+    "https://eth.rpc.blxrbdn.com",
+    "https://rpc.ankr.com/eth",
+  ]),
   slug: "ethereum",
 }

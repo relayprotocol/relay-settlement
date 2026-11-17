@@ -1,0 +1,11 @@
+{
+  "environment": "dev",
+  "chainId": 4217,
+  "address": "0x5CB1De3603A71Ac2f67b12bFbF095013FE4Ac299",
+  "variant": "cancun",
+  "initCodeHash": "0x8728e8aa483f6bb5a76de5b23890cc66385e7ea4eb56eda41b7b375b09f922e7",
+  "runtimeCodeHash": "0x02526e9a94a37e60bc68f40cc10c80aec98d9d7100effda69b6cdd6130d5c3d6",
+  "transactionHash": "0xbd576e1f6d527cebd0cc63f6734661f9de9d7a4dfdf1d3a0fb03d2b46326db6c",
+  "blockNumber": 46481654,
+  "verification": "verified"
+}

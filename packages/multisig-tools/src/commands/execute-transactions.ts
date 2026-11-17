@@ -1,8 +1,17 @@
 import type { Command } from "commander"
+import { mkdirSync, writeFileSync } from "fs"
+import { dirname } from "path"
+import { signMessageEntry } from "../helpers/messageSigning"
+import { executionIndices } from "../helpers/executionIndices"
+import { assertEvmFeeCap } from "../helpers/evmFeeCap"
+import { fundingBalance, getFundingCurrency } from "../helpers/fundingCurrency"
 import {
   createPublicClient,
   createWalletClient,
+  encodeFunctionData,
+  erc20Abi,
   formatEther,
+  formatUnits,
   http,
   keccak256,
   parseSignature,
@@ -13,6 +22,7 @@ import {
   serializeTransaction,
   type TransactionSerialized,
   WaitForTransactionReceiptTimeoutError,
+  zeroAddress,
 } from "viem"
 import { privateKeyToAccount } from "viem/accounts"
 import { networks } from "@relay-protocol/settlement-networks"
@@ -49,10 +59,6 @@ async function ensureFunding(
 ) {
   const networkClient = createPublicClient({ transport: http(tx.rpc) })
   const destinationChainId = await networkClient.getChainId()
-  const currentBalance = await networkClient.getBalance({
-    address: tx.from,
-  })
-
   const gasLimit = BigInt(tx.gas)
   const gasPrice = tx.maxFeePerGas
     ? BigInt(tx.maxFeePerGas)
@@ -60,10 +66,21 @@ async function ensureFunding(
       ? BigInt(tx.gasPrice)
       : await networkClient.getGasPrice()
 
-  const estimatedGasCost = gasLimit * gasPrice
+  const currency = await getFundingCurrency(
+    networkClient,
+    destinationChainId,
+    tx,
+    gasLimit,
+    gasPrice
+  )
+  const isToken = currency.address !== zeroAddress
+  const currentBalance = await fundingBalance(networkClient, currency, tx.from)
+  const formatBalance = (balance: bigint) =>
+    formatUnits(balance, currency.decimals)
+  const estimatedGasCost = currency.gasCost
   const requiredAmount = (estimatedGasCost * 150n) / 100n
   const shortfall = requiredAmount - currentBalance
-  const minimumBridgeAmount = BigInt("500000000000000") // 0.0005 ETH
+  const minimumBridgeAmount = isToken ? 10000n : 500000000000000n // 0.01 USD or 0.0005 native
   const amountToBridge =
     shortfall > minimumBridgeAmount ? shortfall : minimumBridgeAmount
 
@@ -72,10 +89,10 @@ async function ensureFunding(
     `chain ${destinationChainId}`
 
   console.log(
-    `💰 Need to fund ${tx.from} with ${formatEther(amountToBridge)} native tokens`
+    `💰 Need to fund ${tx.from} with ${formatBalance(amountToBridge)} ${currency.symbol}`
   )
   console.log(
-    `   Current: ${formatEther(currentBalance)}, Required: ${formatEther(requiredAmount)}, Amount: ${formatEther(amountToBridge)}`
+    `   Current: ${formatBalance(currentBalance)}, Required: ${formatBalance(requiredAmount)}, Amount: ${formatBalance(amountToBridge)}`
   )
 
   const deployerPrivateKey =
@@ -91,11 +108,11 @@ async function ensureFunding(
   )
   const deployerAddress = deployerAccount.address
 
-  // If the deployer already holds enough native funds on the destination chain,
-  // fund the target with a basic transfer instead of bridging via Relay.
-  const deployerBalance = await networkClient.getBalance({
-    address: deployerAddress,
-  })
+  const deployerBalance = await fundingBalance(
+    networkClient,
+    currency,
+    deployerAddress
+  )
   // Keep headroom for the funding transaction's own gas.
   if (deployerBalance >= amountToBridge + estimatedGasCost) {
     console.log(
@@ -115,16 +132,35 @@ async function ensureFunding(
       transport: http(tx.rpc),
     })
 
-    const transferHash = await directWalletClient.sendTransaction({
-      to: tx.from,
-      value: amountToBridge,
-    })
+    const transferHash = await directWalletClient.sendTransaction(
+      isToken
+        ? {
+            data: encodeFunctionData({
+              abi: erc20Abi,
+              args: [tx.from, amountToBridge],
+              functionName: "transfer",
+            }),
+            to: currency.address,
+            value: 0n,
+          }
+        : { to: tx.from, value: amountToBridge }
+    )
     console.log(`   Transfer tx: ${transferHash}`)
-    await networkClient.waitForTransactionReceipt({ hash: transferHash })
+    const receipt = await networkClient.waitForTransactionReceipt({
+      hash: transferHash,
+    })
+    if (receipt.status !== "success") {
+      throw new Error(`Funding transfer reverted: ${transferHash}`)
+    }
 
-    const newBalance = await networkClient.getBalance({ address: tx.from })
+    const newBalance = await fundingBalance(networkClient, currency, tx.from)
+    if (newBalance < requiredAmount) {
+      throw new Error(
+        `Funding transfer did not provide enough ${currency.symbol} to ${tx.from}`
+      )
+    }
     console.log(
-      `✅ Funding complete via direct transfer! New balance: ${formatEther(newBalance)}`
+      `✅ Funding complete via direct transfer! New balance: ${formatBalance(newBalance)} ${currency.symbol}`
     )
     return
   }
@@ -162,20 +198,25 @@ async function ensureFunding(
     `🌉 Using Relay to bridge from ${sourceChainConfig.name} to ${destinationChainName}`
   )
 
+  const relayHeaders: Record<string, string> = {}
+  if (process.env.RELAY_API_KEY) {
+    relayHeaders["x-api-key"] = process.env.RELAY_API_KEY
+  }
+
   const quoteResponse = await fetch("https://api.relay.link/quote", {
     body: JSON.stringify({
       amount: amountToBridge.toString(),
       destinationChainId,
-      destinationCurrency: "0x0000000000000000000000000000000000000000",
+      destinationCurrency: currency.address,
       options: { swapOnOrigin: false },
       originChainId: sourceChainId,
       originCurrency: "0x0000000000000000000000000000000000000000",
       recipient: tx.from,
       referrer: "relay.settlement",
-      tradeType: "EXACT_INPUT",
+      tradeType: isToken ? "EXACT_OUTPUT" : "EXACT_INPUT",
       user: deployerAddress,
     }),
-    headers: { "Content-Type": "application/json" },
+    headers: { ...relayHeaders, "Content-Type": "application/json" },
     method: "POST",
   })
 
@@ -266,14 +307,14 @@ async function ensureFunding(
   while (attempts < maxAttempts) {
     await new Promise((resolve) => setTimeout(resolve, 5000))
 
-    const newBalance = await networkClient.getBalance({
-      address: tx.from,
-      blockTag: "latest",
-    })
+    const newBalance = await fundingBalance(networkClient, currency, tx.from)
 
-    if (newBalance > currentBalance) {
+    if (
+      newBalance > currentBalance &&
+      (!isToken || newBalance >= requiredAmount)
+    ) {
       console.log(
-        `✅ Funding complete! New balance: ${formatEther(newBalance)} (was: ${formatEther(currentBalance)})`
+        `✅ Funding complete! New balance: ${formatBalance(newBalance)} ${currency.symbol} (was: ${formatBalance(currentBalance)})`
       )
       return
     }
@@ -295,7 +336,8 @@ async function ensureFunding(
 
       try {
         const statusResponse = await fetch(
-          `https://api.relay.link/requests/status?hash=${bridgeHash}`
+          `https://api.relay.link/requests/status?hash=${bridgeHash}`,
+          { headers: relayHeaders }
         )
         if (statusResponse.ok) {
           const status = (await statusResponse.json()) as any
@@ -305,11 +347,11 @@ async function ensureFunding(
             )
           }
           console.log(
-            `   Still waiting... (${attempts * 5}s elapsed) - Balance: ${formatEther(newBalance)}, Status: ${status.status || "unknown"}`
+            `   Still waiting... (${attempts * 5}s elapsed) - Balance: ${formatBalance(newBalance)} ${currency.symbol}, Status: ${status.status || "unknown"}`
           )
         } else {
           console.log(
-            `   Still waiting... (${attempts * 5}s elapsed) - Balance: ${formatEther(newBalance)}`
+            `   Still waiting... (${attempts * 5}s elapsed) - Balance: ${formatBalance(newBalance)} ${currency.symbol}`
           )
         }
       } catch (error: any) {
@@ -320,7 +362,7 @@ async function ensureFunding(
           throw error
         }
         console.log(
-          `   Still waiting... (${attempts * 5}s elapsed) - Balance: ${formatEther(newBalance)}`
+          `   Still waiting... (${attempts * 5}s elapsed) - Balance: ${formatBalance(newBalance)} ${currency.symbol}`
         )
       }
     }
@@ -347,6 +389,9 @@ async function executeEvmTransaction(
     hashesToSign: [hashToSign],
   } = await buildEvmTransaction(tx)
 
+  const networkClient = createPublicClient({ transport: http(tx.rpc) })
+  await assertEvmFeeCap(networkClient, transaction.maxFeePerGas)
+
   const hexSignature = await getSignatureForHash(
     relayMultisigSigner,
     hashToSign,
@@ -372,12 +417,6 @@ async function executeEvmTransaction(
     parseSignature(hexSignature as `0x${string}`)
   )
 
-  const networkClient = createPublicClient({ transport: http(tx.rpc) })
-
-  const currentBalance = await networkClient.getBalance({
-    address: transaction.from,
-  })
-
   const gasLimit = BigInt(transaction.gas || 0)
   const gasPrice = transaction.maxFeePerGas
     ? BigInt(transaction.maxFeePerGas)
@@ -391,30 +430,45 @@ async function executeEvmTransaction(
     537713, // relay mainnet
     537724, // relay testnet
   ]
-  const isRelayChain = RELAY_CHAIN_IDS.includes(
-    await networkClient.getChainId()
+  const chainId = await networkClient.getChainId()
+  const isRelayChain = RELAY_CHAIN_IDS.includes(chainId)
+  const currency = await getFundingCurrency(
+    networkClient,
+    chainId,
+    tx,
+    gasLimit,
+    gasPrice
   )
+  const currentBalance = await fundingBalance(
+    networkClient,
+    currency,
+    transaction.from
+  )
+  const formatBalance = (balance: bigint) =>
+    formatUnits(balance, currency.decimals)
 
-  const estimatedGasCost = gasLimit * gasPrice
+  const estimatedGasCost = currency.gasCost
   const txValue = transaction.value ? BigInt(transaction.value) : 0n
   const requiredBalance = isRelayChain ? 0n : estimatedGasCost + txValue
 
   if (currentBalance < requiredBalance) {
     console.log(
-      `⚠️  Insufficient balance detected before broadcast. Current: ${formatEther(currentBalance)}, Required: ${formatEther(requiredBalance)}`
+      `⚠️  Insufficient ${currency.symbol} balance detected before broadcast. Current: ${formatBalance(currentBalance)}, Required: ${formatBalance(requiredBalance)}`
     )
     await ensureFunding(tx)
 
-    const newBalance = await networkClient.getBalance({
-      address: transaction.from,
-    })
+    const newBalance = await fundingBalance(
+      networkClient,
+      currency,
+      transaction.from
+    )
     if (newBalance < requiredBalance) {
       throw new Error(
-        `Insufficient funds after funding attempt. Have: ${formatEther(newBalance)}, Need: ${formatEther(requiredBalance)}`
+        `Insufficient ${currency.symbol} after funding attempt. Have: ${formatBalance(newBalance)}, Need: ${formatBalance(requiredBalance)}`
       )
     }
     console.log(
-      `✅ Funding successful, new balance: ${formatEther(newBalance)}`
+      `✅ Funding successful, new balance: ${formatBalance(newBalance)} ${currency.symbol}`
     )
   }
 
@@ -498,6 +552,11 @@ export async function broadcastAndConfirm(
       )
     }
     console.log(`⚠️  ${message}; FORCE_BROADCAST=1, broadcasting anyway`)
+  }
+  // Honor the same override for already-signed transactions when the latest
+  // fee rises above the cap, even if earlier blocks were cheaper.
+  if (process.env.FORCE_BROADCAST !== "1") {
+    await assertEvmFeeCap(networkClient, parsed.maxFeePerGas)
   }
   for (let attempt = 1; attempt <= BROADCAST_ATTEMPTS; attempt++) {
     try {
@@ -877,8 +936,16 @@ export function registerExecuteTransactions(program: Command) {
     .option("-n, --network <slug>", "Network slug (from settlement-networks)")
     .option("--rpc-url <url>", "RPC URL override")
     .option(
+      "--indices <indices>",
+      "Execute only these comma-separated zero-based manifest indices, in manifest order"
+    )
+    .option(
+      "--signatures-output <path>",
+      "New output file for sign-only message results"
+    )
+    .option(
       "-e, --env <env>",
-      "Deployment env for the --network contract lookup (prod | dev | stag); required unless --relay-multisig-signer is set"
+      "Deployment env for the --network contract lookup (prod | dev | stag | test | deployers); required unless --relay-multisig-signer is set"
     )
     .action(
       async ({
@@ -886,6 +953,8 @@ export function registerExecuteTransactions(program: Command) {
         relayMultisigSigner,
         network,
         rpcUrl,
+        signaturesOutput,
+        indices,
         env,
       }) => {
         assertEnvOrSigner({ env, multisigSignerOverride: relayMultisigSigner })
@@ -901,8 +970,23 @@ export function registerExecuteTransactions(program: Command) {
         const multisigSignerAddress = resolved.multisigSignerAddress
 
         const transactions = loadTransactions(transactionsPath)
+        const selectedIndices = executionIndices(transactions.length, indices)
+        const selectedTransactions = selectedIndices.map(
+          (index) => transactions[index]
+        )
+        const messageResults: Array<
+          Awaited<ReturnType<typeof signMessageEntry>> & { index: number }
+        > = []
+        if (selectedTransactions.some((tx) => tx.family === "message")) {
+          if (!signaturesOutput)
+            throw new Error("Message entries require --signatures-output")
+          mkdirSync(dirname(signaturesOutput), { recursive: true })
+          // Refuse overwrites before requesting any signatures. Partial successes
+          // are saved after each message; retries can collect cached signatures.
+          writeFileSync(signaturesOutput, "[]\n", { flag: "wx", mode: 0o600 })
+        }
 
-        const signatureCount = countRequiredSignatures(transactions)
+        const signatureCount = countRequiredSignatures(selectedTransactions)
         await checkAndApproveWNEAR(
           resolved.publicClient,
           resolved.walletClient,
@@ -924,7 +1008,7 @@ export function registerExecuteTransactions(program: Command) {
         const laneOf = (tx: Transaction) =>
           tx.family === "ethereum-vm" ? `${tx.from}@${tx.rpc}` : undefined
 
-        for (let i = 0; i < transactions.length; i++) {
+        for (const i of selectedIndices) {
           console.log(`🏗️  Building transaction #${i}`)
           const tx = transactions[i]
           const lane = laneOf(tx)
@@ -939,6 +1023,20 @@ export function registerExecuteTransactions(program: Command) {
           try {
             if (tx.family === "ethereum-vm") {
               await executeEvmTransaction(tx, multisigSignerAddress, resolved)
+            } else if (tx.family === "message") {
+              const result = await signMessageEntry(
+                tx,
+                multisigSignerAddress,
+                resolved
+              )
+              messageResults.push({ index: i, ...result })
+              writeFileSync(
+                signaturesOutput,
+                JSON.stringify(messageResults, null, 2) + "\n"
+              )
+              console.log(
+                `Message #${i} signed without broadcasting; saved to ${signaturesOutput}`
+              )
             } else if (tx.family === "bitcoin-vm") {
               await executeBitcoinTransaction(
                 tx,
@@ -969,7 +1067,7 @@ export function registerExecuteTransactions(program: Command) {
 
         console.log(`\n${"=".repeat(80)}`)
         console.log(
-          `\n✅ Successfully executed ${transactions.length - failures.length}/${transactions.length} transactions`
+          `\n✅ Successfully executed ${selectedIndices.length - failures.length}/${selectedIndices.length} selected entries`
         )
 
         if (failures.length > 0) {

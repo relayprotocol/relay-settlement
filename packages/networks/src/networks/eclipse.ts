@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const eclipse: NetworkConfig = {
   chainId:
@@ -11,8 +12,8 @@ export const eclipse: NetworkConfig = {
     "64090895945001603038992093854505754448788867346671798212401362354189266349171",
   isTestnet: false,
   name: "Eclipse",
-  rpc: process.env.RPC_ECLIPSE
-    ? [process.env.RPC_ECLIPSE]
-    : ["https://mainnetbeta-rpc.eclipse.xyz"],
+  ...resolveRpc(process.env.RPC_ECLIPSE, [
+    "https://mainnetbeta-rpc.eclipse.xyz",
+  ]),
   slug: "eclipse",
 }

@@ -15,6 +15,10 @@ import {
   ROUTED_WITHDRAWAL_DATA_VERSION,
   RoutedCall,
 } from "../common/ethereum-vm/routed"
+import {
+  encodeSolanaRoutedWithdrawalData,
+  SOLANA_ROUTED_WITHDRAWAL_DATA_VERSION,
+} from "../common/solana-vm/router"
 
 export interface WithdrawRequest {
   chainId: string // The chain id to withdraw on
@@ -58,6 +62,11 @@ export type HyperliquidVmWithdrawRequestAdditionalData = {
   nonce: number | bigint | string
 }
 
+// Gapless owner nonce of the depository's wallet: one above the last one Atlas accepted
+export type AtlasVmWithdrawRequestAdditionalData = {
+  nonce: number | bigint | string
+}
+
 export type LighterVmWithdrawRequestAdditionalData = {
   nonce: number | bigint | string
   apiKeyIndex: number | bigint | string
@@ -79,11 +88,18 @@ export type GatewayVmWithdrawRequestAdditionalData = {
   destinationData?: GatewayVmDestinationAdditionalData
 }
 
-type GatewayVmDestinationAdditionalData = {
-  vmType: "ethereum-vm"
-  router: string
-  calls: RoutedCall[]
-}
+type GatewayVmDestinationAdditionalData =
+  | {
+      vmType: "ethereum-vm"
+      router: string
+      calls: RoutedCall[]
+    }
+  // Routed into a relay-router bundle; keys in base58
+  | {
+      vmType: "solana-vm"
+      router: string
+      executor: string
+    }
 
 // Routed withdrawal to an allowlisted router (empty/absent = direct transfer)
 export type EthereumVmWithdrawRequestAdditionalData = {
@@ -91,7 +107,14 @@ export type EthereumVmWithdrawRequestAdditionalData = {
   calls: RoutedCall[]
 }
 
+// Routed withdrawal into a relay-router bundle (absent = direct transfer); keys in base58
+export type SolanaVmWithdrawRequestAdditionalData = {
+  router: string
+  executor: string
+}
+
 export type WithdrawRequestAdditionalData = {
+  "atlas-vm"?: AtlasVmWithdrawRequestAdditionalData
   "bitcoin-vm"?: BitcoinVmWithdrawRequestAdditionalData
   "hedera-vm"?: HederaVmWithdrawRequestAdditionalData
   "hyperliquid-vm"?: HyperliquidVmWithdrawRequestAdditionalData
@@ -99,6 +122,7 @@ export type WithdrawRequestAdditionalData = {
   "xrp-vm"?: XrpVmWithdrawRequestAdditionalData
   "gateway-vm"?: GatewayVmWithdrawRequestAdditionalData
   "ethereum-vm"?: EthereumVmWithdrawRequestAdditionalData
+  "solana-vm"?: SolanaVmWithdrawRequestAdditionalData
 }
 
 export type DenormalizedWithdrawRequest = Omit<WithdrawRequest, "data"> & {
@@ -183,6 +207,17 @@ export const getExecuteAndWithdrawRequestHash = (
     },
   })
 
+// The bundle commits to this id, so the receiver (derived from the bundle) is zeroed
+export const computeExecutionId = (
+  chainId: number,
+  executor: Address,
+  request: ExecuteAndWithdrawRequest
+) =>
+  getExecuteAndWithdrawRequestHash(chainId, executor, {
+    ...request,
+    receiver: "0x",
+  })
+
 export const getWithdrawRequestHash = (request: WithdrawRequest) => {
   const encoded = encodeAbiParameters(
     parseAbiParameters([
@@ -204,6 +239,33 @@ export const getWithdrawRequestHash = (request: WithdrawRequest) => {
   )
 
   return keccak256(encoded)
+}
+
+const encodeGatewayDestinationData = (
+  destinationData?: GatewayVmDestinationAdditionalData
+): Hex => {
+  if (!destinationData) {
+    return "0x"
+  }
+
+  switch (destinationData.vmType) {
+    case "ethereum-vm":
+      return encodeRoutedWithdrawalData({
+        version: ROUTED_WITHDRAWAL_DATA_VERSION,
+        router: destinationData.router,
+        dataHash: hashRoutedCalls(destinationData.calls),
+      })
+
+    case "solana-vm":
+      return encodeSolanaRoutedWithdrawalData({
+        version: SOLANA_ROUTED_WITHDRAWAL_DATA_VERSION,
+        router: destinationData.router,
+        executor: destinationData.executor,
+      })
+
+    default:
+      throw new Error("Unsupported gateway-vm destination data")
+  }
 }
 
 export function encodeWithdrawRequestAdditionalData({
@@ -382,21 +444,9 @@ export function encodeWithdrawRequestAdditionalData({
       if (!gatewayAdditionalData) {
         throw new Error("Additional data is required for gateway-vm")
       }
-      if (
-        gatewayAdditionalData.destinationData &&
-        gatewayAdditionalData.destinationData.vmType !== "ethereum-vm"
-      ) {
-        throw new Error("Unsupported gateway-vm destination data")
-      }
-      const destinationData = gatewayAdditionalData.destinationData
-        ? encodeRoutedWithdrawalData({
-            version: ROUTED_WITHDRAWAL_DATA_VERSION,
-            router: gatewayAdditionalData.destinationData.router,
-            dataHash: hashRoutedCalls(
-              gatewayAdditionalData.destinationData.calls
-            ),
-          })
-        : "0x"
+      const destinationData = encodeGatewayDestinationData(
+        gatewayAdditionalData.destinationData
+      )
 
       return encodeAbiParameters(
         parseAbiParameters([
@@ -461,7 +511,31 @@ export function encodeWithdrawRequestAdditionalData({
       )
     }
 
-    case "solana-vm":
+    case "solana-vm": {
+      const solanaAdditionalData = additionalData?.["solana-vm"]
+      if (!solanaAdditionalData) {
+        return "0x"
+      }
+
+      return encodeSolanaRoutedWithdrawalData({
+        version: SOLANA_ROUTED_WITHDRAWAL_DATA_VERSION,
+        router: solanaAdditionalData.router,
+        executor: solanaAdditionalData.executor,
+      })
+    }
+
+    case "atlas-vm": {
+      const atlasAdditionalData = additionalData?.["atlas-vm"]
+      if (!atlasAdditionalData) {
+        throw new Error("Additional data is required for atlas-vm")
+      }
+
+      return encodeAbiParameters(
+        [{ type: "uint64" }],
+        [BigInt(atlasAdditionalData.nonce)]
+      )
+    }
+
     case "ton-vm":
     case "tron-vm":
       return "0x"
@@ -583,6 +657,7 @@ export function normalizeWithdrawRequest(
       }
     }
 
+    case "atlas-vm":
     case "hedera-vm":
     case "solana-vm":
     case "ton-vm":

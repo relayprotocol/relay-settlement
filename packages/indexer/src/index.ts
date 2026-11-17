@@ -11,6 +11,7 @@ import { logger } from "./logger.js"
 import { createRuntimeState } from "./runtimeState.js"
 import { createServer } from "./server.js"
 import { createTokenPriceService } from "./services/tokenPrices.js"
+import { initRuntimeMetrics } from "./tracer.js"
 
 const start = async () => {
   validateRuntimeConfig(config)
@@ -37,10 +38,13 @@ const start = async () => {
     enableApi: config.enableApi,
   })
 
-  const runtimeState = createRuntimeState({
-    doBackgroundWork: config.doBackgroundWork,
-    enableApi: config.enableApi,
-  })
+  const runtimeState = createRuntimeState(
+    {
+      doBackgroundWork: config.doBackgroundWork,
+      enableApi: config.enableApi,
+    },
+    { version: config.imageTag }
+  )
 
   const db =
     config.doBackgroundWork || config.enableApi ? await openDb() : undefined
@@ -88,6 +92,9 @@ const start = async () => {
   app.listen(config.port, () => {
     if (config.enableApi) {
       runtimeState.markApiReady()
+    }
+    if (!config.doBackgroundWork) {
+      initRuntimeMetrics()
     }
 
     logger.info("app", "Indexer listening", {
@@ -141,6 +148,7 @@ const start = async () => {
     startIndexerAudit(db, provider, retryContract)
     startDepositoryBalanceAudit(db, retryContract)
     runtimeState.markBackgroundWorkReady()
+    initRuntimeMetrics()
   } catch (error) {
     runtimeState.markBackgroundWorkUnready(error as Error)
     throw error

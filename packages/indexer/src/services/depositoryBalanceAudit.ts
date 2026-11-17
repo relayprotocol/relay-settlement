@@ -16,6 +16,12 @@ import {
   ZeroAddress,
 } from "ethers"
 import type { Queryable } from "../db/connection.js"
+import {
+  findSharedReserveGroup,
+  findSharedReserveMember,
+  SHARED_RESERVE_GROUPS,
+  type SharedReserveGroup,
+} from "./sharedReserves.js"
 
 const erc20BalanceAbi = [
   "function balanceOf(address account) view returns (uint256)",
@@ -79,6 +85,7 @@ type RunOptions = {
   oracleApiKey?: string
   oracleApiUrl?: string
   getBalance?: (_input: BalanceInput) => Promise<bigint>
+  sharedReserveGroups?: SharedReserveGroup[]
 }
 
 export type DepositoryBalanceAuditResult = {
@@ -98,6 +105,34 @@ export type DepositoryBalanceAuditResult = {
   totalSupply: string | null
   totalSupplyFormatted: string | null
   vmType: string | null
+}
+
+export type SharedReserveAuditResult = {
+  chainId: string | null
+  /** Decimals every member amount was scaled to before summing. */
+  decimals: number | null
+  delta: string | null
+  deltaFormatted: string | null
+  depository: string | null
+  depositoryBalance: string | null
+  depositoryBalanceFormatted: string | null
+  error: string | null
+  group: string
+  members: Array<{
+    currency: string | null
+    decimals: number | null
+    status: DepositoryBalanceAuditStatus
+    tokenId: string
+    totalSupply: string | null
+  }>
+  status: "covered" | "deficit" | "error"
+  totalSupply: string | null
+  totalSupplyFormatted: string | null
+}
+
+type SharedReserveMember = {
+  balance: bigint | null
+  result: DepositoryBalanceAuditResult
 }
 
 export const formatAuditAmount = (
@@ -654,6 +689,110 @@ const findOracleChain = (
   return null
 }
 
+const scaleUnits = (amount: bigint, from: number, to: number) =>
+  amount * 10n ** BigInt(to - from)
+
+// Compares the combined supply of Hub tokens backed by one physical balance
+// against a single read of that balance. Members are scaled, using the
+// group's declared decimals, to the largest decimals among them; the balance
+// comes from the most precise member.
+export const auditSharedReserve = (
+  group: SharedReserveGroup,
+  auditedMembers: SharedReserveMember[]
+): SharedReserveAuditResult => {
+  const members = auditedMembers.map((member) => ({
+    ...member,
+    decimals: findSharedReserveMember(group, member.result.currency)
+      ?.decimals as number,
+  }))
+  const base = {
+    chainId: members.find((m) => m.result.chainId)?.result.chainId ?? null,
+    depository:
+      members.find((m) => m.result.depository)?.result.depository ?? null,
+    group: group.name,
+    members: members.map(({ result }) => ({
+      currency: result.currency,
+      decimals: result.decimals,
+      status: result.status,
+      tokenId: result.tokenId,
+      totalSupply: result.totalSupply,
+    })),
+  }
+  const empty = {
+    decimals: null,
+    delta: null,
+    deltaFormatted: null,
+    depositoryBalance: null,
+    depositoryBalanceFormatted: null,
+    totalSupply: null,
+    totalSupplyFormatted: null,
+  }
+
+  const failed = members.filter(
+    (m) => m.balance == null || m.result.totalSupply == null
+  )
+  if (failed.length) {
+    return {
+      ...base,
+      ...empty,
+      error: `Member check failed for ${failed
+        .map((m) => m.result.tokenId)
+        .join(", ")}`,
+      status: "error",
+    }
+  }
+
+  // Hub supply is minted in the origin currency's raw units, so the declared
+  // on-chain decimals denominate it. An indexed value that disagrees means
+  // one of the two is wrong, so report it rather than pick one.
+  const mismatched = members.filter(
+    (m) => m.result.decimals != null && m.result.decimals !== m.decimals
+  )
+  if (mismatched.length) {
+    return {
+      ...base,
+      ...empty,
+      error: `Decimals mismatch for ${mismatched
+        .map(
+          (m) =>
+            `${m.result.tokenId} (indexed ${m.result.decimals}, declared ${m.decimals})`
+        )
+        .join(", ")}`,
+      status: "error",
+    }
+  }
+
+  const decimals = Math.max(...members.map((m) => m.decimals))
+  const totalSupply = members.reduce(
+    (sum, m) =>
+      sum +
+      scaleUnits(BigInt(m.result.totalSupply as string), m.decimals, decimals),
+    0n
+  )
+  const precise = members.reduce((best, m) =>
+    m.decimals > best.decimals ? m : best
+  )
+  const balance = scaleUnits(
+    precise.balance as bigint,
+    precise.decimals,
+    decimals
+  )
+  const delta = (balance - totalSupply).toString()
+
+  return {
+    ...base,
+    decimals,
+    delta,
+    deltaFormatted: formatAuditAmount(delta, decimals),
+    depositoryBalance: balance.toString(),
+    depositoryBalanceFormatted: formatAuditAmount(balance.toString(), decimals),
+    error: null,
+    status: classifyDepositoryBalance(balance, totalSupply),
+    totalSupply: totalSupply.toString(),
+    totalSupplyFormatted: formatAuditAmount(totalSupply.toString(), decimals),
+  }
+}
+
 const resultFor = (
   token: TokenAuditRow,
   totalSupply: bigint | null,
@@ -703,6 +842,12 @@ export const runDepositoryBalanceAudit = async (
   const getBalance =
     options.getBalance ?? ((input: BalanceInput) => reader!.getBalance(input))
   const results: DepositoryBalanceAuditResult[] = []
+  const sharedReserveGroups =
+    options.sharedReserveGroups ?? SHARED_RESERVE_GROUPS
+  // Resolved token rows and balances by token id, for the shared-reserve pass
+  const auditedTokens = new Map<string, TokenAuditRow>()
+  const balances = new Map<string, bigint>()
+  const balanceInputs = new Map<string, BalanceInput>()
 
   try {
     if (!options.fetchChains && !options.oracleApiUrl) {
@@ -740,6 +885,7 @@ export const runDepositoryBalanceAudit = async (
           continue
         }
         token = tokenWithOriginMetadata
+        auditedTokens.set(token.token_id, token)
       } catch (error) {
         results.push(
           resultFor(token, null, {
@@ -823,19 +969,22 @@ export const runDepositoryBalanceAudit = async (
       }
 
       try {
+        const balanceInput: BalanceInput = {
+          chainId: token.origin_chain_id as string,
+          currency: token.origin_asset as string,
+          decimals: token.decimals,
+          depository: chain.depository,
+          rpcUrl,
+          vmType: token.origin_family as string,
+        }
+        balanceInputs.set(token.token_id, balanceInput)
         const [balance, totalSupplyResult] = await Promise.all([
-          getBalance({
-            chainId: token.origin_chain_id as string,
-            currency: token.origin_asset as string,
-            decimals: token.decimals,
-            depository: chain.depository,
-            rpcUrl,
-            vmType: token.origin_family as string,
-          }),
+          getBalance(balanceInput),
           hubContract.totalSupply(token.token_id),
         ])
         const totalSupply = BigInt(totalSupplyResult.toString())
         const status = classifyDepositoryBalance(balance, totalSupply)
+        balances.set(token.token_id, balance)
         results.push(
           resultFor(token, totalSupply, {
             ...resultBase,
@@ -855,6 +1004,76 @@ export const runDepositoryBalanceAudit = async (
       }
     }
 
+    const sharedReserveMembers = new Map<
+      SharedReserveGroup,
+      SharedReserveMember[]
+    >()
+    for (const result of results) {
+      const token = auditedTokens.get(result.tokenId)
+      const group = findSharedReserveGroup(
+        token?.origin_chain_id ?? null,
+        token?.origin_asset ?? null,
+        sharedReserveGroups
+      )
+      if (!group || result.status === "unsupported") {
+        continue
+      }
+      sharedReserveMembers.set(group, [
+        ...(sharedReserveMembers.get(group) ?? []),
+        { balance: balances.get(result.tokenId) ?? null, result },
+      ])
+    }
+    // A lone member is already fully checked by its per-token result
+    // Members were checked minutes apart during the token loop, so re-read
+    // the reference balance and every member's supply together before
+    // comparing them, as the per-token check does for its single pair
+    const refreshSharedReserve = async (
+      group: SharedReserveGroup,
+      members: SharedReserveMember[]
+    ): Promise<SharedReserveAuditResult> => {
+      const failed = members.some(
+        (m) => m.balance == null || !balanceInputs.has(m.result.tokenId)
+      )
+      if (failed) {
+        return auditSharedReserve(group, members)
+      }
+
+      const declaredDecimals = (m: SharedReserveMember) =>
+        findSharedReserveMember(group, m.result.currency)?.decimals ?? 0
+      const precise = members.reduce((best, m) =>
+        declaredDecimals(m) > declaredDecimals(best) ? m : best
+      )
+      try {
+        const [balance, ...supplies] = await Promise.all([
+          getBalance(balanceInputs.get(precise.result.tokenId) as BalanceInput),
+          ...members.map((m) => hubContract.totalSupply(m.result.tokenId)),
+        ])
+        return auditSharedReserve(
+          group,
+          members.map((m, index) => ({
+            balance: m === precise ? balance : m.balance,
+            result: {
+              ...m.result,
+              totalSupply: BigInt(supplies[index].toString()).toString(),
+            },
+          }))
+        )
+      } catch (error) {
+        return {
+          ...auditSharedReserve(
+            group,
+            members.map((m) => ({ ...m, balance: null }))
+          ),
+          error: `Shared reserve re-read failed: ${errorMessage(error)}`,
+        }
+      }
+    }
+    const sharedReserves = await Promise.all(
+      [...sharedReserveMembers]
+        .filter(([, members]) => members.length > 1)
+        .map(([group, members]) => refreshSharedReserve(group, members))
+    )
+
     return {
       checked: results.filter(
         (result) => result.status === "covered" || result.status === "deficit"
@@ -863,6 +1082,13 @@ export const runDepositoryBalanceAudit = async (
       deficit: results.filter((result) => result.status === "deficit").length,
       error: results.filter((result) => result.status === "error").length,
       results,
+      sharedReserveDeficit: sharedReserves.filter(
+        (result) => result.status === "deficit"
+      ).length,
+      sharedReserveError: sharedReserves.filter(
+        (result) => result.status === "error"
+      ).length,
+      sharedReserves,
       unsupported: results.filter((result) => result.status === "unsupported")
         .length,
     }

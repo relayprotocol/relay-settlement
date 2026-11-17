@@ -335,6 +335,7 @@ export const RelayDepositoryIdl = {
         {
           name: "ix_sysvar",
           docs: ["The instruction sysvar for ed25519 verification"],
+          address: "Sysvar1nstructions1111111111111111111111111",
         },
         {
           name: "token_program",
@@ -357,6 +358,175 @@ export const RelayDepositoryIdl = {
           type: {
             defined: {
               name: "TransferRequest",
+            },
+          },
+        },
+      ],
+    },
+    {
+      name: "execute_transfer_routed",
+      docs: [
+        "Execute a routed transfer with allocator signature",
+        "",
+        "Runs the same checks as `execute_transfer`, and additionally requires the",
+        "request's router to sign through its `depository_caller` PDA. Only the router",
+        "program can produce that signature, so a routed request can only execute",
+        "inside the router instruction that consumes the funds.",
+        "",
+        "# Parameters",
+        "* `ctx` - The context containing the accounts",
+        "* `request` - The routed transfer request details",
+        "",
+        "# Returns",
+        "* `Ok(())` on success",
+        "* `Err(error)` if the router did not sign or the request can't be processed",
+      ],
+      discriminator: [172, 229, 229, 124, 120, 255, 6, 111],
+      accounts: [
+        {
+          name: "relay_depository",
+          docs: ["The relay depository account"],
+          pda: {
+            seeds: [
+              {
+                kind: "const",
+                value: [
+                  114, 101, 108, 97, 121, 95, 100, 101, 112, 111, 115, 105, 116,
+                  111, 114, 121,
+                ],
+              },
+            ],
+          },
+        },
+        {
+          name: "executor",
+          docs: ["The executor of the transfer"],
+          writable: true,
+          signer: true,
+        },
+        {
+          name: "recipient",
+          docs: ["The recipient of the transfer"],
+          writable: true,
+        },
+        {
+          name: "vault",
+          docs: ["The vault PDA that holds the funds"],
+          writable: true,
+          pda: {
+            seeds: [
+              {
+                kind: "const",
+                value: [118, 97, 117, 108, 116],
+              },
+            ],
+          },
+        },
+        {
+          name: "mint",
+          docs: ["The mint of the token being transferred"],
+          optional: true,
+        },
+        {
+          name: "recipient_token_account",
+          docs: ["The recipient's token account"],
+          writable: true,
+          optional: true,
+          pda: {
+            seeds: [
+              {
+                kind: "account",
+                path: "recipient",
+              },
+              {
+                kind: "account",
+                path: "token_program",
+              },
+              {
+                kind: "account",
+                path: "mint",
+              },
+            ],
+            program: {
+              kind: "const",
+              value: [
+                140, 151, 37, 143, 78, 36, 137, 241, 187, 61, 16, 41, 20, 142,
+                13, 131, 11, 90, 19, 153, 218, 255, 16, 132, 4, 142, 123, 216,
+                219, 233, 248, 89,
+              ],
+            },
+          },
+        },
+        {
+          name: "vault_token_account",
+          docs: ["The vault's token account"],
+          writable: true,
+          optional: true,
+          pda: {
+            seeds: [
+              {
+                kind: "account",
+                path: "vault",
+              },
+              {
+                kind: "account",
+                path: "token_program",
+              },
+              {
+                kind: "account",
+                path: "mint",
+              },
+            ],
+            program: {
+              kind: "const",
+              value: [
+                140, 151, 37, 143, 78, 36, 137, 241, 187, 61, 16, 41, 20, 142,
+                13, 131, 11, 90, 19, 153, 218, 255, 16, 132, 4, 142, 123, 216,
+                219, 233, 248, 89,
+              ],
+            },
+          },
+        },
+        {
+          name: "used_request",
+          docs: [
+            "The account that tracks whether a transfer request has been used",
+            "",
+            "Shares the plain request namespace; the routed hash prefix keeps them disjoint.",
+          ],
+          writable: true,
+        },
+        {
+          name: "ix_sysvar",
+          docs: ["The instruction sysvar for ed25519 verification"],
+          address: "Sysvar1nstructions1111111111111111111111111",
+        },
+        {
+          name: "token_program",
+          docs: ["The token program"],
+        },
+        {
+          name: "associated_token_program",
+          docs: ["The associated token program"],
+          address: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+        },
+        {
+          name: "system_program",
+          docs: ["The system program"],
+          address: "11111111111111111111111111111111",
+        },
+        {
+          name: "router_authority",
+          docs: ["The router's signer PDA, derived from `request.router`"],
+          signer: true,
+        },
+      ],
+      args: [
+        {
+          name: "request",
+          type: {
+            defined: {
+              name: "RoutedTransferRequest",
             },
           },
         },
@@ -429,66 +599,6 @@ export const RelayDepositoryIdl = {
         {
           name: "system_program",
           address: "11111111111111111111111111111111",
-        },
-      ],
-      args: [
-        {
-          name: "chain_id",
-          type: "string",
-        },
-      ],
-    },
-    {
-      name: "migrate_domain_separator",
-      docs: [
-        "Migrate an existing RelayDepository account to include the `domain_separator` field.",
-        "",
-        "Reallocates legacy RelayDepository accounts to add the `domain_separator` field.",
-        "The existing data is preserved, and only this new field is appended in place.",
-        "Only the account owner can call this once, provided sufficient SOL for rent.",
-        "",
-        "# Parameters",
-        "* `ctx` - The context containing the accounts",
-        '* `chain_id` - The chain identifier (e.g., "solana-mainnet")',
-        "",
-        "# Returns",
-        "* `Ok(())` on success",
-        "* `Err(error)` if not authorized or domain separator already set",
-      ],
-      discriminator: [125, 28, 21, 67, 230, 227, 107, 79],
-      accounts: [
-        {
-          name: "relay_depository",
-          docs: ["The relay depository account to migrate in-place"],
-          writable: true,
-          pda: {
-            seeds: [
-              {
-                kind: "const",
-                value: [
-                  114, 101, 108, 97, 121, 95, 100, 101, 112, 111, 115, 105, 116,
-                  111, 114, 121,
-                ],
-              },
-            ],
-          },
-        },
-        {
-          name: "owner",
-          docs: [
-            "The owner of the relay depository (also pays for reallocation)",
-          ],
-          writable: true,
-          signer: true,
-        },
-        {
-          name: "system_program",
-          docs: ["System program for reallocation"],
-          address: "11111111111111111111111111111111",
-        },
-        {
-          name: "ix_sysvar",
-          docs: ["The instruction sysvar for reentrancy protection"],
         },
       ],
       args: [
@@ -607,6 +717,10 @@ export const RelayDepositoryIdl = {
       discriminator: [120, 248, 61, 83, 31, 142, 107, 144],
     },
     {
+      name: "RoutedTransferExecutedEvent",
+      discriminator: [85, 104, 119, 35, 165, 0, 50, 94],
+    },
+    {
       name: "TransferExecutedEvent",
       discriminator: [92, 10, 178, 184, 18, 44, 120, 124],
     },
@@ -717,6 +831,16 @@ export const RelayDepositoryIdl = {
       name: "InvalidAccountSize",
       msg: "Invalid account size for migration",
     },
+    {
+      code: 6021,
+      name: "InvalidRouterAuthority",
+      msg: "Invalid router authority",
+    },
+    {
+      code: 6022,
+      name: "InvalidRouterCaller",
+      msg: "Invalid router caller",
+    },
   ],
   types: [
     {
@@ -795,6 +919,93 @@ export const RelayDepositoryIdl = {
                 array: ["u8", 32],
               },
             },
+          },
+        ],
+      },
+    },
+    {
+      name: "RoutedTransferExecutedEvent",
+      docs: ["Event emitted when a routed transfer is executed"],
+      type: {
+        kind: "struct",
+        fields: [
+          {
+            name: "request",
+            docs: ["The routed transfer request that was executed"],
+            type: {
+              defined: {
+                name: "RoutedTransferRequest",
+              },
+            },
+          },
+          {
+            name: "executor",
+            docs: ["The public key of the executor who processed the transfer"],
+            type: "pubkey",
+          },
+          {
+            name: "id",
+            docs: ["The unique identifier for the used request account"],
+            type: "pubkey",
+          },
+        ],
+      },
+    },
+    {
+      name: "RoutedTransferRequest",
+      docs: [
+        "Structure representing a routed transfer request signed by the allocator",
+        "",
+        "Only executable through `execute_transfer_routed`, signed by `router`.",
+      ],
+      type: {
+        kind: "struct",
+        fields: [
+          {
+            name: "domain",
+            docs: ["Domain separator"],
+            type: {
+              array: ["u8", 32],
+            },
+          },
+          {
+            name: "recipient",
+            docs: ["The recipient of the transfer"],
+            type: "pubkey",
+          },
+          {
+            name: "token",
+            docs: [
+              "The token mint (None for native SOL, Some(mint) for SPL tokens)",
+            ],
+            type: {
+              option: "pubkey",
+            },
+          },
+          {
+            name: "amount",
+            docs: ["The amount to transfer"],
+            type: "u64",
+          },
+          {
+            name: "nonce",
+            docs: ["A unique nonce"],
+            type: "u64",
+          },
+          {
+            name: "expiration",
+            docs: ["The expiration timestamp for the request"],
+            type: "i64",
+          },
+          {
+            name: "vault_address",
+            docs: ["The vault address that funds will be withdrawn from"],
+            type: "pubkey",
+          },
+          {
+            name: "router",
+            docs: ["The router program that must sign the transfer"],
+            type: "pubkey",
           },
         ],
       },

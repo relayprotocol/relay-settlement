@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const celo: NetworkConfig = {
   chainId: 42220n,
@@ -10,8 +11,6 @@ export const celo: NetworkConfig = {
   hubChainId: "42220",
   isTestnet: false,
   name: "Celo",
-  rpc: process.env.RPC_42220
-    ? [process.env.RPC_42220]
-    : ["https://forno.celo.org"],
+  ...resolveRpc(process.env.RPC_42220, ["https://forno.celo.org"]),
   slug: "celo",
 }

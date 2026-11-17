@@ -11,9 +11,11 @@ type CacheEntry = {
 export class MemoryCacheBackend implements CacheBackend {
   private readonly entries = new Map<string, CacheEntry>()
   private readonly getCurrentTime: () => number
+  private readonly maxEntries: number
 
-  constructor(now: () => number = Date.now) {
+  constructor(now: () => number = Date.now, maxEntries = 1000) {
     this.getCurrentTime = now
+    this.maxEntries = maxEntries
   }
 
   async get(key: string) {
@@ -27,6 +29,8 @@ export class MemoryCacheBackend implements CacheBackend {
       return null
     }
 
+    this.entries.delete(key)
+    this.entries.set(key, entry)
     return entry.value
   }
 
@@ -39,6 +43,11 @@ export class MemoryCacheBackend implements CacheBackend {
       }
     }
 
+    if (!this.entries.has(key) && this.entries.size >= this.maxEntries) {
+      this.entries.delete(this.entries.keys().next().value!)
+    }
+
+    this.entries.delete(key)
     this.entries.set(key, {
       expiresAt: now + ttlMs,
       value,

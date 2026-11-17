@@ -68,7 +68,7 @@ const deploymentFile = JSON.parse(
   readFileSync(
     join(
       __dirname,
-      `../../../smart-contracts/deployments/contracts/${ENV}.json`
+      `../../../contracts/relay-chain/deployments/contracts/${ENV}.json`
     ),
     "utf8"
   )

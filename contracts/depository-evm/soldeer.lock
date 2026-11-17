@@ -1,0 +1,11 @@
+[[dependencies]]
+name = "forge-std"
+version = "1.16.1-4-g8b531a0"
+git = "https://github.com/foundry-rs/forge-std"
+rev = "8b531a016f15f761a632f5149a828228573420fc"
+
+[[dependencies]]
+name = "solady"
+version = "0.1.26"
+git = "https://github.com/Vectorized/solady"
+rev = "acd959aa4bd04720d640bf4e6a5c71037510cc4b"

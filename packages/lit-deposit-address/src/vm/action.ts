@@ -97,12 +97,15 @@ export async function runVmAction<V extends VmType>(
 
     await verifyDepositAddressTriggerAttestation(trigger, attestation);
     verifyOrderData(trigger, order, orderSignature);
-    deriver.verifyTransactions(trigger, attestation, transactions);
 
+    // The transaction policy runs on the derived wallet before any signature,
+    // so the deposit key is derived only once.
     const { wallet, signedTransactions } = await deriver.signTransactions(
       rootKeyHex,
       derivationFieldsToIndexes(trigger.derivationFields),
       transactions,
+      (depositWallet) =>
+        deriver.verifyTransactions(trigger, attestation, transactions, depositWallet),
     );
     return { wallet, triggerHash: attestation.triggerHash, signedTransactions };
   }

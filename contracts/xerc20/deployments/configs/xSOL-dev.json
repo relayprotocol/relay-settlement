@@ -1,0 +1,19 @@
+{
+  "chainId": 537724,
+  "rpcUrl": "https://rpc.testnet.relay.link",
+  "explorerUrl": "https://relay-sov-testnet.cloud.blockscout.com",
+  "factory": "0xFd980bf509687cfba5324ca88D0Adbc81281F284",
+  "governor": "0x33eB6a492221d23695Bb830Bc5DC905B7Ff9D2d7",
+  "name": "xSOL-dev",
+  "symbol": "xSOL-dev",
+  "assetDecimals": 9,
+  "majorIndex": 0,
+  "labels": [
+    "solana",
+    "base"
+  ],
+  "tokens": [
+    "0x0cbd1c794d825283d79a7dd9e5911f5f699efe7a",
+    "0x2b2206484b8cbe956b1a652f9b0b2acd6d79e4e3"
+  ]
+}

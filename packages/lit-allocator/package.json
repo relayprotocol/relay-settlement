@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "lint": "tsc --noEmit && eslint .",
+    "lint": "tsc --noEmit && eslint . --cache --cache-strategy content --cache-location node_modules/.cache/lint/eslint",
     "test": "vitest run test",
     "test:watch": "vitest",
     "format": "prettier --write .",
@@ -17,7 +17,8 @@
     "sign": "tsx scripts/client/sign.ts",
     "changepubkey": "tsx scripts/client/change-pub-key.ts",
     "change-pub-key": "tsx scripts/client/change-pub-key.ts",
-    "create-hedera-depository": "tsx scripts/client/create-hedera-depository.ts"
+    "create-hedera-depository": "tsx scripts/client/create-hedera-depository.ts",
+    "onboard-atlas-depository": "tsx scripts/client/onboard-atlas-depository.ts"
   },
   "engines": {
     "node": ">=20"

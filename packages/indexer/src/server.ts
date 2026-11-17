@@ -5,7 +5,11 @@ import { createApiKeyMiddleware } from "./auth.js"
 import { config } from "./config.js"
 import type { Database } from "./db/connection.js"
 import { listBalancesForAddress } from "./queries/balances.js"
-import { createTransferStatsService, listEvents } from "./queries/events.js"
+import {
+  createTransferStatsService,
+  listEvents,
+  TransferStatsUnavailableError,
+} from "./queries/events.js"
 import { listHolders } from "./queries/holders.js"
 import { getApprovedOracleInstances } from "./queries/oracles.js"
 import { getProtocolTransactionsByHash } from "./queries/protocolTransactions.js"
@@ -421,12 +425,18 @@ export const createServer = (
           ? Math.min(pointsRaw, 365)
           : 30
       const tzOffsetMinutes = parseTzOffsetMinutes(req.query.tzOffsetMinutes)
-      const rows = await transferStats({
+      const stats = await transferStats({
         granularity,
         points,
         tzOffsetMinutes,
       })
-      return res.json({ data: rows, granularity, points })
+      return res.json({
+        data: stats.rows,
+        granularity,
+        points,
+        stale: stats.stale,
+        updatedAt: stats.updatedAt,
+      })
     })
   )
 
@@ -440,13 +450,19 @@ export const createServer = (
           ? Math.min(pointsRaw, 365)
           : 30
       const tzOffsetMinutes = parseTzOffsetMinutes(req.query.tzOffsetMinutes)
-      const rows = await transferStats({
+      const stats = await transferStats({
         granularity,
         points,
         tokenId: req.params.id,
         tzOffsetMinutes,
       })
-      return res.json({ data: rows, granularity, points })
+      return res.json({
+        data: stats.rows,
+        granularity,
+        points,
+        stale: stats.stale,
+        updatedAt: stats.updatedAt,
+      })
     })
   )
 
@@ -557,9 +573,13 @@ export const createServer = (
 
   app.use(
     (error: unknown, _req: Request, res: Response, _next: NextFunction) => {
-      return res.status(500).json({
-        error: error instanceof Error ? error.message : String(error),
-      })
+      if (error instanceof TransferStatsUnavailableError)
+        res.setHeader("Retry-After", "30")
+      return res
+        .status(error instanceof TransferStatsUnavailableError ? 503 : 500)
+        .json({
+          error: error instanceof Error ? error.message : String(error),
+        })
     }
   )
 

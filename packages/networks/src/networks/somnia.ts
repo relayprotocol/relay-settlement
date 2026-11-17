@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const somnia: NetworkConfig = {
   chainId: 5031n,
@@ -10,8 +11,8 @@ export const somnia: NetworkConfig = {
   hubChainId: "5031",
   isTestnet: false,
   name: "Somnia",
-  rpc: process.env.RPC_5031
-    ? [process.env.RPC_5031]
-    : ["https://api.infra.mainnet.somnia.network"],
+  ...resolveRpc(process.env.RPC_5031, [
+    "https://api.infra.mainnet.somnia.network",
+  ]),
   slug: "somnia",
 }

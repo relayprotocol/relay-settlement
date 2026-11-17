@@ -43,25 +43,37 @@ export type DrawLeg = {
 export type PoolDrawResolverExecution = {
   legs: DrawLeg[]
   calls: PoolResolverCall[]
+  // Committed recipient of unused input and output above the signed minimum.
+  // Both may be zero only for a plan without draw legs (basic resolution).
+  surplusPool: Address
+  surplusAccount: Address
   salt: Hex
 }
 
-// Mirrors `IRelayFundingPool.SponsorshipConfig`. A zero `authorizer` closes
+// Mirrors `IFundingPool.DrawConfig`. A zero `authorizer` closes
 // the token for draws
-export type FundingPoolSponsorshipConfig = {
+export type FundingPoolDrawConfig = {
   perOrderCap: bigint
   budget: bigint
   authorizer: Address
   expiry: bigint
 }
 
-// Mirrors `IRelayFundingPool.DrawAuthorization`
+// Mirrors `IFundingPool.DrawAuthorization`. `planHash` is
+// `getPoolDrawResolverPlanHash(executionData)` for the committed plan the
+// authorization funds; `nonce` is the pool's `drawNonces(account)` at
+// signing time (any config or allowlist change moves it and voids every
+// outstanding authorization); `deadline` is inclusive, and zero is always
+// expired
 export type FundingPoolDrawAuthorization = {
   account: Address
   orderAddress: Address
+  planHash: Hex
+  nonce: bigint
+  deadline: bigint
 }
 
-// Mirrors `IRelayFundingPool.PoolWithdrawal`
+// Mirrors `IFundingPool.PoolWithdrawal`
 export type FundingPoolWithdrawal = {
   account: Address
   token: Address
@@ -84,7 +96,7 @@ export const fundingPoolWithdrawalTypes = {
   ],
 } as const
 
-// Mirrors `RelayFundingPool.hashWithdrawal`
+// Mirrors `FundingPool.hashWithdrawal`
 export const getFundingPoolWithdrawalHash = (
   chainId: number,
   pool: Address,
@@ -92,7 +104,7 @@ export const getFundingPoolWithdrawalHash = (
 ) =>
   hashTypedData({
     domain: {
-      name: "RelayFundingPool",
+      name: "FundingPool",
       version: "1",
       chainId,
       verifyingContract: pool,
@@ -102,88 +114,124 @@ export const getFundingPoolWithdrawalHash = (
     message: withdrawal,
   })
 
-// Mirrors `IRelayFundingPool.SponsorshipConfigUpdate`
-export type FundingPoolSponsorshipConfigUpdate = {
+// Mirrors `IFundingPool.DrawConfigUpdate`
+export type FundingPoolDrawConfigUpdate = {
   account: Address
   token: Address
   authorizer: Address
   perOrderCap: bigint
   budget: bigint
   expiry: bigint
+  epoch: bigint
   nonce: bigint
   deadline: bigint
 }
 
-// Mirrors `IRelayFundingPool.SponsorshipResolverUpdate`
-export type FundingPoolSponsorshipResolverUpdate = {
+// Mirrors `IFundingPool.DrawResolverUpdate`
+export type FundingPoolDrawResolverUpdate = {
   account: Address
   resolver: Address
   allowed: boolean
+  epoch: bigint
   nonce: bigint
   deadline: bigint
 }
 
-// The primary type stays "SponsorshipConfigUpdate" — the on-chain
-// `SPONSORSHIP_CONFIG_UPDATE_TYPEHASH` is derived from the Solidity struct name
-export const fundingPoolSponsorshipConfigUpdateTypes = {
-  SponsorshipConfigUpdate: [
+// The primary type stays "DrawConfigUpdate" — the on-chain
+// `DRAW_CONFIG_UPDATE_TYPEHASH` is derived from the Solidity struct name
+export const fundingPoolDrawConfigUpdateTypes = {
+  DrawConfigUpdate: [
     { name: "account", type: "address" },
     { name: "token", type: "address" },
     { name: "authorizer", type: "address" },
     { name: "perOrderCap", type: "uint256" },
     { name: "budget", type: "uint256" },
     { name: "expiry", type: "uint64" },
+    { name: "epoch", type: "uint256" },
     { name: "nonce", type: "uint256" },
     { name: "deadline", type: "uint256" },
   ],
 } as const
 
-// Mirrors `RelayFundingPool.hashSponsorshipConfigUpdate`
-export const getFundingPoolSponsorshipConfigUpdateHash = (
+// Mirrors `FundingPool.hashDrawConfigUpdate`
+export const getFundingPoolDrawConfigUpdateHash = (
   chainId: number,
   pool: Address,
-  update: FundingPoolSponsorshipConfigUpdate
+  update: FundingPoolDrawConfigUpdate
 ) =>
   hashTypedData({
     domain: {
-      name: "RelayFundingPool",
+      name: "FundingPool",
       version: "1",
       chainId,
       verifyingContract: pool,
     },
-    types: fundingPoolSponsorshipConfigUpdateTypes,
-    primaryType: "SponsorshipConfigUpdate",
+    types: fundingPoolDrawConfigUpdateTypes,
+    primaryType: "DrawConfigUpdate",
     message: update,
   })
 
-// The primary type stays "SponsorshipResolverUpdate" — the on-chain
-// `SPONSORSHIP_RESOLVER_UPDATE_TYPEHASH` is derived from the Solidity struct name
-export const fundingPoolSponsorshipResolverUpdateTypes = {
-  SponsorshipResolverUpdate: [
+// The primary type stays "DrawResolverUpdate" — the on-chain
+// `DRAW_RESOLVER_UPDATE_TYPEHASH` is derived from the Solidity struct name
+export const fundingPoolDrawResolverUpdateTypes = {
+  DrawResolverUpdate: [
     { name: "account", type: "address" },
     { name: "resolver", type: "address" },
     { name: "allowed", type: "bool" },
+    { name: "epoch", type: "uint256" },
     { name: "nonce", type: "uint256" },
     { name: "deadline", type: "uint256" },
   ],
 } as const
 
-// Mirrors `RelayFundingPool.hashSponsorshipResolverUpdate`
-export const getFundingPoolSponsorshipResolverUpdateHash = (
+// Mirrors `FundingPool.hashDrawResolverUpdate`
+export const getFundingPoolDrawResolverUpdateHash = (
   chainId: number,
   pool: Address,
-  update: FundingPoolSponsorshipResolverUpdate
+  update: FundingPoolDrawResolverUpdate
 ) =>
   hashTypedData({
     domain: {
-      name: "RelayFundingPool",
+      name: "FundingPool",
       version: "1",
       chainId,
       verifyingContract: pool,
     },
-    types: fundingPoolSponsorshipResolverUpdateTypes,
-    primaryType: "SponsorshipResolverUpdate",
+    types: fundingPoolDrawResolverUpdateTypes,
+    primaryType: "DrawResolverUpdate",
     message: update,
+  })
+
+// Sign only the current on-chain epoch; a revocation invalidates queued updates.
+export type FundingPoolDrawRevocation = {
+  account: Address
+  epoch: bigint
+  deadline: bigint
+}
+
+export const fundingPoolDrawRevocationTypes = {
+  DrawRevocation: [
+    { name: "account", type: "address" },
+    { name: "epoch", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
+} as const
+
+export const getFundingPoolDrawRevocationHash = (
+  chainId: number,
+  pool: Address,
+  revocation: FundingPoolDrawRevocation
+) =>
+  hashTypedData({
+    domain: {
+      name: "FundingPool",
+      version: "1",
+      chainId,
+      verifyingContract: pool,
+    },
+    types: fundingPoolDrawRevocationTypes,
+    primaryType: "DrawRevocation",
+    message: revocation,
   })
 
 // The primary type stays "DrawAuthorization" — the on-chain
@@ -192,13 +240,17 @@ export const fundingPoolDrawAuthorizationTypes = {
   DrawAuthorization: [
     { name: "account", type: "address" },
     { name: "orderAddress", type: "address" },
+    { name: "planHash", type: "bytes32" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
   ],
 } as const
 
-// Mirrors `RelayFundingPool.hashDrawAuthorization` — the per-order statement
-// that an account's authorizer signs so the pool will fund that order. Scoped
-// to one account and one order; replay inside the order is bounded by the
-// pool's per-order draw records and cap
+// Mirrors `FundingPool.hashDrawAuthorization` — the statement an
+// account's authorizer signs so the pool will fund one order through one
+// exact plan. Scoped to the account, the order and the plan hash; replay
+// inside the order is bounded by the pool's per-order draw records and cap,
+// and the nonce and deadline bound the signature's lifetime
 export const getFundingPoolDrawAuthorizationHash = (
   chainId: number,
   pool: Address,
@@ -206,7 +258,7 @@ export const getFundingPoolDrawAuthorizationHash = (
 ) =>
   hashTypedData({
     domain: {
-      name: "RelayFundingPool",
+      name: "FundingPool",
       version: "1",
       chainId,
       verifyingContract: pool,
@@ -215,6 +267,26 @@ export const getFundingPoolDrawAuthorizationHash = (
     primaryType: "DrawAuthorization",
     message: authorization,
   })
+
+// The `abi.encode(DrawAuthorization, bytes signature)` envelope the pool
+// decodes from each leg's authorization slot in `encodePoolDrawResolverData`.
+// The signature is EIP-712 over `getFundingPoolDrawAuthorizationHash` (EOA or
+// ERC-1271). Legs naming the same pool and account can share one envelope
+export const encodeFundingPoolDrawAuthorization = (
+  authorization: FundingPoolDrawAuthorization,
+  signature: Hex
+): Hex =>
+  encodeAbiParameters(
+    [
+      {
+        name: "authorization",
+        type: "tuple",
+        components: fundingPoolDrawAuthorizationTypes.DrawAuthorization,
+      },
+      { name: "signature", type: "bytes" },
+    ],
+    [authorization, signature]
+  )
 
 const callComponents = [
   { name: "to", type: "address" },
@@ -239,6 +311,8 @@ const poolDrawResolverExecutionAbi = [
     components: [
       { name: "legs", type: "tuple[]", components: drawLegComponents },
       { name: "calls", type: "tuple[]", components: callComponents },
+      { name: "surplusPool", type: "address" },
+      { name: "surplusAccount", type: "address" },
       { name: "salt", type: "bytes32" },
     ],
   },
@@ -247,6 +321,13 @@ const poolDrawResolverExecutionAbi = [
 export const encodePoolDrawResolverExecution = (
   execution: PoolDrawResolverExecution
 ): Hex => encodeAbiParameters(poolDrawResolverExecutionAbi, [execution])
+
+// Mirrors `keccak256(executionData)` in `PoolDrawResolver.execute` — the plan
+// hash every draw authorization must sign. Pass the encoded execution plan
+// (`encodePoolDrawResolverExecution`): the same bytes
+// `getPoolDrawResolverCommitmentNonce` commits to the oracle
+export const getPoolDrawResolverPlanHash = (executionData: Hex): Hex =>
+  keccak256(executionData)
 
 export const decodePoolDrawResolverExecution = (
   data: Hex
@@ -264,6 +345,8 @@ export const decodePoolDrawResolverExecution = (
       calls: leg.calls.map((call) => ({ to: call.to, data: call.data })),
     })),
     calls: execution.calls.map((call) => ({ to: call.to, data: call.data })),
+    surplusPool: execution.surplusPool,
+    surplusAccount: execution.surplusAccount,
     salt: execution.salt,
   }
 }
@@ -275,15 +358,18 @@ const poolDrawResolverDataAbi = [
 
 // Assembles the full `callResolverData` the resolver decodes:
 // `abi.encode(bytes executionData, bytes[] authorizations)`. The execution is
-// the committed half (its bytes are what the commitment nonce hashes); the
-// authorizations are one per leg, parallel by index — legs naming the same
-// account repeat the same bytes — and ride outside the commitment so they can
-// be signed after the plan is attested. The pool verifies each one against
-// the account's configured authorizer; tampering fails closed on-chain
+// the committed half (its bytes are what the commitment nonce and the plan
+// hash cover); the authorizations are one `encodeFundingPoolDrawAuthorization`
+// envelope per leg, parallel by index — legs naming the same pool and account
+// repeat the same bytes — and ride outside the commitment so they can be
+// signed after the plan is attested, once the order address is known. The
+// pool verifies each one against the account's configured authorizer and the
+// plan the resolver is executing; tampering fails closed on-chain
 export const encodePoolDrawResolverData = (
   executionData: Hex,
   authorizations: Hex[]
-): Hex => encodeAbiParameters(poolDrawResolverDataAbi, [executionData, authorizations])
+): Hex =>
+  encodeAbiParameters(poolDrawResolverDataAbi, [executionData, authorizations])
 
 export const decodePoolDrawResolverData = (
   data: Hex

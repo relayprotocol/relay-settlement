@@ -1,0 +1,324 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {SafeCastLib} from "solady/utils/SafeCastLib.sol";
+import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
+import {IRateLimiter} from "./IRateLimiter.sol";
+
+/// @title RelayAmountRateLimiter
+/// @author Relay Protocol
+/// @notice Per-token token-bucket rate limiter. It caps the RATE at which a token amount can be
+///         consumed — it is NOT a flat ceiling: over a window T, peak in-flight consumption is ~
+///         capacity + rate*T. Size `rate` accordingly (e.g. rate <= capacity / (k * T)). One bucket
+///         per token id.
+/// @dev    Budget is denominated in the currency's own base units — there is no USD pricing and no
+///         decimal normalization, since each bucket holds a single token. `consume` receives the
+///         token id and gross deposit amount as direct arguments; there is no on-chain price read.
+///         Fail-closed: consumption requires an enabled bucket AND a nonzero amount; an
+///         unconfigured/disabled token id — or a zero amount — returns false. "Unlimited" =
+///         a deliberately high capacity. Implements the generic `IRateLimiter`, so a different limiter
+///         is a drop-in behind RelayInbox's limiter allowlist with no oracle/SDK change.
+contract RelayAmountRateLimiter is AccessControl, IRateLimiter {
+  using SafeCastLib for uint256;
+
+  // Structs
+
+  /// @notice Live token-bucket state for one token id, in the token's base units
+  struct TokenBucket {
+    uint128 tokens; // available budget (base units), as of `lastUpdated`
+    uint48 lastUpdated; // unix seconds of the last refill checkpoint
+    bool isEnabled; // false => not enabled for this token id (consume returns false)
+    uint128 capacity; // max budget / burst size (base units)
+    uint128 rate; // base units refilled per second
+  }
+
+  /// @notice Admin-supplied bucket configuration for one token id
+  struct BucketConfig {
+    uint256 tokenId;
+    bool isEnabled;
+    uint128 capacity;
+    uint128 rate;
+  }
+
+  // Roles
+
+  /// @notice Administers configuration and role grants
+  bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
+
+  /// @notice May consume budget (granted to the consumer contract)
+  bytes32 public constant CONSUMER_ROLE = keccak256("CONSUMER_ROLE");
+
+  // Fields
+
+  /// @notice Token-bucket state keyed by token id
+  mapping(uint256 => TokenBucket) private buckets;
+
+  // Events
+
+  /// @notice Emitted when budget is consumed
+  /// @param tokenId Token id
+  /// @param amount Amount consumed (currency base units)
+  /// @param remaining Budget left after consumption (base units)
+  event TokensConsumed(
+    uint256 indexed tokenId,
+    uint256 amount,
+    uint256 remaining
+  );
+
+  /// @notice Emitted when a token bucket is (re)configured
+  /// @param tokenId Token id
+  /// @param isEnabled Whether the bucket rate-limits
+  /// @param capacity Max budget (base units)
+  /// @param rate Base units refilled per second
+  event BucketConfigSet(
+    uint256 indexed tokenId,
+    bool isEnabled,
+    uint128 capacity,
+    uint128 rate
+  );
+
+  // Errors
+
+  /// @notice Thrown when a required address argument is zero
+  error ZeroAddress();
+
+  // Constructor
+
+  /// @notice Creates the rate limiter
+  /// @param admin Address granted ADMIN_ROLE
+  constructor(address admin) {
+    if (admin == address(0)) {
+      revert ZeroAddress();
+    }
+    _setRoleAdmin(ADMIN_ROLE, ADMIN_ROLE);
+    _setRoleAdmin(CONSUMER_ROLE, ADMIN_ROLE);
+    _grantRole(ADMIN_ROLE, admin);
+  }
+
+  // Consumer methods
+
+  /// @notice Try to consume budget for a fast deposit; returns whether it was consumed.
+  /// @dev Authoritative, trustless enforcement. Does NOT revert on rejection: the caller owns the
+  ///      revert decision so it can carry its own context. Returns false (no deduct) when the budget
+  ///      is unavailable — disabled token id, zero amount, or over budget (fail-closed). A
+  ///      zero amount is rejected (NOT a no-op): it would otherwise consume nothing and always pass
+  ///      (= unlimited). A caller's accept/reject choice must NOT depend on live budget (see
+  ///      canConsume).
+  /// @param tokenId The token id for the fast mint.
+  /// @param amount The at-risk deposit amount.
+  /// @param data Unused by this limiter.
+  /// @return consumed True if the budget was consumed; false otherwise
+  function consume(
+    uint256 tokenId,
+    uint256 amount,
+    bytes calldata data
+  ) external override onlyRole(CONSUMER_ROLE) returns (bool consumed) {
+    data;
+
+    TokenBucket storage bucket = buckets[tokenId];
+    if (!bucket.isEnabled) {
+      // Fail-closed: requires an explicitly enabled budget; otherwise return false.
+      return false;
+    }
+    if (amount == 0) {
+      // Fail-closed: a zero amount on an enabled bucket would otherwise consume nothing and always
+      // pass (= unlimited). Reject it.
+      return false;
+    }
+
+    uint256 tokens = bucket.tokens;
+    uint256 capacity = bucket.capacity;
+    uint256 rate = bucket.rate;
+    uint256 timeDiff = block.timestamp - bucket.lastUpdated;
+    if (timeDiff != 0) {
+      // Invariant guard (unreachable: every writer keeps tokens <= capacity, and _calculateRefill
+      // caps regardless) — fall back rather than proceed if it were ever violated.
+      if (tokens > capacity) {
+        return false;
+      }
+      tokens = _calculateRefill(capacity, tokens, timeDiff, rate);
+      // Persist the refill checkpoint (tokens + lastUpdated together): advancing lastUpdated alone
+      // would discard the accrual if the request below is rejected, defeating the configured rate.
+      bucket.lastUpdated = block.timestamp.toUint48();
+      bucket.tokens = tokens.toUint128();
+    }
+
+    // Single request larger than capacity, or not enough budget right now → return false.
+    if (capacity < amount || tokens < amount) {
+      return false;
+    }
+
+    unchecked {
+      tokens -= amount;
+    }
+    bucket.tokens = tokens.toUint128();
+    emit TokensConsumed(tokenId, amount, tokens);
+    return true;
+  }
+
+  // Admin methods
+
+  /// @notice Configures a single token bucket
+  /// @param config Bucket configuration
+  function setBucketConfig(
+    BucketConfig calldata config
+  ) external onlyRole(ADMIN_ROLE) {
+    _setBucketConfig(config);
+  }
+
+  /// @notice Configures many token buckets in one call (e.g. seeding the threshold table)
+  /// @param configs Bucket configurations
+  function setBucketConfigs(
+    BucketConfig[] calldata configs
+  ) external onlyRole(ADMIN_ROLE) {
+    uint256 length = configs.length;
+    for (uint256 i; i < length; ++i) {
+      _setBucketConfig(configs[i]);
+    }
+  }
+
+  // View methods
+
+  /// @notice Advisory check of whether `consume` would currently succeed for `amount`.
+  /// @dev ADVISORY ONLY. MUST NOT gate a decision that needs to be deterministic across independent
+  ///      callers: it reads mutable shared state they would read inconsistently. On-chain consume()
+  ///      is the authoritative enforcement.
+  /// @param tokenId Token id
+  /// @param amount Amount that would be consumed (currency base units)
+  /// @return ok True if it would currently succeed; false when the token bucket is disabled, the
+  ///         amount is zero, or it is over budget
+  function canConsume(
+    uint256 tokenId,
+    uint256 amount
+  ) external view returns (bool ok) {
+    TokenBucket storage bucket = buckets[tokenId];
+    if (!bucket.isEnabled) {
+      return false;
+    }
+    if (amount == 0) {
+      return false;
+    }
+    if (bucket.capacity < amount) {
+      return false;
+    }
+    return _refilledTokens(bucket) >= amount;
+  }
+
+  /// @notice Advisory check of whether `consume` would accept all these amounts charged in sequence.
+  /// @dev ADVISORY ONLY, like canConsume. Per-item checks admit a set that collectively exceeds the
+  ///      shared per-token budget; the sum must fit here.
+  /// @param tokenId Token id
+  /// @param amounts Amounts that would be consumed (currency base units)
+  /// @return ok True if the whole batch would currently succeed; false when the token bucket is
+  ///         disabled, the batch is empty, any amount is zero, or the total is over budget
+  function canConsumeBatch(
+    uint256 tokenId,
+    uint256[] calldata amounts
+  ) external view returns (bool ok) {
+    uint256 length = amounts.length;
+    if (length == 0) {
+      // Fail-closed: an empty batch would total zero and always pass (= unlimited).
+      return false;
+    }
+
+    TokenBucket storage bucket = buckets[tokenId];
+    if (!bucket.isEnabled) {
+      return false;
+    }
+
+    // Refilled balance never exceeds capacity, so it is the whole budget; checking each item
+    // against what is left of it keeps the running total from overflowing.
+    uint256 remaining = _refilledTokens(bucket);
+    for (uint256 i; i < length; ++i) {
+      uint256 amount = amounts[i];
+      if (amount == 0 || amount > remaining) {
+        return false;
+      }
+      unchecked {
+        remaining -= amount;
+      }
+    }
+    return true;
+  }
+
+  /// @notice Returns the live (refilled) bucket state for a token id without mutating storage. The
+  ///         struct carries `isEnabled`: when false, the bucket is disabled (consume returns false)
+  ///         and its balance is frozen until re-enabled.
+  /// @param tokenId Token id
+  /// @return bucket Refilled bucket as of `block.timestamp`
+  function getBucket(
+    uint256 tokenId
+  ) external view returns (TokenBucket memory bucket) {
+    bucket = buckets[tokenId];
+    if (bucket.isEnabled) {
+      bucket.tokens = _refilledTokens(bucket).toUint128();
+      bucket.lastUpdated = block.timestamp.toUint48();
+    }
+  }
+
+  // Internal methods
+
+  /// @notice (Re)configures a bucket; new buckets start full, existing ones refill (if enabled) then cap to new capacity
+  /// @param config Bucket configuration
+  function _setBucketConfig(BucketConfig calldata config) internal {
+    TokenBucket storage bucket = buckets[config.tokenId];
+
+    if (bucket.lastUpdated == 0) {
+      // First configuration: start full so budget is immediately available up to capacity.
+      bucket.tokens = config.capacity;
+    } else {
+      // Refill at the OLD rate up to now (a rate change is not retroactive), then cap to new capacity.
+      // A disabled bucket does not accrue, so re-enabling resumes from its stored balance.
+      uint256 timeDiff = block.timestamp - bucket.lastUpdated;
+      if (timeDiff != 0 && bucket.isEnabled) {
+        bucket.tokens = _calculateRefill(
+          bucket.capacity,
+          bucket.tokens,
+          timeDiff,
+          bucket.rate
+        ).toUint128();
+      }
+      bucket.tokens = FixedPointMathLib
+        .min(config.capacity, bucket.tokens)
+        .toUint128();
+    }
+
+    bucket.lastUpdated = block.timestamp.toUint48();
+    bucket.isEnabled = config.isEnabled;
+    bucket.capacity = config.capacity;
+    bucket.rate = config.rate;
+
+    emit BucketConfigSet(
+      config.tokenId,
+      config.isEnabled,
+      config.capacity,
+      config.rate
+    );
+  }
+
+  /// @notice Live token balance of a bucket as of `block.timestamp` (does not mutate)
+  /// @return tokens Refilled token balance as of `block.timestamp`
+  function _refilledTokens(
+    TokenBucket memory bucket
+  ) private view returns (uint256 tokens) {
+    return
+      _calculateRefill(
+        bucket.capacity,
+        bucket.tokens,
+        block.timestamp - bucket.lastUpdated,
+        bucket.rate
+      );
+  }
+
+  /// @notice Rolling refill: current tokens plus elapsed-time accrual, capped at capacity
+  /// @return refilled Token balance after accrual, capped at capacity
+  function _calculateRefill(
+    uint256 capacity,
+    uint256 tokens,
+    uint256 timeDiff,
+    uint256 rate
+  ) private pure returns (uint256 refilled) {
+    return FixedPointMathLib.min(capacity, tokens + timeDiff * rate);
+  }
+}

@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const stable: NetworkConfig = {
   chainId: 988n,
@@ -10,6 +11,6 @@ export const stable: NetworkConfig = {
   hubChainId: "988",
   isTestnet: false,
   name: "Stable",
-  rpc: process.env.RPC_988 ? [process.env.RPC_988] : ["https://rpc.stable.xyz"],
+  ...resolveRpc(process.env.RPC_988, ["https://rpc.stable.xyz"]),
   slug: "stable",
 }

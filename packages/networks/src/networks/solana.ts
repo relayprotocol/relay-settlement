@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const solana: NetworkConfig = {
   chainId:
@@ -12,8 +13,8 @@ export const solana: NetworkConfig = {
     "50176979118388105370421134508366610418687875236156196470082648173271157915018",
   isTestnet: false,
   name: "Solana",
-  rpc: process.env.RPC_SOLANA
-    ? [process.env.RPC_SOLANA]
-    : ["https://api.mainnet-beta.solana.com"],
+  ...resolveRpc(process.env.RPC_SOLANA, [
+    "https://api.mainnet-beta.solana.com",
+  ]),
   slug: "solana",
 }

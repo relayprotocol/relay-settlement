@@ -3,8 +3,9 @@
  *
  * Runs inside Lit's TEE. Lighter uses an EVM-style secp256k1 key for L1
  * signatures. Regular withdrawals sign oracle-attested hashes. The
- * `changePubKey` action signs a legacy EIP-155 transaction to the Lighter
- * gateway, but only for API keys compiled into the action's environment config.
+ * `changePubKey` action signs a legacy EIP-155 transaction to one of the
+ * Lighter gateways compiled into the action's environment config, selected by
+ * L1 chain id, and only for API keys allowlisted on that gateway.
  *
  * js_params:
  *   - pkpId:           string — PKP identifier
@@ -32,11 +33,7 @@ import {
   HUB_EVM_CHAIN_ID,
   ORACLE_SIGNATURE_THRESHOLD,
 } from "../config.js";
-import {
-  LIGHTER_ALLOWED_API_KEYS,
-  LIGHTER_GATEWAY,
-  LIGHTER_GATEWAY_CHAIN_ID,
-} from "../custom-configs/lighter-vm.js";
+import { LIGHTER_GATEWAYS, type LighterGateway } from "../custom-configs/lighter-vm.js";
 
 /** `js_params` passed by the Lit Action invoker. */
 interface LighterActionParams {
@@ -54,6 +51,8 @@ interface LighterActionParams {
 
 /** Inputs needed to build and sign Lighter gateway `changePubKey`. */
 interface LighterChangePubKeyInput {
+  /** EIP-155 chain id of the L1 hosting the target Lighter gateway. Must match a configured gateway. */
+  gatewayChainId: string | number | bigint;
   /** Lighter account index whose API key is being registered. */
   accountIndex: string | number | bigint;
   /** API key index to register. Must match an allowed configured key. */
@@ -91,6 +90,10 @@ interface LighterSignResult extends LighterWalletResult {
 /** Result returned for `action="changePubKey"`. */
 interface LighterChangePubKeyResult extends LighterWalletResult {
   changePubKey: {
+    /** L1 chain id the transaction was signed for, as a decimal string. */
+    gatewayChainId: string;
+    /** Lowercase gateway address the transaction is sent to. */
+    gateway: string;
     /** Unsigned EIP-155 legacy transaction hash. */
     hash: string;
     /** ABI-encoded `changePubKey(uint48,uint8,bytes)` calldata. */
@@ -270,18 +273,48 @@ function signDigest(messageHash: Uint8Array, privateKeyHex: string): string {
   return signDigestDetailed(messageHash, privateKeyHex).signature;
 }
 
-/** Return true if a Lighter API key is compiled into the environment allowlist. */
-function isAllowedApiKey(apiKeyIndex: bigint, publicKeyHex: string): boolean {
+/** Resolve the compiled-in gateway for an L1 chain id, or throw when none matches. */
+function resolveGateway(gatewayChainId: bigint): LighterGateway {
+  const entry = LIGHTER_GATEWAYS.find((gateway) => BigInt(gateway.chainId) === gatewayChainId);
+  if (!entry) {
+    throw new Error("Lighter gateway chain id is not allowlisted");
+  }
+  return entry;
+}
+
+/** Return true if a Lighter API key is allowlisted on the given gateway. */
+function isAllowedApiKey(
+  gateway: LighterGateway,
+  apiKeyIndex: bigint,
+  publicKeyHex: string,
+): boolean {
   const normalizedPublicKey = normalizeHex(publicKeyHex, "changePubKey.publicKey");
-  return LIGHTER_ALLOWED_API_KEYS.some(
+  return gateway.allowedApiKeys.some(
     (key) =>
       BigInt(key.apiKeyIndex) === apiKeyIndex &&
-      normalizeHex(key.publicKey, "LIGHTER_ALLOWED_API_KEYS[].publicKey") === normalizedPublicKey,
+      normalizeHex(key.publicKey, "LIGHTER_GATEWAYS[].allowedApiKeys[].publicKey") ===
+        normalizedPublicKey,
   );
 }
 
 /** Build and sign a Lighter ChangePubKey legacy transaction. */
 function signChangePubKey(input: LighterChangePubKeyInput, privateKeyHex: string) {
+  if (input.gatewayChainId === undefined || input.gatewayChainId === null) {
+    throw new Error("changePubKey.gatewayChainId is required");
+  }
+  const chainId = parseBoundedQuantity(
+    input.gatewayChainId,
+    "changePubKey.gatewayChainId",
+    1n << 256n,
+  );
+  if (chainId === 0n) {
+    throw new Error("changePubKey.gatewayChainId out of range");
+  }
+  const gatewayConfig = resolveGateway(chainId);
+  // Sign with the chain id from the compiled-in gateway entry, not the parsed
+  // caller input, so the signed value comes structurally from the config.
+  const signingChainId = BigInt(gatewayConfig.chainId);
+
   const accountIndex = parseBoundedQuantity(
     input.accountIndex,
     "changePubKey.accountIndex",
@@ -291,17 +324,9 @@ function signChangePubKey(input: LighterChangePubKeyInput, privateKeyHex: string
   const txNonce = parseBoundedQuantity(input.txNonce, "changePubKey.txNonce", 1n << 256n);
   const gasPrice = parseBoundedQuantity(input.gasPrice, "changePubKey.gasPrice", 1n << 256n);
   const gasLimit = parseBoundedQuantity(input.gasLimit, "changePubKey.gasLimit", 1n << 256n);
-  const chainId = parseBoundedQuantity(
-    LIGHTER_GATEWAY_CHAIN_ID,
-    "LIGHTER_GATEWAY_CHAIN_ID",
-    1n << 256n,
-  );
-  if (chainId === 0n) {
-    throw new Error("LIGHTER_GATEWAY_CHAIN_ID out of range");
-  }
 
   const publicKeyHex = normalizeHex(input.publicKey, "changePubKey.publicKey");
-  if (!isAllowedApiKey(apiKeyIndex, publicKeyHex)) {
+  if (!isAllowedApiKey(gatewayConfig, apiKeyIndex, publicKeyHex)) {
     throw new Error("Lighter API key is not allowlisted");
   }
   const publicKey = hexToBytes(publicKeyHex, "changePubKey.publicKey");
@@ -309,9 +334,9 @@ function signChangePubKey(input: LighterChangePubKeyInput, privateKeyHex: string
     throw new Error("changePubKey.publicKey must be non-empty");
   }
 
-  const gateway = hexToBytes(LIGHTER_GATEWAY, "LIGHTER_GATEWAY");
+  const gateway = hexToBytes(gatewayConfig.gateway, "LIGHTER_GATEWAYS[].gateway");
   if (gateway.length !== 20) {
-    throw new Error("LIGHTER_GATEWAY must be exactly 20 bytes");
+    throw new Error("LIGHTER_GATEWAYS[].gateway must be exactly 20 bytes");
   }
 
   const data = encodeChangePubKeyCalldata(accountIndex, apiKeyIndex, publicKey);
@@ -321,11 +346,11 @@ function signChangePubKey(input: LighterChangePubKeyInput, privateKeyHex: string
     gasLimit,
     to: gateway,
     data,
-    chainId,
+    chainId: signingChainId,
   });
   const hash = keccak(unsignedTransaction);
   const signed = signDigestDetailed(hash, privateKeyHex);
-  const eip155V = BigInt(signed.yParity) + chainId * 2n + 35n;
+  const eip155V = BigInt(signed.yParity) + signingChainId * 2n + 35n;
   const r = BigInt(`0x${bytesToHex(signed.r)}`);
   const s = BigInt(`0x${bytesToHex(signed.s)}`);
   const rawTransaction = encodeSignedLegacyTransaction({
@@ -340,6 +365,8 @@ function signChangePubKey(input: LighterChangePubKeyInput, privateKeyHex: string
   });
 
   return {
+    gatewayChainId: signingChainId.toString(),
+    gateway: `0x${bytesToHex(gateway)}`,
     hash: `0x${bytesToHex(hash)}`,
     data: `0x${bytesToHex(data)}`,
     unsignedTransaction: `0x${bytesToHex(unsignedTransaction)}`,

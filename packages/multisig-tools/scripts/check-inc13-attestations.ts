@@ -5,8 +5,15 @@
 // Mirrors the oracle's own derivations (relay-protocol-oracle):
 // - idempotency key: sha256("<chainId>:<transactionId>") with the oracle
 //   config's chain id string ("arbitrum")
-// - credited account: legacy getOrderAddress(chainId, depositor,
-//   deposit block timestamp, depositId), token id from the same chain id
+// - credited account: both order address derivations are probed, since
+//   these deposits predate the switch to getOrderAddress(chainId, depositId)
+//   and may sit at getLegacyOrderAddress(chainId, depositor, deposit block
+//   timestamp, depositId); token id from the same chain id
+//
+// Only the "arbitrum" chain id string and the order id are checked, so a zero
+// balance does not prove the funds are absent from the hub: they may sit
+// under the numeric chain id or the onchain id. For an exhaustive search over
+// those candidates, use generate-inc13-recovery-transfers.ts.
 import { createHash } from "crypto"
 import { createPublicClient, formatEther, http } from "viem"
 import { RelayHub } from "@relay-protocol/settlement-abis"
@@ -19,6 +26,7 @@ import {
   createRelayChainClient,
   RELAY_CHAIN_HUB_ADDRESS,
 } from "./helpers/chains"
+import { getLegacyOrderAddress } from "./helpers/legacyOrderAddress"
 
 // Prod oracles. The deposits predate the V2 migration (July 2026), so the
 // legacy V1 oracle is checked directly alongside V2 — whose isExecuted()
@@ -92,8 +100,8 @@ const main = async () => {
   for (const requestId of REQUEST_IDS) {
     const deposit = await fetchDeposit(requestId)
 
-    // Deposit block timestamp from the origin chain (hashed into the order
-    // address by the oracle).
+    // Deposit block timestamp from the origin chain (hashed into the legacy
+    // order address).
     const originRpc = networks[String(deposit.chainId)]?.rpc?.[0]
     if (!originRpc) {
       throw new Error(`No RPC configured for origin chain ${deposit.chainId}`)
@@ -113,6 +121,10 @@ const main = async () => {
     const orderAddress = getOrderAddress({
       chainId: ORACLE_CHAIN_ID,
       depositId: deposit.orderId,
+    })
+    const legacyOrderAddress = getLegacyOrderAddress({
+      chainId: ORACLE_CHAIN_ID,
+      depositId: deposit.orderId,
       depositor: deposit.depositor,
       timestamp: block.timestamp,
       vmType: "ethereum-vm",
@@ -123,36 +135,47 @@ const main = async () => {
       family: "ethereum-vm",
     })
 
-    const [executedV1, executedV2, balance] = await Promise.all([
-      relayChainClient.readContract({
-        abi: oracleAbi,
-        address: ORACLE_V1_ADDRESS,
-        args: [idempotencyKey],
-        functionName: "isExecuted",
-      }) as Promise<boolean>,
-      relayChainClient.readContract({
-        abi: oracleAbi,
-        address: ORACLE_V2_ADDRESS,
-        args: [idempotencyKey],
-        functionName: "isExecuted",
-      }) as Promise<boolean>,
+    const balanceOf = (account: `0x${string}`) =>
       relayChainClient.readContract({
         abi: RelayHub,
         address: RELAY_CHAIN_HUB_ADDRESS as `0x${string}`,
-        args: [orderAddress, tokenId],
+        args: [account, tokenId],
         functionName: "balanceOf",
-      }) as Promise<bigint>,
-    ])
+      }) as Promise<bigint>
+
+    const [executedV1, executedV2, orderBalance, legacyBalance] =
+      await Promise.all([
+        relayChainClient.readContract({
+          abi: oracleAbi,
+          address: ORACLE_V1_ADDRESS,
+          args: [idempotencyKey],
+          functionName: "isExecuted",
+        }) as Promise<boolean>,
+        relayChainClient.readContract({
+          abi: oracleAbi,
+          address: ORACLE_V2_ADDRESS,
+          args: [idempotencyKey],
+          functionName: "isExecuted",
+        }) as Promise<boolean>,
+        balanceOf(orderAddress),
+        balanceOf(legacyOrderAddress),
+      ])
     const executed = executedV1 || executedV2
+    const balance = orderBalance + legacyBalance
 
     console.log(`request ${requestId}`)
     console.log(
       `  deposit tx ${deposit.transactionId} | ${formatEther(BigInt(deposit.amount))} ETH from ${deposit.depositor}`
     )
     console.log(`  idempotency key : ${idempotencyKey}`)
-    console.log(`  order address   : ${orderAddress}`)
     console.log(
-      `  attestation executed on hub : ${executed ? "YES" : "no"} (v1: ${executedV1}, v2/store: ${executedV2}) | order-address balance : ${formatEther(balance)} ETH`
+      `  order address        : ${orderAddress} | balance : ${formatEther(orderBalance)} ETH`
+    )
+    console.log(
+      `  legacy order address : ${legacyOrderAddress} | balance : ${formatEther(legacyBalance)} ETH`
+    )
+    console.log(
+      `  attestation executed on hub : ${executed ? "YES" : "no"} (v1: ${executedV1}, v2/store: ${executedV2})`
     )
     if (!executed && balance === 0n) {
       console.log(
@@ -164,6 +187,10 @@ const main = async () => {
       )
     } else if (executed && balance > 0n) {
       console.log("  → attested and still funded: transferable by the council")
+    } else {
+      console.log(
+        "  → funded on hub but no executed attestation found: re-check the idempotency key derivation"
+      )
     }
     console.log()
   }

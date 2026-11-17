@@ -1,4 +1,4 @@
-import { Address as TonAddress } from "@ton/core";
+import { Address as TonAddress, crc16 } from "@ton/core";
 import { describe, expect, it } from "vitest";
 import type {
   DepositAddressTrigger,
@@ -59,6 +59,59 @@ describe("ton-vm transaction policy", () => {
     ).not.toThrow();
   });
 
+  it("accepts a padded depositor tag and an uppercase order id", () => {
+    expect(() =>
+      verifyTransactionsWithWallet(makeTonTrigger(), makeTonAttestation(), [
+        buildTonTx({
+          comment: `0x${ORDER_ID.slice(2).toUpperCase()}|depositor= ${TON_DEPOSITOR_ADDR} |`,
+        }),
+      ]),
+    ).not.toThrow();
+  });
+
+  it("rejects a comment that does not start with an order id", () => {
+    expect(() =>
+      verifyTransactionsWithWallet(makeTonTrigger(), makeTonAttestation(), [
+        buildTonTx({ comment: `relay${ORDER_ID}|depositor=${TON_DEPOSITOR_ADDR}|` }),
+      ]),
+    ).toThrow(/must start with a 32-byte order id/);
+  });
+
+  it("uses the first depositor tag only", () => {
+    expect(() =>
+      verifyTransactionsWithWallet(makeTonTrigger(), makeTonAttestation(), [
+        buildTonTx({
+          comment: `${ORDER_ID}|depositor=0:${"66".repeat(32)}|depositor=${TON_DEPOSITOR_ADDR}|`,
+        }),
+      ]),
+    ).toThrow(/comment depositor mismatch/);
+  });
+
+  it("rejects a friendly depositor with a valid checksum but unknown tag byte", () => {
+    const payload = Buffer.concat([Buffer.from([0x12, 0]), Buffer.from("33".repeat(32), "hex")]);
+    const depositor = Buffer.concat([payload, crc16(payload)]).toString("base64url");
+    expect(() =>
+      verifyTransactionsWithWallet(makeTonTrigger(), makeTonAttestation(), [
+        buildTonTx({ comment: `${ORDER_ID}|depositor=${depositor}|` }),
+      ]),
+    ).toThrow(/invalid TON address tag/);
+  });
+
+  it.each([
+    ["an inserted character", (s: string) => `${s.slice(0, 10)}!${s.slice(10)}`],
+    ["a trailing character", (s: string) => `${s}A`],
+  ])("rejects a friendly depositor with %s", (_caseName, mutate) => {
+    const friendly = new TonAddress(0, Buffer.from("33".repeat(32), "hex")).toString({
+      urlSafe: true,
+      bounceable: true,
+    });
+    expect(() =>
+      verifyTransactionsWithWallet(makeTonTrigger(), makeTonAttestation(), [
+        buildTonTx({ comment: `${ORDER_ID}|depositor=${mutate(friendly)}|` }),
+      ]),
+    ).toThrow(/invalid TON address/);
+  });
+
   it("rejects more than one transaction", () => {
     expect(() =>
       verifyTransactionsWithWallet(makeTonTrigger(), makeTonAttestation(), [
@@ -111,7 +164,7 @@ describe("ton-vm transaction policy", () => {
   it("rejects a comment without the trigger order id", () => {
     expect(() =>
       verifyTransactionsWithWallet(makeTonTrigger(), makeTonAttestation(), [
-        buildTonTx({ comment: `0xdead|depositor=${TON_DEPOSITOR_ADDR}|` }),
+        buildTonTx({ comment: `0x${"cd".repeat(32)}|depositor=${TON_DEPOSITOR_ADDR}|` }),
       ]),
     ).toThrow(/must start with trigger\.orderId/);
   });

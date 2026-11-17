@@ -48,7 +48,7 @@ async function main() {
     )
     .option(
       "-e, --env <env>",
-      "Deployment environment to read the multisig signer from (prod | dev | stag)",
+      "Deployment environment to read the multisig signer from (prod | dev | stag | test | deployers)",
       "prod"
     )
     .option(

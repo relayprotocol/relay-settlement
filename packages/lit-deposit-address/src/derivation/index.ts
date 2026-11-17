@@ -16,6 +16,7 @@ import { HyperliquidVmWalletDeriver } from "./vm/hyperliquid/HyperliquidVmWallet
 import { SolanaVmWalletDeriver } from "./vm/solana/SolanaVmWalletDeriver.js";
 import { TonVmWalletDeriver } from "./vm/ton/TonVmWalletDeriver.js";
 import { TronVmWalletDeriver } from "./vm/tron/TronVmWalletDeriver.js";
+import { XrpVmWalletDeriver } from "./vm/xrp/XrpVmWalletDeriver.js";
 
 /**
  * Public package entrypoint. Re-exports everything off-TEE consumers need
@@ -38,6 +39,7 @@ const VM_DERIVERS = {
   "hyperliquid-vm": new HyperliquidVmWalletDeriver(),
   "ton-vm": new TonVmWalletDeriver(),
   "tron-vm": new TronVmWalletDeriver(),
+  "xrp-vm": new XrpVmWalletDeriver(),
 } satisfies { [V in VmType]: TypedVmWalletDeriver<V> };
 
 function getDeriver<V extends VmType>(vmType: V): TypedVmWalletDeriver<V> {
@@ -79,26 +81,29 @@ export function deriveWalletFromExtendedPublicKey(
 /**
  * Sign one or more VM-native transactions with the child wallet at the given
  * derivation path. The wallet's private key is derived once and reused for all
- * transactions.
+ * transactions; `authorize` can reject the derived wallet before any signature.
  */
 export function signTransactionsWithWallet<V extends VmType>(
   rootKeyHex: string,
   vmType: V,
   indexes: readonly number[],
   transactions: readonly VmTransactionMap[V][],
+  authorize: (wallet: WalletInfo) => void | Promise<void> = () => {},
 ): Promise<{ wallet: WalletInfo; signedTransactions: VmSignedTransactionMap[V][] }> {
-  return getDeriver(vmType).signTransactions(rootKeyHex, indexes, transactions);
+  return getDeriver(vmType).signTransactions(rootKeyHex, indexes, transactions, authorize);
 }
 
 /**
  * Run the VM-specific transaction policy check on a batch of unsigned
  * VM-native transactions. Throws if any transaction violates the deposit
- * shape expected by the VM-specific deriver.
+ * shape expected by the VM-specific deriver. Pass the deposit `wallet` derived
+ * from `trigger.derivationFields` to let Bitcoin change return to it.
  */
 export function verifyTransactionsWithWallet(
   trigger: DepositAddressTrigger,
   attestation: DepositAddressTriggerAttestation,
   transactions: readonly VmTransactionMap[VmType][],
+  wallet?: WalletInfo,
 ): void {
   const vmType = assertVmType(
     trigger.derivationFields.inputVmType,
@@ -110,5 +115,6 @@ export function verifyTransactionsWithWallet(
     trigger,
     attestation,
     transactions as readonly VmTransactionMap[typeof vmType][],
+    wallet,
   );
 }

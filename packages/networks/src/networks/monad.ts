@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const monad: NetworkConfig = {
   chainId: 143n,
@@ -10,8 +11,9 @@ export const monad: NetworkConfig = {
   hubChainId: "143",
   isTestnet: false,
   name: "Monad",
-  rpc: process.env.RPC_143
-    ? [process.env.RPC_143]
-    : ["https://rpc-mainnet.monadinfra.com", "https://rpc.monad.xyz"],
+  ...resolveRpc(process.env.RPC_143, [
+    "https://rpc-mainnet.monadinfra.com",
+    "https://rpc.monad.xyz",
+  ]),
   slug: "monad",
 }

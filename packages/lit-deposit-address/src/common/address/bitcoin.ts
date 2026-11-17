@@ -65,8 +65,9 @@ export function encodeBitcoinAddress(address: string): Uint8Array {
     return Uint8Array.from([LEGACY_BITCOIN_ADDRESS_DISCRIMINATOR, ...payload]);
   }
 
-  if (address.toLowerCase().startsWith(`${BITCOIN_MAINNET_HRP}1`)) {
-    const lower = address.toLowerCase() as `${string}1${string}`;
+  // Case-sensitive like the settlement SDK: the sender must emit lowercase bech32.
+  if (address.startsWith(`${BITCOIN_MAINNET_HRP}1`)) {
+    const lower = address as `${string}1${string}`;
     try {
       const decoded = bech32.decode(lower, 90);
       if (decoded.prefix === BITCOIN_MAINNET_HRP && decoded.words[0] === 0) {

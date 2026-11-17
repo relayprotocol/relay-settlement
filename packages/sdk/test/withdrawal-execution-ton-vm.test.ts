@@ -1,5 +1,5 @@
 // ABOUTME: Round-trip tests for ton-vm withdrawal encode/decode + cell-hash withdrawalId.
-// ABOUTME: Reference hashes mirror smart-contracts TonVmPayloadBuilder.t.sol — drift = SDK out of sync with on-chain hashesToSign.
+// ABOUTME: Reference hashes mirror contracts/relay-chain TonVmPayloadBuilder.t.sol — drift = SDK out of sync with on-chain hashesToSign.
 
 import { describe, it, expect } from "vitest"
 
@@ -14,8 +14,8 @@ import { getWithdrawalCodec } from "../src/messages/v2.1/withdrawals"
 
 const codec = getWithdrawalCodec("ton-vm")
 
-// Reference vectors mirror smart-contracts/tools/ton-reference-hashes.ts and the
-// foundry test smart-contracts/test/PayloadBuilders/TonVmPayloadBuilder.t.sol.
+// Reference vectors mirror contracts/relay-chain/tools/ton-reference-hashes.ts and the
+// foundry test contracts/relay-chain/test/PayloadBuilders/TonVmPayloadBuilder.t.sol.
 // The expected msg_inner cell hashes are taken verbatim from that foundry test,
 // so a mismatch here means the SDK has drifted from the on-chain builder.
 const RECEIVER_RAW =

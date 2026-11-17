@@ -1,4 +1,0 @@
-{
-  "detectors_to_exclude": "naming-convention,unindexed-event,similar-names,too-many-digits,constable-states,immutable-states",
-  "filter_paths": "test,script,lib"
-}

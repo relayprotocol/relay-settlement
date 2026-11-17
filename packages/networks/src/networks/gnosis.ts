@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const gnosis: NetworkConfig = {
   chainId: 100n,
@@ -10,8 +11,9 @@ export const gnosis: NetworkConfig = {
   hubChainId: "100",
   isTestnet: false,
   name: "Gnosis",
-  rpc: process.env.RPC_100
-    ? [process.env.RPC_100]
-    : ["https://rpc.gnosischain.com", "https://rpc.ankr.com/gnosis"],
+  ...resolveRpc(process.env.RPC_100, [
+    "https://rpc.gnosischain.com",
+    "https://rpc.ankr.com/gnosis",
+  ]),
   slug: "gnosis",
 }

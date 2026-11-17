@@ -83,6 +83,10 @@ export const getWithdrawParamsMappingMessage = (
   }
 }
 
+/**
+ * Struct hash of the four-field `SetEntry` signed by `RelayGenericMapping` deployments that predate signature expirations.
+ * @deprecated Produces digests the post-#930 `RelayGenericMapping` rejects, since its `SetEntry` binds an `expiration`; use `getGenericMappingSetEntryHash` from `messages/v2.4/generic-mapping` for the hub mapping.
+ */
 export const getGenericMappingMessageId = (message: GenericMappingMessage) => {
   return hashStruct({
     types: {

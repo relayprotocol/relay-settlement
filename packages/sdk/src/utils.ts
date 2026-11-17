@@ -12,13 +12,19 @@ import {
   xAddressToClassicAddress,
 } from "ripple-address-codec"
 
+import { formatAtlasAssetId, parseAtlasAssetId } from "./atlas-vm"
 import {
   decodeHederaAddress,
   encodeHederaAddress,
   HEDERA_HBAR_TOKEN_ID,
 } from "./hedera-vm"
+import {
+  formatLighterAccountIndex,
+  parseLighterAccountIndex,
+} from "./lighter-vm"
 
 export type VmType =
+  | "atlas-vm"
   | "bitcoin-vm"
   | "ethereum-vm"
   | "gateway-vm"
@@ -65,6 +71,7 @@ export const getVmTypeNativeCurrency = (vmType: VmType) => {
       return "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c"
     case "tron-vm":
       return "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb"
+    case "atlas-vm":
     case "lighter-vm":
       return "0"
     case "xrp-vm":
@@ -87,7 +94,18 @@ const _toHexString = (arr: Uint8Array): Hex => {
 export const encodeBytesToHex = (bytes: string) =>
   _toHexString(encodeBytes(bytes))
 
-export const encodeBytes = (bytes: string) => hexToBytes(bytes as Hex)
+// viem's hexToBytes slices off the first two characters without checking they
+// are "0x", so un-prefixed hex would be silently truncated. Reject it instead.
+const _strictHexToBytes = (hex: string): Uint8Array => {
+  if (!/^0x([0-9a-fA-F]{2})*$/.test(hex)) {
+    throw new Error(
+      `Invalid hex string: expected a 0x-prefixed, even-length hex value`
+    )
+  }
+  return hexToBytes(hex as Hex)
+}
+
+export const encodeBytes = (bytes: string) => _strictHexToBytes(bytes)
 
 // Address encoding
 
@@ -97,6 +115,22 @@ export const encodeAddressToHex = (address: string, vmType: VmType): Hex => {
 
 export const encodeAddress = (address: string, vmType: VmType): Uint8Array => {
   switch (vmType) {
+    case "atlas-vm": {
+      // Accounts are 20-byte addresses; currencies are numeric asset ids in 16 bytes
+      if (address.startsWith("0x")) {
+        const encoded = _strictHexToBytes(address)
+        if (encoded.length !== 20) {
+          throw new Error(
+            `Invalid atlas-vm address byte length ${encoded.length}; expected 20`
+          )
+        }
+        return encoded
+      }
+      return hexToBytes(
+        `0x${parseAtlasAssetId(address).toString(16).padStart(32, "0")}`
+      )
+    }
+
     case "bitcoin-vm": {
       const LEGACY_BITCOIN_ADDRESS_DISCRIMINATOR = 0xff
 
@@ -136,13 +170,18 @@ export const encodeAddress = (address: string, vmType: VmType): Uint8Array => {
 
       const type = getBitcoinAddressType(address)
       if (type === "p2pkh" || type === "p2sh") {
-        const decoded = bs58.decode(address)
-        // Strip the checksum and prefix with a discriminator so legacy
-        // Base58Check addresses don't collide with witness-version encodings
+        // Validate the Base58Check checksum and require the mainnet P2PKH/P2SH
+        // versions, then strip the checksum and prefix a discriminator so
+        // legacy addresses don't collide with witness-version encodings
         // (notably P2PKH 0x00 || hash160 vs P2WPKH v0 || 20-byte program).
+        const { version, hash } = bitcoin.address.fromBase58Check(address)
+        if (version !== 0x00 && version !== 0x05) {
+          throw new Error("Unsupported bitcoin base58 address version")
+        }
         return Uint8Array.from([
           LEGACY_BITCOIN_ADDRESS_DISCRIMINATOR,
-          ...decoded.slice(0, -4),
+          version,
+          ...hash,
         ])
       } else {
         const decoder = type === "bech32" ? bech32 : bech32m
@@ -154,7 +193,7 @@ export const encodeAddress = (address: string, vmType: VmType): Uint8Array => {
     }
 
     case "ethereum-vm": {
-      const encoded = hexToBytes(address as Hex)
+      const encoded = _strictHexToBytes(address)
       if (encoded.length !== 20) {
         throw new Error(
           `Invalid ethereum-vm address byte length ${encoded.length}; expected 20`
@@ -177,7 +216,7 @@ export const encodeAddress = (address: string, vmType: VmType): Uint8Array => {
     }
 
     case "hyperliquid-vm": {
-      const encoded = hexToBytes(address as Hex)
+      const encoded = _strictHexToBytes(address)
       if (encoded.length === 0 || encoded.length > 20) {
         throw new Error(
           `Invalid hyperliquid-vm address byte length ${encoded.length}; expected 1 to 20`
@@ -201,6 +240,11 @@ export const encodeAddress = (address: string, vmType: VmType): Uint8Array => {
       // all VMs). Workchain is a chain-level property — each Relay chainId
       // maps to a single TON workchain (current chains all target basechain).
       // Cross-workchain addresses on a single chainId are a mismatch.
+      // Raw-form addresses must be `<workchain>:<64 hex>`; `Address.parse`
+      // alone would accept malformed workchains and truncated hex.
+      if (address.includes(":") && !/^-?\d+:[0-9a-fA-F]{64}$/.test(address)) {
+        throw new Error(`Invalid TON address: ${address}`)
+      }
       const parsed = TonAddress.parse(address)
       if (parsed.workChain !== 0) {
         throw new Error(
@@ -215,7 +259,9 @@ export const encodeAddress = (address: string, vmType: VmType): Uint8Array => {
     }
 
     case "lighter-vm": {
-      return hexToBytes(`0x${Number(address).toString(16).padStart(32, "0")}`)
+      return hexToBytes(
+        `0x${parseLighterAccountIndex(address).toString(16).padStart(32, "0")}`
+      )
     }
 
     case "xrp-vm": {
@@ -247,6 +293,18 @@ export const encodeAddress = (address: string, vmType: VmType): Uint8Array => {
 
 export const decodeAddress = (address: Uint8Array, vmType: VmType): string => {
   switch (vmType) {
+    case "atlas-vm": {
+      if (address.length === 20) {
+        return bytesToHex(address)
+      }
+      if (address.length === 16) {
+        return formatAtlasAssetId(BigInt(bytesToHex(address)))
+      }
+      throw new Error(
+        `Invalid atlas-vm address byte length ${address.length}; expected 20 (account) or 16 (asset id)`
+      )
+    }
+
     case "bitcoin-vm": {
       const LEGACY_BITCOIN_ADDRESS_DISCRIMINATOR = 0xff
       if (address[0] === LEGACY_BITCOIN_ADDRESS_DISCRIMINATOR) {
@@ -333,7 +391,7 @@ export const decodeAddress = (address: Uint8Array, vmType: VmType): string => {
     }
 
     case "lighter-vm": {
-      return Number("0x" + Buffer.from(address).toString("hex")).toString()
+      return formatLighterAccountIndex(BigInt(bytesToHex(address)))
     }
 
     case "xrp-vm": {

@@ -1,0 +1,26 @@
+{
+  "chainId": 537713,
+  "rpcUrl": "https://rpc.chain.relay.link",
+  "explorerUrl": "https://explorer.chain.relay.link",
+  "governor": "0x71d8bE89D9f2339F0FE9cBA39496C6C9cbFF9da6",
+  "name": "xUSDC-stag",
+  "symbol": "xUSDC-stag",
+  "assetDecimals": 6,
+  "majorIndex": 5,
+  "labels": [
+    "ethereum",
+    "solana",
+    "polygon",
+    "base",
+    "arbitrum",
+    "arc-gateway"
+  ],
+  "tokens": [
+    "0x25b8c6e487e6c10126824b578ca956f2b9d5081a",
+    "0xb064303b48f90a97c97835cd1978971f24447230",
+    "0x06a0ae2f999de0ac8858e4b6d4ec1666d25cd3d6",
+    "0x2071fc58dc02d939cd5b6cd2b2140c772bd1baed",
+    "0xb134ff661b0d107faec7c51b9ad77f86bd01f3a0",
+    "0x45286760b702aee71f60e5373ead5247973948a4"
+  ]
+}

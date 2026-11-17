@@ -63,7 +63,10 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const
 
 const deployment = JSON.parse(
   readFileSync(
-    join(__dirname, "../../../smart-contracts/deployments/contracts/dev.json"),
+    join(
+      __dirname,
+      "../../../contracts/relay-chain/deployments/contracts/dev.json"
+    ),
     "utf8"
   )
 ) as {

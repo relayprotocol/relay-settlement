@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const relay: NetworkConfig = {
   blockExplorer: {
@@ -31,8 +32,6 @@ export const relay: NetworkConfig = {
     name: "eth",
     symbol: "eth",
   },
-  rpc: process.env.RPC_RELAY_CHAIN
-    ? [process.env.RPC_RELAY_CHAIN]
-    : ["https://rpc.chain.relay.link"],
+  ...resolveRpc(process.env.RPC_RELAY_CHAIN, ["https://rpc.chain.relay.link"]),
   slug: "relay",
 }

@@ -6,16 +6,6 @@
         "name": "_config",
         "type": "address",
         "internalType": "address"
-      },
-      {
-        "name": "_fromAccountIndex",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "_lighterChainId",
-        "type": "uint64",
-        "internalType": "uint64"
       }
     ],
     "stateMutability": "nonpayable"
@@ -35,20 +25,7 @@
   },
   {
     "type": "function",
-    "name": "FROM_ACCOUNT_INDEX",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "LIGHTER_CHAIN_ID",
+    "name": "DEFAULT_MAX_USDC_FEE",
     "inputs": [],
     "outputs": [
       {
@@ -82,15 +59,25 @@
         "internalType": "string"
       },
       {
-        "name": "",
+        "name": "depository",
         "type": "bytes",
         "internalType": "bytes"
       },
       {
         "name": "params",
         "type": "tuple",
-        "internalType": "struct BuildPayloadParams",
+        "internalType": "struct WithdrawRequest",
         "components": [
+          {
+            "name": "chainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "depository",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
           {
             "name": "currency",
             "type": "bytes",
@@ -102,19 +89,29 @@
             "internalType": "uint256"
           },
           {
+            "name": "spenderChainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "spender",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
             "name": "receiver",
             "type": "bytes",
             "internalType": "bytes"
           },
           {
-            "name": "nonce",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "data",
             "type": "bytes",
             "internalType": "bytes"
+          },
+          {
+            "name": "nonce",
+            "type": "bytes32",
+            "internalType": "bytes32"
           }
         ]
       }
@@ -124,6 +121,23 @@
         "name": "payload",
         "type": "bytes",
         "internalType": "bytes"
+      },
+      {
+        "name": "withdrawFee",
+        "type": "tuple",
+        "internalType": "struct WithdrawFee",
+        "components": [
+          {
+            "name": "currency",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
       }
     ],
     "stateMutability": "view"
@@ -280,6 +294,44 @@
   },
   {
     "type": "function",
+    "name": "getFromAccountIndex",
+    "inputs": [
+      {
+        "name": "chainId",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "fromAccountIndex",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getFromAccountIndexKey",
+    "inputs": [
+      {
+        "name": "chainId",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "key",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "getFromRouteTypeKey",
     "inputs": [
       {
@@ -291,6 +343,82 @@
         "name": "currency",
         "type": "bytes",
         "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "key",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "getLighterChainId",
+    "inputs": [
+      {
+        "name": "chainId",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "lighterChainId",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getLighterChainIdKey",
+    "inputs": [
+      {
+        "name": "chainId",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "key",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "getMaxUsdcFee",
+    "inputs": [
+      {
+        "name": "chainId",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "maxUsdcFee",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getMaxUsdcFeeKey",
+    "inputs": [
+      {
+        "name": "chainId",
+        "type": "string",
+        "internalType": "string"
       }
     ],
     "outputs": [
@@ -383,6 +511,65 @@
       }
     ],
     "stateMutability": "pure"
+  },
+  {
+    "type": "error",
+    "name": "CurrencyDisabled",
+    "inputs": [
+      {
+        "name": "chainId",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "currency",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "DepositoryMismatch",
+    "inputs": [
+      {
+        "name": "depository",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "fromAccountIndex",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "FeeExceedsMaxFee",
+    "inputs": [
+      {
+        "name": "fee",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "maxFee",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidCurrencyLength",
+    "inputs": [
+      {
+        "name": "length",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   },
   {
     "type": "error",

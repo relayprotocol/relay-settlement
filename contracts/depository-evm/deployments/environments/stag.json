@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "environment": "stag",
+  "factory": "0x4e59b44847b379578588920ca78fbf26c0b4956c",
+  "salt": "0x0000000000000000000000000000000000000000000000000000000000000003",
+  "constructor": {
+    "owner": "0x71d8be89d9f2339f0fe9cba39496c6c9cbff9da6",
+    "allocator": "0x2c77d826d76bd6bab294c986ac3e17fbf1bd435a"
+  },
+  "variants": {
+    "cancun": {
+      "address": "0x9ddc6a541e8f8b50b0996786a3ec275ab4d3a76c",
+      "artifact": "releases/stag-cancun.json"
+    },
+    "london": {
+      "address": "0xa4da4ec0558404cebba46bd112663723bc89829b",
+      "artifact": "releases/stag-london.json"
+    }
+  }
+}

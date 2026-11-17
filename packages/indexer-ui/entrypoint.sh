@@ -28,12 +28,8 @@ esac
 
 export INDEXER_API_URL="$indexer_api_url"
 
-envsubst '${INDEXER_API_URL} ${AUTH_API_KEY}' \
+envsubst '${INDEXER_API_URL} ${AUTH_API_KEY} ${IMAGE_TAG}' \
   < /etc/nginx/templates/default.conf.template \
   > /etc/nginx/conf.d/default.conf
-
-sed "s/\${INDEXER_API_URL}//g" \
-  /usr/share/nginx/html/config.template.js \
-  > /usr/share/nginx/html/config.js
 
 exec "$@"

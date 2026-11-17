@@ -1,7 +1,8 @@
-import { describe, expect, it, vi, type Mock } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
+import type { AtlasTransfer } from "../../../src/vm/atlas-vm.js";
 
 /** Decode a 0x-prefixed hex string into a Uint8Array. */
 function hexToBytes(hex: string): Uint8Array {
@@ -34,13 +35,17 @@ type GlobalWithLit = typeof globalThis & {
   __HUB_EVM_CHAIN_ID__?: string;
   __ALLOWED_ORACLES__?: string;
   __ORACLE_SIGNATURE_THRESHOLD__?: string;
-  __LIGHTER_ALLOWED_API_KEYS__?: string;
-  __LIGHTER_GATEWAY__?: string;
-  __LIGHTER_GATEWAY_CHAIN_ID__?: string;
+  __LIGHTER_GATEWAYS__?: string;
+  __ATLAS_DOMAIN__?: string;
 };
 
 const TEST_PKP_KEY_HEX = "deadbeef".repeat(8);
 const PKP_ID = "pkp-test";
+// Atlas testnet transaction domain
+const TESTNET_DOMAIN = {
+  chainId: 43003,
+  salt: "0xcc279b865244fb243618dfc109dced1cae0e32662920805f8b64813411597338",
+};
 
 function mockConfig(): void {
   const globalWithLit = globalThis as GlobalWithLit;
@@ -48,14 +53,34 @@ function mockConfig(): void {
   globalWithLit.__HUB_EVM_CHAIN_ID__ = "421614";
   globalWithLit.__ALLOWED_ORACLES__ = "[]";
   globalWithLit.__ORACLE_SIGNATURE_THRESHOLD__ = "0";
-  globalWithLit.__LIGHTER_ALLOWED_API_KEYS__ = JSON.stringify([
+  globalWithLit.__LIGHTER_GATEWAYS__ = JSON.stringify([
     {
-      apiKeyIndex: 5,
-      publicKey: "0x0102030405060708091011121314151617181920212223242526272829303132",
+      chainId: 1,
+      gateway: "0x3B4D794a66304F130a4Db8F2551B0070dfCf5ca7",
+      allowedApiKeys: [
+        {
+          apiKeyIndex: 5,
+          publicKey: "0x0102030405060708091011121314151617181920212223242526272829303132",
+        },
+      ],
+    },
+    {
+      chainId: 4663,
+      gateway: "0x94bAB9693Ba2f6358507eFfcbd372b0660AFfF9d",
+      allowedApiKeys: [
+        {
+          apiKeyIndex: 7,
+          publicKey: "0x3232323232323232323232323232323232323232323232323232323232323232",
+        },
+      ],
+    },
+    {
+      chainId: 999,
+      gateway: "0x0000000000000000000000000000000000000999",
+      allowedApiKeys: [],
     },
   ]);
-  globalWithLit.__LIGHTER_GATEWAY__ = "0x3B4D794a66304F130a4Db8F2551B0070dfCf5ca7";
-  globalWithLit.__LIGHTER_GATEWAY_CHAIN_ID__ = "1";
+  globalWithLit.__ATLAS_DOMAIN__ = JSON.stringify(TESTNET_DOMAIN);
 }
 
 async function loadActions() {
@@ -71,6 +96,7 @@ async function loadActions() {
     { main: lighterMain },
     { main: xrpMain },
     { main: hederaMain },
+    { main: atlasMain },
   ] = await Promise.all([
     import("../../../src/vm/gateway-vm.js"),
     import("../../../src/vm/ethereum-vm.js"),
@@ -82,6 +108,7 @@ async function loadActions() {
     import("../../../src/vm/lighter-vm.js"),
     import("../../../src/vm/xrp-vm.js"),
     import("../../../src/vm/hedera-vm.js"),
+    import("../../../src/vm/atlas-vm.js"),
   ]);
   return {
     gatewayMain,
@@ -94,6 +121,7 @@ async function loadActions() {
     lighterMain,
     xrpMain,
     hederaMain,
+    atlasMain,
   };
 }
 
@@ -435,6 +463,7 @@ describe("lighter-vm action", () => {
       pkpId: PKP_ID,
       action: "changePubKey",
       changePubKey: {
+        gatewayChainId: 1,
         accountIndex: 42,
         apiKeyIndex: 5,
         publicKey: "0x0102030405060708091011121314151617181920212223242526272829303132",
@@ -444,6 +473,8 @@ describe("lighter-vm action", () => {
       },
     })) as {
       changePubKey: {
+        gatewayChainId: string;
+        gateway: string;
         hash: string;
         data: string;
         rawTransaction: string;
@@ -452,6 +483,8 @@ describe("lighter-vm action", () => {
       };
     };
 
+    expect(result.changePubKey.gatewayChainId).toBe("1");
+    expect(result.changePubKey.gateway).toBe("0x3b4d794a66304f130a4db8f2551b0070dfcf5ca7");
     expect(result.changePubKey.hash).toMatch(/^0x[0-9a-f]{64}$/i);
     expect(result.changePubKey.data.startsWith("0x")).toBe(true);
     expect(result.changePubKey.rawTransaction.startsWith("0x")).toBe(true);
@@ -470,8 +503,127 @@ describe("lighter-vm action", () => {
         pkpId: PKP_ID,
         action: "changePubKey",
         changePubKey: {
+          gatewayChainId: 1,
           accountIndex: 42,
           apiKeyIndex: 6,
+          publicKey: "0x0102030405060708091011121314151617181920212223242526272829303132",
+          txNonce: 7,
+          gasPrice: 20_000_000_000n,
+          gasLimit: 200_000,
+        },
+      }),
+    ).rejects.toThrow("Lighter API key is not allowlisted");
+  });
+
+  it("signs ChangePubKey against the Robinhood Lighter gateway with EIP-155 v for chain 4663", async () => {
+    mockLit();
+    const { lighterMain } = await loadActions();
+
+    const result = (await lighterMain({
+      pkpId: PKP_ID,
+      action: "changePubKey",
+      changePubKey: {
+        gatewayChainId: 4663,
+        accountIndex: 42,
+        apiKeyIndex: 7,
+        publicKey: "0x3232323232323232323232323232323232323232323232323232323232323232",
+        txNonce: 0,
+        gasPrice: 100_000_000n,
+        gasLimit: 200_000,
+      },
+    })) as {
+      changePubKey: {
+        gatewayChainId: string;
+        gateway: string;
+        rawTransaction: string;
+        transactionSignature: { v: string };
+      };
+    };
+
+    expect(result.changePubKey.gatewayChainId).toBe("4663");
+    expect(result.changePubKey.gateway).toBe("0x94bab9693ba2f6358507effcbd372b0660afff9d");
+    // v = yParity + chainId * 2 + 35 for chain 4663
+    expect(["9361", "9362"]).toContain(result.changePubKey.transactionSignature.v);
+    // The gateway address is the `to` field of the RLP-encoded transaction.
+    expect(result.changePubKey.rawTransaction.toLowerCase()).toContain(
+      "94bab9693ba2f6358507effcbd372b0660afff9d",
+    );
+  });
+
+  it("rejects ChangePubKey for a gateway chain id that is not configured", async () => {
+    mockLit();
+    const { lighterMain } = await loadActions();
+
+    await expect(
+      lighterMain({
+        pkpId: PKP_ID,
+        action: "changePubKey",
+        changePubKey: {
+          gatewayChainId: 42161,
+          accountIndex: 42,
+          apiKeyIndex: 5,
+          publicKey: "0x0102030405060708091011121314151617181920212223242526272829303132",
+          txNonce: 7,
+          gasPrice: 20_000_000_000n,
+          gasLimit: 200_000,
+        },
+      }),
+    ).rejects.toThrow("Lighter gateway chain id is not allowlisted");
+  });
+
+  it("requires gatewayChainId for ChangePubKey", async () => {
+    mockLit();
+    const { lighterMain } = await loadActions();
+
+    await expect(
+      lighterMain({
+        pkpId: PKP_ID,
+        action: "changePubKey",
+        changePubKey: {
+          accountIndex: 42,
+          apiKeyIndex: 5,
+          publicKey: "0x0102030405060708091011121314151617181920212223242526272829303132",
+          txNonce: 7,
+          gasPrice: 20_000_000_000n,
+          gasLimit: 200_000,
+        } as never,
+      }),
+    ).rejects.toThrow("changePubKey.gatewayChainId is required");
+  });
+
+  it("does not accept an API key allowlisted on another gateway", async () => {
+    mockLit();
+    const { lighterMain } = await loadActions();
+
+    // apiKeyIndex 5 / this public key are allowlisted on chain 1 only.
+    await expect(
+      lighterMain({
+        pkpId: PKP_ID,
+        action: "changePubKey",
+        changePubKey: {
+          gatewayChainId: 4663,
+          accountIndex: 42,
+          apiKeyIndex: 5,
+          publicKey: "0x0102030405060708091011121314151617181920212223242526272829303132",
+          txNonce: 7,
+          gasPrice: 20_000_000_000n,
+          gasLimit: 200_000,
+        },
+      }),
+    ).rejects.toThrow("Lighter API key is not allowlisted");
+  });
+
+  it("rejects every ChangePubKey on a gateway whose allowlist is empty", async () => {
+    mockLit();
+    const { lighterMain } = await loadActions();
+    await expect(
+      lighterMain({
+        pkpId: PKP_ID,
+        action: "changePubKey",
+        changePubKey: {
+          gatewayChainId: 999,
+          accountIndex: 42,
+          apiKeyIndex: 5,
           publicKey: "0x0102030405060708091011121314151617181920212223242526272829303132",
           txNonce: 7,
           gasPrice: 20_000_000_000n,
@@ -901,5 +1053,299 @@ describe("hedera-vm action", () => {
     // verified as-is rather than re-hashed.
     expect(secp256k1.verify(signature, digest, pubKey, { prehash: false })).toBe(true);
     expect(secp256k1.Signature.fromBytes(signature).hasHighS()).toBe(false);
+  });
+});
+
+describe("atlas-vm action", () => {
+  const ATLAS_DEPOSITORY = "0x1EF18983E5BA8D8F36c0baD4543588b8c28E70BD";
+  const NOW_SECONDS = 1_700_000_000;
+  const OTHER_ACCOUNT = "0x8f3a6c1e2b9d4f7a0c5e8b1d3f6a9c2e4b7d0f15";
+  // The settlement SDK and payload builder tests pin the same transfer and transfer id
+  const TRANSFER = {
+    nonce: "7",
+    expiresAt: String(NOW_SECONDS + 3600),
+    signer: ATLAS_DEPOSITORY,
+    fromAccountAddress: ATLAS_DEPOSITORY,
+    toAccountAddress: "0x299d292ddb5c386bee485ed5ffc9226421ed2947",
+    assetId: "2",
+    amount: "1000000000000",
+    memoHead: `0x${Buffer.from("ord-42").toString("hex").padEnd(64, "0")}`,
+    memoTail: `0x${"00".repeat(31)}07`,
+  };
+  const TRANSFER_ID = "0x7b533dfc4b8b8bbb898f8c7291a32983c3dbec4bff489c705c4b3a223c2c4c6f";
+  // Terms line published in the Atlas docs for testnet
+  const BIND = {
+    expiresAt: String(NOW_SECONDS + 3600),
+    statements: [
+      {
+        label: "Atlas Terms of Use",
+        value:
+          "atlas-terms-of-use@testnet-2 0x28ef6460e39d51d0c9d9dc3c3635503ae039fbd91913cc43839e367bd7690120",
+      },
+      { label: "Request", value: "enableTrading" },
+    ],
+  };
+  // EIP-712 hash of the bind, computed with two typed-data libraries from the published type string
+  const BIND_DIGEST = "0x80d0560b686565ebe90e919aa05036ec95375cf0a165f6996e859143d6a43eee";
+
+  const withdrawRequest = {
+    chainId: "atlas-testnet",
+    depository: ATLAS_DEPOSITORY.toLowerCase(),
+    currency: `0x${"00".repeat(15)}02`,
+    amount: "1000000",
+    spenderChainId: "atlas-testnet",
+    spender: "0x0000000000000000000000000000000000000000",
+    receiver: TRANSFER.toAccountAddress,
+    data: `0x${"00".repeat(31)}07`,
+    nonce: `0x${"00".repeat(32)}`,
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW_SECONDS * 1000);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function signParams(hashesToSign: string[], transfer: AtlasTransfer) {
+    const { computeWithdrawRequestHash } = await import("../../../src/common/abi.js");
+    return {
+      pkpId: PKP_ID,
+      action: "sign",
+      withdrawRequest,
+      attestation: {
+        chainId: 421614,
+        allocator: "0x0000000000000000000000000000000000000000",
+        withdrawRequestHash: `0x${bytesToHex(computeWithdrawRequestHash(withdrawRequest))}`,
+        hashesToSign,
+        signatures: [],
+      },
+      transfer,
+    };
+  }
+
+  /** Attest the transfer's own digest under the given domain and ask the action to sign it. */
+  async function signTransfer(transfer: AtlasTransfer, domain = TESTNET_DOMAIN) {
+    const { atlasMain } = await loadActions();
+    const { atlasTransferDigest } = await import("../../../src/vm/atlas-vm.js");
+    const digest = `0x${bytesToHex(atlasTransferDigest(domain, transfer))}`;
+    return atlasMain(await signParams([digest], transfer));
+  }
+
+  async function expectDepositorySignature(hash: string, signatureHex: string) {
+    const signature = hexToBytes(signatureHex);
+    expect([0, 1]).toContain(signature[64]);
+    expect(BigInt(`0x${bytesToHex(signature.slice(32, 64))}`)).toBeLessThanOrEqual(
+      secp256k1.Point.Fn.ORDER / 2n,
+    );
+    const recovered = secp256k1.Signature.fromBytes(signature.slice(0, 64))
+      .addRecoveryBit(signature[64])
+      .recoverPublicKey(hexToBytes(hash));
+    const { addr } = await import("micro-eth-signer");
+    expect(addr.fromPublicKey(recovered.toBytes(false))).toBe(ATLAS_DEPOSITORY);
+  }
+
+  it("returns the HKDF-derived Atlas owner address", async () => {
+    const lit = mockLit();
+    const { atlasMain } = await loadActions();
+
+    const result = await atlasMain({ pkpId: PKP_ID, action: "wallet" });
+
+    expect(lit.Actions.getPrivateKey).toHaveBeenCalledWith({ pkpId: PKP_ID });
+    // Pinned: this address is the depository's Atlas account.
+    expect(result).toEqual({ vmType: "atlas-vm", address: ATLAS_DEPOSITORY });
+  });
+
+  it("derives a distinct wallet from ethereum-vm", async () => {
+    mockLit();
+    const { ethereumMain, atlasMain } = await loadActions();
+
+    const ethereum = (await ethereumMain({ pkpId: PKP_ID, action: "wallet" })) as {
+      address: string;
+    };
+    const atlas = (await atlasMain({ pkpId: PKP_ID, action: "wallet" })) as { address: string };
+    expect(atlas.address).not.toBe(ethereum.address);
+  });
+
+  it("derives the transfer id the SDK and the payload builder derive", async () => {
+    const { atlasTransferDigest } = await import("../../../src/vm/atlas-vm.js");
+
+    expect(`0x${bytesToHex(atlasTransferDigest(TESTNET_DOMAIN, TRANSFER))}`).toBe(TRANSFER_ID);
+  });
+
+  it("signs the attested transfer out of the depository", async () => {
+    mockLit();
+
+    const result = (await signTransfer(TRANSFER)) as {
+      results: Array<{ hash: string; signature: string }>;
+    };
+
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].hash).toBe(TRANSFER_ID);
+    await expectDepositorySignature(TRANSFER_ID, result.results[0].signature);
+  });
+
+  it("rejects a transfer that is not from the depository", async () => {
+    mockLit();
+
+    await expect(signTransfer({ ...TRANSFER, fromAccountAddress: OTHER_ACCOUNT })).rejects.toThrow(
+      "transfer is not from this depository",
+    );
+  });
+
+  it("rejects a different signer even when the oracle attested its digest", async () => {
+    mockLit();
+
+    await expect(signTransfer({ ...TRANSFER, signer: OTHER_ACCOUNT })).rejects.toThrow(
+      "transfer signer is not this depository",
+    );
+  });
+
+  it("rejects a transfer whose memo tail is not its nonce", async () => {
+    mockLit();
+
+    await expect(signTransfer({ ...TRANSFER, memoTail: `0x${"00".repeat(32)}` })).rejects.toThrow(
+      "transfer memoTail is not its nonce",
+    );
+    // Hex 0x10 is 16, whatever a decimal reading of the same digits says
+    await expect(
+      signTransfer({ ...TRANSFER, nonce: "10", memoTail: `${"00".repeat(31)}10` }),
+    ).rejects.toThrow("transfer memoTail is not its nonce");
+  });
+
+  it("rejects a transfer that has expired", async () => {
+    mockLit();
+
+    await expect(signTransfer({ ...TRANSFER, expiresAt: String(NOW_SECONDS) })).rejects.toThrow(
+      "transfer.expiresAt has passed",
+    );
+  });
+
+  it("rejects a transfer dated further ahead than Atlas accepts", async () => {
+    mockLit();
+    const limit = NOW_SECONDS + 14 * 24 * 60 * 60;
+
+    await expect(signTransfer({ ...TRANSFER, expiresAt: String(limit + 1) })).rejects.toThrow(
+      "transfer.expiresAt is more than 1209600 seconds ahead",
+    );
+    await expect(signTransfer({ ...TRANSFER, expiresAt: String(limit) })).resolves.toBeDefined();
+  });
+
+  it("rejects a transfer attested under another domain chain id", async () => {
+    mockLit();
+
+    await expect(signTransfer(TRANSFER, { ...TESTNET_DOMAIN, chainId: 21337 })).rejects.toThrow(
+      "attested hash is not this transfer under the configured domain",
+    );
+  });
+
+  it("rejects an attested hash that is not the given transfer", async () => {
+    mockLit();
+    const { atlasMain } = await loadActions();
+
+    await expect(
+      atlasMain(await signParams([TRANSFER_ID], { ...TRANSFER, amount: "2000000000000" })),
+    ).rejects.toThrow("attested hash is not this transfer");
+  });
+
+  it("rejects an attestation that does not carry exactly one hash", async () => {
+    mockLit();
+    const { atlasMain } = await loadActions();
+
+    await expect(
+      atlasMain(await signParams([`0x${"11".repeat(32)}`, `0x${"22".repeat(32)}`], TRANSFER)),
+    ).rejects.toThrow("expected one attested hash, got 2");
+  });
+
+  it("requires the transfer", async () => {
+    mockLit();
+    const { atlasMain } = await loadActions();
+    const { transfer: _, ...params } = await signParams([`0x${"11".repeat(32)}`], TRANSFER);
+
+    await expect(atlasMain(params)).rejects.toThrow("transfer is required");
+  });
+
+  it("rejects signing and onboarding when the environment has no Atlas domain", async () => {
+    mockLit();
+    vi.resetModules();
+    mockConfig();
+    (globalThis as GlobalWithLit).__ATLAS_DOMAIN__ = "null";
+    try {
+      const { main: atlasMain } = await import("../../../src/vm/atlas-vm.js");
+      await expect(atlasMain(await signParams([`0x${"11".repeat(32)}`], TRANSFER))).rejects.toThrow(
+        "Atlas is not configured for this environment",
+      );
+      await expect(atlasMain({ pkpId: PKP_ID, action: "onboard", bind: BIND })).rejects.toThrow(
+        "Atlas is not configured for this environment",
+      );
+    } finally {
+      vi.resetModules();
+    }
+  });
+
+  it("signs the bind that opens the depository's wallet", async () => {
+    mockLit();
+    const { atlasMain } = await loadActions();
+
+    const result = (await atlasMain({ pkpId: PKP_ID, action: "onboard", bind: BIND })) as {
+      results: Array<{ hash: string; signature: string }>;
+    };
+
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].hash).toBe(BIND_DIGEST);
+    await expectDepositorySignature(BIND_DIGEST, result.results[0].signature);
+  });
+
+  it.each([
+    ["no request line", [BIND.statements[0]]],
+    ["an extra line", [...BIND.statements, { label: "Builder", value: OTHER_ACCOUNT }]],
+    ["lines out of order", [BIND.statements[1], BIND.statements[0]]],
+    ["another terms label", [{ ...BIND.statements[0], label: "Terms" }, BIND.statements[1]]],
+    [
+      "a terms value without a content hash",
+      [{ ...BIND.statements[0], value: "atlas-terms-of-use@testnet-2" }, BIND.statements[1]],
+    ],
+    ["another request", [BIND.statements[0], { label: "Request", value: "enableBuilder" }]],
+  ])("rejects a bind with %s", async (_, statements) => {
+    mockLit();
+    const { atlasMain } = await loadActions();
+
+    await expect(
+      atlasMain({ pkpId: PKP_ID, action: "onboard", bind: { ...BIND, statements } }),
+    ).rejects.toThrow("bind statements must be the terms in force and the enableTrading request");
+  });
+
+  it("rejects a bind that has expired or is dated more than a day ahead", async () => {
+    mockLit();
+    const { atlasMain } = await loadActions();
+    const onboard = (expiresAt: number) =>
+      atlasMain({
+        pkpId: PKP_ID,
+        action: "onboard",
+        bind: { ...BIND, expiresAt: String(expiresAt) },
+      });
+
+    await expect(onboard(NOW_SECONDS)).rejects.toThrow("bind.expiresAt has passed");
+    await expect(onboard(NOW_SECONDS + 86_401)).rejects.toThrow(
+      "bind.expiresAt is more than 86400 seconds ahead",
+    );
+    await expect(onboard(NOW_SECONDS + 86_400)).resolves.toBeDefined();
+  });
+
+  it("requires the bind", async () => {
+    mockLit();
+    const { atlasMain } = await loadActions();
+
+    await expect(atlasMain({ pkpId: PKP_ID, action: "onboard" })).rejects.toThrow(
+      "bind is required",
+    );
+  });
+
+  it("rejects unknown actions", async () => {
+    mockLit();
+    const { atlasMain } = await loadActions();
+    await expect(atlasMain({ pkpId: PKP_ID, action: "unknown" })).rejects.toThrow("unknown action");
   });
 });

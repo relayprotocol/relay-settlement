@@ -67,8 +67,8 @@ export interface SetupReads {
   listActions(): Promise<ActionInfo[]>
   listUsageApiKeys(): Promise<UsageKeyInfo[]>
   listPkpsInGroup(groupId: bigint): Promise<PkpInfo[]>
-  /** Actions currently attached to a group (its permitted CID hashes). */
-  listActionsInGroup(groupId: bigint): Promise<ActionInfo[]>
+  /** Attached actions, or undefined when the API does not support this read. */
+  listActionsInGroup(groupId: bigint): Promise<ActionInfo[] | undefined>
 }
 
 /** Write surface — same shape for every backend, different transport. */

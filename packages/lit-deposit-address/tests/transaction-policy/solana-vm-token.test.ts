@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { verifyTransactionsWithWallet } from "../../src/derivation/index.js";
 import {
+  COMPUTE_BUDGET_PROGRAM_KEY,
   DEPOSIT_NATIVE_DISCRIMINATOR_BYTES,
   DEPOSIT_TOKEN_DISCRIMINATOR_BYTES,
   SOLANA_DEPOSITORY_HEX,
@@ -10,9 +11,12 @@ import {
   SOLANA_ORDER_ID,
   buildDepositArgs,
   buildLegacyMessage,
+  computeUnitLimitIx,
+  computeUnitPriceIx,
   hexToBytes32,
   makeSolanaAttestation,
   makeSolanaTrigger,
+  type SolanaMessageInputs,
 } from "./solana-shared.js";
 
 describe("solana-vm transaction policy (deposit_token)", () => {
@@ -37,6 +41,7 @@ describe("solana-vm transaction policy (deposit_token)", () => {
       programIdIndex?: number;
       staticAccountKeys?: Uint8Array[];
       numRequiredSignatures?: number;
+      prefixInstructions?: SolanaMessageInputs["instructions"];
     } = {},
   ): string {
     const staticAccountKeys = args.staticAccountKeys ?? [
@@ -54,8 +59,12 @@ describe("solana-vm transaction policy (deposit_token)", () => {
     ];
     return buildLegacyMessage({
       numRequiredSignatures: args.numRequiredSignatures,
-      staticAccountKeys,
+      // With prefix instructions, the ComputeBudget program is appended as the last static key.
+      staticAccountKeys: args.prefixInstructions
+        ? [...staticAccountKeys, COMPUTE_BUDGET_PROGRAM_KEY]
+        : staticAccountKeys,
       instructions: [
+        ...(args.prefixInstructions ?? []),
         {
           programIdIndex: args.programIdIndex ?? 10,
           accountIndexes: args.accountIndexes ?? [2, 0, 1, 3, 4, 5, 6, 7, 8, 9],
@@ -70,6 +79,7 @@ describe("solana-vm transaction policy (deposit_token)", () => {
   }
 
   const erc20LikeTrigger = () => makeSolanaTrigger({ inputCurrency: SOLANA_MINT_HEX });
+  const COMPUTE_BUDGET_INDEX = 11;
 
   it("accepts a well-formed deposit_token instruction", () => {
     expect(() =>
@@ -173,5 +183,35 @@ describe("solana-vm transaction policy (deposit_token)", () => {
         },
       ]),
     ).not.toThrow();
+  });
+
+  it("accepts SetComputeUnitLimit + SetComputeUnitPrice before deposit_token", () => {
+    expect(() =>
+      verifyTransactionsWithWallet(erc20LikeTrigger(), makeSolanaAttestation(), [
+        {
+          message: buildTokenMessage({
+            prefixInstructions: [
+              computeUnitLimitIx(200_000, COMPUTE_BUDGET_INDEX),
+              computeUnitPriceIx(1_000_000n, COMPUTE_BUDGET_INDEX),
+            ],
+          }),
+        },
+      ]),
+    ).not.toThrow();
+  });
+
+  it("rejects a compute unit price above the cap before deposit_token", () => {
+    expect(() =>
+      verifyTransactionsWithWallet(erc20LikeTrigger(), makeSolanaAttestation(), [
+        {
+          message: buildTokenMessage({
+            prefixInstructions: [
+              computeUnitLimitIx(200_000, COMPUTE_BUDGET_INDEX),
+              computeUnitPriceIx(1_000_001n, COMPUTE_BUDGET_INDEX),
+            ],
+          }),
+        },
+      ]),
+    ).toThrow(/SetComputeUnitPrice must not exceed 1000000 micro-lamports/);
   });
 });

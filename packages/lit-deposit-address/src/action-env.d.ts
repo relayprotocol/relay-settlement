@@ -61,3 +61,15 @@ declare module "https://cdn.jsdelivr.net/npm/bs58@6.0.0/+esm" {
   import bs58 from "bs58";
   export default bs58;
 }
+
+declare module "https://cdn.jsdelivr.net/npm/ripple-address-codec@5.0.1/+esm" {
+  export * from "ripple-address-codec";
+}
+
+declare module "https://cdn.jsdelivr.net/npm/ripple-keypairs@2.0.0/dist/index.js/+esm" {
+  export * from "ripple-keypairs";
+}
+
+declare module "https://cdn.jsdelivr.net/npm/ripple-binary-codec@2.8.0/dist/index.js/+esm" {
+  export * from "ripple-binary-codec";
+}

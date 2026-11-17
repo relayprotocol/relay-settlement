@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const katana: NetworkConfig = {
   chainId: 747474n,
@@ -10,8 +11,6 @@ export const katana: NetworkConfig = {
   hubChainId: "747474",
   isTestnet: false,
   name: "Katana",
-  rpc: process.env.RPC_747474
-    ? [process.env.RPC_747474]
-    : ["https://rpc.katana.network"],
+  ...resolveRpc(process.env.RPC_747474, ["https://rpc.katana.network"]),
   slug: "katana",
 }

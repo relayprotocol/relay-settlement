@@ -1,12 +1,13 @@
 .git
 node_modules
 **/node_modules
+contracts/*/dependencies
 **/dist
 **/target
 **/.env
 **/*.tsbuildinfo
-smart-contracts/ignition
-smart-contracts/artifacts
-smart-contracts/cache
+contracts/relay-chain/ignition
+contracts/relay-chain/artifacts
+contracts/relay-chain/cache
 .pnp.*
 .yarn/unplugged

@@ -1,0 +1,5 @@
+@openzeppelin/=dependencies/@openzeppelin-contracts-4.9.3/
+ds-test/=dependencies/ds-test-9310e87/src/
+forge-std/=dependencies/forge-std-1.7.3/src/
+isolmate/=dependencies/isolmate-73ce8b9/src/
+prb/test/=dependencies/prb-test-0.1.1/src/

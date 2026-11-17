@@ -1,9 +1,13 @@
 {
   "name": "test",
-  "allocatorAddress": "0xf62Db37A0d07f7226292CE360225A329510A7F3a",
+  "allocatorAddress": "0x1E2092B7c5f30B2078f7987b7B000C317aC19172",
   "hubEvmChainId": 421614,
   "allowedOracles": [
     "0x20a281822adfbc2be1fd5c77566702e0a8007084"
   ],
-  "oracleSignatureThreshold": 1
+  "oracleSignatureThreshold": 1,
+  "atlasDomain": {
+    "chainId": 43003,
+    "salt": "0xcc279b865244fb243618dfc109dced1cae0e32662920805f8b64813411597338"
+  }
 }

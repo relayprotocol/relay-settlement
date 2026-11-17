@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const flow: NetworkConfig = {
   chainId: 747n,
@@ -10,8 +11,6 @@ export const flow: NetworkConfig = {
   hubChainId: "747",
   isTestnet: false,
   name: "Flow",
-  rpc: process.env.RPC_747
-    ? [process.env.RPC_747]
-    : ["https://mainnet.evm.nodes.onflow.org"],
+  ...resolveRpc(process.env.RPC_747, ["https://mainnet.evm.nodes.onflow.org"]),
   slug: "flow",
 }

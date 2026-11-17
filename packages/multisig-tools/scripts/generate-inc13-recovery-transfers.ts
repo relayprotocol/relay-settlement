@@ -31,7 +31,6 @@ import {
   generateAddress,
   generateTokenId,
   getOrderAddress,
-  getOrderAddressSafe,
 } from "@relay-protocol/settlement-sdk"
 import { networks } from "@relay-protocol/settlement-networks"
 import {
@@ -40,6 +39,7 @@ import {
   RELAY_CHAIN_HUB_ADDRESS,
   RELAY_CHAIN_GAS_CONFIG,
 } from "./helpers/chains"
+import { getLegacyOrderAddress } from "./helpers/legacyOrderAddress"
 import { getManifestPath, stringifyJsonWithBigInt } from "./helpers/manifest"
 
 // Recovery Safe the funds are transferred to (deployed on Arbitrum, the
@@ -171,7 +171,7 @@ const orderAddressCandidates = (deposit: Deposit) => {
   ]
   const derivations = [
     { fn: getOrderAddress, fnLabel: "orderAddress" },
-    { fn: getOrderAddressSafe, fnLabel: "orderAddressSafe" },
+    { fn: getLegacyOrderAddress, fnLabel: "legacyOrderAddress" },
   ]
 
   const candidates: {

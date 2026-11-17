@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const cronos: NetworkConfig = {
   chainId: 25n,
@@ -10,6 +11,6 @@ export const cronos: NetworkConfig = {
   hubChainId: "25",
   isTestnet: false,
   name: "Cronos",
-  rpc: process.env.RPC_25 ? [process.env.RPC_25] : ["https://evm.cronos.org"],
+  ...resolveRpc(process.env.RPC_25, ["https://evm.cronos.org"]),
   slug: "cronos",
 }

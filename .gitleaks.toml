@@ -4,14 +4,40 @@ title = "Relay Settlement Protocol gitleaks configuration"
 useDefault = true
 
 [[allowlists]]
+description = "Public Robinhood USDG contract address in the withdrawal generator test"
+targetRules = ["generic-api-key"]
+condition = "AND"
+# Git scans report relative paths; release directory scans report absolute paths.
+paths = ['''(^|/)packages/multisig-tools/test/approvalProxyWithdrawal\.spec\.ts$''']
+regexTarget = "secret"
+regexes = ['''(?i)^0x5fc5360d0400a0fd4f2af552add042d716f1d168$''']
+
+[[allowlists]]
 description = "Public addresses in deterministic tests, transaction fixtures, and deployment records"
 targetRules = ["generic-api-key"]
 paths = [
   '''packages/lit-deposit-address/tests/transaction-policy/hyperliquid-vm\.test\.ts''',
   '''packages/lit-deposit-address/tests/transactions/tron-helpers\.ts''',
   '''packages/lit-deposit-address/tests/tron-wallet\.test\.ts''',
-  '''packages/multisig-tools/transactions/(dev|stag|prod)/(025-test-set-allocator|026-test-authority-transfer|045-dev-solana-transfer-authority-and-ownership|051-set-allocator-arc-zorro-tron-solana-eclipse|demo-solana-durable-nonce-example|demo-solana-program-deploy|demo-solana-program-upgrade|demo-solana-send-memo)\.json''',
+  '''packages/multisig-tools/transactions/(dev|stag|prod)/(025-test-set-allocator|026-test-authority-transfer|045-dev-solana-transfer-authority-and-ownership|051-set-allocator-arc-zorro-tron-solana-eclipse|demo-solana-durable-nonce-example|demo-solana-program-deploy|demo-solana-program-upgrade|demo-solana-send-memo|027-upgrade-depository-and-register-solana-router-dev)\.json''',
   '''packages/sdk/test/withdrawal-codec-fixtures\.test\.ts''',
-  '''smart-contracts/test/RelayHubBalanceViewer/balanceOf\.t\.sol''',
-  '''smart-contracts/deployments/contracts/(dev|stag|prod)\.json''',
+  '''contracts/relay-chain/test/RelayHubBalanceViewer/balanceOf\.t\.sol''',
+  '''contracts/relay-chain/deployments/contracts/(dev|stag|prod)\.json''',
+  '''contracts/xerc20/deployments/contracts/(dev|stag|prod)\.json''',
 ]
+
+[[allowlists]]
+description = "Manifest field name serialized by the xERC20 deployment script"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(^|/)contracts/xerc20/script/DeployLockboxes\.s\.sol$''']
+regexTarget = "secret"
+regexes = ['''^xerc20Decimals$''']
+
+[[allowlists]]
+description = "Public Lit account API key hash encoded in XRP action registration calldata"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(^|/)packages/multisig-tools/scripts/generate-register-deposit-address-xrp-action\.ts$''']
+regexTarget = "secret"
+regexes = ['''^0x2a0065350f24490dcd6d9adfcbd327cd63dfbc6e4c002a96233ea77cbf326e77n?$''']

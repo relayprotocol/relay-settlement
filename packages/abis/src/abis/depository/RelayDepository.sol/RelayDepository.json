@@ -506,6 +506,11 @@
   },
   {
     "type": "error",
+    "name": "AmountCannotBeZero",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "CallFailed",
     "inputs": [
       {

@@ -24,22 +24,24 @@ export const BITCOIN_TRANSACTION_PARAMS_ABI = {
   type: "tuple",
 }
 
+// Mirrors BitcoinVmPayloadBuilder's BitcoinVmTransactionData payload. `txid` is in
+// serialized outpoint byte order; `index` and `value` are plain integers.
 export const BITCOIN_TRANSACTION_ABI = [
   {
     components: [
       {
         components: [
-          { name: "txid", type: "bytes" },
-          { name: "index", type: "bytes" },
+          { name: "txid", type: "bytes32" },
+          { name: "index", type: "uint32" },
           { name: "script", type: "bytes" },
-          { name: "value", type: "bytes" },
+          { name: "value", type: "uint64" },
         ],
         name: "inputs",
         type: "tuple[]",
       },
       {
         components: [
-          { name: "value", type: "bytes" },
+          { name: "value", type: "uint64" },
           { name: "script", type: "bytes" },
         ],
         name: "outputs",

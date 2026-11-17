@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const arc: NetworkConfig = {
   chainId: 5042n,
@@ -10,6 +11,6 @@ export const arc: NetworkConfig = {
   hubChainId: "5042",
   isTestnet: false,
   name: "Arc",
-  rpc: [process.env.RPC_5042 ?? ""],
+  ...resolveRpc(process.env.RPC_5042, ["https://rpc.mainnet.arc.io"]),
   slug: "arc",
 }

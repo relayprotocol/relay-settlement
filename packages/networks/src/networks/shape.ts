@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const shape: NetworkConfig = {
   chainId: 360n,
@@ -10,8 +11,6 @@ export const shape: NetworkConfig = {
   hubChainId: "360",
   isTestnet: false,
   name: "Shape",
-  rpc: process.env.RPC_360
-    ? [process.env.RPC_360]
-    : ["https://mainnet.shape.network"],
+  ...resolveRpc(process.env.RPC_360, ["https://mainnet.shape.network"]),
   slug: "shape",
 }

@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const tron: NetworkConfig = {
   chainId: 728126428n,
@@ -9,8 +10,6 @@ export const tron: NetworkConfig = {
   hubChainId: "728126428",
   isTestnet: false,
   name: "Tron",
-  rpc: process.env.RPC_TRON
-    ? [process.env.RPC_TRON]
-    : ["https://api.trongrid.io/jsonrpc"],
+  ...resolveRpc(process.env.RPC_TRON, ["https://api.trongrid.io/jsonrpc"]),
   slug: "tron",
 }

@@ -31,9 +31,13 @@ The compiled message must require 1 or 2 signatures, and the deposit wallet must
 
 Messages requiring more than two signatures are rejected.
 
+### Priority fee
+
+The deposit must be the last instruction. It may be preceded by at most one `SetComputeUnitLimit` (≤ 200,000 CU) and one `SetComputeUnitPrice` (≤ 1,000,000 micro-lamports per CU), in either order and without accounts. Any other instruction, including other ComputeBudget instructions, is rejected. The priority fee is charged on the requested limit, not on the units used.
+
 ### Native SOL deposit
 
-When `trigger.input.currency` is Solana's native/gas currency, the single instruction must call `deposit_native(amount, id)` on `attestation.inputDepository`:
+When `trigger.input.currency` is Solana's native/gas currency, the deposit instruction must call `deposit_native(amount, id)` on `attestation.inputDepository`:
 
 - 5 Anchor accounts: `relay_depository, sender, depositor, vault, system_program`.
 - `sender` is the deposit wallet signer slot.
@@ -42,7 +46,7 @@ When `trigger.input.currency` is Solana's native/gas currency, the single instru
 
 ### SPL token deposit
 
-When `trigger.input.currency` is an SPL token mint, the single instruction must call `deposit_token(amount, id)`:
+When `trigger.input.currency` is an SPL token mint, the deposit instruction must call `deposit_token(amount, id)`:
 
 - 10 Anchor accounts: `relay_depository, sender, depositor, vault, mint, sender_token_account, vault_token_account, token_program, associated_token_program, system_program`.
 - `mint` equals `trigger.input.currency`.
@@ -66,4 +70,4 @@ Non-wallet signer slots are zero-filled.
 ## Submission notes
 
 - With a separate fee payer, sign slot `0` of the returned base64 transaction before submission.
-- The solver is responsible for recent blockhash freshness and for creating any associated token accounts outside the single-instruction deposit message.
+- The solver is responsible for recent blockhash freshness and for creating any associated token accounts outside the deposit message.

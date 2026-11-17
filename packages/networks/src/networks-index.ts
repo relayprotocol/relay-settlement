@@ -1,7 +1,4 @@
-import type {
-  NetworkConfig,
-  NetworkConfigs,
-} from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig, NetworkConfigs } from "./types"
 import * as supportedNetworks from "./networks"
 import {
   loadChainsWithOverrides,

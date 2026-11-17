@@ -18,7 +18,7 @@ export interface ResolveNetworkOptions {
   network?: string
   rpcOverride?: string
   multisigSignerOverride?: `0x${string}`
-  env?: "prod" | "dev" | "stag"
+  env?: "prod" | "dev" | "stag" | "test" | "deployers"
 }
 
 // `--env` selects the RelayMultisigSigner from the network config, so it is
@@ -34,7 +34,7 @@ export function assertEnvOrSigner(opts: {
     !process.env.RELAY_MULTISIG_SIGNER
   ) {
     throw new Error(
-      "Set --env (prod | dev | stag), or supply the signer directly with --relay-multisig-signer / RELAY_MULTISIG_SIGNER."
+      "Set --env (prod | dev | stag | test | deployers), or supply the signer directly with --relay-multisig-signer / RELAY_MULTISIG_SIGNER."
     )
   }
 }
@@ -108,17 +108,20 @@ export function resolveNetwork(
   }
 
   const env = opts.env ?? "prod"
-  if (!["prod", "dev", "stag"].includes(env)) {
+  if (!["prod", "dev", "stag", "test", "deployers"].includes(env)) {
     throw new Error(
-      `resolveNetwork: invalid env "${env}". Expected prod, dev, or stag.`
+      `resolveNetwork: invalid env "${env}". Expected prod, dev, stag, test, or deployers.`
     )
   }
   const multisigSignerAddress = (opts.multisigSignerOverride ??
     (process.env.RELAY_MULTISIG_SIGNER as `0x${string}` | undefined) ??
     (config?.contracts?.[env]?.multisigSigner as `0x${string}` | undefined) ??
-    (config?.contracts?.dev?.multisigSigner as `0x${string}` | undefined)) as
-    | `0x${string}`
-    | undefined
+    // Never substitute another signing group for deployers.
+    (env === "deployers"
+      ? undefined
+      : (config?.contracts?.dev?.multisigSigner as
+          | `0x${string}`
+          | undefined))) as `0x${string}` | undefined
 
   if (!multisigSignerAddress) {
     throw new Error(

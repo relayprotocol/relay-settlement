@@ -173,7 +173,11 @@ export function placeholderPrice(currencyDecimals: number): PlaceholderPrice {
   };
 }
 
-/** ABI-encode an array of placeholder prices for the trigger's `extraData`. */
+/**
+ * ABI-encode placeholder prices for a pricing oracle that decodes a prices array.
+ * XRP triggers instead encode a ledger reference and require a compatible oracle;
+ * see the README's XRP Payment sweeps section for the payload and oracle choice.
+ */
 export function encodePricesExtraData(prices: readonly PlaceholderPrice[]): Hex {
   return encodeAbiParameters(PRICES_ABI, [prices]);
 }

@@ -27,6 +27,7 @@ import type {
 import { Ed25519Bip32VmWalletDeriver } from "../base/Ed25519Bip32VmWalletDeriver.js";
 
 const HASH_LEN = 32;
+const ORDER_ID_RE = /^0x[0-9a-fA-F]{64}/;
 const DEPOSITOR_RE = /\|depositor=([^|]+)(?=\|)/;
 
 /**
@@ -109,7 +110,12 @@ export class TonVmWalletDeriver extends Ed25519Bip32VmWalletDeriver<
       );
     }
 
-    if (!tx.comment.startsWith(trigger.orderId)) {
+    // Select the order id and depositor exactly as the oracle does (leading
+    // order id, first depositor tag), then require them to match the trigger.
+    if (!ORDER_ID_RE.test(tx.comment)) {
+      throw new Error("transactions[0]: comment must start with a 32-byte order id");
+    }
+    if (tx.comment.slice(0, 66).toLowerCase() !== trigger.orderId.toLowerCase()) {
       throw new Error("transactions[0]: comment must start with trigger.orderId");
     }
     const depositor = DEPOSITOR_RE.exec(tx.comment)?.[1];

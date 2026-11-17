@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const hyperliquid: NetworkConfig = {
   chainId:
@@ -12,8 +13,6 @@ export const hyperliquid: NetworkConfig = {
     "111378472430415857054556056192544272316610524417112732947551032542507639335976",
   isTestnet: false,
   name: "Hyperliquid",
-  rpc: process.env.RPC_HYPERLIQUID
-    ? [process.env.RPC_HYPERLIQUID]
-    : ["https://api.hyperliquid.xyz"],
+  ...resolveRpc(process.env.RPC_HYPERLIQUID, ["https://api.hyperliquid.xyz"]),
   slug: "hyperliquid",
 }

@@ -3,6 +3,7 @@ import {
   ed25519Bip32,
 } from "https://cdn.jsdelivr.net/npm/@metamask/key-tree@10.1.1/+esm";
 import bs58 from "https://cdn.jsdelivr.net/npm/bs58@6.0.0/+esm";
+import { encodeSolanaAddress } from "../../../common/address/solana.js";
 import {
   base64ToBytes,
   bytesToBase64,
@@ -53,6 +54,17 @@ const DEPOSIT_ID_END = 48;
 
 const PUBKEY_LEN = 32;
 
+const COMPUTE_BUDGET_PROGRAM_ID = encodeSolanaAddress(
+  "ComputeBudget111111111111111111111111111111",
+);
+const SET_COMPUTE_UNIT_LIMIT_TAG = 2;
+const SET_COMPUTE_UNIT_LIMIT_DATA_LEN = 1 + 4;
+const SET_COMPUTE_UNIT_PRICE_TAG = 3;
+const SET_COMPUTE_UNIT_PRICE_DATA_LEN = 1 + 8;
+// With a limit, the priority fee is at most 200k CU × 1M micro-lamports = 0.0002 SOL.
+const MAX_COMPUTE_UNIT_LIMIT = 200_000n;
+const MAX_COMPUTE_UNIT_PRICE = 1_000_000n;
+
 /**
  * Solana wallet deriver using the publicly derivable Ed25519 (CIP-3 / BIP32-Ed25519)
  * scheme so that child wallets can be derived from the account extended public
@@ -83,8 +95,8 @@ export class SolanaVmWalletDeriver extends Ed25519Bip32VmWalletDeriver<
    * Two flows are accepted, dispatched on `trigger.input.currency`:
    *
    * 1. Native (`input.currency` = 32 zero bytes a.k.a. the System Program):
-   *    a single Solana transaction containing exactly one instruction
-   *    calling `deposit_native(amount, id)` on the program identified by
+   *    a single Solana transaction whose last instruction calls
+   *    `deposit_native(amount, id)` on the program identified by
    *    `attestation.inputDepository`, with exactly 5 accounts (Anchor
    *    layout: relay_depository, sender, depositor, vault, system_program).
    *
@@ -98,6 +110,11 @@ export class SolanaVmWalletDeriver extends Ed25519Bip32VmWalletDeriver<
    * In both flows the `depositor` account must resolve to
    * `trigger.derivationFields.depositor`, and the Borsh-encoded args must
    * carry `amount == input.amount` and `id == trigger.orderId`.
+   *
+   * The deposit may be preceded by at most one `SetComputeUnitLimit`
+   * (≤ 200,000 CU) and one `SetComputeUnitPrice` (≤ 1,000,000 micro-lamports
+   * per CU) so sweeps can carry a priority fee.
+   * Any other leading instruction is rejected.
    *
    * Address-table-lookup accounts (introduced by versioned-v0 messages) are
    * not supported: an instruction whose account index falls outside the
@@ -127,12 +144,13 @@ export class SolanaVmWalletDeriver extends Ed25519Bip32VmWalletDeriver<
         `transactions[0]: numRequiredSignatures must be 1 or 2 (got ${parsed.numRequiredSignatures})`,
       );
     }
-    if (parsed.instructions.length !== 1) {
+    if (parsed.instructions.length === 0) {
       throw new Error(
-        `transactions[0]: solana deposit message must contain exactly 1 instruction, got ${parsed.instructions.length}`,
+        "transactions[0]: solana deposit message must contain at least 1 instruction",
       );
     }
-    const ix = parsed.instructions[0];
+    this.verifyComputeBudgetInstructions(parsed, parsed.instructions.slice(0, -1));
+    const ix = parsed.instructions[parsed.instructions.length - 1];
 
     // The Anchor `sender` (the wallet whose SOL or tokens flow out) must be
     // the deposit wallet. The signer pins the deposit wallet to the LAST
@@ -176,6 +194,69 @@ export class SolanaVmWalletDeriver extends Ed25519Bip32VmWalletDeriver<
         expectedOrderId,
         currencyBytes,
       );
+    }
+  }
+
+  /** Validate the ComputeBudget instructions that may precede the deposit. */
+  private verifyComputeBudgetInstructions(
+    parsed: ParsedSolanaMessage,
+    instructions: readonly ParsedSolanaInstruction[],
+  ): void {
+    let hasLimit = false;
+    let hasPrice = false;
+    for (let i = 0; i < instructions.length; i++) {
+      const ix = instructions[i];
+      const programKey = resolveStaticKey(
+        parsed,
+        ix.programIdIndex,
+        `instructions[${i}].programIdIndex`,
+      );
+      if (!bytesEqual(programKey, COMPUTE_BUDGET_PROGRAM_ID)) {
+        throw new Error(
+          `transactions[0]: instructions[${i}] must be a ComputeBudget instruction (the deposit must be last)`,
+        );
+      }
+      if (ix.accountIndexes.length !== 0) {
+        throw new Error(
+          `transactions[0]: instructions[${i}]: ComputeBudget instruction must not reference accounts`,
+        );
+      }
+      const tag = ix.data[0];
+      if (tag === SET_COMPUTE_UNIT_LIMIT_TAG) {
+        if (hasLimit) {
+          throw new Error("transactions[0]: duplicate SetComputeUnitLimit instruction");
+        }
+        hasLimit = true;
+        if (ix.data.length !== SET_COMPUTE_UNIT_LIMIT_DATA_LEN) {
+          throw new Error(
+            `transactions[0]: SetComputeUnitLimit data must be ${SET_COMPUTE_UNIT_LIMIT_DATA_LEN} bytes, got ${ix.data.length}`,
+          );
+        }
+        const units = bytesToNumberLE(ix.data.slice(1));
+        if (units > MAX_COMPUTE_UNIT_LIMIT) {
+          throw new Error(
+            `transactions[0]: SetComputeUnitLimit must not exceed ${MAX_COMPUTE_UNIT_LIMIT} (got ${units})`,
+          );
+        }
+      } else if (tag === SET_COMPUTE_UNIT_PRICE_TAG) {
+        if (hasPrice) {
+          throw new Error("transactions[0]: duplicate SetComputeUnitPrice instruction");
+        }
+        hasPrice = true;
+        if (ix.data.length !== SET_COMPUTE_UNIT_PRICE_DATA_LEN) {
+          throw new Error(
+            `transactions[0]: SetComputeUnitPrice data must be ${SET_COMPUTE_UNIT_PRICE_DATA_LEN} bytes, got ${ix.data.length}`,
+          );
+        }
+        const microLamports = bytesToNumberLE(ix.data.slice(1));
+        if (microLamports > MAX_COMPUTE_UNIT_PRICE) {
+          throw new Error(
+            `transactions[0]: SetComputeUnitPrice must not exceed ${MAX_COMPUTE_UNIT_PRICE} micro-lamports (got ${microLamports})`,
+          );
+        }
+      } else {
+        throw new Error(`transactions[0]: unsupported ComputeBudget instruction tag ${tag}`);
+      }
     }
   }
 

@@ -21,6 +21,54 @@ import {
 } from "./messages/common/ethereum-vm/routed"
 
 import {
+  ROUTED_TRANSFER_REQUEST_PREFIX,
+  SolanaRoutedTransferRequest,
+  decodeSolanaRoutedTransferRequest,
+  encodeSolanaRoutedTransferRequest,
+  getSolanaRoutedTransferRequestHash,
+  getSolanaUsedRequestAddress,
+} from "./messages/common/solana-vm/routed-transfer"
+
+import {
+  SOLANA_NATIVE_MINT,
+  SOLANA_ROUTED_WITHDRAWAL_DATA_VERSION,
+  SOLANA_ROUTER_BUNDLE_VERSION,
+  SolanaBundleCall,
+  SolanaCallAccount,
+  SolanaRoutedWithdrawalData,
+  SolanaRouterBundle,
+  decodeSolanaRoutedWithdrawalData,
+  decodeSolanaRouterBundle,
+  encodeSolanaRoutedWithdrawalData,
+  encodeSolanaRouterBundle,
+  encodeSolanaRouterReleaseData,
+  encodeSolanaRouterSettleData,
+  getSolanaRouterAuthority,
+  getSolanaRouterConfigAddress,
+  getSolanaRouterDepositoryRole,
+  encodeSolanaRouterInitializeData,
+  encodeSolanaRouterGrantDepositoryRoleData,
+  encodeSolanaRouterRevokeDepositoryRoleData,
+  encodeSolanaRouterSetOwnerData,
+  getSolanaRouterBundleAddress,
+  getSolanaRouterBundleHash,
+  getSolanaRouterBundlePda,
+  toSolanaBundleFillMint,
+  toSolanaBundleWithdrawMint,
+} from "./messages/common/solana-vm/router"
+import { RelayRouterIdl } from "./messages/common/solana-vm/idls/RelayRouterIdl"
+
+import {
+  decodeGatewaySolanaVmTransferRequest,
+  encodeGatewaySolanaVmTransferRequest,
+  GATEWAY_ROUTED_TRANSFER_REQUEST_PREFIX,
+  GATEWAY_TRANSFER_REQUEST_PREFIX,
+  GatewaySolanaVmTransferRequest,
+  getGatewaySolanaVmTransferRequestHash,
+  SOLANA_VM_GATEWAY_MINTER,
+} from "./messages/v2.1/withdrawals/gateway-vm/solana-vm"
+
+import {
   CallRequestWithdrawal,
   CommittedCallRequestWithdrawal,
   toExecutableCallRequest,
@@ -40,6 +88,8 @@ import {
   DecodedSolanaVmWithdrawal,
   DecodedHederaVmWithdrawal,
   DecodedHyperliquidVmWithdrawal,
+  AtlasTransferParams,
+  DecodedAtlasVmWithdrawal,
   DecodedLighterVmWithdrawal,
   DecodedTonVmWithdrawal,
   DecodedTronVmWithdrawal,
@@ -83,12 +133,7 @@ import {
   getWithdrawParamsMappingMessage,
 } from "./messages/v2.2/generic-mapping"
 
-import {
-  OrderAddressParams,
-  OrderAddressSafeParams,
-  getOrderAddress,
-  getOrderAddressSafe,
-} from "./messages/v2.2/withdrawal"
+import { OrderAddressParams, getOrderAddress } from "./messages/v2.2/withdrawal"
 
 import {
   DepositAddressTrigger,
@@ -104,12 +149,14 @@ import {
   BitcoinVmWithdrawRequestAdditionalData,
   EthereumVmWithdrawRequestAdditionalData,
   GatewayVmWithdrawRequestAdditionalData,
+  SolanaVmWithdrawRequestAdditionalData,
   WithdrawRequestAdditionalData,
   DenormalizedWithdrawRequest,
   ExecuteAndWithdrawFee,
   ExecuteAndWithdrawRequest,
   executeAndWithdrawRequestTypes,
   getExecuteAndWithdrawRequestHash,
+  computeExecutionId,
   getWithdrawRequestHash,
   encodeWithdrawRequestAdditionalData,
   normalizeWithdrawRequest,
@@ -119,26 +166,73 @@ import {
   DrawLeg,
   DrawLegKind,
   FundingPoolDrawAuthorization,
-  FundingPoolSponsorshipConfig,
-  FundingPoolSponsorshipConfigUpdate,
-  FundingPoolSponsorshipResolverUpdate,
+  FundingPoolDrawConfig,
+  FundingPoolDrawConfigUpdate,
+  FundingPoolDrawResolverUpdate,
   FundingPoolWithdrawal,
   PoolDrawResolverExecution,
   PoolResolverCall,
   fundingPoolDrawAuthorizationTypes,
-  fundingPoolSponsorshipConfigUpdateTypes,
-  fundingPoolSponsorshipResolverUpdateTypes,
+  fundingPoolDrawConfigUpdateTypes,
+  fundingPoolDrawResolverUpdateTypes,
   fundingPoolWithdrawalTypes,
+  encodeFundingPoolDrawAuthorization,
   getFundingPoolDrawAuthorizationHash,
-  getFundingPoolSponsorshipConfigUpdateHash,
-  getFundingPoolSponsorshipResolverUpdateHash,
+  getFundingPoolDrawConfigUpdateHash,
+  getFundingPoolDrawResolverUpdateHash,
   getFundingPoolWithdrawalHash,
   getPoolDrawResolverCommitmentNonce,
+  getPoolDrawResolverPlanHash,
   encodePoolDrawResolverExecution,
   encodePoolDrawResolverData,
   decodePoolDrawResolverData,
   decodePoolDrawResolverExecution,
 } from "./messages/v2.3/funding-pool"
+import {
+  FundingPoolDrawRevocation,
+  MAX_FUNDING_POOL_REVOCATION_JUMP,
+  MIN_FUNDING_POOL_REVOCATION_JUMP,
+  MIN_RANDOM_FUNDING_POOL_REVOCATION_JUMP,
+  fundingPoolDrawRevocationTypes,
+  getFundingPoolDrawRevocationHash,
+  getRandomFundingPoolRevocationNonce,
+} from "./messages/v2.4/funding-pool"
+import {
+  TransferConsent,
+  getTransferConsentMessage,
+  getTransferExecutionId,
+} from "./messages/v2.3/transfer-consent"
+import {
+  HubPermit,
+  hubPermitTypes,
+  getHubPermitTypedData,
+  getHubPermitHash,
+  splitHubPermitSignature,
+} from "./messages/v2.3/hub-permit"
+
+import {
+  GenericMappingDeleteEntry,
+  GenericMappingSetEntry,
+  genericMappingDeleteEntryTypes,
+  genericMappingSetEntryTypes,
+  getGenericMappingDeleteEntryHash,
+  getGenericMappingSetEntryHash,
+} from "./messages/v2.4/generic-mapping"
+
+import {
+  WithdrawRequestAuthorization,
+  WithdrawRequestAuthorizationMessage,
+  withdrawRequestAuthorizationTypes,
+  getWithdrawRequestAuthorizationHash,
+  getWithdrawRequestAuthorizationTypedData,
+} from "./messages/v2.4/withdraw-request-authorization"
+
+import {
+  OracleExecution,
+  OracleExecutionMessage,
+  getOracleExecutionHash,
+  oracleExecutionTypes,
+} from "./messages/v2.4/execution"
 
 import {
   VmType,
@@ -182,6 +276,18 @@ import {
 } from "./hedera-vm"
 
 import {
+  LIGHTER_ACCOUNT_INDEX_MAX,
+  formatLighterAccountIndex,
+  parseLighterAccountIndex,
+} from "./lighter-vm"
+
+import {
+  ATLAS_ASSET_ID_MAX,
+  formatAtlasAssetId,
+  parseAtlasAssetId,
+} from "./atlas-vm"
+
+import {
   TokenIdComponents,
   VirtualAddressComponents,
   TokenId,
@@ -219,6 +325,40 @@ export {
   toExecutableCallRequest,
   encodeRoutedWithdrawalData,
   decodeRoutedWithdrawalData,
+
+  // Routed transfers and relay-router bundles (solana-vm)
+  ROUTED_TRANSFER_REQUEST_PREFIX,
+  SolanaRoutedTransferRequest,
+  decodeSolanaRoutedTransferRequest,
+  encodeSolanaRoutedTransferRequest,
+  getSolanaRoutedTransferRequestHash,
+  getSolanaUsedRequestAddress,
+  SOLANA_NATIVE_MINT,
+  SOLANA_ROUTED_WITHDRAWAL_DATA_VERSION,
+  SOLANA_ROUTER_BUNDLE_VERSION,
+  SolanaBundleCall,
+  SolanaCallAccount,
+  SolanaRoutedWithdrawalData,
+  SolanaRouterBundle,
+  decodeSolanaRoutedWithdrawalData,
+  decodeSolanaRouterBundle,
+  encodeSolanaRoutedWithdrawalData,
+  encodeSolanaRouterBundle,
+  encodeSolanaRouterReleaseData,
+  encodeSolanaRouterSettleData,
+  getSolanaRouterAuthority,
+  getSolanaRouterConfigAddress,
+  getSolanaRouterDepositoryRole,
+  encodeSolanaRouterInitializeData,
+  encodeSolanaRouterGrantDepositoryRoleData,
+  encodeSolanaRouterRevokeDepositoryRoleData,
+  encodeSolanaRouterSetOwnerData,
+  getSolanaRouterBundleAddress,
+  getSolanaRouterBundleHash,
+  getSolanaRouterBundlePda,
+  toSolanaBundleFillMint,
+  toSolanaBundleWithdrawMint,
+  RelayRouterIdl,
 
   // Utils
   VmType,
@@ -259,6 +399,16 @@ export {
   parseHederaTransactionId,
   toHederaMirrorNodeTransactionId,
 
+  // Lighter identity codec
+  LIGHTER_ACCOUNT_INDEX_MAX,
+  formatLighterAccountIndex,
+  parseLighterAccountIndex,
+
+  // Atlas asset id codec
+  ATLAS_ASSET_ID_MAX,
+  formatAtlasAssetId,
+  parseAtlasAssetId,
+
   // Messages v2.1
 
   // DepositoryDeposit
@@ -269,6 +419,13 @@ export {
   DecodedEthereumVmWithdrawal,
   DecodedGatewayVmWithdrawal,
   GatewayBurnIntent,
+  decodeGatewaySolanaVmTransferRequest,
+  encodeGatewaySolanaVmTransferRequest,
+  GATEWAY_ROUTED_TRANSFER_REQUEST_PREFIX,
+  GATEWAY_TRANSFER_REQUEST_PREFIX,
+  GatewaySolanaVmTransferRequest,
+  getGatewaySolanaVmTransferRequestHash,
+  SOLANA_VM_GATEWAY_MINTER,
   GatewayTransferSpec,
   GatewayVmWithdrawal,
   getGatewayDestinationExpiration,
@@ -276,6 +433,8 @@ export {
   DecodedSolanaVmWithdrawal,
   DecodedHederaVmWithdrawal,
   DecodedHyperliquidVmWithdrawal,
+  AtlasTransferParams,
+  DecodedAtlasVmWithdrawal,
   DecodedLighterVmWithdrawal,
   DecodedTonVmWithdrawal,
   DecodedTronVmWithdrawal,
@@ -318,9 +477,7 @@ export {
 
   // Withdrawal
   OrderAddressParams,
-  OrderAddressSafeParams,
   getOrderAddress,
-  getOrderAddressSafe,
 
   // Messages v2.3
 
@@ -337,12 +494,14 @@ export {
   BitcoinVmWithdrawRequestAdditionalData,
   EthereumVmWithdrawRequestAdditionalData,
   GatewayVmWithdrawRequestAdditionalData,
+  SolanaVmWithdrawRequestAdditionalData,
   WithdrawRequestAdditionalData,
   DenormalizedWithdrawRequest,
   ExecuteAndWithdrawFee,
   ExecuteAndWithdrawRequest,
   executeAndWithdrawRequestTypes,
   getExecuteAndWithdrawRequestHash,
+  computeExecutionId,
   getWithdrawRequestHash,
   encodeWithdrawRequestAdditionalData,
   normalizeWithdrawRequest,
@@ -351,25 +510,65 @@ export {
   DrawLeg,
   DrawLegKind,
   FundingPoolDrawAuthorization,
-  FundingPoolSponsorshipConfig,
-  FundingPoolSponsorshipConfigUpdate,
-  FundingPoolSponsorshipResolverUpdate,
+  FundingPoolDrawConfig,
+  FundingPoolDrawConfigUpdate,
+  FundingPoolDrawResolverUpdate,
+  FundingPoolDrawRevocation,
   FundingPoolWithdrawal,
   PoolDrawResolverExecution,
   PoolResolverCall,
   fundingPoolDrawAuthorizationTypes,
-  fundingPoolSponsorshipConfigUpdateTypes,
-  fundingPoolSponsorshipResolverUpdateTypes,
+  fundingPoolDrawConfigUpdateTypes,
+  fundingPoolDrawResolverUpdateTypes,
+  fundingPoolDrawRevocationTypes,
   fundingPoolWithdrawalTypes,
+  encodeFundingPoolDrawAuthorization,
   getFundingPoolDrawAuthorizationHash,
-  getFundingPoolSponsorshipConfigUpdateHash,
-  getFundingPoolSponsorshipResolverUpdateHash,
+  getFundingPoolDrawConfigUpdateHash,
+  getFundingPoolDrawResolverUpdateHash,
+  getFundingPoolDrawRevocationHash,
+  getRandomFundingPoolRevocationNonce,
+  MIN_FUNDING_POOL_REVOCATION_JUMP,
+  MIN_RANDOM_FUNDING_POOL_REVOCATION_JUMP,
+  MAX_FUNDING_POOL_REVOCATION_JUMP,
   getFundingPoolWithdrawalHash,
   getPoolDrawResolverCommitmentNonce,
+  getPoolDrawResolverPlanHash,
   encodePoolDrawResolverExecution,
   encodePoolDrawResolverData,
   decodePoolDrawResolverData,
   decodePoolDrawResolverExecution,
+  TransferConsent,
+  HubPermit,
+  getTransferConsentMessage,
+  getTransferExecutionId,
+  hubPermitTypes,
+  getHubPermitTypedData,
+  getHubPermitHash,
+  splitHubPermitSignature,
+
+  // Messages v2.4
+
+  // Generic mapping
+  GenericMappingDeleteEntry,
+  GenericMappingSetEntry,
+  genericMappingDeleteEntryTypes,
+  genericMappingSetEntryTypes,
+  getGenericMappingDeleteEntryHash,
+  getGenericMappingSetEntryHash,
+
+  // Withdraw authorization
+  WithdrawRequestAuthorization,
+  WithdrawRequestAuthorizationMessage,
+  withdrawRequestAuthorizationTypes,
+  getWithdrawRequestAuthorizationHash,
+  getWithdrawRequestAuthorizationTypedData,
+
+  // Oracle execution
+  OracleExecution,
+  OracleExecutionMessage,
+  getOracleExecutionHash,
+  oracleExecutionTypes,
 
   // Misc
 
@@ -386,3 +585,13 @@ export {
   ProtocolContracts,
   NetworkConfig,
 }
+
+// Separate-payer fees for v2.4 allocators.
+export {
+  WithdrawFeePayment,
+  WithdrawFeePaymentAuthorization,
+  withdrawFeePaymentAuthorizationTypes,
+  getWithdrawFeePaymentAuthorizationHash,
+} from "./messages/v2.4/withdrawal"
+
+export { Authorization } from "./messages/v2.4/authorization"

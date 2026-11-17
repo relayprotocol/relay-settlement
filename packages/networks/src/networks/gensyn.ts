@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const gensyn: NetworkConfig = {
   chainId: 685689n,
@@ -10,8 +11,8 @@ export const gensyn: NetworkConfig = {
   hubChainId: "685689",
   isTestnet: false,
   name: "Gensyn",
-  rpc: process.env.RPC_685689
-    ? [process.env.RPC_685689]
-    : ["https://gensyn-mainnet.g.alchemy.com/public"],
+  ...resolveRpc(process.env.RPC_685689, [
+    "https://gensyn-mainnet.g.alchemy.com/public",
+  ]),
   slug: "gensyn",
 }

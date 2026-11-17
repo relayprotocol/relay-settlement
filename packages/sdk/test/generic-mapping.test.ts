@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest"
+import { Hex, hashStruct } from "viem"
 
 import {
   getGenericMappingMessageId,
   getNoFillOrRefundMessage,
   getWithdrawParamsMappingMessage,
 } from "../src/messages/v2.2/generic-mapping"
+import { genericMappingSetEntryTypes } from "../src/messages/v2.4/generic-mapping"
 
 const solver = "0x" + "11".repeat(20)
 const otherSolver = "0x" + "22".repeat(20)
@@ -87,5 +89,29 @@ describe("getWithdrawParamsMappingMessage", () => {
     )
 
     expect(getGenericMappingMessageId(message)).toMatch(/^0x[0-9a-f]{64}$/)
+  })
+
+  // Deliberate divergence: the v2.2 id is the pre-expiration struct hash, which
+  // the post-#930 mapping rejects; v2.4 binds `expiration`
+  it("is not the v2.4 SetEntry struct hash", () => {
+    const message = getWithdrawParamsMappingMessage(
+      solver,
+      withdrawParamsHash,
+      orderId
+    )
+
+    expect(getGenericMappingMessageId(message)).not.toBe(
+      hashStruct({
+        types: genericMappingSetEntryTypes,
+        primaryType: "SetEntry",
+        data: {
+          user: message.user as Hex,
+          id: message.id as Hex,
+          data: message.data as Hex,
+          nonce: message.nonce as Hex,
+          expiration: 0n,
+        },
+      })
+    )
   })
 })

@@ -11,6 +11,7 @@ import {
   encodeRoutedWithdrawalData,
   hashRoutedCalls,
 } from "../src/messages/common/ethereum-vm/routed"
+import { decodeSolanaRoutedWithdrawalData } from "../src/messages/common/solana-vm/router"
 import {
   encodeWithdrawRequestAdditionalData,
   normalizeWithdrawRequest,
@@ -735,6 +736,59 @@ describe("encodeWithdrawRequestAdditionalData", () => {
       version: 1,
       router: destinationData.router,
       dataHash: hashRoutedCalls(destinationData.calls),
+    })
+  })
+
+  it("rejects gateway-vm destination data without a known vmType", () => {
+    for (const destinationData of [
+      {},
+      { router: "0x4444444444444444444444444444444444444444", calls: [] },
+      { vmType: "bitcoin-vm" },
+    ]) {
+      expect(() =>
+        encodeWithdrawRequestAdditionalData({
+          vmType: "gateway-vm",
+          additionalData: {
+            "gateway-vm": {
+              allocator: "0x1111111111111111111111111111111111111111",
+              destinationChainId: "solana",
+              maxBlockHeight: "90932551",
+              destinationData: destinationData as any,
+            },
+          },
+        })
+      ).toThrow("Unsupported gateway-vm destination data")
+    }
+  })
+
+  it("encodes gateway-vm solana-vm destination data", () => {
+    const destinationData = {
+      vmType: "solana-vm" as const,
+      router: "9QybjuydfDYwJkdDLMJJaHEcQPaYeRoiJ5cYj7qLd5Su",
+      executor: "FDx39MbXSupLUaxmN3SQ9x3G6mtTjemZVcWgz7jkcvTD",
+    }
+    const data = encodeWithdrawRequestAdditionalData({
+      vmType: "gateway-vm",
+      additionalData: {
+        "gateway-vm": {
+          allocator: "0x1111111111111111111111111111111111111111",
+          destinationChainId: "solana",
+          maxBlockHeight: "90932551",
+          destinationData,
+        },
+      },
+    })
+
+    const [decoded] = decodeAbiParameters(
+      parseAbiParameters([
+        "(address allocator, string destinationChainId, uint256 maxBlockHeight, bytes destinationData)",
+      ]),
+      data
+    )
+    expect(decodeSolanaRoutedWithdrawalData(decoded.destinationData)).toEqual({
+      version: 1,
+      router: destinationData.router,
+      executor: destinationData.executor,
     })
   })
 

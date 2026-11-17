@@ -16,6 +16,7 @@ export type RuntimeConfig = {
   healthMaxLagBlocks: number
   hubContractAddress: string
   hubStartBlock: number
+  imageTag: string | undefined
   indexerAuditConsecutiveFailures: number
   indexerAuditFailureThreshold: number
   indexerAuditIntervalMs: number
@@ -166,6 +167,7 @@ export const config: RuntimeConfig = {
     process.env.HUB_START_BLOCK,
     resolveNumber(process.env.START_BLOCK, relayNetworkDefaults.startBlock)
   ),
+  imageTag: process.env.IMAGE_TAG,
   indexerAuditConsecutiveFailures: resolveNonNegativeInteger(
     process.env.INDEXER_AUDIT_CONSECUTIVE_FAILURES,
     2

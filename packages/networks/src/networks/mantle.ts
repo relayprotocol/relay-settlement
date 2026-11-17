@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const mantle: NetworkConfig = {
   chainId: 5000n,
@@ -10,8 +11,6 @@ export const mantle: NetworkConfig = {
   hubChainId: "5000",
   isTestnet: false,
   name: "Mantle",
-  rpc: process.env.RPC_5000
-    ? [process.env.RPC_5000]
-    : ["https://rpc.mantle.xyz"],
+  ...resolveRpc(process.env.RPC_5000, ["https://rpc.mantle.xyz"]),
   slug: "mantle",
 }

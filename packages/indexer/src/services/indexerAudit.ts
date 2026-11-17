@@ -1,10 +1,16 @@
 import { RelayHub } from "@relay-protocol/settlement-abis"
-import { Contract, Interface, JsonRpcProvider, type Provider } from "ethers"
+import { Contract, Interface, type Provider } from "ethers"
+import { setImmediate } from "node:timers/promises"
 import type { Database, Queryable } from "../db/connection.js"
 import { getMeta } from "../db/meta.js"
 import { HUB_TRANSFER_META_KEY } from "../indexerState.js"
-import { shouldSkipTokenId, parseTransferLog } from "./transferProcessor.js"
-import { isGetLogsResponseTooLargeError } from "./transferReplay.js"
+import {
+  shouldSkipTokenId,
+  parseTransferLog,
+  getTransferTokenId,
+} from "./transferProcessor.js"
+import { getLogPages } from "./logPages.js"
+import { getEventKey, getIndexedEventKeys } from "./indexedEvents.js"
 
 export const INDEXER_AUDIT_KINDS = ["transfer-coverage"] as const
 
@@ -103,14 +109,6 @@ type AuditFindingRow = {
   token_id: string | null
   token_name: string | null
   tx_hash: string | null
-}
-
-type ChainLog = {
-  blockNumber: number
-  data: string
-  index: number
-  topics: readonly string[]
-  transactionHash: string
 }
 
 type RunAuditOptions = {
@@ -269,106 +267,6 @@ export const mergeSuggestedReplayRanges = (
   return capped
 }
 
-const toHex = (block: number) => `0x${block.toString(16)}`
-
-const normalizeProviderLog = (log: {
-  blockNumber: number | string
-  data: string
-  index?: number
-  logIndex?: number | string
-  topics: readonly string[]
-  transactionHash: string
-}): ChainLog => ({
-  blockNumber:
-    typeof log.blockNumber === "string"
-      ? Number(log.blockNumber)
-      : log.blockNumber,
-  data: log.data,
-  index:
-    log.index ??
-    (typeof log.logIndex === "string" ? Number(log.logIndex) : log.logIndex) ??
-    0,
-  topics: log.topics,
-  transactionHash: log.transactionHash,
-})
-
-const getLogsWithSplitForFilter = async (
-  provider: Provider,
-  params: {
-    address: string
-    fromBlock: number
-    toBlock: number
-    topics: Array<string | string[] | null>
-  }
-): Promise<ChainLog[]> => {
-  const fetchLogsWithCursor = async () => {
-    const allLogs: ChainLog[] = []
-    let cursor: string | undefined
-
-    do {
-      const filter: Record<string, unknown> = {
-        address: params.address,
-        fromBlock: toHex(params.fromBlock),
-        toBlock: toHex(params.toBlock),
-        topics: params.topics,
-      }
-      if (cursor) {
-        filter.cursor = cursor
-      }
-
-      const result = (await (provider as JsonRpcProvider).send(
-        "eth_getLogsWithCursor",
-        [filter]
-      )) as {
-        cursor?: string | null
-        logs?: Array<{
-          blockNumber: string
-          data: string
-          logIndex: string
-          topics: string[]
-          transactionHash: string
-        }>
-      }
-
-      for (const log of result.logs ?? []) {
-        allLogs.push(normalizeProviderLog(log))
-      }
-      cursor = result.cursor ?? undefined
-    } while (cursor)
-
-    return allLogs
-  }
-
-  try {
-    const logs = await provider.getLogs({
-      address: params.address,
-      fromBlock: params.fromBlock,
-      toBlock: params.toBlock,
-      topics: params.topics,
-    })
-    return logs.map(normalizeProviderLog)
-  } catch (error) {
-    if (!isGetLogsResponseTooLargeError(error)) {
-      throw error
-    }
-
-    if (params.fromBlock >= params.toBlock) {
-      return fetchLogsWithCursor()
-    }
-
-    const midpoint = Math.floor((params.fromBlock + params.toBlock) / 2)
-    const left = await getLogsWithSplitForFilter(provider, {
-      ...params,
-      toBlock: midpoint,
-    })
-    const right = await getLogsWithSplitForFilter(provider, {
-      ...params,
-      fromBlock: midpoint + 1,
-    })
-    return [...left, ...right]
-  }
-}
-
 const getAuditBlock = async (
   db: Queryable,
   override?: number
@@ -469,22 +367,21 @@ const insertAuditFindings = async (
 const withAuditRun = async (
   db: Database,
   kind: IndexerAuditKind,
-  run: (_db: Queryable) => Promise<{
+  run: (
+    _db: Queryable,
+    _runId: number
+  ) => Promise<{
     auditBlock: number
     checkedCount: number
-    findings: IndexerAuditFinding[]
+    confirmedCount: number
     latestChainBlock: number
   }>
 ) => {
   const runId = await insertAuditRun(db, kind)
 
   try {
-    const result = await run(db)
-    await insertAuditFindings(db, runId, result.findings)
-
-    const confirmedCount = result.findings.filter(
-      (finding) => finding.classification === "confirmed"
-    ).length
+    const result = await run(db, runId)
+    const confirmedCount = result.confirmedCount
     await completeAuditRun(db, runId, {
       auditBlock: result.auditBlock,
       checkedCount: result.checkedCount,
@@ -511,25 +408,6 @@ const withAuditRun = async (
   }
 }
 
-const getIndexedEventKeys = async (
-  db: Queryable,
-  fromBlock: number,
-  toBlock: number
-) => {
-  const rows = await db.manyOrNone<{
-    log_index: number
-    tx_hash: string
-  }>(
-    `SELECT tx_hash, log_index
-     FROM events
-     WHERE block_number BETWEEN $1 AND $2`,
-    [fromBlock, toBlock]
-  )
-  return new Set(
-    rows.map((row) => `${row.tx_hash.toLowerCase()}:${row.log_index}`)
-  )
-}
-
 const getTokenNames = async (db: Queryable) => {
   const rows = await db.manyOrNone<{ name: string | null; token_id: string }>(
     "SELECT token_id, name FROM tokens"
@@ -543,67 +421,74 @@ export const runTransferCoverageAudit = async (
   hubContract: Contract,
   options: TransferCoverageAuditOptions
 ) =>
-  withAuditRun(db, "transfer-coverage", async (tx) => {
+  withAuditRun(db, "transfer-coverage", async (tx, runId) => {
     const auditBlock = await getAuditBlock(tx, options.auditBlock)
     const latestChainBlock =
       options.latestChainBlock ?? (await provider.getBlockNumber())
     const fromBlock = Math.max(0, auditBlock - options.lookbackBlocks + 1)
-    const [logs, indexedKeys, tokenNames] = await Promise.all([
-      getLogsWithSplitForFilter(provider, {
+    const tokenNames = await getTokenNames(tx)
+    let checkedCount = 0
+    let confirmedCount = 0
+
+    for await (const page of getLogPages(
+      provider,
+      {
         address: hubContract.target as string,
         fromBlock,
         toBlock: auditBlock,
         topics: [transferTopic],
-      }),
-      getIndexedEventKeys(tx, fromBlock, auditBlock),
-      getTokenNames(tx),
-    ])
-
-    const findings: IndexerAuditFinding[] = []
-    let checkedCount = 0
-
-    for (const log of logs.sort((a, b) =>
-      a.blockNumber === b.blockNumber
-        ? a.index - b.index
-        : a.blockNumber - b.blockNumber
+      },
+      100
     )) {
-      const transfer = parseTransferLog(log)
-      if (!transfer || shouldSkipTokenId(transfer.tokenId)) {
-        continue
+      const indexedKeys = await getIndexedEventKeys(tx, page.logs)
+      const findings: IndexerAuditFinding[] = []
+      for (const [index, log] of page.logs.entries()) {
+        if (index % 100 === 0) await setImmediate()
+        const eventKey = getEventKey(log)
+        if (indexedKeys.has(eventKey)) {
+          const tokenId = getTransferTokenId(log)
+          if (tokenId !== null && !shouldSkipTokenId(tokenId)) checkedCount += 1
+          continue
+        }
+        const transfer = parseTransferLog(log)
+        if (!transfer || shouldSkipTokenId(transfer.tokenId)) {
+          continue
+        }
+
+        checkedCount += 1
+        findings.push({
+          blockNumber: log.blockNumber,
+          classification: "confirmed",
+          details: {
+            amount: transfer.amount.toString(),
+            from: transfer.from.toLowerCase(),
+            operator: transfer.operator.toLowerCase(),
+            suggestedReplayRanges: buildSuggestedReplayRanges(
+              [log.blockNumber],
+              {
+                maxRange: options.maxReplayRange,
+                padding: options.replayPaddingBlocks,
+                reason: "transfer-coverage",
+              }
+            ),
+            to: transfer.to.toLowerCase(),
+          },
+          kind: "transfer-coverage",
+          logIndex: log.index,
+          tokenId: transfer.tokenId,
+          tokenName: tokenNames.get(transfer.tokenId) ?? null,
+          txHash: log.transactionHash,
+        })
       }
 
-      checkedCount += 1
-      const eventKey = `${log.transactionHash.toLowerCase()}:${log.index}`
-      if (indexedKeys.has(eventKey)) {
-        continue
-      }
-
-      findings.push({
-        blockNumber: log.blockNumber,
-        classification: "confirmed",
-        details: {
-          amount: transfer.amount.toString(),
-          from: transfer.from.toLowerCase(),
-          operator: transfer.operator.toLowerCase(),
-          suggestedReplayRanges: buildSuggestedReplayRanges([log.blockNumber], {
-            maxRange: options.maxReplayRange,
-            padding: options.replayPaddingBlocks,
-            reason: "transfer-coverage",
-          }),
-          to: transfer.to.toLowerCase(),
-        },
-        kind: "transfer-coverage",
-        logIndex: log.index,
-        tokenId: transfer.tokenId,
-        tokenName: tokenNames.get(transfer.tokenId) ?? null,
-        txHash: log.transactionHash,
-      })
+      confirmedCount += findings.length
+      await insertAuditFindings(tx, runId, findings)
     }
 
     return {
       auditBlock,
       checkedCount,
-      findings,
+      confirmedCount,
       latestChainBlock,
     }
   })
@@ -774,7 +659,7 @@ export const getLatestIndexerAuditReport = async (
   ])
   const findings = await getFindingsForRuns(
     db,
-    runs.map((run) => run.id)
+    runs.filter((run) => run.status === "succeeded").map((run) => run.id)
   )
 
   const grouped = new Map<

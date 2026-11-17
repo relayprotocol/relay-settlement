@@ -1,8 +1,8 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "./types"
 import { readFileSync, existsSync } from "fs"
 
 export interface OverrideConfig {
-  [chainSlug: string]: Partial<NetworkConfig> & {
+  [chainSlug: string]: Partial<Omit<NetworkConfig, "usesDefaultRpc">> & {
     esploraCompatibleApiUrl?: string
   }
 }
@@ -89,6 +89,10 @@ export function mergeOverrides(
   ) {
     merged.rpc = overrides.rpc as [string, ...string[]]
   }
+
+  // Provenance is derived from the RPC selection, not user-supplied metadata.
+  merged.usesDefaultRpc =
+    overrides.rpc !== undefined ? false : baseConfig.usesDefaultRpc
 
   return merged
 }

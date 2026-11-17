@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const arbitrum: NetworkConfig = {
   chainId: 42161n,
@@ -11,8 +12,9 @@ export const arbitrum: NetworkConfig = {
   hubChainId: "42161",
   isTestnet: false,
   name: "Arbitrum",
-  rpc: process.env.RPC_42161
-    ? [process.env.RPC_42161]
-    : ["https://arb1.arbitrum.io/rpc", "https://rpc.ankr.com/arbitrum"],
+  ...resolveRpc(process.env.RPC_42161, [
+    "https://arb1.arbitrum.io/rpc",
+    "https://rpc.ankr.com/arbitrum",
+  ]),
   slug: "arbitrum",
 }

@@ -9,6 +9,7 @@ import type {
   BitcoinVmTransaction,
   DepositAddressTrigger,
   DepositAddressTriggerAttestation,
+  WalletInfo,
 } from "../../../common/types.js";
 
 const BTC_NATIVE = encodeBitcoinAddressToHex(
@@ -16,10 +17,14 @@ const BTC_NATIVE = encodeBitcoinAddressToHex(
 ).toLowerCase();
 const SIGHASH_ALL = 1;
 const OP_RETURN = 0x6a;
+const ORDER_ID_RE = /^0x[0-9a-fA-F]{64}/;
 const DEPOSITOR_RE = /\|depositor=([^|]+)(?=\|)/;
 const LEGACY = 0xff;
 const P2PKH = 0x00;
 const P2SH = 0x05;
+// Bitcoin Core's dust threshold for P2PKH, the highest standard one; smaller
+// change can't be relayed and costs more to sweep again than it holds.
+const MIN_DEPOSIT_WALLET_CHANGE = 546n;
 
 interface TxInput {
   txid: Uint8Array;
@@ -192,6 +197,7 @@ const script = (bytes: Uint8Array) => concat([varInt(bytes.length), bytes]);
 const output = (o: TxOutput) => concat([u64le(o.value), script(o.script)]);
 const p2wpkhCode = (pubkey: Uint8Array) =>
   concat([new Uint8Array([0x76, 0xa9, 0x14]), hash160(pubkey), new Uint8Array([0x88, 0xac])]);
+const p2wpkh = (pubkey: Uint8Array) => concat([new Uint8Array([0x00, 0x14]), hash160(pubkey)]);
 
 function sighash(tx: ParsedTx, inputIndex: number, pubkey: Uint8Array, value: bigint): Uint8Array {
   const input = tx.inputs[inputIndex];
@@ -245,18 +251,14 @@ function refundScripts(encodedHex: string): Uint8Array[] {
   return addressScripts(encodedHex, "trigger.derivationFields.refundRecipient");
 }
 
+// Mirrors the oracle's OP_RETURN decoding exactly: skip the opcode (and the
+// OP_PUSHDATA1 length byte) and decode everything after it, BOM included.
 function opReturn(scriptBytes: Uint8Array): string | undefined {
-  if (scriptBytes[0] !== OP_RETURN || scriptBytes.length < 2) {
+  if (scriptBytes[0] !== OP_RETURN) {
     return undefined;
   }
-  const op = scriptBytes[1];
-  const data =
-    op <= 75
-      ? scriptBytes.slice(2, 2 + op)
-      : op === 0x4c
-        ? scriptBytes.slice(3, 3 + scriptBytes[2])
-        : undefined;
-  return data ? new TextDecoder().decode(data) : undefined;
+  const offset = scriptBytes[1] === 0x4c ? 3 : 2;
+  return new TextDecoder("utf-8", { ignoreBOM: true }).decode(scriptBytes.subarray(offset));
 }
 
 function assertCounts(tx: ParsedTx, data: BitcoinVmTransaction): void {
@@ -276,6 +278,7 @@ export function assertBitcoinDepositTransaction(
   trigger: DepositAddressTrigger,
   attestation: DepositAddressTriggerAttestation,
   data: BitcoinVmTransaction,
+  wallet?: WalletInfo,
 ): void {
   if (normalizeBitcoinAddressHex(trigger.input.currency) !== BTC_NATIVE) {
     throw new Error("bitcoin-vm only supports native BTC deposits");
@@ -297,26 +300,38 @@ export function assertBitcoinDepositTransaction(
     );
   }
 
+  // A fill sweep spends whole UTXOs, so an overpayment may stay at the deposit wallet.
+  const walletScript = wallet && p2wpkh(hexToBytes(wallet.publicKey, "wallet.publicKey"));
+  const change = walletScript ? [...refunds, walletScript] : refunds;
   const invalidChange = tx.outputs.find(
     (o) =>
       !scripts.some((s) => equal(s, o.script)) &&
       opReturn(o.script) === undefined &&
-      !refunds.some((s) => equal(s, o.script)),
+      !change.some((s) => equal(s, o.script)),
   );
   if (invalidChange) {
     throw new Error(
-      "transactions[0]: non-depository, non-OP_RETURN outputs must pay trigger.derivationFields.refundRecipient",
+      "transactions[0]: non-depository, non-OP_RETURN outputs must pay trigger.derivationFields.refundRecipient or the deposit wallet",
+    );
+  }
+  const dust =
+    walletScript &&
+    tx.outputs.find((o) => equal(o.script, walletScript) && o.value < MIN_DEPOSIT_WALLET_CHANGE);
+  if (dust) {
+    throw new Error(
+      `transactions[0]: change to the deposit wallet must be at least ${MIN_DEPOSIT_WALLET_CHANGE} sats, got=${dust.value}`,
     );
   }
 
-  const metadata = tx.outputs
-    .map((o) => opReturn(o.script))
-    .find((x) => x?.startsWith(trigger.orderId));
-  if (!metadata) {
+  // Select the order id and depositor exactly as the oracle does (first match
+  // across all OP_RETURN outputs), then require them to match the trigger.
+  const metadata = tx.outputs.flatMap((o) => opReturn(o.script) ?? []);
+  const orderId = metadata.find((x) => ORDER_ID_RE.test(x))?.slice(0, 66);
+  if (orderId?.toLowerCase() !== trigger.orderId.toLowerCase()) {
     throw new Error("transactions[0]: OP_RETURN metadata must start with trigger.orderId");
   }
 
-  const depositor = DEPOSITOR_RE.exec(metadata)?.[1];
+  const depositor = metadata.map((x) => DEPOSITOR_RE.exec(x)?.[1]).find((x) => x);
   if (!depositor) {
     throw new Error("transactions[0]: OP_RETURN metadata must include |depositor=<depositor>|");
   }

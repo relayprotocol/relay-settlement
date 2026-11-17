@@ -1,0 +1,158 @@
+{
+  "environment": "dev",
+  "chainId": 537724,
+  "rpcUrl": "https://rpc.testnet.relay.link",
+  "explorerUrl": "https://relay-sov-testnet.cloud.blockscout.com",
+  "factory": "0xFd980bf509687cfba5324ca88D0Adbc81281F284",
+  "factoryTransaction": "0x53a132a6660fb0d71cc106582281ce3e92db30fd262b410a17ac04a61bf0f815",
+  "tokens": {
+    "xusdc": {
+      "address": "0x482b4d40B84b0c3690F463e33774255C9cA28c11",
+      "name": "xUSDC-dev",
+      "symbol": "xUSDC-dev",
+      "governor": "0x33eB6a492221d23695Bb830Bc5DC905B7Ff9D2d7",
+      "deployer": "0xf3d63166F0Ca56C3c1A3508FcE03Ff0Cf3Fb691e",
+      "assetDecimals": 6,
+      "xerc20Decimals": 18,
+      "lockboxes": [
+        {
+          "label": "ethereum",
+          "token": "0x431575ca0FdE85b85e1d22a0Dbc18168425757Ff",
+          "lockbox": "0xDAaB254707193596a33b45B60a19D6Ec16270596",
+          "privileged": false
+        },
+        {
+          "label": "solana",
+          "token": "0x784137D170decB69C310C0969c89b2c69631E386",
+          "lockbox": "0xA0c13060c9D6DE84E1E623c33Cd0D55A4A3b80A7",
+          "privileged": false
+        },
+        {
+          "label": "polygon",
+          "token": "0x09B3840CF449Eac51DC95296ED73057947B35B8A",
+          "lockbox": "0x72310d7474975C9A84DC01c0ca7fb92B5Bd73c47",
+          "privileged": false
+        },
+        {
+          "label": "base",
+          "token": "0xED75d41AF05AD2DCa3Fcd5Ed912952F173e2De28",
+          "lockbox": "0x9BaB1e50BC314442f2f432423b252EcAD97b48B4",
+          "privileged": false
+        },
+        {
+          "label": "arbitrum",
+          "token": "0xf0026f23c06A8A8337e2d9E1188893ecB52E7571",
+          "lockbox": "0xa408042333b9A7110687692B4bB0E5E2E39f28c7",
+          "privileged": false
+        },
+        {
+          "label": "polygon-gateway",
+          "token": "0x63a123b9332EA7Afd768655dcDE2e08778ff1E17",
+          "lockbox": "0xAfA752812b2c1B990F3DD31611c948b5617Bfe23",
+          "privileged": true
+        }
+      ],
+      "deployment": {
+        "firstBlock": 4700660,
+        "lastBlock": 4700785,
+        "configHash": "0xd164c355d9af45209717a89314131c78fa9c2c13cec5123a055ac29077cadaa7",
+        "xerc20Transaction": "0xa7aba5dd51627e248842688f7c8743e5a9e148679a66715e4f376d3c4342a323",
+        "ownershipTransaction": "0x8e30d2509d897bea3f06b7391e5ef728c2a8a5e2d0f3403aab55eaa8e4e30caf",
+        "originalConfigHash": "0xb398a23d2c1199ff0a8085fee95149ee7ace8e9c070a9a110900e03b277b90fa"
+      }
+    },
+    "xsol": {
+      "address": "0x888CACBaa138d09B804c62DDFaDE1D52382F218F",
+      "name": "xSOL-dev",
+      "symbol": "xSOL-dev",
+      "governor": "0x33eB6a492221d23695Bb830Bc5DC905B7Ff9D2d7",
+      "deployer": "0x57768C7c683Da89d01d0c6b5c79f7ef0aFF75569",
+      "assetDecimals": 9,
+      "xerc20Decimals": 18,
+      "lockboxes": [
+        {
+          "label": "solana",
+          "token": "0x0cbD1C794D825283D79a7dD9E5911F5F699eFe7a",
+          "lockbox": "0x72B8b4BD3E5083309b8c015ACc2e78e72DA7d939",
+          "privileged": true
+        },
+        {
+          "label": "base",
+          "token": "0x2b2206484b8cBe956b1A652F9b0b2ACD6D79E4E3",
+          "lockbox": "0x7C8dA9C4ec9dBEdE7aA4dD635Ff888DcBF101a67",
+          "privileged": false
+        }
+      ],
+      "deployment": {
+        "firstBlock": 5286815,
+        "lastBlock": 5287772,
+        "configHash": "0xd263d76a3cbab85c900f90ad65e5173e7cfe677133baabbfb5641b27061038ef",
+        "xerc20Transaction": "0x78efc2f543c1914fee7d83fbef06a2e2eec4b3742b6265efe76f8e81eccb0f56",
+        "ownershipTransaction": "0x96485fb0757827f27efba7dc80eda6b87514ea45187ec4077cc598d1cdc8908a",
+        "originalConfigHash": "0x71f860457f0cda980bcbb64c497be6f03d895f75f2c9965639ca140858cf93b2"
+      }
+    },
+    "xeth": {
+      "address": "0x38561832e1cf334097880676c71B7C084Db71bC6",
+      "name": "xETH-dev",
+      "symbol": "xETH-dev",
+      "governor": "0x33eB6a492221d23695Bb830Bc5DC905B7Ff9D2d7",
+      "deployer": "0x57768C7c683Da89d01d0c6b5c79f7ef0aFF75569",
+      "assetDecimals": 18,
+      "xerc20Decimals": 18,
+      "lockboxes": [
+        {
+          "label": "ethereum",
+          "token": "0xbff70382f1AdAa3Ef3a6E5fE2f7C34df7b54952D",
+          "lockbox": "0xF247B51fF83EA9d296ED516C1F155b08c2E61AA6",
+          "privileged": true
+        },
+        {
+          "label": "base",
+          "token": "0xBb78e1C5B896ceB4aA0bE888816E182e6A693309",
+          "lockbox": "0x6b273043e65EC99E92509936a10B7ba226312FA8",
+          "privileged": false
+        }
+      ],
+      "deployment": {
+        "firstBlock": 5288657,
+        "lastBlock": 5288694,
+        "configHash": "0xe30c3c750f00ccd30f025c5c7f76191eea3cb866e63029ac48d8b280ade2a929",
+        "xerc20Transaction": "0xc8e3730951200d5c454551299e1e724d13ce366e101481da1799573fdbb20a17",
+        "ownershipTransaction": "0x5d599998194970fe7769f0309ee8df41dd646ed7593ce9742bdaf809064a5db5",
+        "originalConfigHash": "0xf98e1755e5287378866eacff08129de4e01a03fb6cedc63205a69a545ad65fdf"
+      }
+    },
+    "xbtc": {
+      "address": "0x727d4989fB4c93A5CbD81AF91eAA8fDC51FC5B3A",
+      "name": "xBTC-dev",
+      "symbol": "xBTC-dev",
+      "governor": "0x33eB6a492221d23695Bb830Bc5DC905B7Ff9D2d7",
+      "deployer": "0x57768C7c683Da89d01d0c6b5c79f7ef0aFF75569",
+      "assetDecimals": 8,
+      "xerc20Decimals": 18,
+      "lockboxes": [
+        {
+          "label": "bitcoin",
+          "token": "0x6Dc80eBeC4c8791bD3E9b0337CfaAeC7547b1b9A",
+          "lockbox": "0x70E7c167f7800Fd95EE2e0b275298FDeC381E15D",
+          "privileged": true
+        },
+        {
+          "label": "base",
+          "token": "0x672450dFCf8fe7b99bFab05803281645B1e0c8d9",
+          "lockbox": "0xfa5BFCF5335ff5cdaE94099fe3966732AbFDCBC4",
+          "privileged": false
+        }
+      ],
+      "deployment": {
+        "firstBlock": 5289576,
+        "lastBlock": 5289587,
+        "configHash": "0x8ef01e0ac89ac3e7118deadac078a6d3843a0068da79415835e37fc71ff2df02",
+        "xerc20Transaction": "0xe06590ad455a6dbe7ecb54317f3a4c8d3786766deea1af8b04ec5fe81a68ee23",
+        "ownershipTransaction": "0x2627ab3e007692e35e0c89e4d19750377fcfdb20b4626d7690c0e2323ca22b01",
+        "originalConfigHash": "0x48fe34385a97ebd86b659f31f845b1f88d3350361f4f7658e12fc3dd364e19c1"
+      }
+    }
+  }
+}

@@ -1,5 +1,6 @@
 import type { VmType } from "../../../../utils"
 import { gatewayEthereumVmDestinationCodec } from "./ethereum-vm"
+import { gatewaySolanaVmDestinationCodec } from "./solana-vm"
 import type { GatewayTransferSpec, GatewayVmWithdrawal } from "./types"
 
 export interface GatewayDestinationWithdrawalCodec {
@@ -10,10 +11,11 @@ export interface GatewayDestinationWithdrawalCodec {
   getExpiration: (executionPayload: string) => number
 }
 
-// Destination codecs own the VM-specific execution payload. Adding Solana
-// support only requires registering a codec that matches its Circle program.
+// Destination codecs own the VM-specific execution payload, selected by the
+// Circle contract or program the transfer spec names.
 const destinationCodecs: readonly GatewayDestinationWithdrawalCodec[] = [
   gatewayEthereumVmDestinationCodec,
+  gatewaySolanaVmDestinationCodec,
 ]
 
 export const getGatewayDestinationCodec = (

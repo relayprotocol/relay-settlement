@@ -18,16 +18,16 @@ import {
   ORACLE_ROLE_META_KEY,
 } from "./indexerState.js"
 import { getBlockTimestamp } from "./services/utils.js"
-import { getProtocolTransferType } from "./protocol/transferSemantics.js"
 import {
-  insertParsedTransferLog,
-  parseTransferLog,
   processSingleLog,
   recordFailedEvent,
-  reconcileTransferStateFromChain,
-  shouldSkipTokenId,
-  syncTokenTransfersFromEvents,
 } from "./services/transferProcessor.js"
+import { processTransferLogs } from "./services/transferBatch.js"
+import {
+  getLogPages,
+  type IndexedLog,
+  type LogRangeState,
+} from "./services/logPages.js"
 import {
   OracleExecutionProcessingContext,
   processAndStoreOracleExecutionLog,
@@ -43,14 +43,6 @@ const yieldToEventLoop = () =>
     setImmediate(resolve)
   })
 
-type IndexedLog = {
-  blockNumber: number
-  transactionHash: string
-  index: number
-  topics: readonly string[]
-  data: string
-}
-
 type Lane = {
   name: string
   contractAddress: string
@@ -62,6 +54,7 @@ type Lane = {
   processLog?: (_log: IndexedLog, _timestamp: number) => Promise<void>
   afterBatch?: () => void
   tokenContract?: Contract
+  logRange?: LogRangeState
 }
 
 export const backfillAndWatch = async (db: Database) => {
@@ -171,34 +164,16 @@ export const backfillAndWatch = async (db: Database) => {
     logger.warn("indexer", "RPC_HTTP_URL not set; polling uses WebSocket RPC")
   }
 
-  const errorMessage = (error: unknown) => {
-    if (error instanceof Error) {
-      return error.message
-    }
-
-    try {
-      const serialized = JSON.stringify(error)
-      if (typeof serialized === "string") {
-        return serialized
-      }
-    } catch {
-      return String(error)
-    }
-
-    return String(error)
-  }
-
-  const isResponseSizeError = (error: unknown): boolean => {
-    return errorMessage(error)
-      .toLowerCase()
-      .includes("response size exceeds limit")
-  }
-
-  const toHex = (n: number) => "0x" + n.toString(16)
-
   const processLogs = async (lane: Lane, logs: IndexedLog[]) => {
     if (lane.tokenContract) {
-      await processTransferLogs(lane, logs, lane.tokenContract)
+      const checkpoint = await getCheckpointValue(lane)
+      await processTransferLogs(db, lane.tokenContract, logs, {
+        checkpoint: checkpoint == null ? -1 : Number(checkpoint),
+        contractAddress: lane.contractAddress,
+        getTimestamp: (block) =>
+          getBlockTimestamp(pollingProvider, cache, block),
+        lane: lane.name,
+      })
       lane.afterBatch?.()
       return
     }
@@ -239,227 +214,6 @@ export const backfillAndWatch = async (db: Database) => {
     lane.afterBatch?.()
   }
 
-  const addTouchedAddress = (
-    touched: Map<string, Map<string, number>>,
-    tokenId: string,
-    address: string,
-    timestamp: number
-  ) => {
-    const normalizedAddress = address.toLowerCase()
-    let addressesByTimestamp = touched.get(tokenId)
-    if (!addressesByTimestamp) {
-      addressesByTimestamp = new Map()
-      touched.set(tokenId, addressesByTimestamp)
-    }
-
-    addressesByTimestamp.set(
-      normalizedAddress,
-      Math.max(addressesByTimestamp.get(normalizedAddress) ?? 0, timestamp)
-    )
-  }
-
-  const processTransferLogs = async (
-    lane: Lane,
-    logs: IndexedLog[],
-    tokenContract: Contract
-  ) => {
-    const checkpoint = await getCheckpointValue(lane)
-    const parsedCheckpoint = checkpoint == null ? -1 : Number(checkpoint)
-    const touched = new Map<string, Map<string, number>>()
-    const touchedLogsByToken = new Map<string, IndexedLog[]>()
-
-    for (const [batchIndex, log] of logs.entries()) {
-      try {
-        const transfer = parseTransferLog(log)
-        if (!transfer) {
-          logger.warn("processor", "Skipping undecodable transfer log", {
-            blockNumber: log.blockNumber,
-            logIndex: log.index,
-            txHash: log.transactionHash,
-          })
-          continue
-        }
-
-        if (shouldSkipTokenId(transfer.tokenId)) {
-          logger.info("processor", "Skipping transfer for token", {
-            blockNumber: log.blockNumber,
-            logIndex: log.index,
-            tokenId: transfer.tokenId,
-            txHash: log.transactionHash,
-          })
-          continue
-        }
-
-        const timestamp = await getBlockTimestamp(
-          pollingProvider,
-          cache,
-          log.blockNumber
-        )
-        const { inserted } = await db.tx((tx) =>
-          insertParsedTransferLog(tx, transfer, log, timestamp)
-        )
-
-        if (inserted || log.blockNumber > parsedCheckpoint) {
-          addTouchedAddress(touched, transfer.tokenId, transfer.from, timestamp)
-          addTouchedAddress(touched, transfer.tokenId, transfer.to, timestamp)
-          const touchedLogs = touchedLogsByToken.get(transfer.tokenId) ?? []
-          touchedLogs.push(log)
-          touchedLogsByToken.set(transfer.tokenId, touchedLogs)
-        }
-
-        if (inserted) {
-          logger.debug("processor", "Transfer processed", {
-            amount: transfer.amount.toString(),
-            blockNumber: log.blockNumber,
-            from: transfer.from,
-            logIndex: log.index,
-            operator: transfer.operator,
-            to: transfer.to,
-            tokenId: transfer.tokenId,
-            txHash: log.transactionHash,
-            type: getProtocolTransferType(transfer.from, transfer.to),
-          })
-        }
-      } catch (error) {
-        logger.error(
-          "indexer",
-          "Failed to process log; recorded in failed_events",
-          {
-            blockNumber: log.blockNumber,
-            contractAddress: lane.contractAddress,
-            error,
-            lane: lane.name,
-            logIndex: log.index,
-            txHash: log.transactionHash,
-          }
-        )
-        await recordFailedEvent(db, lane.contractAddress, log, error)
-      } finally {
-        if ((batchIndex + 1) % PROCESSING_YIELD_INTERVAL === 0) {
-          await yieldToEventLoop()
-        }
-      }
-    }
-
-    for (const [tokenId, addressesByTimestamp] of touched) {
-      const touchedLogs = touchedLogsByToken.get(tokenId) ?? []
-      let tokenFailed = false
-
-      try {
-        const groupedAddresses = new Map<number, string[]>()
-        for (const [address, timestamp] of addressesByTimestamp) {
-          const addresses = groupedAddresses.get(timestamp) ?? []
-          addresses.push(address)
-          groupedAddresses.set(timestamp, addresses)
-        }
-
-        for (const [timestamp, addresses] of groupedAddresses) {
-          await reconcileTransferStateFromChain(
-            db,
-            tokenContract,
-            tokenId,
-            addresses,
-            timestamp
-          )
-        }
-      } catch (error) {
-        tokenFailed = true
-        for (const log of touchedLogs) {
-          await recordFailedEvent(db, lane.contractAddress, log, error)
-        }
-        logger.error(
-          "indexer",
-          "Failed to reconcile transfer token; recorded token logs in failed_events",
-          {
-            error,
-            lane: lane.name,
-            tokenId,
-            touchedLogs: touchedLogs.length,
-          }
-        )
-      }
-
-      try {
-        await syncTokenTransfersFromEvents(db, tokenId)
-      } catch (error) {
-        if (!tokenFailed) {
-          for (const log of touchedLogs) {
-            await recordFailedEvent(db, lane.contractAddress, log, error)
-          }
-        }
-        logger.error(
-          "indexer",
-          "Failed to sync transfer count; recorded token logs in failed_events",
-          {
-            error,
-            lane: lane.name,
-            tokenId,
-            touchedLogs: touchedLogs.length,
-          }
-        )
-      }
-
-      await yieldToEventLoop()
-    }
-  }
-
-  const fetchLogsWithCursor = async (
-    lane: Lane,
-    start: number,
-    end: number
-  ) => {
-    logger.info("indexer", "Using eth_getLogsWithCursor for dense range", {
-      contractAddress: lane.contractAddress,
-      fromBlock: start,
-      lane: lane.name,
-      toBlock: end,
-    })
-    const allLogs: IndexedLog[] = []
-    let cursor: string | undefined
-    do {
-      const params: Record<string, unknown> = {
-        address: lane.contractAddress,
-        fromBlock: toHex(start),
-        toBlock: toHex(end),
-        topics: lane.topics,
-      }
-      if (cursor) {
-        params.cursor = cursor
-      }
-      const result = await (pollingProvider as JsonRpcProvider).send(
-        "eth_getLogsWithCursor",
-        [params]
-      )
-      const logs: Array<{
-        blockNumber: string
-        transactionHash: string
-        logIndex: string
-        topics: string[]
-        data: string
-      }> = result.logs ?? []
-      for (const log of logs) {
-        allLogs.push({
-          blockNumber: Number(log.blockNumber),
-          data: log.data,
-          index: Number(log.logIndex),
-          topics: log.topics,
-          transactionHash: log.transactionHash,
-        })
-      }
-      cursor = result.cursor ?? undefined
-      if (cursor) {
-        logger.debug("indexer", "Cursor pagination continuing", {
-          contractAddress: lane.contractAddress,
-          fromBlock: start,
-          lane: lane.name,
-          logsSoFar: allLogs.length,
-          toBlock: end,
-        })
-      }
-    } while (cursor)
-    return allLogs
-  }
-
   const setLaneCheckpoint = async (lane: Lane, end: number) => {
     const checkpoint = await getCheckpointValue(lane)
     const parsedCheckpoint = checkpoint == null ? null : Number(checkpoint)
@@ -476,65 +230,31 @@ export const backfillAndWatch = async (db: Database) => {
     fromBlock: number,
     toBlock: number
   ) => {
-    const queue: Array<[number, number]> = [[fromBlock, toBlock]]
-    while (queue.length) {
-      const [start, end] = queue.shift() as [number, number]
-      try {
-        const logs = await pollingProvider.getLogs({
-          address: lane.contractAddress,
-          fromBlock: start,
-          toBlock: end,
-          topics: lane.topics,
+    lane.logRange ??= { blockCount: config.batchSize, successfulRanges: 0 }
+    for await (const page of getLogPages(
+      pollingProvider,
+      {
+        address: lane.contractAddress,
+        fromBlock,
+        toBlock,
+        topics: lane.topics,
+      },
+      config.batchSize,
+      lane.logRange
+    )) {
+      if (page.logs.length) {
+        logger.info("indexer", "Processing log batch", {
+          contractAddress: lane.contractAddress,
+          count: page.logs.length,
+          fromBlock: page.fromBlock,
+          lane: lane.name,
+          toBlock: page.toBlock,
         })
-        if (logs.length) {
-          logger.info("indexer", "Processing log batch", {
-            contractAddress: lane.contractAddress,
-            count: logs.length,
-            fromBlock: start,
-            lane: lane.name,
-            toBlock: end,
-          })
-          await processLogs(lane, logs)
-        }
-        // Failed logs are persisted into failed_events for follow-up handling.
-        // The main checkpoint still advances so one bad log does not stall the lane.
-        await setLaneCheckpoint(lane, end)
-      } catch (error) {
-        if (isResponseSizeError(error)) {
-          if (start < end) {
-            const mid = Math.floor((start + end) / 2)
-            logger.warn(
-              "indexer",
-              "Splitting log range after oversized response",
-              {
-                contractAddress: lane.contractAddress,
-                fromBlock: start,
-                lane: lane.name,
-                nextLeft: [start, mid],
-                nextRight: [mid + 1, end],
-                toBlock: end,
-              }
-            )
-            queue.unshift([mid + 1, end])
-            queue.unshift([start, mid])
-            continue
-          }
-          const logs = await fetchLogsWithCursor(lane, start, end)
-          if (logs.length) {
-            logger.info("indexer", "Processing cursor-paginated batch", {
-              contractAddress: lane.contractAddress,
-              count: logs.length,
-              fromBlock: start,
-              lane: lane.name,
-              toBlock: end,
-            })
-            await processLogs(lane, logs)
-          }
-          await setLaneCheckpoint(lane, end)
-          continue
-        }
-        throw error
+        await processLogs(lane, page.logs)
       }
+      // Individual failures are in failed_events. Never checkpoint a partial
+      // cursor range: recovery must reconcile its already-inserted events too.
+      if (page.complete) await setLaneCheckpoint(lane, page.toBlock)
     }
   }
 

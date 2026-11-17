@@ -32,16 +32,17 @@ environment bundle and cannot be overridden by the caller.
 
 Each VM has its own bundle under `dist/actions/<env>/`.
 
-| `action`       | Result                                                                                              |
-| -------------- | --------------------------------------------------------------------------------------------------- |
-| `wallet`       | Returns the wallet address derived from the PKP for the selected VM.                                |
-| `sign`         | Verifies a `WithdrawRequestAttestation` and returns one signature for each entry in `hashesToSign`. |
-| `changePubKey` | Lighter-only operation that signs an allowlisted gateway `changePubKey` transaction.                |
+| `action`       | Result                                                                                                                                      |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wallet`       | Returns the wallet address derived from the PKP for the selected VM.                                                                        |
+| `sign`         | Verifies a `WithdrawRequestAttestation` and returns one signature for each entry in `hashesToSign`.                                         |
+| `changePubKey` | Lighter-only operation that signs a `changePubKey` transaction to one of the configured Lighter gateways, selected by `gatewayChainId`.     |
+| `onboard`      | Atlas-only operation that signs the bind opening the depository's wallet, with only its expiry and the accepted terms chosen by the caller. |
 
 Source entrypoints exist for `gateway-vm`, `ethereum-vm`, `bitcoin-vm`,
 `tron-vm`, `solana-vm`, `ton-vm`, `hyperliquid-vm`, `lighter-vm`, `xrp-vm`,
-and `hedera-vm`. The currently released subset is defined by the matrix in
-[`@relay-protocol/lit-actions`](../lit-actions).
+`hedera-vm`, and `atlas-vm`. The currently released subset is defined by the
+matrix in [`@relay-protocol/lit-actions`](../lit-actions).
 
 The active protocol environments are `dev`, `stag`, and `prod`. A legacy
 `test` configuration remains in the source package but is not an active
@@ -62,9 +63,32 @@ environment's bundles:
 }
 ```
 
-Lighter environments additionally configure the allowed API keys, gateway
-address, and gateway chain id. Any configuration change modifies the bundle
-and requires a new Lit deployment.
+Lighter environments additionally list the gateways the Lighter action may
+register API keys on. Each entry is keyed by the EIP-155 chain id of the L1
+hosting the gateway and carries its own API-key allowlist. An empty
+`allowedApiKeys` is valid and fail-closed: `changePubKey` rejects every key
+for that gateway until keys are added.
+
+```json
+"lighterGateways": [
+  { "chainId": 1, "gateway": "0x3b4d794a66304f130a4db8f2551b0070dfcf5ca7", "allowedApiKeys": [{ "apiKeyIndex": 4, "publicKey": "0x..." }] },
+  { "chainId": 4663, "gateway": "0x94bab9693ba2f6358507effcbd372b0660afff9d", "allowedApiKeys": [] }
+]
+```
+
+Chain id `1` is Lighter mainnet on Ethereum; `4663` is Robinhood Lighter on
+Robinhood Chain.
+
+Atlas environments set the deployment-specific fields of the `atlas` version
+`1` EIP-712 transaction domain; the testnet salt is `keccak256("atlas/testnet")`.
+Without `atlasDomain`, Atlas `sign` and `onboard` reject every request.
+
+```json
+"atlasDomain": { "chainId": 43003, "salt": "0xcc279b865244fb243618dfc109dced1cae0e32662920805f8b64813411597338" }
+```
+
+Any configuration change modifies the bundle and requires a new Lit
+deployment.
 
 ## Build and bundle
 
@@ -104,9 +128,14 @@ yarn workspace @relay-protocol/lit-allocator setup -- \
 ```
 
 The command manages the `allocator-<env>` group and
-`allocator-<env>-usage-key`, registers the environment's per-VM actions, prunes
-stale allocator registrations, and prints the PKP, usage key, and action CIDs
-needed by callers. Pass `--dry-run` to inspect the changes first.
+`allocator-<env>-usage-key`, registers the environment's per-VM actions, and
+prints the PKP, usage key, and action CIDs needed by callers. Pass `--dry-run`
+to inspect the changes first.
+
+Actions are registered as `allocator-<env>-action-<vm>-<version>`, where the
+version is `ACTION_VERSIONS[env]` in `scripts/env.ts` (`v3` in every environment). Older versions stay
+registered and permitted so callers can be promoted one at a time. Pass
+`--prune-old-versions` only once no caller executes the previous version.
 
 Account modes, PKP creation, ownership, billing, usage-key rotation, and
 MPC/multisig `--calldata` mode are documented once in
@@ -142,6 +171,22 @@ yarn workspace @relay-protocol/lit-allocator sign -- \
   --pkp-id <pkp-address> \
   --vm-type ethereum-vm \
   --input request.json
+
+# Sign a Lighter changePubKey for the Robinhood Lighter gateway
+yarn workspace @relay-protocol/lit-allocator change-pub-key -- \
+  --env dev \
+  --usage-api-key <usage-api-key> \
+  --pkp-id <pkp-address> \
+  --gateway-chain-id 4663 \
+  --account-index <uint48> --api-key-index <uint8> --public-key <hex> \
+  --tx-nonce <nonce> --gas-price <wei> --gas-limit <gas>
+
+# Sign the bind that opens the Atlas depository's wallet
+yarn workspace @relay-protocol/lit-allocator onboard-atlas-depository -- \
+  --env test \
+  --usage-api-key <usage-api-key> \
+  --pkp-id <pkp-address> \
+  --terms "<id>@<version> 0x<contentHash>" --expires-at <unix-seconds>
 ```
 
 `request.json` contains the exact `withdrawRequest` and oracle `attestation`.
@@ -153,13 +198,24 @@ invocation, and response checks.
 - `gateway-vm` requires `destinationVmType` to be `ethereum-vm` or
   `solana-vm`. It signs the first Gateway hash with secp256k1 and uses the
   destination curve for the remaining hashes.
-- `lighter-vm` also supports `changePubKey`, restricted to API keys and gateway
-  values embedded in the environment configuration.
+- `lighter-vm` also supports `changePubKey`, restricted to the gateways and API
+  keys embedded in the environment configuration; the caller selects the
+  gateway with `gatewayChainId`.
 - `xrp-vm` returns `signingPubKey` from `wallet` and emits canonical low-S DER
   signatures for XRPL transactions.
 - `hedera-vm` returns the public key and EVM alias. Use
   `create-hedera-depository` to create and verify the corresponding Hedera
   entity id without exposing the derived private key.
+- `atlas-vm` returns the derived address, which is the depository's Atlas
+  Main account. `sign` also takes the builder's `transfer`,
+  rebuilds its transferId under the embedded domain, and signs only a transfer
+  out of the derived account whose transferId is the one attested hash and
+  whose expiry is ahead by at most 14 days. `onboard` signs the one bind that
+  opens the wallet: the account binds its own key reduce-only with no Builder
+  Fee at gapless nonce 1, accepting the `bind.statements` terms line, with
+  `bind.expiresAt` at most a day ahead. Signatures carry Atlas's raw recovery
+  id (v = 0 or 1). `onboard-atlas-depository` prints that bind as the raw
+  envelope and statements `atlas.sendWalletReadyRequest` takes.
 
 ## Security checks
 

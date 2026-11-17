@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const metis: NetworkConfig = {
   chainId: 1088n,
@@ -10,8 +11,8 @@ export const metis: NetworkConfig = {
   hubChainId: "1088",
   isTestnet: false,
   name: "Metis",
-  rpc: process.env.RPC_1088
-    ? [process.env.RPC_1088]
-    : ["https://andromeda.metis.io/?owner=1088"],
+  ...resolveRpc(process.env.RPC_1088, [
+    "https://andromeda.metis.io/?owner=1088",
+  ]),
   slug: "metis",
 }

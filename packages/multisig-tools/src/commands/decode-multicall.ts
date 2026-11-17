@@ -1,7 +1,7 @@
 import type { Command } from "commander"
 import {
   createSafeClientWithRpc,
-  getPendingSafeTxActionsByNonce,
+  getSafeTxActionsByNonce,
 } from "../helpers/safe"
 import { resolveNetwork } from "../helpers/network"
 
@@ -41,7 +41,7 @@ export function registerDecodeMulticall(program: Command) {
         safeAddress as `0x${string}`
       )
 
-      const safeTransactionActions = await getPendingSafeTxActionsByNonce(
+      const safeTransactionActions = await getSafeTxActionsByNonce(
         safe.apiKit,
         safeAddress as `0x${string}`,
         Number(nonce)
@@ -58,7 +58,7 @@ export function registerDecodeMulticall(program: Command) {
           console.log("  (no calldata)")
           continue
         }
-        // dataDecoded is populated by getPendingSafeTxActionsByNonce when the
+        // dataDecoded is populated by getSafeTxActionsByNonce when the
         // Safe transaction service recognises the ABI.
         if (action.dataDecoded) {
           console.log(`  ${formatDecoded(action.dataDecoded)}`)

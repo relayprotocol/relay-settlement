@@ -1,0 +1,27 @@
+{
+  "chainId": 537713,
+  "rpcUrl": "https://rpc.chain.relay.link",
+  "explorerUrl": "https://explorer.chain.relay.link",
+  "factory": "0x636F9Ef485CF081B8fB8875E3Dd88ce0743c9125",
+  "governor": "0xF61A305199fa1135d76FFaB3752D42F55cBd775A",
+  "name": "xSOL",
+  "symbol": "xSOL",
+  "assetDecimals": 9,
+  "majorIndex": 0,
+  "labels": [
+    "solana",
+    "base"
+  ],
+  "tokens": [
+    "0x8cb83eca98bc0ed4df4049adfcc16c7b1ea30822",
+    "0xc83d553171f328e78dfa29b5f75377267d656a00"
+  ],
+  "mintLimits": [
+    0,
+    10000000000000
+  ],
+  "burnLimits": [
+    0,
+    10000000000000
+  ]
+}

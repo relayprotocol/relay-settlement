@@ -1,13 +1,11 @@
-import {
-  decodeAbiParameters,
-  encodeAbiParameters,
-  Hex,
-  keccak256,
-  parseAbiParameters,
-  stringToHex,
-} from "viem"
+import { Hex, keccak256, parseAbiParameters, stringToHex } from "viem"
 
-import { defineAbiWithdrawalCodec, WithdrawalCodec } from "./codec"
+import {
+  AbiValues,
+  decodeUnderSchema,
+  defineAbiWithdrawalCodec,
+  WithdrawalCodec,
+} from "./codec"
 
 export type LighterTransferParams = {
   type: "Transfer"
@@ -34,44 +32,85 @@ export type DecodedLighterVmWithdrawal = {
 
 type Withdrawal = DecodedLighterVmWithdrawal["withdrawal"]
 
-const envelopeAbiParams = parseAbiParameters([
+const TRANSFER_REQUEST_TUPLE =
+  "(uint64 nonce, uint64 fromAccountIndex, uint64 fromRouteType, uint64 apiKeyIndex, uint64 toAccountIndex, uint64 toRouteType, uint64 assetIndex, uint64 amount, uint64 usdcFee, uint64 lighterChainId, bytes32 memo)"
+
+// Mirrors LighterVmPayloadBuilder.sol `abi.encode(uint8 actionType, LighterTransferRequest)`:
+// the action type word followed by the static request inline
+const payloadAbiParams = parseAbiParameters(
+  `uint8 actionType, ${TRANSFER_REQUEST_TUPLE} parameters` as const
+)
+
+// The envelope `abi.encode((uint8 actionType, bytes parameters))` around
+// `abi.encode(LighterTransferRequest)`, still stored for payloads built before
+// the builder inlined the request
+const legacyEnvelopeAbiParams = parseAbiParameters([
   "(uint8 actionType, bytes parameters)",
 ])
 
-const transferAbiParams = parseAbiParameters([
-  "(uint64 nonce, uint64 fromAccountIndex, uint64 fromRouteType, uint64 apiKeyIndex, uint64 toAccountIndex, uint64 toRouteType, uint64 assetIndex, uint64 amount, uint64 usdcFee, uint64 lighterChainId, bytes32 memo)",
-])
+const transferAbiParams = parseAbiParameters([TRANSFER_REQUEST_TUPLE])
+
+type TransferRequestAbi = AbiValues<typeof transferAbiParams>[0]
+
+const transferToAbi = (
+  parameters: LighterTransferParams
+): TransferRequestAbi => ({
+  nonce: BigInt(parameters.nonce),
+  fromAccountIndex: BigInt(parameters.fromAccountIndex),
+  fromRouteType: BigInt(parameters.fromRouteType),
+  apiKeyIndex: BigInt(parameters.apiKeyIndex),
+  toAccountIndex: BigInt(parameters.toAccountIndex),
+  toRouteType: BigInt(parameters.toRouteType),
+  assetIndex: BigInt(parameters.assetIndex),
+  amount: BigInt(parameters.amount),
+  usdcFee: BigInt(parameters.usdcFee),
+  lighterChainId: BigInt(parameters.lighterChainId),
+  memo: `0x${parameters.memo.padEnd(64, "0")}` as Hex,
+})
+
+const transferFromAbi = (
+  result: TransferRequestAbi
+): LighterTransferParams => ({
+  type: "Transfer" as const,
+  nonce: result.nonce.toString(),
+  fromAccountIndex: result.fromAccountIndex.toString(),
+  fromRouteType: result.fromRouteType.toString(),
+  apiKeyIndex: result.apiKeyIndex.toString(),
+  toAccountIndex: result.toAccountIndex.toString(),
+  toRouteType: result.toRouteType.toString(),
+  assetIndex: result.assetIndex.toString(),
+  amount: result.amount.toString(),
+  usdcFee: result.usdcFee.toString(),
+  lighterChainId: result.lighterChainId.toString(),
+  memo: (result.memo as string).slice(2),
+})
 
 const transferCodec = defineAbiWithdrawalCodec({
   params: transferAbiParams,
-  toAbi: (parameters: LighterTransferParams) => [
-    {
-      nonce: BigInt(parameters.nonce),
-      fromAccountIndex: BigInt(parameters.fromAccountIndex),
-      fromRouteType: BigInt(parameters.fromRouteType),
-      apiKeyIndex: BigInt(parameters.apiKeyIndex),
-      toAccountIndex: BigInt(parameters.toAccountIndex),
-      toRouteType: BigInt(parameters.toRouteType),
-      assetIndex: BigInt(parameters.assetIndex),
-      amount: BigInt(parameters.amount),
-      usdcFee: BigInt(parameters.usdcFee),
-      lighterChainId: BigInt(parameters.lighterChainId),
-      memo: `0x${parameters.memo.padEnd(64, "0")}` as Hex,
-    },
+  toAbi: (parameters: LighterTransferParams) => [transferToAbi(parameters)],
+  fromAbi: ([result]) => transferFromAbi(result),
+})
+
+const abiCodec = defineAbiWithdrawalCodec({
+  params: payloadAbiParams,
+  toAbi: ({ actionType, parameters }: Withdrawal) => [
+    actionType,
+    transferToAbi(parameters),
   ],
-  fromAbi: ([result]) => ({
-    type: "Transfer" as const,
-    nonce: result.nonce.toString(),
-    fromAccountIndex: result.fromAccountIndex.toString(),
-    fromRouteType: result.fromRouteType.toString(),
-    apiKeyIndex: result.apiKeyIndex.toString(),
-    toAccountIndex: result.toAccountIndex.toString(),
-    toRouteType: result.toRouteType.toString(),
-    assetIndex: result.assetIndex.toString(),
-    amount: result.amount.toString(),
-    usdcFee: result.usdcFee.toString(),
-    lighterChainId: result.lighterChainId.toString(),
-    memo: (result.memo as string).slice(2),
+  fromAbi: ([actionType, parameters]): Withdrawal => ({
+    actionType,
+    parameters: transferFromAbi(parameters),
+  }),
+})
+
+const legacyAbiCodec = defineAbiWithdrawalCodec({
+  params: legacyEnvelopeAbiParams,
+  toAbi: ({ actionType, parameters }: Withdrawal) => [
+    { actionType, parameters: transferCodec.encode(parameters) as Hex },
+  ],
+  fromAbi: ([{ actionType, parameters }]): Withdrawal => ({
+    actionType,
+    parameters: transferCodec.decode(parameters),
   }),
 })
 
@@ -106,33 +145,25 @@ export const buildLighterTransferL1Message = (
 }
 
 export const lighterVmCodec: WithdrawalCodec<Withdrawal> = {
-  encode: (withdrawal) => {
-    const { actionType, parameters } = withdrawal
+  encode: abiCodec.encode,
 
-    return encodeAbiParameters(envelopeAbiParams, [
-      {
-        actionType,
-        parameters: transferCodec.encode(parameters) as Hex,
-      },
-    ])
-  },
-
+  // Payloads stored before the request was inlined keep the envelope layout;
+  // both carry the same request, so the id is preserved
   decode: (encodedWithdrawal) => {
-    const result = decodeAbiParameters(
-      envelopeAbiParams,
-      encodedWithdrawal as Hex
-    )
-
-    const { actionType, parameters } = result[0]
-
-    if (actionType !== 0) {
-      throw new Error(`Unsupported Lighter action type: ${actionType}`)
+    const withdrawal =
+      decodeUnderSchema(abiCodec, encodedWithdrawal) ??
+      decodeUnderSchema(legacyAbiCodec, encodedWithdrawal)
+    if (!withdrawal) {
+      throw new Error("Failed to decode lighter-vm payload")
     }
 
-    return {
-      actionType: Number(actionType),
-      parameters: transferCodec.decode(parameters),
+    if (withdrawal.actionType !== 0) {
+      throw new Error(
+        `Unsupported Lighter action type: ${withdrawal.actionType}`
+      )
     }
+
+    return withdrawal
   },
 
   getId: (withdrawal) =>

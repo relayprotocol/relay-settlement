@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../../types"
+import { resolveRpc } from "../../rpc"
 
 export const sepolia: NetworkConfig = {
   chainId: 11155111n,
@@ -11,8 +12,8 @@ export const sepolia: NetworkConfig = {
   hubChainId: "11155111",
   isTestnet: true,
   name: "Sepolia",
-  rpc: process.env.RPC_11155111
-    ? [process.env.RPC_11155111]
-    : ["https://ethereum-sepolia-rpc.publicnode.com"],
+  ...resolveRpc(process.env.RPC_11155111, [
+    "https://ethereum-sepolia-rpc.publicnode.com",
+  ]),
   slug: "sepolia",
 }

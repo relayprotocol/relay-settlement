@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const plasma: NetworkConfig = {
   chainId: 9745n,
@@ -10,8 +11,6 @@ export const plasma: NetworkConfig = {
   hubChainId: "9745",
   isTestnet: false,
   name: "Plasma",
-  rpc: process.env.RPC_9745
-    ? [process.env.RPC_9745]
-    : ["https://rpc.plasma.to"],
+  ...resolveRpc(process.env.RPC_9745, ["https://rpc.plasma.to"]),
   slug: "plasma",
 }

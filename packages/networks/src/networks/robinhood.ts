@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const robinhood: NetworkConfig = {
   chainId: 4663n,
@@ -10,8 +11,8 @@ export const robinhood: NetworkConfig = {
   hubChainId: "4663",
   isTestnet: false,
   name: "Robinhood",
-  rpc: process.env.RPC_4663
-    ? [process.env.RPC_4663]
-    : ["https://rpc.mainnet.chain.robinhood.com"],
+  ...resolveRpc(process.env.RPC_4663, [
+    "https://rpc.mainnet.chain.robinhood.com",
+  ]),
   slug: "robinhood",
 }

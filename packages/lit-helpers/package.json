@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "lint": "tsc --noEmit && eslint .",
+    "lint": "tsc --noEmit && eslint . --cache --cache-strategy content --cache-location node_modules/.cache/lint/eslint",
     "create-pkp": "tsx scripts/create-pkp.ts",
     "convert-to-chain-secured": "tsx scripts/convert-to-chain-secured.ts",
     "transfer-ownership": "tsx scripts/transfer-ownership.ts",

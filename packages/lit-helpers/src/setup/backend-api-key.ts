@@ -19,6 +19,14 @@ import type {
 
 const BASE_URL = "https://api.chipotle.litprotocol.com"
 
+/** Preserve the HTTP status for callers that recognize unsupported endpoints. */
+class ApiRequestFailed extends Error {
+  /** Create an API failure with its HTTP status and response details. */
+  constructor(readonly status: number, message: string) {
+    super(message)
+  }
+}
+
 // ─── HTTP helpers ────────────────────────────────────────────────────────────
 
 /** Send an authenticated Chipotle REST API request. */
@@ -39,7 +47,8 @@ async function apiCall(
 
   const res = await fetch(url, opts)
   if (!res.ok) {
-    throw new Error(
+    throw new ApiRequestFailed(
+      res.status,
       `API ${method} ${path} failed (${res.status}): ${await res.text()}`
     )
   }
@@ -209,22 +218,33 @@ class ApiKeyBackend implements SetupBackend {
     }))
   }
 
-  async listActionsInGroup(groupId: bigint): Promise<ActionInfo[]> {
-    // Best-effort: not every Chipotle deployment exposes this endpoint. When
-    // it is unavailable we return `[]`, which simply makes the caller fall
-    // back to (idempotent) re-attach + permission sync rather than skipping.
+  async listActionsInGroup(groupId: bigint): Promise<ActionInfo[] | undefined> {
+    // Permission sync needs a complete read to preserve unrelated actions safely.
+    // Chipotle serves this read from `/list_actions?group_id=` through the
+    // registry's `listActionsInGroup` view, except that id 0 lists the whole
+    // account. Refuse id 0 so the result is always group-scoped.
+    if (groupId === 0n) {
+      throw new Error("Cannot list actions for group id 0")
+    }
+    let raw: RawActionInfo[]
     try {
-      const raw = await listAll<RawActionInfo>(
-        `/list_actions_in_group?group_id=${groupId}`,
+      raw = await listAll<RawActionInfo>(
+        `/list_actions?group_id=${groupId}`,
         this.apiKey
       )
-      return raw.flatMap((a) => {
-        const info = toActionInfo(a)
-        return info ? [info] : []
-      })
-    } catch {
-      return []
+    } catch (error) {
+      if (error instanceof ApiRequestFailed && (error.status === 404 || error.status === 501)) {
+        return undefined
+      }
+      throw error
     }
+    return raw.map((a) => {
+      const info = toActionInfo(a)
+      if (!info) {
+        throw new Error("Cannot read group action hash")
+      }
+      return info
+    })
   }
 
   // ── Writes ──────────────────────────────────────────────────────────────

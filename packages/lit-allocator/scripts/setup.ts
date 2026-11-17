@@ -28,15 +28,19 @@
  *   tsx scripts/setup.ts --env <name> --mode chain-secured --account-api-key <key> --private-key 0x... (--create-pkp | --pkp-id <address>) [--dry-run]
  *   tsx scripts/setup.ts --env <name> --mode chain-secured --account-api-key <key> --calldata --pkp-id <address>
  *
+ * Existing action versions remain registered and permitted unless
+ * `--prune-old-versions` is explicitly supplied after migration is complete.
+ *
  * `--calldata` requires an existing PKP and usage key because minting requires
  * a live admin signature.
  */
 
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { keccak_256 } from "@noble/hashes/sha3.js";
 import {
+  ACTION_VERSIONS,
   VM_TYPES,
   actionBasenameForVm,
   loadEnvironment,
@@ -67,6 +71,7 @@ const ACTION_DESCRIPTIONS: Record<VmType, string> = {
   "lighter-vm": "Lit Allocator Lighter signing action",
   "xrp-vm": "Lit Allocator XRP signing action",
   "hedera-vm": "Lit Allocator Hedera signing action",
+  "atlas-vm": "Lit Allocator Atlas signing action",
 };
 
 /** Environment variable name carrying each VM's deployed action CID. */
@@ -81,6 +86,7 @@ const ACTION_CID_ENV_VARS: Record<VmType, string> = {
   "lighter-vm": "LIT_LIGHTER_ACTION_CID",
   "xrp-vm": "LIT_XRP_ACTION_CID",
   "hedera-vm": "LIT_HEDERA_ACTION_CID",
+  "atlas-vm": "LIT_ATLAS_ACTION_CID",
 };
 
 // ─── Shared script utilities ─────────────────────────────────────────────────
@@ -218,10 +224,12 @@ const USAGE =
   "\n" +
   "  --calldata: emit the contract calldata to relay via the account owner (MPC/multisig)\n" +
   "              instead of broadcasting. Requires --pkp-id and an already-provisioned\n" +
-  "              usage key (PKP/usage-key minting need a live admin signature).";
+  "              usage key (PKP/usage-key minting need a live admin signature).\n" +
+  "  --prune-old-versions: remove older managed action versions after registering and\n" +
+  "                        attaching replacements. Only use after every caller runs the new version.";
 
-async function main() {
-  const { envName, rest: args } = parseEnvArg(process.argv.slice(2));
+export async function main(argv = process.argv.slice(2)) {
+  const { envName, rest: args } = parseEnvArg(argv);
   if (!envName) {
     console.error(`Missing --env <name>.\n\n${USAGE}`);
     process.exit(1);
@@ -231,10 +239,24 @@ async function main() {
 
   const groupName = `allocator-${env.name}`;
   const usageKeyName = `allocator-${env.name}-usage-key`;
-  const actionNameForVm = (vm: VmType) => `allocator-${env.name}-action-${vm}`;
+  const actionNamePrefix = `allocator-${env.name}-action-`;
+  /** Names this source tree registers: version-suffixed so several releases can coexist. */
+  const actionVersion = ACTION_VERSIONS[env.name];
+  const actionNameForVm = (vm: VmType) => `${actionNamePrefix}${vm}-${actionVersion}`;
+  /**
+   * Names eligible for `--prune-old-versions`: the current versioned names,
+   * the unversioned names used by v1 registrations, and any other version
+   * suffix of a managed VM. Unrelated actions are never touched.
+   */
+  const managedActionNamePattern = new RegExp(
+    `^${actionNamePrefix}(${VM_TYPES.join("|")})(-v\\d+)?$`,
+  );
+  const isManagedActionName = (name: string | undefined) =>
+    name !== undefined && managedActionNamePattern.test(name);
   const actionDescriptionForVm = (vm: VmType) => ACTION_DESCRIPTIONS[vm];
 
   const dryRun = args.includes("--dry-run");
+  const pruneOldVersions = args.includes("--prune-old-versions");
   const calldataMode = args.includes("--calldata");
   const createPkpFlag = args.includes("--create-pkp");
   const providedPkpId = getOption(args, "--pkp-id")?.trim();
@@ -269,6 +291,10 @@ async function main() {
     `   Mode:         ${backend.mode}${calldataMode ? " (calldata — no broadcast)" : ""}`,
   );
   console.log(`   Dry run:      ${dryRun ? "yes — no writes will be performed" : "no"}`);
+  console.log(
+    `   Prune old versions: ${pruneOldVersions ? "yes" : "no — preserving legacy actions"}`,
+  );
+  console.log(`   Action version: ${actionVersion}`);
   console.log(`   Allocator:    ${env.allocatorAddress}`);
   console.log(`   Hub chain id: ${env.hubEvmChainId}`);
   console.log();
@@ -331,6 +357,39 @@ async function main() {
   // already emitted individually.
   const currentPkpSet = new Set(walletsInGroup.map((w) => w.walletAddress.toLowerCase()));
   const pkpInGroup = currentPkpSet.has(pkpId.toLowerCase());
+  // ── 4. Register the Lit Actions in the group ────────────────────────────
+  console.log("4. Registering Lit Actions in group...");
+
+  const existingActions = await backend.listActions();
+  console.log(`   account has ${existingActions.length} action(s) before sync`);
+
+  // Actions already attached to the group (its permitted CID hashes) so we can
+  // skip on-chain writes when everything is already in place.
+  const actionsInGroup = groupExists ? await backend.listActionsInGroup(requireGroupId()) : [];
+  if (actionsInGroup === undefined && pruneOldVersions) {
+    throw new Error("Cannot prune action versions without a complete group permission list");
+  }
+  const attachedHashes = new Set((actionsInGroup ?? []).map((a) => a.actionHash));
+
+  // Compute target CIDs/hashes for every VM up front.
+  const targetCids = new Map<VmType, { cid: string; actionHash: bigint }>();
+  for (const vmType of VM_TYPES) {
+    const code = loadBundledActionFile(env.name, vmType);
+    const cid = await getLitActionIpfsCid(code);
+    targetCids.set(vmType, { cid, actionHash: hashCidToBigInt(cid) });
+    console.log(`   ${vmType} target CID: ${cid} (hash=${formatHash(hashCidToBigInt(cid))})`);
+  }
+  const targetHashes = new Set([...targetCids.values()].map((t) => t.actionHash));
+
+  // Older versions of a managed action: a name this source tree manages (any
+  // version suffix, including v1's unversioned name) whose hash no longer
+  // matches a target CID. They stay registered and permitted unless
+  // `--prune-old-versions` is passed, so v1 callers keep working. Actions for
+  // VMs introduced on other branches only share the prefix and are untouched.
+  const stale: typeof existingActions = existingActions.filter(
+    (a) => isManagedActionName(a.name) && !targetHashes.has(a.actionHash),
+  );
+
   if (!groupExists) {
     console.log("   Group missing — PKP will be included when the group is created");
   } else if (pkpInGroup) {
@@ -346,54 +405,6 @@ async function main() {
     console.log("   ✓ PKP added to group");
   }
   console.log();
-
-  // ── 4. Register the Lit Actions in the group ────────────────────────────
-  console.log("4. Registering Lit Actions in group...");
-
-  const existingActions = await backend.listActions();
-  console.log(`   account has ${existingActions.length} action(s) before sync`);
-
-  // Actions already attached to the group (its permitted CID hashes) so we can
-  // skip on-chain writes when everything is already in place.
-  const actionsInGroup = groupExists ? await backend.listActionsInGroup(requireGroupId()) : [];
-  const attachedHashes = new Set(actionsInGroup.map((a) => a.actionHash));
-
-  // Compute target CIDs/hashes for every VM up front.
-  const targetCids = new Map<VmType, { cid: string; actionHash: bigint }>();
-  for (const vmType of VM_TYPES) {
-    const code = loadBundledActionFile(env.name, vmType);
-    const cid = await getLitActionIpfsCid(code);
-    targetCids.set(vmType, { cid, actionHash: hashCidToBigInt(cid) });
-    console.log(`   ${vmType} target CID: ${cid} (hash=${formatHash(hashCidToBigInt(cid))})`);
-  }
-  const targetHashes = new Set([...targetCids.values()].map((t) => t.actionHash));
-
-  // Sweep stale entries: only actions belonging to a VM the current code
-  // knows about whose hash no longer matches that VM's target CID. We match
-  // on the exact per-VM action names so that actions for VMs introduced on
-  // other branches (e.g. a `bitcoin-vm` action) are left untouched rather
-  // than pruned just for sharing the `allocator-${env.name}-` prefix.
-  const managedActionNames = new Set(VM_TYPES.map((vm) => actionNameForVm(vm)));
-  const stale: typeof existingActions = existingActions.filter(
-    (a) =>
-      a.name !== undefined && managedActionNames.has(a.name) && !targetHashes.has(a.actionHash),
-  );
-
-  if (stale.length === 0) {
-    console.log("   no stale action registrations to prune");
-  }
-  for (const a of stale) {
-    console.log(
-      `   ${dryRun ? "Would prune" : "pruning"} stale action: name=${a.name ?? "<unnamed>"} hash=${formatHash(a.actionHash)}`,
-    );
-    if (!dryRun) {
-      if (groupExists) {
-        await backend.removeActionFromGroup(requireGroupId(), a.actionHash);
-        attachedHashes.delete(a.actionHash);
-      }
-      await backend.removeAction(a.actionHash);
-    }
-  }
 
   // Register / refresh the canonical actions and attach them to the group.
   for (const vmType of VM_TYPES) {
@@ -429,7 +440,9 @@ async function main() {
   const permittedPkpIds = Array.from(
     new Set([...walletsInGroup.map((w) => w.walletAddress), pkpId]),
   );
-  const targetActionHashes = [...targetCids.values()].map((t) => t.actionHash);
+  // Preserve existing permissions, including legacy and unrelated actions.
+  // Explicit pruning happens only after every replacement is registered and attached.
+  const targetActionHashes = [...new Set([...attachedHashes, ...targetHashes])];
 
   if (!groupExists) {
     // Fresh group: create it fully populated in a single call. No id is needed,
@@ -456,14 +469,14 @@ async function main() {
       }
       console.log("   ✓ Group created with permissions");
     }
+  } else if (actionsInGroup === undefined) {
+    console.log("   Group action list unavailable; using only per-action permission additions");
   } else {
     // Existing group: sync only what is out of date. Because the individual
     // addPkpToGroup / addActionToGroup writes above were tracked locally, a
     // fully-synced group emits no updateGroup call.
     const pkpsInSync = permittedPkpIds.every((p) => currentPkpSet.has(p.toLowerCase()));
-    const actionsSynced =
-      attachedHashes.size === targetHashes.size &&
-      [...targetHashes].every((h) => attachedHashes.has(h));
+    const actionsSynced = targetActionHashes.every((h) => attachedHashes.has(h));
     const permissionsInSync = pkpsInSync && actionsSynced;
 
     if (permissionsInSync) {
@@ -483,6 +496,33 @@ async function main() {
         cidHashesPermitted: targetActionHashes,
       });
       console.log("   ✓ Group permissions synced");
+    }
+  }
+
+  for (const action of stale) {
+    console.log(
+      `   older version detected: name=${action.name ?? "<unnamed>"} hash=${formatHash(action.actionHash)}`,
+    );
+  }
+  if (!pruneOldVersions) {
+    console.log(
+      `   Preserving ${stale.length} old action version(s); use --prune-old-versions after migration`,
+    );
+  } else {
+    if (stale.length === 0) {
+      console.log("   no stale action registrations to prune");
+    }
+    for (const action of stale) {
+      console.log(
+        `   ${dryRun ? "Would prune" : "pruning"} stale action: name=${action.name ?? "<unnamed>"} hash=${formatHash(action.actionHash)}`,
+      );
+      if (!dryRun) {
+        if (groupExists && attachedHashes.has(action.actionHash)) {
+          await backend.removeActionFromGroup(requireGroupId(), action.actionHash);
+          attachedHashes.delete(action.actionHash);
+        }
+        await backend.removeAction(action.actionHash);
+      }
     }
   }
   console.log();
@@ -546,7 +586,9 @@ async function main() {
   console.log();
 }
 
-main().catch((err) => {
-  console.error("Error:", err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main().catch((err) => {
+    console.error("Error:", err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}

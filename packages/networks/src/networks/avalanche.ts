@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const avalanche: NetworkConfig = {
   chainId: 43114n,
@@ -10,11 +11,9 @@ export const avalanche: NetworkConfig = {
   hubChainId: "43114",
   isTestnet: false,
   name: "Avalanche",
-  rpc: process.env.RPC_43114
-    ? [process.env.RPC_43114]
-    : [
-        "https://api.avax.network/ext/bc/C/rpc",
-        "https://rpc.ankr.com/avalanche",
-      ],
+  ...resolveRpc(process.env.RPC_43114, [
+    "https://api.avax.network/ext/bc/C/rpc",
+    "https://rpc.ankr.com/avalanche",
+  ]),
   slug: "avalanche",
 }

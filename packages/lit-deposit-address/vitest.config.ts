@@ -25,6 +25,9 @@ export default defineConfig({
       "https://cdn.jsdelivr.net/npm/@noble/hashes@2.0.1/pbkdf2.js/+esm": "@noble/hashes/pbkdf2.js",
       "https://cdn.jsdelivr.net/npm/@scure/base@2.0.0/+esm": "@scure/base",
       "https://cdn.jsdelivr.net/npm/bs58@6.0.0/+esm": "bs58",
+      "https://cdn.jsdelivr.net/npm/ripple-address-codec@5.0.1/+esm": "ripple-address-codec",
+      "https://cdn.jsdelivr.net/npm/ripple-binary-codec@2.8.0/dist/index.js/+esm": "ripple-binary-codec",
+      "https://cdn.jsdelivr.net/npm/ripple-keypairs@2.0.0/dist/index.js/+esm": "ripple-keypairs",
     },
   },
   test: {

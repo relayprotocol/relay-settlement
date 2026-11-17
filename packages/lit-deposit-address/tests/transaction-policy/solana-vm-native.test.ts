@@ -1,6 +1,8 @@
+import { ComputeBudgetProgram } from "@solana/web3.js";
 import { describe, expect, it } from "vitest";
 import { verifyTransactionsWithWallet } from "../../src/derivation/index.js";
 import {
+  COMPUTE_BUDGET_PROGRAM_KEY,
   DEPOSIT_NATIVE_DISCRIMINATOR_BYTES,
   SOLANA_DEPOSITORY_HEX,
   SOLANA_DEPOSITOR_HEX,
@@ -8,6 +10,8 @@ import {
   SOLANA_ORDER_ID,
   buildDepositArgs,
   buildLegacyMessage,
+  computeUnitLimitIx,
+  computeUnitPriceIx,
   hexToBytes32,
   makeSolanaAttestation,
   makeSolanaTrigger,
@@ -31,6 +35,7 @@ describe("solana-vm transaction policy (deposit_native)", () => {
       programIdIndex?: number;
       staticAccountKeys?: Uint8Array[];
       data?: Uint8Array;
+      prefixInstructions?: SolanaMessageInputs["instructions"];
       extraInstructions?: SolanaMessageInputs["instructions"];
       numRequiredSignatures?: number;
     } = {},
@@ -45,8 +50,12 @@ describe("solana-vm transaction policy (deposit_native)", () => {
     ];
     return buildLegacyMessage({
       numRequiredSignatures: args.numRequiredSignatures,
-      staticAccountKeys,
+      // With prefix instructions, the ComputeBudget program is appended as the last static key.
+      staticAccountKeys: args.prefixInstructions
+        ? [...staticAccountKeys, COMPUTE_BUDGET_PROGRAM_KEY]
+        : staticAccountKeys,
       instructions: [
+        ...(args.prefixInstructions ?? []),
         {
           programIdIndex: args.programIdIndex ?? 5,
           accountIndexes: args.accountIndexes ?? [2, 0, 1, 3, 4],
@@ -80,7 +89,7 @@ describe("solana-vm transaction policy (deposit_native)", () => {
     ).toThrow(/solana deposit requires exactly 1 transaction/);
   });
 
-  it("rejects a message containing more than one instruction", () => {
+  it("rejects an instruction after the deposit", () => {
     expect(() =>
       verifyTransactionsWithWallet(makeSolanaTrigger(), makeSolanaAttestation(), [
         {
@@ -91,7 +100,7 @@ describe("solana-vm transaction policy (deposit_native)", () => {
           }),
         },
       ]),
-    ).toThrow(/must contain exactly 1 instruction, got 2/);
+    ).toThrow(/instructions\[0\] must be a ComputeBudget instruction \(the deposit must be last\)/);
   });
 
   it("rejects an instruction whose program does not match attestation.inputDepository", () => {
@@ -270,5 +279,160 @@ describe("solana-vm transaction policy (deposit_native)", () => {
         },
       ]),
     ).toThrow(/numRequiredSignatures must be 1 or 2 \(got 3\)/);
+  });
+
+  // ── ComputeBudget prefix (priority fee) ──────────────────────────────────
+  const COMPUTE_BUDGET_INDEX = 6;
+  const verifyWithPrefix = (prefixInstructions: SolanaMessageInputs["instructions"]) =>
+    verifyTransactionsWithWallet(makeSolanaTrigger(), makeSolanaAttestation(), [
+      { message: buildNativeMessage({ prefixInstructions }) },
+    ]);
+
+  it("encodes ComputeBudget helpers byte-for-byte like @solana/web3.js", () => {
+    expect(Buffer.from(ComputeBudgetProgram.programId.toBytes())).toEqual(
+      Buffer.from(COMPUTE_BUDGET_PROGRAM_KEY),
+    );
+    expect(Buffer.from(computeUnitLimitIx(200_000, COMPUTE_BUDGET_INDEX).data)).toEqual(
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }).data,
+    );
+    expect(Buffer.from(computeUnitPriceIx(1_000_000n, COMPUTE_BUDGET_INDEX).data)).toEqual(
+      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1_000_000 }).data,
+    );
+  });
+
+  it("accepts SetComputeUnitLimit + SetComputeUnitPrice before the deposit", () => {
+    expect(() =>
+      verifyWithPrefix([
+        computeUnitLimitIx(150_000, COMPUTE_BUDGET_INDEX),
+        computeUnitPriceIx(50_000n, COMPUTE_BUDGET_INDEX),
+      ]),
+    ).not.toThrow();
+  });
+
+  it("accepts SetComputeUnitPrice before SetComputeUnitLimit", () => {
+    expect(() =>
+      verifyWithPrefix([
+        computeUnitPriceIx(50_000n, COMPUTE_BUDGET_INDEX),
+        computeUnitLimitIx(150_000, COMPUTE_BUDGET_INDEX),
+      ]),
+    ).not.toThrow();
+  });
+
+  it("accepts SetComputeUnitLimit alone", () => {
+    expect(() =>
+      verifyWithPrefix([computeUnitLimitIx(150_000, COMPUTE_BUDGET_INDEX)]),
+    ).not.toThrow();
+  });
+
+  it("accepts SetComputeUnitPrice alone", () => {
+    expect(() =>
+      verifyWithPrefix([computeUnitPriceIx(1_000_000n, COMPUTE_BUDGET_INDEX)]),
+    ).not.toThrow();
+  });
+
+  it("accepts the exact caps (200,000 CU and 1,000,000 micro-lamports)", () => {
+    expect(() =>
+      verifyWithPrefix([
+        computeUnitLimitIx(200_000, COMPUTE_BUDGET_INDEX),
+        computeUnitPriceIx(1_000_000n, COMPUTE_BUDGET_INDEX),
+      ]),
+    ).not.toThrow();
+  });
+
+  it("accepts ComputeBudget instructions in the 2-signer fee payer layout", () => {
+    expect(() =>
+      verifyTransactionsWithWallet(makeSolanaTrigger(), makeSolanaAttestation(), [
+        {
+          message: buildNativeMessage({
+            numRequiredSignatures: 2,
+            staticAccountKeys: feePayerStaticKeys,
+            programIdIndex: 6,
+            accountIndexes: [3, 1, 2, 4, 5],
+            prefixInstructions: [
+              computeUnitLimitIx(200_000, feePayerStaticKeys.length),
+              computeUnitPriceIx(1_000_000n, feePayerStaticKeys.length),
+            ],
+          }),
+        },
+      ]),
+    ).not.toThrow();
+  });
+
+  it("rejects a compute unit limit above 200,000", () => {
+    expect(() => verifyWithPrefix([computeUnitLimitIx(200_001, COMPUTE_BUDGET_INDEX)])).toThrow(
+      /SetComputeUnitLimit must not exceed 200000 \(got 200001\)/,
+    );
+  });
+
+  it("rejects a compute unit price above 1,000,000 micro-lamports", () => {
+    expect(() =>
+      verifyWithPrefix([
+        computeUnitLimitIx(200_000, COMPUTE_BUDGET_INDEX),
+        computeUnitPriceIx(1_000_001n, COMPUTE_BUDGET_INDEX),
+      ]),
+    ).toThrow(/SetComputeUnitPrice must not exceed 1000000 micro-lamports \(got 1000001\)/);
+  });
+
+  it("rejects a duplicate SetComputeUnitLimit", () => {
+    expect(() =>
+      verifyWithPrefix([
+        computeUnitLimitIx(1, COMPUTE_BUDGET_INDEX),
+        computeUnitLimitIx(1, COMPUTE_BUDGET_INDEX),
+      ]),
+    ).toThrow(/duplicate SetComputeUnitLimit instruction/);
+  });
+
+  it("rejects RequestHeapFrame (tag 1)", () => {
+    expect(() =>
+      verifyWithPrefix([
+        {
+          programIdIndex: COMPUTE_BUDGET_INDEX,
+          accountIndexes: [],
+          data: new Uint8Array([1, 0, 0, 1, 0]),
+        },
+      ]),
+    ).toThrow(/unsupported ComputeBudget instruction tag 1/);
+  });
+
+  it("rejects SetLoadedAccountsDataSizeLimit (tag 4)", () => {
+    expect(() =>
+      verifyWithPrefix([
+        {
+          programIdIndex: COMPUTE_BUDGET_INDEX,
+          accountIndexes: [],
+          data: new Uint8Array([4, 0, 0, 1, 0]),
+        },
+      ]),
+    ).toThrow(/unsupported ComputeBudget instruction tag 4/);
+  });
+
+  it("rejects a ComputeBudget instruction that references accounts", () => {
+    expect(() =>
+      verifyWithPrefix([{ ...computeUnitLimitIx(1, COMPUTE_BUDGET_INDEX), accountIndexes: [0] }]),
+    ).toThrow(/ComputeBudget instruction must not reference accounts/);
+  });
+
+  it("rejects a ComputeBudget instruction with the wrong data length", () => {
+    const ix = computeUnitLimitIx(1, COMPUTE_BUDGET_INDEX);
+    expect(() => verifyWithPrefix([{ ...ix, data: new Uint8Array([...ix.data, 0]) }])).toThrow(
+      /SetComputeUnitLimit data must be 5 bytes, got 6/,
+    );
+  });
+
+  it("rejects a duplicate SetComputeUnitPrice", () => {
+    expect(() =>
+      verifyWithPrefix([
+        computeUnitLimitIx(1, COMPUTE_BUDGET_INDEX),
+        computeUnitPriceIx(1n, COMPUTE_BUDGET_INDEX),
+        computeUnitPriceIx(1n, COMPUTE_BUDGET_INDEX),
+      ]),
+    ).toThrow(/duplicate SetComputeUnitPrice instruction/);
+  });
+
+  it("rejects a non-ComputeBudget instruction before the deposit", () => {
+    // System program (static key 4).
+    expect(() =>
+      verifyWithPrefix([{ programIdIndex: 4, accountIndexes: [], data: new Uint8Array([2]) }]),
+    ).toThrow(/instructions\[0\] must be a ComputeBudget instruction/);
   });
 });

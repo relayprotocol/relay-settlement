@@ -8,6 +8,7 @@ import {
   buildSolanaTransaction,
   buildTronTransaction,
   buildEvmTransaction,
+  buildMessage,
   loadTransactions,
 } from "../builders/utils"
 
@@ -28,7 +29,15 @@ export function registerSimulate(program: Command) {
         const tx = transactions[i]
         let result
         if (tx.family === "ethereum-vm") {
-          result = await buildEvmTransaction(EthereumTxSchema.parse(tx))
+          result = await buildEvmTransaction(
+            EthereumTxSchema.parse(tx),
+            transactions.slice(0, i)
+          )
+        } else if (tx.family === "message") {
+          result = buildMessage(tx)
+          console.log(
+            "Sign-only message: validated locally; no on-chain execution simulation."
+          )
         } else if (tx.family === "bitcoin-vm") {
           result = await buildBitcoinTransaction(BitcoinTxSchema.parse(tx))
         } else if (tx.family === "solana-vm") {

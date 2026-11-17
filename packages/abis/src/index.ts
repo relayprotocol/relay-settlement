@@ -1,5 +1,5 @@
 // This file is generated, please don't edit directly
-// Refer to 'yarn run build:abis' in smart-contracts folder for more
+// Refer to 'yarn run build:abis' in contracts/relay-chain folder for more
 
 import ChainSignatures from "./abis/ChainSignatures.sol/ChainSignatures.json"
 import Config from "./abis/Config.sol/Config.json"
@@ -9,21 +9,22 @@ import IHub from "./abis/ERC20View.sol/IHub.json"
 import HubAddressCodec from "./abis/HubAddressCodec.sol/HubAddressCodec.json"
 import Multicall3 from "./abis/Multicall3.sol/Multicall3.json"
 import IPayloadBuilder from "./abis/RelayAllocator.sol/IPayloadBuilder.json"
+import IWithdrawalCounter from "./abis/RelayAllocator.sol/IWithdrawalCounter.json"
 import RelayAllocator from "./abis/RelayAllocator.sol/RelayAllocator.json"
 import RelayExecutor from "./abis/RelayExecutor.sol/RelayExecutor.json"
+import ILegacyRelayGenericMapping from "./abis/RelayGenericMapping.sol/ILegacyRelayGenericMapping.json"
 import RelayGenericMapping from "./abis/RelayGenericMapping.sol/RelayGenericMapping.json"
 import IERC20View from "./abis/RelayHub.sol/IERC20View.json"
 import RelayHub from "./abis/RelayHub.sol/RelayHub.json"
 import RelayHubBalanceViewer from "./abis/RelayHubBalanceViewer.sol/RelayHubBalanceViewer.json"
+import RelayInbox from "./abis/RelayInbox.sol/RelayInbox.json"
+import IRelayInboxIdempotencySource from "./abis/RelayInboxIdempotencyStore.sol/IRelayInboxIdempotencySource.json"
+import RelayInboxIdempotencyStore from "./abis/RelayInboxIdempotencyStore.sol/RelayInboxIdempotencyStore.json"
+import RelayInboxMultisig from "./abis/RelayInboxMultisig.sol/RelayInboxMultisig.json"
 import RelayMultisigSigner from "./abis/RelayMultisigSigner.sol/RelayMultisigSigner.json"
-import IRelayOracleIdempotencySource from "./abis/RelayOracleIdempotencyStore.sol/IRelayOracleIdempotencySource.json"
-import RelayOracleIdempotencyStore from "./abis/RelayOracleIdempotencyStore.sol/RelayOracleIdempotencyStore.json"
-import RelayOracleMultisig from "./abis/RelayOracleMultisig.sol/RelayOracleMultisig.json"
-import RelayOracleV2 from "./abis/RelayOracleV2.sol/RelayOracleV2.json"
 import IPriceFeedAdapter from "./abis/RelayPriceOracle.sol/IPriceFeedAdapter.json"
 import RelayPriceOracle from "./abis/RelayPriceOracle.sol/RelayPriceOracle.json"
 import Utils from "./abis/Utils.sol/Utils.json"
-import WithdrawGasPayer from "./abis/WithdrawGasPayer.sol/WithdrawGasPayer.json"
 import AuroraSdk from "./abis/aurora-xcc/AuroraSdk.sol/AuroraSdk.json"
 import AuroraXccUtils from "./abis/aurora-xcc/AuroraXccUtils.sol/AuroraXccUtils.json"
 import Borsh from "./abis/aurora-xcc/Borsh.sol/Borsh.json"
@@ -46,21 +47,22 @@ import ICircleGatewayMinter from "./abis/depository/interfaces/ICircleGateway.so
 import ICircleGatewayWallet from "./abis/depository/interfaces/ICircleGateway.sol/ICircleGatewayWallet.json"
 import IFeeCalculator from "./abis/fee-calculators/IFeeCalculator.sol/IFeeCalculator.json"
 import RelayBpsFeeCalculator from "./abis/fee-calculators/RelayBpsFeeCalculator.sol/RelayBpsFeeCalculator.json"
-import IRelayFundingPool from "./abis/funding-pools/IRelayFundingPool.sol/IRelayFundingPool.json"
-import RelayFundingPool from "./abis/funding-pools/RelayFundingPool.sol/RelayFundingPool.json"
-import RelayFundingPoolFactory from "./abis/funding-pools/RelayFundingPoolFactory.sol/RelayFundingPoolFactory.json"
+import FundingPool from "./abis/funding-pools/FundingPool.sol/FundingPool.json"
+import IHubErc20View from "./abis/funding-pools/FundingPool.sol/IHubErc20View.json"
+import IHubPermit from "./abis/funding-pools/FundingPool.sol/IHubPermit.json"
+import FundingPoolFactory from "./abis/funding-pools/FundingPoolFactory.sol/FundingPoolFactory.json"
+import IFundingPool from "./abis/funding-pools/IFundingPool.sol/IFundingPool.json"
 import EmptyPayloadBuilder from "./abis/mocks/EmptyPayloadBuilder.sol/EmptyPayloadBuilder.json"
 import MockPriceFeedAdapter from "./abis/mocks/MockPriceFeedAdapter.sol/MockPriceFeedAdapter.json"
 import MockPricingOracle from "./abis/mocks/MockPricingOracle.sol/MockPricingOracle.json"
 import MockStorkFastVerifier from "./abis/mocks/MockStorkFastVerifier.sol/MockStorkFastVerifier.json"
 import MockVerifierProxy from "./abis/mocks/MockVerifierProxy.sol/MockVerifierProxy.json"
 import MockWNEAR from "./abis/mocks/MockWNEAR.sol/MockWNEAR.json"
+import NoHashesPayloadBuilder from "./abis/mocks/NoHashesPayloadBuilder.sol/NoHashesPayloadBuilder.json"
 import RelayMultisigSignerHarness from "./abis/mocks/RelayMultisigSignerHarness.sol/RelayMultisigSignerHarness.json"
+import AtlasVmPayloadBuilder from "./abis/payload-builders/AtlasVmPayloadBuilder.sol/AtlasVmPayloadBuilder.json"
 import BitcoinVmPayloadBuilder from "./abis/payload-builders/BitcoinVmPayloadBuilder.sol/BitcoinVmPayloadBuilder.json"
 import EthereumVmPayloadBuilder from "./abis/payload-builders/EthereumVmPayloadBuilder.sol/EthereumVmPayloadBuilder.json"
-import GasPaidPayloadBuilder from "./abis/payload-builders/GasPaidPayloadBuilder.sol/GasPaidPayloadBuilder.json"
-import IWithdrawGasPayer from "./abis/payload-builders/GasPaidPayloadBuilder.sol/IWithdrawGasPayer.json"
-import WithdrawParams from "./abis/payload-builders/GasPaidPayloadBuilder.sol/WithdrawParams.json"
 import GatewayVmPayloadBuilder from "./abis/payload-builders/GatewayVmPayloadBuilder.sol/GatewayVmPayloadBuilder.json"
 import HederaVmPayloadBuilder from "./abis/payload-builders/HederaVmPayloadBuilder.sol/HederaVmPayloadBuilder.json"
 import HyperliquidVmPayloadBuilder from "./abis/payload-builders/HyperliquidVmPayloadBuilder.sol/HyperliquidVmPayloadBuilder.json"
@@ -71,6 +73,7 @@ import TronVmPayloadBuilder from "./abis/payload-builders/TronVmPayloadBuilder.s
 import XrpVmPayloadBuilder from "./abis/payload-builders/XrpVmPayloadBuilder.sol/XrpVmPayloadBuilder.json"
 import CircleGatewayCodec from "./abis/payload-builders/gateway/CircleGatewayCodec.sol/CircleGatewayCodec.json"
 import GatewayEthereumVmDestinationPayloadBuilder from "./abis/payload-builders/gateway/GatewayEthereumVmDestinationPayloadBuilder.sol/GatewayEthereumVmDestinationPayloadBuilder.json"
+import GatewaySolanaVmDestinationPayloadBuilder from "./abis/payload-builders/gateway/GatewaySolanaVmDestinationPayloadBuilder.sol/GatewaySolanaVmDestinationPayloadBuilder.json"
 import IGatewayDestinationPayloadBuilder from "./abis/payload-builders/gateway/IGatewayDestinationPayloadBuilder.sol/IGatewayDestinationPayloadBuilder.json"
 import Protobuf from "./abis/payload-builders/utils/Protobuf.sol/Protobuf.json"
 import Sha512 from "./abis/payload-builders/utils/Sha512.sol/Sha512.json"
@@ -92,7 +95,11 @@ import SafeTransferLib from "./abis/solady/src/utils/SafeTransferLib.sol/SafeTra
 import SignatureCheckerLib from "./abis/solady/src/utils/SignatureCheckerLib.sol/SignatureCheckerLib.json"
 import FeeOnTransferToken from "./abis/test-utils/FeeOnTransferToken.sol/FeeOnTransferToken.json"
 import MyToken from "./abis/test-utils/MyToken.sol/MyToken.json"
+import XERC20 from "./abis/xerc20/XERC20.sol/XERC20.json"
+import XERC20Factory from "./abis/xerc20/XERC20Factory.sol/XERC20Factory.json"
+import XERC20Lockbox from "./abis/xerc20/XERC20Lockbox.sol/XERC20Lockbox.json"
 import { RelayOracle } from "./versions/index.js"
+import { RelayOracleV2 } from "./versions/index.js"
 
 // exports
 export { ChainSignatures }
@@ -103,21 +110,22 @@ export { IHub }
 export { HubAddressCodec }
 export { Multicall3 }
 export { IPayloadBuilder }
+export { IWithdrawalCounter }
 export { RelayAllocator }
 export { RelayExecutor }
+export { ILegacyRelayGenericMapping }
 export { RelayGenericMapping }
 export { IERC20View }
 export { RelayHub }
 export { RelayHubBalanceViewer }
+export { RelayInbox }
+export { IRelayInboxIdempotencySource }
+export { RelayInboxIdempotencyStore }
+export { RelayInboxMultisig }
 export { RelayMultisigSigner }
-export { IRelayOracleIdempotencySource }
-export { RelayOracleIdempotencyStore }
-export { RelayOracleMultisig }
-export { RelayOracleV2 }
 export { IPriceFeedAdapter }
 export { RelayPriceOracle }
 export { Utils }
-export { WithdrawGasPayer }
 export { AuroraSdk }
 export { AuroraXccUtils }
 export { Borsh }
@@ -140,21 +148,22 @@ export { ICircleGatewayMinter }
 export { ICircleGatewayWallet }
 export { IFeeCalculator }
 export { RelayBpsFeeCalculator }
-export { IRelayFundingPool }
-export { RelayFundingPool }
-export { RelayFundingPoolFactory }
+export { FundingPool }
+export { IHubErc20View }
+export { IHubPermit }
+export { FundingPoolFactory }
+export { IFundingPool }
 export { EmptyPayloadBuilder }
 export { MockPriceFeedAdapter }
 export { MockPricingOracle }
 export { MockStorkFastVerifier }
 export { MockVerifierProxy }
 export { MockWNEAR }
+export { NoHashesPayloadBuilder }
 export { RelayMultisigSignerHarness }
+export { AtlasVmPayloadBuilder }
 export { BitcoinVmPayloadBuilder }
 export { EthereumVmPayloadBuilder }
-export { GasPaidPayloadBuilder }
-export { IWithdrawGasPayer }
-export { WithdrawParams }
 export { GatewayVmPayloadBuilder }
 export { HederaVmPayloadBuilder }
 export { HyperliquidVmPayloadBuilder }
@@ -165,6 +174,7 @@ export { TronVmPayloadBuilder }
 export { XrpVmPayloadBuilder }
 export { CircleGatewayCodec }
 export { GatewayEthereumVmDestinationPayloadBuilder }
+export { GatewaySolanaVmDestinationPayloadBuilder }
 export { IGatewayDestinationPayloadBuilder }
 export { Protobuf }
 export { Sha512 }
@@ -186,4 +196,22 @@ export { SafeTransferLib }
 export { SignatureCheckerLib }
 export { FeeOnTransferToken }
 export { MyToken }
+export { XERC20 }
+export { XERC20Factory }
+export { XERC20Lockbox }
 export { RelayOracle }
+export { RelayOracleV2 }
+
+// deprecated aliases
+/** @deprecated Use `IRelayInboxIdempotencySource` instead. */
+export const IRelayOracleIdempotencySource = IRelayInboxIdempotencySource
+/** @deprecated Use `XERC20` instead. */
+export const IXERC20 = XERC20
+/** @deprecated Use `XERC20Lockbox` instead. */
+export const IXERC20Lockbox = XERC20Lockbox
+/** @deprecated Use `RelayInboxIdempotencyStore` instead. */
+export const RelayOracleIdempotencyStore = RelayInboxIdempotencyStore
+/** @deprecated Use `RelayInboxMultisig` instead. */
+export const RelayOracleMultisig = RelayInboxMultisig
+/** @deprecated Use `RelayInbox` instead. */
+export const RelayOracleV2Source = RelayInbox

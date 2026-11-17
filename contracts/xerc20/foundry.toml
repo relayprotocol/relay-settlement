@@ -1,0 +1,36 @@
+[profile.default]
+solc_version = "0.8.23"
+evm_version = "shanghai"
+src = "contracts"
+script = "script"
+test = "test"
+out = "out"
+libs = ["dependencies"]
+auto_detect_remappings = false
+optimizer = true
+optimizer_runs = 10_000
+via_ir = true
+fs_permissions = [{ access = "read-write", path = "./" }]
+
+[profile.default.fuzz]
+runs = 1000
+
+[fmt]
+line_length = 120
+tab_width = 2
+bracket_spacing = false
+int_types = "long"
+quote_style = "single"
+number_underscore = "thousands"
+multiline_func_header = "params_first"
+
+[dependencies]
+"@openzeppelin-contracts" = { version = "4.9.3", git = "https://github.com/OpenZeppelin/openzeppelin-contracts", rev = "fd81a96f01cc42ef1c9a5399364968d0e07e9e90" }
+ds-test = { version = "9310e87", git = "https://github.com/dapphub/ds-test", rev = "9310e879db8ba3ea6d5c6489a579118fd264a3f5" }
+forge-std = { version = "1.7.3", git = "https://github.com/foundry-rs/forge-std", rev = "2f112697506eab12d433a65fdc31a639548fe365" }
+isolmate = { version = "73ce8b9", git = "https://github.com/defi-wonderland/isolmate", rev = "73ce8b9adaf951e3ec702493bd4da010d74eaa74" }
+prb-test = { version = "0.1.1", git = "https://github.com/PaulRBerg/prb-test", rev = "ce5d128391feb6f64dff05d8d4431c799646b2c5" }
+
+[soldeer]
+remappings_generate = false
+recursive_deps = false

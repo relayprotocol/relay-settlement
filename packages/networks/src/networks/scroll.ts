@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const scroll: NetworkConfig = {
   chainId: 534352n,
@@ -10,8 +11,6 @@ export const scroll: NetworkConfig = {
   hubChainId: "534352",
   isTestnet: false,
   name: "Scroll",
-  rpc: process.env.RPC_534352
-    ? [process.env.RPC_534352]
-    : ["https://rpc.scroll.io"],
+  ...resolveRpc(process.env.RPC_534352, ["https://rpc.scroll.io"]),
   slug: "scroll",
 }

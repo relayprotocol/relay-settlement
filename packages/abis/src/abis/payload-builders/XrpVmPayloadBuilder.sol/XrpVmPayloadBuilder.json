@@ -6,24 +6,19 @@
         "name": "signingPubKey",
         "type": "bytes",
         "internalType": "bytes"
-      },
-      {
-        "name": "gasPayer",
-        "type": "address",
-        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
   },
   {
     "type": "function",
-    "name": "GAS_PAYER",
+    "name": "ALLOWED_FLAGS",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "address",
-        "internalType": "address"
+        "type": "uint32",
+        "internalType": "uint32"
       }
     ],
     "stateMutability": "view"
@@ -72,7 +67,7 @@
     "name": "buildPayload",
     "inputs": [
       {
-        "name": "chainId",
+        "name": "",
         "type": "string",
         "internalType": "string"
       },
@@ -84,8 +79,18 @@
       {
         "name": "params",
         "type": "tuple",
-        "internalType": "struct BuildPayloadParams",
+        "internalType": "struct WithdrawRequest",
         "components": [
+          {
+            "name": "chainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "depository",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
           {
             "name": "currency",
             "type": "bytes",
@@ -97,19 +102,29 @@
             "internalType": "uint256"
           },
           {
+            "name": "spenderChainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "spender",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
             "name": "receiver",
             "type": "bytes",
             "internalType": "bytes"
           },
           {
-            "name": "nonce",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "data",
             "type": "bytes",
             "internalType": "bytes"
+          },
+          {
+            "name": "nonce",
+            "type": "bytes32",
+            "internalType": "bytes32"
           }
         ]
       }
@@ -119,6 +134,23 @@
         "name": "payload",
         "type": "bytes",
         "internalType": "bytes"
+      },
+      {
+        "name": "withdrawFee",
+        "type": "tuple",
+        "internalType": "struct WithdrawFee",
+        "components": [
+          {
+            "name": "currency",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
       }
     ],
     "stateMutability": "view"
@@ -207,33 +239,6 @@
   },
   {
     "type": "error",
-    "name": "FeeExceedsPaidGas",
-    "inputs": [
-      {
-        "name": "fee",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "paidAmount",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "GasNotPaid",
-    "inputs": [
-      {
-        "name": "withdrawParamsHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "InvalidCurrencyLength",
     "inputs": [
       {
@@ -291,5 +296,16 @@
     "type": "error",
     "name": "UnsupportedCurrency",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UnsupportedFlags",
+    "inputs": [
+      {
+        "name": "flags",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ]
   }
 ]

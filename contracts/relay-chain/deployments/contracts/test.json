@@ -1,0 +1,21 @@
+{
+  "chainId": 421614,
+  "core": {
+    "utils": "0xddd361727c22a01eb137880678a20b0beae69318",
+    "hub": "0xa884543c91156098b2e50ae17c3840770b7b55f5",
+    "oracle": "0x1e54d4e9d093fe7bec020ec9196022415235b740",
+    "oracleMultisig": "0xc1f30fdc9367ac7e8784480c7653087b74f0ac28",
+    "genericMapping": "0x393d418bca90d502e05a4eb0d50f8d298ca8cbd2",
+    "allocator": "0x1e2092b7c5f30b2078f7987b7b000c317ac19172",
+    "executor": "0x8d941db12c770b2c0412e513d8f6d6d48c220f27",
+    "config": "0xdc2a0dc71daacf9746a06555e27d945678eb961f",
+    "oracleIdempotencyStore": "0x17c36e8bf26a04556730b54da9f1ea176df0a90f"
+  },
+  "payloadBuilders": {
+    "ethereumVmPayloadBuilder": "0x119b9a7db206ef9217880b23e6d19893a9e55f26",
+    "atlasVmPayloadBuilder": "0x16df04eb16a171e15d4131bbd5c3649eba06aee5"
+  },
+  "utils": {
+    "poolDrawResolver": "0x6496d6c81be24c10de548024f0431a6d9d6f8777"
+  }
+}

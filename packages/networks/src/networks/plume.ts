@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const plume: NetworkConfig = {
   chainId: 98866n,
@@ -10,8 +11,6 @@ export const plume: NetworkConfig = {
   hubChainId: "98866",
   isTestnet: false,
   name: "Plume",
-  rpc: process.env.RPC_98866
-    ? [process.env.RPC_98866]
-    : ["https://rpc.plume.org"],
+  ...resolveRpc(process.env.RPC_98866, ["https://rpc.plume.org"]),
   slug: "plume",
 }

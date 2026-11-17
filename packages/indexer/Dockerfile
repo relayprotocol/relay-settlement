@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:24.22.3-alpine AS base
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ ENV YARN_NETWORK_CONCURRENCY=8
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn ./.yarn
 COPY packages ./packages
-COPY smart-contracts ./smart-contracts
+COPY contracts ./contracts
 
 FROM base AS builder
 
@@ -23,7 +23,7 @@ FROM base AS prod-deps
 
 RUN node .yarn/releases/yarn-4.9.1.cjs workspaces focus @relay-settlement/indexer --production
 
-FROM node:20-alpine AS runner
+FROM node:24.22.3-alpine AS runner
 
 WORKDIR /app
 

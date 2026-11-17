@@ -1,0 +1,19 @@
+{
+  "chainId": 537713,
+  "rpcUrl": "https://rpc.chain.relay.link",
+  "explorerUrl": "https://explorer.chain.relay.link",
+  "factory": "0xa86b6f82A3317b41D9398b37886Be44b597eaEbE",
+  "governor": "0x71d8bE89D9f2339F0FE9cBA39496C6C9cbFF9da6",
+  "name": "xETH-stag",
+  "symbol": "xETH-stag",
+  "assetDecimals": 18,
+  "majorIndex": 0,
+  "labels": [
+    "ethereum",
+    "base"
+  ],
+  "tokens": [
+    "0x8f5edcecc62de604cc13ddbe4725a497a30823fe",
+    "0x49c23a3510b85a322a30c3333e29911a4657f932"
+  ]
+}

@@ -21,6 +21,8 @@
 // and must be done first. The default chain set is every chain with a recorded router.
 //
 // Env:
+//   ROUTER_ROLLOUT_FILE optional JSON with retiredRouters and gatewayDestinations;
+//                    added to deployment records routerRollout (see README migration runbook).
 //   ENV              dev | stag | prod. Defaults to "prod". dev targets the relay
 //                    testnet chain (537724) -- dev privileged changes go through the
 //                    multisig flow like stag/prod.
@@ -37,10 +39,18 @@
 //   SIGNER           optional 0x signer address to use as `from`. When set, the NEAR/MPC
 //                    derivation is skipped.
 import { readFileSync, writeFileSync } from "fs"
+import {
+  assertRetiredRoutersInactive,
+  destinationBuilderMismatch,
+  destinationDepositoryMismatch,
+  loadRouterRollout,
+  readConfigWord,
+  readDestinationBuilderKey,
+  readDestinationDepositoryKey,
+  type RouterRollout,
+} from "../../../contracts/relay-chain/deployments/scripts/routerRollout"
 import { join } from "path"
 import {
-  BaseError,
-  ContractFunctionRevertedError,
   bytesToHex,
   createPublicClient,
   encodeFunctionData,
@@ -66,11 +76,12 @@ const deploymentFile = JSON.parse(
   readFileSync(
     join(
       __dirname,
-      `../../../smart-contracts/deployments/contracts/${ENV}.json`
+      `../../../contracts/relay-chain/deployments/contracts/${ENV}.json`
     ),
     "utf8"
   )
 ) as {
+  routerRollout?: RouterRollout
   core: Record<string, string>
   multicallRouters?: Record<string, string>
   payloadBuilders: Record<string, string>
@@ -85,25 +96,25 @@ type DestinationChain = {
 
 // Each chain costs one ETHEREUM_VM_ROUTER_ALLOWED key, because the key is per
 // (chainId, depository, router) even when the router address is identical across chains.
-const ROUTED_CHAINS: DestinationChain[] = (
-  process.env.CHAINS
+const resolveChains = (): DestinationChain[] =>
+  (process.env.CHAINS
     ? process.env.CHAINS.split(",").filter(Boolean)
     : Object.keys(deploymentFile.multicallRouters ?? {})
-).map((slug) => {
-  const net = networks[slug]
-  if (!net) throw new Error(`${slug}: not in settlement-networks`)
-  const depository = net.contracts?.[ENV]?.depository
-  if (!depository || !isAddress(depository)) {
-    throw new Error(`${slug}: no ${ENV} depository in settlement-networks`)
-  }
-  const router = deploymentFile.multicallRouters?.[slug]
-  if (!router || !isAddress(router)) {
-    throw new Error(
-      `${slug}: multicallRouters.${slug} missing from contracts/${ENV}.json`
-    )
-  }
-  return { chainId: net.chainId, depository, router, slug }
-})
+  ).map((slug) => {
+    const net = networks[slug]
+    if (!net) throw new Error(`${slug}: not in settlement-networks`)
+    const depository = net.contracts?.[ENV]?.depository
+    if (!depository || !isAddress(depository)) {
+      throw new Error(`${slug}: no ${ENV} depository in settlement-networks`)
+    }
+    const router = deploymentFile.multicallRouters?.[slug]
+    if (!router || !isAddress(router)) {
+      throw new Error(
+        `${slug}: multicallRouters.${slug} missing from contracts/${ENV}.json`
+      )
+    }
+    return { chainId: net.chainId, depository, router, slug }
+  })
 
 const allocatorAbi = parseAbi([
   "function setPayloadBuilder(string chainId, bytes depository, address builder)",
@@ -112,7 +123,7 @@ const allocatorAbi = parseAbi([
 
 // ConfigValueNotSet must be in this ABI: without it viem cannot name the revert, and the
 // unset-key path below would fall through to a hard failure.
-const configAbi = parseAbi([
+export const configAbi = parseAbi([
   "function setConfigValues(bytes32[] keys, bytes32[] values)",
   "function getConfigValue(bytes32 key) view returns (bytes32)",
   "error ConfigValueNotSet(bytes32 key)",
@@ -138,42 +149,45 @@ const requireAddressEnv = (name: string): `0x${string}` => {
 const uint256Word = (value: bigint): `0x${string}` =>
   `0x${value.toString(16).padStart(64, "0")}`
 
-const readConfigValue = async (
-  client: ReturnType<typeof createPublicClient>,
-  config: `0x${string}`,
-  key: `0x${string}`
-): Promise<`0x${string}` | undefined> => {
-  try {
-    return (await client.readContract({
-      abi: configAbi,
-      address: config,
-      args: [key],
-      functionName: "getConfigValue",
-    })) as `0x${string}`
-  } catch (error) {
-    if (error instanceof BaseError) {
-      const revert = error.walk(
-        (e) => e instanceof ContractFunctionRevertedError
-      )
-      if (
-        revert instanceof ContractFunctionRevertedError &&
-        revert.data?.errorName === "ConfigValueNotSet"
-      ) {
-        return undefined
-      }
-    }
-    throw error
-  }
-}
+const readConfigValue = readConfigWord
 
-const buildCalls = async (
+export const buildCalls = async (
   client: ReturnType<typeof createPublicClient>,
   payloadBuilder: `0x${string}`,
-  chains: DestinationChain[]
+  chains: DestinationChain[],
+  records = deploymentFile
 ): Promise<{ builderCalls: Call[]; configCalls: Call[] }> => {
-  const allocator = deploymentFile.core.allocator as `0x${string}`
-  const config = deploymentFile.core.config as `0x${string}`
+  const allocator = records.core.allocator as `0x${string}`
+  const config = records.core.config as `0x${string}`
 
+  const rollout = loadRouterRollout(records.routerRollout)
+  assertRetiredRoutersInactive(rollout, records.multicallRouters, ENV)
+  const gatewayBuilder = records.payloadBuilders.gatewayVmPayloadBuilder
+  const destinationBuilder =
+    records.payloadBuilders.gatewayEthereumVmDestinationPayloadBuilder
+  if (
+    rollout.gatewayDestinations.length > 0 &&
+    (!gatewayBuilder ||
+      !isAddress(gatewayBuilder) ||
+      !destinationBuilder ||
+      !isAddress(destinationBuilder))
+  ) {
+    throw new Error(
+      `payloadBuilders.gatewayVmPayloadBuilder and gatewayEthereumVmDestinationPayloadBuilder missing from contracts/${ENV}.json`
+    )
+  }
+  for (const chain of chains) {
+    if (
+      rollout.retiredRouters.some(
+        (old) =>
+          old.chain === chain.slug &&
+          old.depository.toLowerCase() === chain.depository.toLowerCase() &&
+          old.router.toLowerCase() === chain.router.toLowerCase()
+      )
+    ) {
+      throw new Error("Router tuple cannot be both active and retired")
+    }
+  }
   const builderCalls: Call[] = []
   const configCalls: Call[] = []
   const keys: `0x${string}`[] = []
@@ -184,6 +198,12 @@ const buildCalls = async (
     value: `0x${string}`,
     label: string
   ) => {
+    const existing = keys.indexOf(key)
+    if (existing >= 0) {
+      if (values[existing] !== value)
+        throw new Error(`Conflicting config writes for ${key}`)
+      return
+    }
     const current = await readConfigValue(client, config, key)
     if (current?.toLowerCase() === value.toLowerCase()) {
       console.log(`  [skip] ${label} already set`)
@@ -237,13 +257,88 @@ const buildCalls = async (
       args: [chain.slug, chain.depository, chain.router],
       functionName: "getRouterAllowedKey",
     })) as `0x${string}`
-    // The builder treats any value other than 1 as disabled; revoking a router means
-    // overwriting this key with 0 (Config has no unset), which this tool does not generate.
     await push(
       routerKey,
       uint256Word(1n),
       `${chain.slug} routerAllowed router=${chain.router}`
     )
+  }
+
+  for (const [tuples, value] of [
+    [rollout.retiredRouters, 0n],
+    [rollout.gatewayDestinations, 1n],
+  ] as const) {
+    for (const tuple of tuples) {
+      if (value === 1n) {
+        const chainKey = (await client.readContract({
+          abi: payloadBuilderAbi,
+          address: payloadBuilder,
+          args: [tuple.chain],
+          functionName: "getEvmChainIdKey",
+        })) as `0x${string}`
+        await push(
+          chainKey,
+          uint256Word(networks[tuple.chain].chainId),
+          `${tuple.chain} Gateway signatureChainId`
+        )
+      }
+      const key = (await client.readContract({
+        abi: payloadBuilderAbi,
+        address: payloadBuilder,
+        args: [tuple.chain, tuple.depository, tuple.router],
+        functionName: "getRouterAllowedKey",
+      })) as `0x${string}`
+      const label = `${tuple.chain} depository=${tuple.depository} router=${tuple.router} allowed=${value}`
+      if (value === 1n) {
+        // Same gate as the ordinary builder registration: allowlisting a Gateway
+        // router behind another destination builder turns routed withdrawals
+        // into bare transfers, so hold the write until the builder is configured.
+        const mismatch = destinationBuilderMismatch(
+          await readConfigValue(
+            client,
+            config,
+            await readDestinationBuilderKey(
+              client,
+              gatewayBuilder as `0x${string}`,
+              tuple.chain
+            )
+          ),
+          destinationBuilder as `0x${string}`
+        )
+        if (mismatch) {
+          console.log(
+            `  [hold] ${label} withheld: ${mismatch} -- configure the Gateway destination builder, then re-run`
+          )
+          continue
+        }
+        // The recorded depository receives DEPOSITORY_ROLE on the router, so it must
+        // be the one Config resolves: unset means the destination is not activated
+        // yet (hold), another address means the record is wrong (abort).
+        const configuredDepository = await readConfigValue(
+          client,
+          config,
+          await readDestinationDepositoryKey(
+            client,
+            gatewayBuilder as `0x${string}`,
+            tuple.chain
+          )
+        )
+        const depositoryMismatch = destinationDepositoryMismatch(
+          configuredDepository,
+          tuple.depository
+        )
+        if (depositoryMismatch && configuredDepository === undefined) {
+          console.log(
+            `  [hold] ${label} withheld: ${depositoryMismatch} -- activate the Gateway destination, then re-run`
+          )
+          continue
+        }
+        if (depositoryMismatch) {
+          throw new Error(`${tuple.chain}: ${depositoryMismatch}`)
+        }
+      }
+      await push(key, uint256Word(value), label)
+    }
   }
 
   const chunk =
@@ -320,11 +415,10 @@ const main = async () => {
       `PAYLOAD_BUILDER ${payloadBuilder} has no code on the relay chain -- deploy it first (deploying is permissionless)`
     )
   }
-
   const { builderCalls, configCalls } = await buildCalls(
     relayChainClient,
     payloadBuilder,
-    ROUTED_CHAINS
+    resolveChains()
   )
   if (builderCalls.length === 0 && configCalls.length === 0) {
     console.log("Nothing to do -- builder and config already match")
@@ -388,7 +482,8 @@ const main = async () => {
   console.log(`📝 Generated ${txs.length} transaction(s)`)
 }
 
-main().catch((error) => {
-  console.error(error)
-  process.exit(1)
-})
+if (require.main === module)
+  main().catch((error) => {
+    console.error(error)
+    process.exit(1)
+  })

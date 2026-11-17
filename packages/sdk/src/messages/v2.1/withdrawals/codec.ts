@@ -51,3 +51,20 @@ export const defineAbiWithdrawalCodec = <
       ) as AbiValues<TParams>
     ),
 })
+
+// Payload layouts of one VM cannot always be told apart by decoding alone, so a
+// candidate only counts if it re-encodes to its own input
+export const decodeUnderSchema = <W>(
+  codec: Pick<WithdrawalCodec<W>, "encode" | "decode">,
+  encodedWithdrawal: string
+): W | undefined => {
+  try {
+    const withdrawal = codec.decode(encodedWithdrawal)
+    return codec.encode(withdrawal).toLowerCase() ===
+      encodedWithdrawal.toLowerCase()
+      ? withdrawal
+      : undefined
+  } catch {
+    return undefined
+  }
+}

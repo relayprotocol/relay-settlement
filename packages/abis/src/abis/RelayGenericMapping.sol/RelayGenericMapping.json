@@ -6,6 +6,11 @@
         "name": "admin",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "legacy",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
@@ -45,6 +50,19 @@
         "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "LEGACY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract ILegacyRelayGenericMapping"
       }
     ],
     "stateMutability": "view"
@@ -93,6 +111,11 @@
         "name": "nonce",
         "type": "bytes32",
         "internalType": "bytes32"
+      },
+      {
+        "name": "expiration",
+        "type": "uint256",
+        "internalType": "uint256"
       },
       {
         "name": "oracleMultisig",
@@ -243,6 +266,30 @@
   },
   {
     "type": "function",
+    "name": "legacyEntryDeleted",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "renounceRole",
     "inputs": [
       {
@@ -300,6 +347,11 @@
         "name": "nonce",
         "type": "bytes32",
         "internalType": "bytes32"
+      },
+      {
+        "name": "expiration",
+        "type": "uint256",
+        "internalType": "uint256"
       },
       {
         "name": "oracleMultisig",
@@ -543,6 +595,17 @@
   },
   {
     "type": "error",
+    "name": "InvalidLegacy",
+    "inputs": [
+      {
+        "name": "legacy",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InvalidOracleSignature",
     "inputs": [
       {
@@ -565,6 +628,17 @@
         "name": "nonce",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "SignatureExpired",
+    "inputs": [
+      {
+        "name": "expiration",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ]
   },

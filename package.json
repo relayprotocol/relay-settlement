@@ -5,14 +5,19 @@
   "workspaces": [
     "packages/*",
     "oracle",
-    "smart-contracts"
+    "contracts/relay-chain"
   ],
   "scripts": {
     "build": "yarn packages:clean && yarn packages:build",
+    "build:typescript": "yarn packages:clean && yarn packages --parallel --jobs 2 --topological-dev --exclude @relay-settlement/indexer --exclude @relay-settlement/smart-contracts run build && yarn workspace @relay-settlement/indexer build:ci",
     "packages:clean": "yarn packages --parallel run clean",
     "packages:build": "yarn packages --topological-dev run build",
     "lint": "lint",
+    "lint:ci": "yarn workspaces foreach --all --parallel --jobs 2 --exclude @relay-settlement/hub-monorepo run lint",
     "test": "yarn workspaces foreach --all run test",
+    "test:typescript": "yarn test:typescript:workspaces && yarn test:typescript:deposit-address",
+    "test:typescript:workspaces": "yarn workspaces foreach --all --parallel --jobs 2 --exclude @relay-settlement/hub-monorepo --exclude @relay-settlement/indexer --exclude @relay-settlement/smart-contracts --exclude @relay-protocol/lit-deposit-address run test --no-file-parallelism && yarn workspace @relay-settlement/indexer test:ci",
+    "test:typescript:deposit-address": "yarn workspace @relay-protocol/lit-deposit-address test --no-file-parallelism",
     "packages": "yarn workspaces foreach --recursive --from '{@relay-settlement/eslint-config,@relay-settlement/tsconfig,@relay-protocol/settlement-sdk,@relay-protocol/settlement-abis,@relay-protocol/settlement-networks,@relay-settlement/indexer,@relay-settlement/indexer-ui,@relay-protocol/lit-actions,@relay-protocol/lit-helpers,@relay-protocol/lit-allocator,@relay-protocol/lit-deposit-address,@relay-settlement/multisig-tools,@relay-settlement/smart-contracts}'",
     "multisig:simulate": "yarn workspace @relay-settlement/multisig-tools cli simulate",
     "multisig:submit": "yarn workspace @relay-settlement/multisig-tools cli submit",
@@ -24,6 +29,7 @@
     "@relay-settlement/eslint-config": "workspace:*",
     "@types/node": "24.6.1",
     "eslint": "9.36.0",
+    "ethers": "6.15.0",
     "husky": "9.1.7",
     "lint-staged": "16.2.3",
     "prettier": "3.6.2",

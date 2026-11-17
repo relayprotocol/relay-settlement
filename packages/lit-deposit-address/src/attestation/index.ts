@@ -24,6 +24,9 @@ import {
 } from "../common/relay-sdk.js";
 import type { DepositAddressTrigger, DepositAddressTriggerAttestation } from "../common/types.js";
 
+// Leave time for the signed deposit to be broadcast and confirmed before settlement.
+const MIN_DEADLINE_BUFFER_SECONDS = 3600n;
+
 /** EIP-712 typed-data schema oracles use when signing trigger attestations. */
 const TRIGGER_TYPED_DATA = {
   primaryType: "Trigger" as const,
@@ -198,9 +201,12 @@ export async function verifyDepositAddressTriggerAttestation(
  * Checks that:
  * - The order has exactly one input with `weight == "1"` whose `(chainId,
  *   currency, amount)` matches `trigger.input`.
- * - That input has at least one refund; the first refund's `(chainId,
+ * - That input has at least one refund; every refund's `(chainId,
  *   currency)` must match `trigger.input.(chainId, currency)` and its
  *   `recipient` must match `derivationFields.refundRecipient`.
+ * - Every refund minimum and the output minimum respect `priceImpactBps`.
+ *   The output deadline and every refund deadline leave more than one hour
+ *   for settlement, and no refund deadline precedes the output deadline.
  * - The order has exactly one output payment, no `output.calls`, and the
  *   payment's `(chainId, currency, recipient)` matches the corresponding
  *   `derivationFields` fields.
@@ -243,6 +249,13 @@ export function verifyOrderData(
     );
   }
 
+  const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+  const minimumDeadline = nowSeconds + MIN_DEADLINE_BUFFER_SECONDS;
+  const priceImpactBps = BigInt(trigger.derivationFields.priceImpactBps);
+  if (priceImpactBps > 10_000n) {
+    throw new Error(`priceImpactBps must be <= 10000, got=${priceImpactBps}`);
+  }
+
   // ── Refunds ─────────────────────────────────────────────────────────────
   // Validate EVERY refund entry, not just refunds[0]. The depository can
   // honour any refund the solver listed in the signed order, so an entry
@@ -270,6 +283,26 @@ export function verifyOrderData(
         `order refund[${i}] recipient mismatch: order=${orderRefund.recipient}, derivationFields=${trigger.derivationFields.refundRecipient}`,
       );
     }
+    // Refunds use the input currency, so compare raw amounts without price conversion
+    // or division that could round the required minimum down.
+    if (
+      BigInt(orderRefund.minimumAmount) * 10_000n <
+      BigInt(trigger.input.amount) * (10_000n - priceImpactBps)
+    ) {
+      throw new Error(
+        `order refund[${i}] price impact exceeded: input.amount=${trigger.input.amount}, refund.minimumAmount=${orderRefund.minimumAmount}, priceImpactBps=${priceImpactBps}`,
+      );
+    }
+    if (BigInt(orderRefund.deadline) <= minimumDeadline) {
+      throw new Error(
+        `order refund[${i}] deadline must be more than ${MIN_DEADLINE_BUFFER_SECONDS} seconds in the future: deadline=${orderRefund.deadline}, now=${nowSeconds}`,
+      );
+    }
+    if (BigInt(orderRefund.deadline) < BigInt(order.output.deadline)) {
+      throw new Error(
+        `order refund[${i}] deadline precedes output deadline: refund=${orderRefund.deadline}, output=${order.output.deadline}`,
+      );
+    }
   }
 
   // ── Output ──────────────────────────────────────────────────────────────
@@ -280,6 +313,11 @@ export function verifyOrderData(
   }
   if (order.output.calls.length !== 0) {
     throw new Error(`expected order output to have no calls, got ${order.output.calls.length}`);
+  }
+  if (BigInt(order.output.deadline) <= minimumDeadline) {
+    throw new Error(
+      `order output deadline must be more than ${MIN_DEADLINE_BUFFER_SECONDS} seconds in the future: deadline=${order.output.deadline}, now=${nowSeconds}`,
+    );
   }
   const orderOutput = order.output.payments[0];
   if (order.output.chainId !== trigger.derivationFields.outputChainId) {
@@ -329,7 +367,20 @@ export function verifyOrderData(
     );
   }
 
-  const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+  // ABI hashing accepts numeric strings, so an authenticated trigger hash
+  // does not guarantee the JSON types used by the arithmetic below.
+  for (const [side, price] of [
+    ["input", inputPrice],
+    ["output", outputPrice],
+  ] as const) {
+    for (const field of ["usdPriceDecimals", "currencyDecimals"] as const) {
+      const decimals = price[field];
+      if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) {
+        throw new Error(`${side} price ${field} must be an integer between 0 and 255`);
+      }
+    }
+  }
+
   if (BigInt(inputPrice.expiration) <= nowSeconds) {
     throw new Error(`input price expired: expiration=${inputPrice.expiration}, now=${nowSeconds}`);
   }
@@ -353,10 +404,6 @@ export function verifyOrderData(
     BigInt(orderOutput.minimumAmount) *
     BigInt(outputPrice.usdPrice) *
     10n ** BigInt(inputPrice.usdPriceDecimals + inputPrice.currencyDecimals);
-  const priceImpactBps = BigInt(trigger.derivationFields.priceImpactBps);
-  if (priceImpactBps > 10_000n) {
-    throw new Error(`priceImpactBps must be <= 10000, got=${priceImpactBps}`);
-  }
   // outputUsd >= inputUsd * (10000 - priceImpactBps) / 10000
   if (outputUsdScaled * 10_000n < inputUsdScaled * (10_000n - priceImpactBps)) {
     throw new Error(

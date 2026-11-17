@@ -7,6 +7,7 @@ import {
   getContract,
   http,
   keccak256,
+  hashMessage,
   parseEther,
   serializeTransaction,
   encodePacked,
@@ -31,6 +32,7 @@ import {
 import * as tronweb from "tronweb"
 import { buildBitcoinTransactionFromPayload } from "../crypto/bitcoin"
 import { wait } from "../crypto/wait"
+import { simulateEvmSequence } from "../helpers/evmSimulation"
 import { extractNearSignature } from "../crypto/near"
 
 const ethereumAddress = z
@@ -211,11 +213,30 @@ export const TronTxSchema = z.discriminatedUnion("contractType", [
   }),
 ])
 
+// Messages authorize personal_sign signatures only and are never broadcast.
+export const MessageSchema = z
+  .object({
+    description: z.string().min(1),
+    family: z.literal("message"),
+    from: ethereumAddress,
+    message: z
+      .object({
+        data: hex0x.refine(
+          (data) => data.length % 2 === 0,
+          "Expected whole bytes"
+        ),
+        type: z.literal("personal_sign"),
+      })
+      .strict(),
+  })
+  .strict()
+
 export const TransactionSchema = z.discriminatedUnion("family", [
   EthereumTxSchema,
   SolanaTxSchema,
   BitcoinTxSchema,
   TronTxSchema,
+  MessageSchema,
 ])
 
 export type Transaction = z.infer<typeof TransactionSchema>
@@ -231,6 +252,17 @@ export type BuildTransactionResult = {
   hashesToSign: readonly `0x${string}`[]
   payload: `0x${string}`
   transaction: any
+}
+
+export function buildMessage(
+  input: z.infer<typeof MessageSchema>
+): BuildTransactionResult {
+  const entry = MessageSchema.parse(input)
+  return {
+    hashesToSign: [hashMessage({ raw: entry.message.data })],
+    payload: entry.message.data,
+    transaction: undefined,
+  }
 }
 
 export const hasEvmTransactionBeenExecuted = async (
@@ -272,34 +304,44 @@ export const hasBitcoinTransactionBeenExecuted = async (
   return false
 }
 
+type BuildOptions = {
+  skipEvmStateChecks?: boolean
+  skipSimulation?: boolean
+}
+
 export const buildEvmTransaction = async (
-  tx: z.infer<typeof EthereumTxSchema>
+  tx: z.infer<typeof EthereumTxSchema>,
+  precedingTransactions: Transaction[] = [],
+  options: BuildOptions = {}
 ): Promise<BuildTransactionResult> => {
   const networkClient = createPublicClient({
     transport: http(tx.rpc),
   })
   const chainId = await networkClient.getChainId()
 
-  const nonce = await networkClient.getTransactionCount({
-    address: tx.from,
-  })
-  if (!nextNonces[tx.from]) {
-    nextNonces[tx.from] = {}
-  }
-  const expectedNonce = Math.max(nonce, nextNonces[tx.from][chainId] ?? 0)
-  if (tx.nonce < expectedNonce) {
-    // A nonce below the expected one is already used and can never execute.
-    throw new Error(
-      `❌ Nonce too low: the transaction nonce is ${tx.nonce} but the current nonce is ${expectedNonce}. This tx will not be executed!`
-    )
-  }
-  if (tx.nonce > expectedNonce) {
-    // A nonce ahead of the expected one is valid as long as the gap is filled
-    // by earlier transactions queued from the same sender (e.g. a prior
-    // manifest that has not been executed yet).
-    console.warn(
-      `⚠️  Transaction nonce ${tx.nonce} is ahead of the current nonce ${expectedNonce} for ${tx.from} on chain ${chainId}. This relies on ${tx.nonce - expectedNonce} earlier queued transaction(s) executing first.`
-    )
+  let nonce = tx.nonce
+  if (!options.skipEvmStateChecks) {
+    nonce = await networkClient.getTransactionCount({
+      address: tx.from,
+    })
+    if (!nextNonces[tx.from]) {
+      nextNonces[tx.from] = {}
+    }
+    const expectedNonce = Math.max(nonce, nextNonces[tx.from][chainId] ?? 0)
+    if (tx.nonce < expectedNonce) {
+      // A nonce below the expected one is already used and can never execute.
+      throw new Error(
+        `❌ Nonce too low: the transaction nonce is ${tx.nonce} but the current nonce is ${expectedNonce}. This tx will not be executed!`
+      )
+    }
+    if (tx.nonce > expectedNonce) {
+      // A nonce ahead of the expected one is valid as long as the gap is filled
+      // by earlier transactions queued from the same sender (e.g. a prior
+      // manifest that has not been executed yet).
+      console.warn(
+        `⚠️  Transaction nonce ${tx.nonce} is ahead of the current nonce ${expectedNonce} for ${tx.from} on chain ${chainId}. This relies on ${tx.nonce - expectedNonce} earlier queued transaction(s) executing first.`
+      )
+    }
   }
   const raw = {
     chainId,
@@ -311,27 +353,58 @@ export const buildEvmTransaction = async (
     value: parseEther(tx.amount),
   }
 
-  try {
-    await networkClient.estimateGas({
-      account: tx.from,
-      ...raw,
-      // Estimate against the current on-chain nonce rather than this tx's
-      // (possibly future) nonce. Some nodes reject eth_estimateGas when the
-      // supplied nonce isn't the expected next one, which would break every
-      // bundled tx after the first.
-      nonce,
-    })
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error)
-    throw new Error(
-      `❌ Ethereum transaction failed: ${JSON.stringify(tx)}, ${message}`
-    )
+  if (!options.skipEvmStateChecks && !options.skipSimulation) {
+    try {
+      await networkClient.estimateGas({
+        account: tx.from,
+        ...raw,
+        // Estimate against the current on-chain nonce rather than this tx's
+        // (possibly future) nonce. Some nodes reject eth_estimateGas when the
+        // supplied nonce isn't the expected next one, which would break every
+        // bundled tx after the first.
+        nonce,
+      })
+    } catch (error: unknown) {
+      const preceding = precedingTransactions.filter(
+        (candidate): candidate is z.infer<typeof EthereumTxSchema> =>
+          candidate.family === "ethereum-vm" &&
+          candidate.rpc === tx.rpc &&
+          candidate.from.toLowerCase() === tx.from.toLowerCase() &&
+          candidate.nonce >= nonce &&
+          candidate.nonce < tx.nonce
+      )
+      // Only replay a contiguous, explicitly supplied prefix from this manifest.
+      // Execution supplies no prefix: each call must succeed against live state.
+      if (
+        preceding.length === 0 ||
+        preceding.length !== tx.nonce - nonce ||
+        preceding.some((candidate, index) => candidate.nonce !== nonce + index)
+      ) {
+        const message = error instanceof Error ? error.message : String(error)
+        throw new Error(
+          `❌ Ethereum transaction failed: ${JSON.stringify(tx)}, ${message}`
+        )
+      }
+      await simulateEvmSequence(
+        networkClient,
+        [...preceding, tx].map((candidate) => ({
+          data: candidate.calldata,
+          from: candidate.from,
+          gas: BigInt(candidate.gas),
+          nonce: candidate.nonce,
+          to: candidate.to,
+          value: parseEther(candidate.amount),
+        }))
+      )
+    }
   }
 
-  nextNonces[tx.from][chainId] = Math.max(
-    nextNonces[tx.from][chainId] ?? 0,
-    tx.nonce + 1
-  )
+  if (!options.skipEvmStateChecks) {
+    nextNonces[tx.from][chainId] = Math.max(
+      nextNonces[tx.from][chainId] ?? 0,
+      tx.nonce + 1
+    )
+  }
 
   // Pick the correct transaction type from the manifest's fee fields. Not
   // every chain supports EIP-1559 (e.g. Metis), and those chains can only
@@ -872,9 +945,30 @@ const getChainNameFromTransaction = (tx: Transaction): string => {
 
 export const createTransactionBundle = async (
   transactionsPath: string,
-  relayMultisigSignerAddress: `0x${string}`
+  relayMultisigSignerAddress: `0x${string}`,
+  options: BuildOptions = {}
 ) => {
   const transactions = loadTransactions(transactionsPath)
+  if (options.skipEvmStateChecks) {
+    // Some builders reconstruct payloads from live block/nonce data.
+    // Reject them before building any entry for historical verification.
+    if (
+      transactions.some(
+        (tx) => tx.family !== "ethereum-vm" && tx.family !== "message"
+      )
+    ) {
+      throw new Error(
+        "Historical verification currently supports only EVM transactions and messages"
+      )
+    }
+    console.warn(
+      "Skipping destination EVM nonce checks and simulation for historical hash verification."
+    )
+  } else if (options.skipSimulation) {
+    console.warn(
+      "Skipping EVM execution simulation for approval construction; chain and nonce checks remain enabled."
+    )
+  }
 
   const transactionBundle: Array<{
     data: `0x${string}`
@@ -887,7 +981,14 @@ export const createTransactionBundle = async (
     let result
     let curve: "Ecdsa" | "Eddsa"
     if (tx.family === "ethereum-vm") {
-      result = await buildEvmTransaction(EthereumTxSchema.parse(tx))
+      result = await buildEvmTransaction(
+        EthereumTxSchema.parse(tx),
+        transactions.slice(0, i),
+        options
+      )
+      curve = "Ecdsa"
+    } else if (tx.family === "message") {
+      result = buildMessage(tx)
       curve = "Ecdsa"
     } else if (tx.family === "bitcoin-vm") {
       result = await buildBitcoinTransaction(BitcoinTxSchema.parse(tx))

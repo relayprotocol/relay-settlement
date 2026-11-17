@@ -48,3 +48,43 @@ test("parseTransferLog returns null for malformed transfer data", () => {
 
   assert.equal(parsed, null)
 })
+
+test("coverage token lookup agrees with the ABI parser for canonical and non-canonical transfers", async () => {
+  const { getTransferTokenId } = await import("./transferProcessor.js")
+  for (const tokenId of [0n, 1n, (1n << 256n) - 1n]) {
+    const encoded = relayHubInterface.encodeEventLog(transferEvent, [
+      ZeroAddress,
+      ZeroAddress,
+      ZeroAddress,
+      tokenId,
+      0n,
+    ])
+    const variants = [
+      encoded,
+      { ...encoded, data: encoded.data + "00".repeat(32) },
+      { ...encoded, data: "0x" },
+      { ...encoded, topics: encoded.topics.slice(0, 2) },
+      { ...encoded, topics: [...encoded.topics, "0x" + "00".repeat(32)] },
+      { ...encoded, data: "0x" + "f".repeat(64) + encoded.data.slice(66) },
+      {
+        ...encoded,
+        topics: encoded.topics.map(
+          (topic) => "0x" + topic.slice(2).toUpperCase()
+        ),
+      },
+      {
+        ...encoded,
+        topics: [
+          encoded.topics[0],
+          "0x" + "f".repeat(64),
+          ...encoded.topics.slice(2),
+        ],
+      },
+    ]
+    for (const variant of variants)
+      assert.equal(
+        getTransferTokenId(variant),
+        parseTransferLog(variant)?.tokenId ?? null
+      )
+  }
+})

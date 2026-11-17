@@ -47,8 +47,12 @@ export function registerApproveLocal(program: Command) {
     .option("-n, --network <slug>", "Network slug (from settlement-networks)")
     .option("--rpc-url <url>", "RPC URL override")
     .option(
+      "--skip-simulation",
+      "Skip EVM execution simulation when building approvals; execution still checks live state"
+    )
+    .option(
       "-e, --env <env>",
-      "Deployment env for the --network contract lookup (prod | dev | stag); required unless --relay-multisig-signer is set"
+      "Deployment env for the --network contract lookup (prod | dev | stag | test | deployers); required unless --relay-multisig-signer is set"
     )
     .action(
       async ({
@@ -56,6 +60,7 @@ export function registerApproveLocal(program: Command) {
         relayMultisigSigner,
         network,
         rpcUrl,
+        skipSimulation,
         env,
       }) => {
         assertEnvOrSigner({ env, multisigSignerOverride: relayMultisigSigner })
@@ -113,7 +118,8 @@ export function registerApproveLocal(program: Command) {
 
         const transactionBundle = await createTransactionBundle(
           transactionsPath,
-          resolved.multisigSignerAddress
+          resolved.multisigSignerAddress,
+          { skipSimulation }
         )
 
         // Sanity check: simulate the bundle from the Safe before signing.

@@ -25,6 +25,32 @@
   },
   {
     "type": "function",
+    "name": "ROUTED_TRANSFER_REQUEST_PREFIX",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "ROUTED_WITHDRAWAL_DATA_VERSION",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "buildPayload",
     "inputs": [
       {
@@ -33,15 +59,25 @@
         "internalType": "string"
       },
       {
-        "name": "",
+        "name": "depository",
         "type": "bytes",
         "internalType": "bytes"
       },
       {
         "name": "params",
         "type": "tuple",
-        "internalType": "struct BuildPayloadParams",
+        "internalType": "struct WithdrawRequest",
         "components": [
+          {
+            "name": "chainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "depository",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
           {
             "name": "currency",
             "type": "bytes",
@@ -53,19 +89,29 @@
             "internalType": "uint256"
           },
           {
+            "name": "spenderChainId",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "spender",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
             "name": "receiver",
             "type": "bytes",
             "internalType": "bytes"
           },
           {
-            "name": "nonce",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "data",
             "type": "bytes",
             "internalType": "bytes"
+          },
+          {
+            "name": "nonce",
+            "type": "bytes32",
+            "internalType": "bytes32"
           }
         ]
       }
@@ -75,6 +121,23 @@
         "name": "payload",
         "type": "bytes",
         "internalType": "bytes"
+      },
+      {
+        "name": "withdrawFee",
+        "type": "tuple",
+        "internalType": "struct WithdrawFee",
+        "components": [
+          {
+            "name": "currency",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
       }
     ],
     "stateMutability": "view"
@@ -176,6 +239,35 @@
   },
   {
     "type": "function",
+    "name": "getRouterAllowedKey",
+    "inputs": [
+      {
+        "name": "chainId",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "depository",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "router",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "key",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "getVaultAddressKey",
     "inputs": [
       {
@@ -235,6 +327,28 @@
         "name": "expectedLength",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "RouterNotAllowed",
+    "inputs": [
+      {
+        "name": "router",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnsupportedRoutedDataVersion",
+    "inputs": [
+      {
+        "name": "version",
+        "type": "uint8",
+        "internalType": "uint8"
       }
     ]
   },

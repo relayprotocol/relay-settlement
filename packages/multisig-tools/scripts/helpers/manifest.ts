@@ -5,7 +5,7 @@ import { join } from "path"
 const txManifestsDir = join(__dirname, "../../transactions")
 
 // Manifests are grouped per deployment env under transactions/<env>/.
-export type ManifestEnv = "dev" | "stag" | "prod"
+export type ManifestEnv = "dev" | "stag" | "test" | "prod"
 
 export function getLatestManifestIndex(
   env: ManifestEnv = "prod"

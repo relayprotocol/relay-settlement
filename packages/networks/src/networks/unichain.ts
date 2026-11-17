@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const unichain: NetworkConfig = {
   chainId: 130n,
@@ -10,8 +11,6 @@ export const unichain: NetworkConfig = {
   hubChainId: "130",
   isTestnet: false,
   name: "Unichain",
-  rpc: process.env.RPC_130
-    ? [process.env.RPC_130]
-    : ["https://mainnet.unichain.org"],
+  ...resolveRpc(process.env.RPC_130, ["https://mainnet.unichain.org"]),
   slug: "unichain",
 }

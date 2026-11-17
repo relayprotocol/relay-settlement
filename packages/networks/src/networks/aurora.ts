@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const aurora: NetworkConfig = {
   assets: {
@@ -15,6 +16,10 @@ export const aurora: NetworkConfig = {
   },
   chainId: 1313161554n,
   contracts: {
+    // Owned by the deployers Safe; derives EVM sender 0x463c…F56E.
+    deployers: {
+      multisigSigner: "0xE5Ee6a6E8D57d1D315D1898c68eA1bc487B6EA92",
+    },
     dev: {
       multisigSigner: "0xAFA58BbC787DcDa022B698dF78d613EA760727e2",
     },
@@ -24,6 +29,11 @@ export const aurora: NetworkConfig = {
     stag: {
       multisigSigner: "0x15334fe6F1cb0e286E1F9e1268B44E4221E169B7",
     },
+    // Test env (Arbitrum Sepolia Hub); owned by the dev/stag Safe, derives
+    // EVM sender 0xBB91…51EB.
+    test: {
+      multisigSigner: "0x192d296616b699E27cD9Cb7142d1ab77Fe41eE3A",
+    },
   },
   family: "ethereum-vm",
   isTestnet: false,
@@ -32,8 +42,6 @@ export const aurora: NetworkConfig = {
     rpc: "https://rpc.mainnet.near.org",
     signer: "v1.signer",
   },
-  rpc: process.env.RPC_1313161554
-    ? [process.env.RPC_1313161554]
-    : ["https://mainnet.aurora.dev"],
+  ...resolveRpc(process.env.RPC_1313161554, ["https://mainnet.aurora.dev"]),
   slug: "aurora",
 }

@@ -1,4 +1,5 @@
-import type { NetworkConfig } from "@relay-protocol/settlement-sdk"
+import type { NetworkConfig } from "../types"
+import { resolveRpc } from "../rpc"
 
 export const zircuit: NetworkConfig = {
   chainId: 48900n,
@@ -10,8 +11,6 @@ export const zircuit: NetworkConfig = {
   hubChainId: "48900",
   isTestnet: false,
   name: "Zircuit",
-  rpc: process.env.RPC_48900
-    ? [process.env.RPC_48900]
-    : ["https://mainnet.zircuit.com"],
+  ...resolveRpc(process.env.RPC_48900, ["https://mainnet.zircuit.com"]),
   slug: "zircuit",
 }

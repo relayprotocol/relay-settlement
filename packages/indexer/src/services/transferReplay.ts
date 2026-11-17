@@ -1,5 +1,5 @@
 import { RelayHub } from "@relay-protocol/settlement-abis"
-import { Contract, Interface, JsonRpcProvider, type Provider } from "ethers"
+import { Contract, Interface, type Provider } from "ethers"
 import type { Database, Queryable } from "../db/connection.js"
 import {
   type ParsedTransferLog,
@@ -7,17 +7,11 @@ import {
   parseTransferLog,
   reconcileTransferStateFromChain,
   shouldSkipTokenId,
-  syncTokenTransfersFromEvents,
+  ensureToken,
 } from "./transferProcessor.js"
 import { getBlockTimestamp } from "./utils.js"
-
-type IndexedLog = {
-  blockNumber: number
-  transactionHash: string
-  index: number
-  topics: readonly string[]
-  data: string
-}
+import { setImmediate } from "node:timers/promises"
+import { getLogPages, type IndexedLog } from "./logPages.js"
 
 type ReplayTransfer = {
   log: IndexedLog
@@ -62,114 +56,6 @@ type TransferReplayCounters = {
   inserted: number
   reconciledAddresses: number
   skipped: number
-}
-
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null
-
-export const isGetLogsResponseTooLargeError = (error: unknown): boolean => {
-  if (!isObject(error)) {
-    return false
-  }
-
-  const code = error.code
-  const message = [error.message, error.shortMessage, error.reason].filter(
-    (value): value is string => typeof value === "string"
-  )
-
-  if (
-    code === -32005 ||
-    message.some((value) => value.includes("Response size exceeds limit"))
-  ) {
-    return true
-  }
-
-  return isGetLogsResponseTooLargeError(error.error)
-}
-
-export const getTransferLogsWithSplit = async (
-  provider: Provider,
-  params: {
-    address: string
-    fromBlock: number
-    toBlock: number
-    topic: string
-  }
-): Promise<IndexedLog[]> => {
-  const toHex = (block: number) => `0x${block.toString(16)}`
-
-  const fetchLogsWithCursor = async () => {
-    const allLogs: IndexedLog[] = []
-    let cursor: string | undefined
-
-    do {
-      const filter: Record<string, unknown> = {
-        address: params.address,
-        fromBlock: toHex(params.fromBlock),
-        toBlock: toHex(params.toBlock),
-        topics: [[params.topic]],
-      }
-      if (cursor) {
-        filter.cursor = cursor
-      }
-
-      const result = (await (provider as JsonRpcProvider).send(
-        "eth_getLogsWithCursor",
-        [filter]
-      )) as {
-        cursor?: string | null
-        logs?: Array<{
-          blockNumber: string
-          data: string
-          logIndex: string
-          topics: string[]
-          transactionHash: string
-        }>
-      }
-
-      for (const log of result.logs ?? []) {
-        allLogs.push({
-          blockNumber: Number(log.blockNumber),
-          data: log.data,
-          index: Number(log.logIndex),
-          topics: log.topics,
-          transactionHash: log.transactionHash,
-        })
-      }
-      cursor = result.cursor ?? undefined
-    } while (cursor)
-
-    return allLogs
-  }
-
-  try {
-    return (await provider.getLogs({
-      address: params.address,
-      fromBlock: params.fromBlock,
-      toBlock: params.toBlock,
-      topics: [[params.topic]],
-    })) as IndexedLog[]
-  } catch (error) {
-    if (!isGetLogsResponseTooLargeError(error)) {
-      throw error
-    }
-
-    if (params.fromBlock >= params.toBlock) {
-      return fetchLogsWithCursor()
-    }
-
-    const midpoint = Math.floor((params.fromBlock + params.toBlock) / 2)
-    const left = await getTransferLogsWithSplit(provider, {
-      ...params,
-      toBlock: midpoint,
-    })
-    const right = await getTransferLogsWithSplit(provider, {
-      ...params,
-      fromBlock: midpoint + 1,
-    })
-
-    return [...left, ...right]
-  }
 }
 
 const addTouchedAddress = (
@@ -406,28 +292,22 @@ export const runTransferReplay = async (
 
   await db.task((taskDb) =>
     withReplayLock(taskDb, async (lockedDb) => {
-      for (
-        let start = request.fromBlock;
-        start <= request.toBlock;
-        start += request.batchSize
-      ) {
-        const end = Math.min(start + request.batchSize - 1, request.toBlock)
-        const logs = await getTransferLogsWithSplit(provider, {
+      for await (const page of getLogPages(
+        provider,
+        {
           address: hubContract.target as string,
-          fromBlock: start,
-          toBlock: end,
-          topic: transferTopic,
-        })
-
+          fromBlock: request.fromBlock,
+          toBlock: request.toBlock,
+          topics: [[transferTopic]],
+        },
+        request.batchSize
+      )) {
         const touched = new Map<string, Set<string>>()
         const touchedTokens = new Set<string>()
         const replayTransfers: ReplayTransfer[] = []
 
-        for (const log of logs.sort((a, b) =>
-          a.blockNumber === b.blockNumber
-            ? a.index - b.index
-            : a.blockNumber - b.blockNumber
-        )) {
+        for (const [index, log] of page.logs.entries()) {
+          if (index % 100 === 0) await setImmediate()
           const transfer = parseTransferLog(log)
           if (!transfer) {
             counters.skipped += 1
@@ -450,6 +330,9 @@ export const runTransferReplay = async (
           addTouchedAddress(touched, transfer.tokenId, transfer.to)
         }
 
+        for (const tokenId of touchedTokens) {
+          await ensureToken(lockedDb, hubContract, tokenId)
+        }
         await lockedDb.tx(async (tx) => {
           for (const { log, timestamp, transfer } of replayTransfers) {
             const wasInserted = await insertEvent(tx, {
@@ -484,13 +367,11 @@ export const runTransferReplay = async (
           }
         }
 
-        for (const tokenId of touchedTokens) {
-          await syncTokenTransfersFromEvents(lockedDb, tokenId)
+        if (page.complete) {
+          completed.currentBlock = page.toBlock
+          completed.lastBatchFromBlock = page.fromBlock
+          completed.lastBatchToBlock = page.toBlock
         }
-
-        completed.currentBlock = end
-        completed.lastBatchFromBlock = start
-        completed.lastBatchToBlock = end
         options.onProgress?.(
           buildTransferReplayProgress(request, counters, startedAtMs, completed)
         )
